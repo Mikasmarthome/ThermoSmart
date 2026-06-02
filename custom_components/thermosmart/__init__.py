@@ -361,11 +361,38 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             adjusted_target = override
             override_active = True
         elif not window_open:
-            adjusted_target = round(base_target + weather_offset, 1)
+            raw_target = round(base_target + weather_offset, 1)
+
+            # Prognose-Unterdrückung: wenn es tagsüber warm wird,
+            # weniger oder gar nicht heizen (Sonne übernimmt den Rest)
+            night_temp = zone_cfg.get("night_temp", TEMP_NIGHT)
+            if mode == HEATING_MODE_AUTO:
+                suppression = self.weather_engine.compute_forecast_suppression(
+                    weather_data, raw_target, night_temp
+                )
+                if suppression < 1.0:
+                    # Ziel zwischen Nacht-Temp und raw_target interpolieren
+                    adjusted_target = round(
+                        night_temp + suppression * (raw_target - night_temp), 1
+                    )
+                else:
+                    adjusted_target = raw_target
+            else:
+                adjusted_target = raw_target
+
             override_active = False
         else:
             adjusted_target = None
             override_active = False
+
+        # Prognose-Unterdrückungsfaktor für Sensoren/Dashboard
+        if mode == HEATING_MODE_AUTO and not window_open and override is None:
+            night_temp = zone_cfg.get("night_temp", TEMP_NIGHT)
+            suppression_factor = self.weather_engine.compute_forecast_suppression(
+                weather_data, round(base_target + weather_offset, 1), night_temp
+            )
+        else:
+            suppression_factor = 1.0
 
         return {
             "zone_id": zone_id,
@@ -379,8 +406,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             "override_active": override_active,
             "override_temp": override,
             "preheat_minutes": preheat_minutes,
+            "forecast_suppression": round((1 - suppression_factor) * 100),
             "learning_confidence": self.learning_engine.get_confidence(zone_id),
             "outdoor_temp": weather_data.get("temperature"),
+            "forecast_high": weather_data.get("forecast_high"),
             "weather_condition": weather_data.get("condition"),
         }
 

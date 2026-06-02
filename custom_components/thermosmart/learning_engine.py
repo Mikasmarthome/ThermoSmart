@@ -316,23 +316,34 @@ class LearningEngine:
     def _weighted_targets_for_hour(
         self, zone_id: str, now: datetime
     ) -> list[tuple[float, float]]:
-        """Gibt (target, weight)-Paare für die aktuelle Stunde zurück."""
+        """Gibt (target, weight)-Paare für die aktuelle Stunde zurück.
+
+        Nutzt KEINE saisonale Gewichtung – der Wunsch '21°C morgens'
+        gilt jeden Tag, unabhängig von der Jahreszeit.
+        Ob geheizt werden muss entscheidet der WeatherEngine separat.
+
+        Gewichtung: reine Aktualität (neuere Beobachtungen bevorzugt).
+        Halbwertszeit 180 Tage – alte Gewohnheiten zählen weiter,
+        aber aktuelle dominieren.
+        """
         hour = now.hour
         is_weekend = now.weekday() >= 5
         result = []
 
         for obs in self._observations[zone_id]:
             # Gleiche Tagesart (Wochentag / Wochenende)
-            obs_weekend = obs["weekday"] >= 5
-            if obs_weekend != is_weekend:
+            if (obs["weekday"] >= 5) != is_weekend:
                 continue
             # Gleiche Stunde ±1
             if abs(obs["hour"] - hour) > 1:
                 continue
 
-            weight = _observation_weight(obs["ts"], now)
+            age_days = max(
+                (now - datetime.fromisoformat(obs["ts"])).total_seconds() / 86400, 0
+            )
+            weight = math.exp(-age_days / 180)  # 6 Monate Halbwertszeit
             if weight < 0.01:
-                continue  # Irrelevante Beobachtungen überspringen
+                continue
             result.append((obs["target"], weight))
 
         return result

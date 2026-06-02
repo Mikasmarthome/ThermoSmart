@@ -156,6 +156,68 @@ class WeatherEngine:
 
         return round(offset, 2)
 
+    def compute_forecast_suppression(
+        self, weather_data: dict, target_temp: float, night_temp: float
+    ) -> float:
+        """Prognose-basierte Heizunterdrückung – Faktor 0.0 bis 1.0.
+
+        Fragt: 'Muss ich jetzt heizen oder wird es tagsüber von selbst warm?'
+
+        Rückgabe:
+          1.0 = vollständig heizen (kalt heute)
+          0.5 = halb heizen (wird mild)
+          0.0 = nicht heizen (wird warm genug, Sonne heizt das Haus)
+
+        Logik:
+          - Tages-Hochtemperatur (Prognose) ≥ Zieltemperatur
+            → Haus wird sich selbst erwärmen, kein Heizen nötig
+          - Tages-Hochtemperatur nahe Zieltemperatur
+            → Teilweise heizen (Sonne übernimmt den Rest)
+          - Sonneneinstrahlung hoch + Außentemp > 5°C
+            → Solarer Wärmeeintrag reduziert Heizbedarf zusätzlich
+          - Kalter Tag (Prognose weit unter Ziel)
+            → Vollständig heizen
+        """
+        forecast_high = weather_data.get("forecast_high")
+        outdoor = weather_data.get("temperature") or 0.0
+        solar = weather_data.get("solar_radiation") or 0.0
+
+        factor = 1.0  # Standard: vollständig heizen
+
+        # ── Prognose-basierte Unterdrückung ──────────────────────────
+        if forecast_high is not None:
+            if forecast_high >= target_temp:
+                # Tages-Maximum erreicht oder überschreitet Zieltemperatur
+                # → Haus wird sich selbst auf Zieltemperatur erwärmen
+                factor = 0.0
+            elif forecast_high >= night_temp:
+                # Zwischen Nacht- und Komforttemperatur: lineare Reduktion
+                # z.B. Ziel=21°C, Nacht=18°C, Prognose=20°C
+                # → factor = (21-20)/(21-18) = 0.33 → 33% heizen
+                span = target_temp - night_temp
+                if span > 0:
+                    remaining = target_temp - forecast_high
+                    factor = max(0.0, min(1.0, remaining / span))
+
+        # ── Sonneneinstrahlungs-Bonus ─────────────────────────────────
+        # Sonne heizt den Raum zusätzlich → weitere Reduktion
+        if solar > 300 and outdoor > 3 and factor > 0:
+            # >300 W/m² und nicht zu kalt → bis zu 30% extra Reduktion
+            solar_reduction = min((solar - 300) / 1000.0, 0.30)
+            factor = max(0.0, factor - solar_reduction)
+            _LOGGER.debug(
+                "Solarunterdrückung: %.0f W/m² → −%.0f%% Heizfaktor",
+                solar, solar_reduction * 100
+            )
+
+        result = round(factor, 3)
+        _LOGGER.debug(
+            "Prognose-Unterdrückung: forecast_high=%.1f°C, target=%.1f°C, "
+            "solar=%.0f W/m² → Heizfaktor %.0f%%",
+            forecast_high or -99, target_temp, solar, result * 100
+        )
+        return result
+
     def is_heating_season(self, weather_data: dict) -> bool:
         """True wenn Heizung wahrscheinlich benötigt wird."""
         outdoor = weather_data.get("temperature")

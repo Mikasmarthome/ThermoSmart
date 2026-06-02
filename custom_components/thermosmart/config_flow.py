@@ -169,6 +169,9 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
                     "comfort_temp": float(user_input.get("comfort_temp", 21.0)),
                     "night_temp": float(user_input.get("night_temp", 18.0)),
                     "away_temp": float(user_input.get("away_temp", 17.0)),
+                    "temp_tolerance": float(user_input.get("temp_tolerance", 0.4)),
+                    "window_open_delay": int(user_input.get("window_open_delay", 5)),
+                    "window_close_delay": int(user_input.get("window_close_delay", 2)),
                 }
                 self._zones.append(new_zone)
                 new_opts = dict(self.config_entry.options)
@@ -231,6 +234,9 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
                     "comfort_temp": float(user_input.get("comfort_temp", 21.0)),
                     "night_temp": float(user_input.get("night_temp", 18.0)),
                     "away_temp": float(user_input.get("away_temp", 17.0)),
+                    "temp_tolerance": float(user_input.get("temp_tolerance", 0.4)),
+                    "window_open_delay": int(user_input.get("window_open_delay", 5)),
+                    "window_close_delay": int(user_input.get("window_close_delay", 2)),
                 }
                 self._zones = [
                     updated if z["zone_id"] == self._editing_zone_id else z
@@ -294,6 +300,28 @@ def _zone_schema(zone: dict | None = None, show_delete: bool = False) -> vol.Sch
                 selector.NumberSelectorConfig(
                     min=5, max=25, step=0.5,
                     unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX
+                )
+            ),
+        # ── TRV-Verhalten ────────────────────────────────────────────
+        vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.4)):
+            selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0.1, max=2.0, step=0.1,
+                    unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX
+                )
+            ),
+        vol.Required("window_open_delay", default=d.get("window_open_delay", 5)):
+            selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=60, step=1,
+                    unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
+                )
+            ),
+        vol.Required("window_close_delay", default=d.get("window_close_delay", 2)):
+            selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=0, max=30, step=1,
+                    unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX
                 )
             ),
         **(

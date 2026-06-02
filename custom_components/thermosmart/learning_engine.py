@@ -1,9 +1,19 @@
-"""LearningEngine – adaptive, ewig lernende Heizungsoptimierung.
+"""LearningEngine – Multi-Faktor Thermalmodell für ThermoSmart.
 
-Kernidee: Daten werden NIEMALS gelöscht.
-Ältere Beobachtungen verlieren durch exponentiellen Gewichtsabfall
-schrittweise Einfluss – neue Daten dominieren, ohne das Langzeitwissen
-zu vernichten. Die Konfidenz kann nur wachsen, nie sinken.
+Das System lernt wie sich das Haus verhält unter Berücksichtigung von:
+  - Innentemperatur & Zieltemperatur
+  - Außentemperatur (primärer Faktor)
+  - Windgeschwindigkeit (erhöht Wärmeverlust)
+  - Sonneneinstrahlung (reduziert Heizbedarf)
+  - Innenluftfeuchtigkeit (beeinflusst Wärmewahrnehmung)
+  - Außenluftfeuchtigkeit (Feuchte erhöht gefühlte Kälte)
+  - Tageszeit & Wochentag (Nutzungsgewohnheiten)
+
+Zwei getrennte Lernspuren:
+  1. Zeitplan-Lernen: Was für eine Temperatur will man wann?
+     → zeitbasierte Gewichtung, gilt täglich
+  2. Thermisches Lernen: Wie schnell heizt das Haus auf?
+     → Multi-Faktor-Ähnlichkeit der Außenbedingungen
 """
 from __future__ import annotations
 
@@ -12,6 +22,7 @@ import math
 import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.storage import Store
@@ -31,144 +42,151 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _thermal_weight(obs: dict, outdoor: float, now: datetime) -> float:
-    """Gewicht für thermisches Lernen (Heizrate, Vorheizzeit).
+# ── Gewichtungsfunktionen ───────────────────────────────────────────────────
 
-    Fragt: 'Wie ähnlich waren die Außenbedingungen?' – NICHT 'Welche Jahreszeit?'
+def _time_weight(obs_ts: str, now: datetime, halflife_days: float = 180) -> float:
+    """Einfache Zeitgewichtung für Zeitplan-Lernen.
+    Halbwertszeit 180 Tage – alte Gewohnheiten zählen weiter.
+    """
+    try:
+        age_days = max((now - datetime.fromisoformat(obs_ts)).total_seconds() / 86400, 0)
+    except (ValueError, TypeError):
+        return 0.0
+    return math.exp(-age_days / halflife_days)
 
-    Ein Oktober-Tag bei 8°C ist für die Heizrate genauso relevant wie
-    ein Januar-Tag bei 8°C. Das Gebäude heizt sich physikalisch gleich auf.
-    Daher KEINE saisonale Gewichtung hier.
 
-    Gewichtung nach:
-      1. Außentemperatur-Ähnlichkeit (wichtigster Faktor)
-      2. Leichte Aktualitätspräferenz (neuere Kalibrierungen bevorzugt)
+def _seasonal_weight(obs_ts: str, now: datetime) -> float:
+    """Saisonale Gewichtung für Jahreszeit-sensitive Berechnungen.
+    Letzter Dezember zählt mehr als der Juli dieses Jahres.
+    """
+    try:
+        obs_dt = datetime.fromisoformat(obs_ts)
+    except (ValueError, TypeError):
+        return 0.0
+    age_days = max((now - obs_dt).total_seconds() / 86400, 0)
+    obs_doy = obs_dt.timetuple().tm_yday
+    now_doy = now.timetuple().tm_yday
+    day_dist = abs(obs_doy - now_doy)
+    day_dist = min(day_dist, 365 - day_dist)
+    seasonal = math.exp(-(day_dist / 45.0) ** 2)
+    recency = math.exp(-age_days / 365 * 0.25)
+    return round(seasonal * recency, 6)
+
+
+def _thermal_weight(obs: dict, conditions: dict, now: datetime) -> float:
+    """Multi-Faktor Gewichtung für thermisches Lernen.
+
+    Fragt: 'Wie ähnlich waren die Außenbedingungen?'
+    Berücksichtigt alle verfügbaren Faktoren:
+      - Außentemperatur (σ=5°C)    – wichtigster Faktor
+      - Windgeschwindigkeit (σ=4)  – erhöht Wärmeverlust
+      - Sonneneinstrahlung (σ=200) – reduziert Heizbedarf
+      - Außenluftfeuchtigkeit (σ=15%) – feuchte Kälte kühlt stärker
     """
     try:
         obs_dt = datetime.fromisoformat(obs["ts"])
     except (ValueError, TypeError, KeyError):
         return 0.0
 
-    obs_outdoor = obs.get("outdoor_temp") or outdoor
-    temp_diff = abs(obs_outdoor - outdoor)
-
-    # Temperaturähnlichkeit: σ = 5°C – bei >15°C Unterschied fast irrelevant
-    temp_similarity = math.exp(-(temp_diff / 5.0) ** 2)
-    if temp_similarity < 0.01:
-        return 0.0
-
-    # Leichte Aktualitätspräferenz: neuere Messungen etwas bevorzugt
     age_days = max((now - obs_dt).total_seconds() / 86400, 0)
-    recency = math.exp(-age_days / 730)  # 2 Jahre Halbwertzeit
 
-    return round(temp_similarity * recency, 6)
+    # ── Außentemperatur (Pflichtfeld) ──────────────────────────────────
+    curr_outdoor = conditions.get("outdoor_temp") or 10.0
+    obs_outdoor = obs.get("outdoor_temp") or curr_outdoor
+    temp_sim = math.exp(-((obs_outdoor - curr_outdoor) / 5.0) ** 2)
+    if temp_sim < 0.02:
+        return 0.0  # Zu unterschiedliche Temperatur → irrelevant
+
+    # ── Wind (optional) ──────────────────────────────────────────────
+    curr_wind = conditions.get("wind_speed") or 0.0
+    obs_wind = obs.get("wind_speed") or 0.0
+    if curr_wind > 0 or obs_wind > 0:
+        wind_sim = math.exp(-((obs_wind - curr_wind) / 4.0) ** 2)
+    else:
+        wind_sim = 1.0
+
+    # ── Sonneneinstrahlung (optional) ─────────────────────────────────
+    curr_solar = conditions.get("solar_radiation") or 0.0
+    obs_solar = obs.get("solar_radiation") or 0.0
+    if curr_solar > 50 or obs_solar > 50:
+        solar_sim = math.exp(-((obs_solar - curr_solar) / 200.0) ** 2)
+    else:
+        solar_sim = 1.0
+
+    # ── Außenluftfeuchtigkeit (optional) ─────────────────────────────
+    curr_hum_out = conditions.get("outdoor_humidity") or 0.0
+    obs_hum_out = obs.get("outdoor_humidity") or 0.0
+    if curr_hum_out > 0 or obs_hum_out > 0:
+        hum_out_sim = math.exp(-((obs_hum_out - curr_hum_out) / 15.0) ** 2)
+    else:
+        hum_out_sim = 1.0
+
+    # ── Aktualität (sehr sanft, 2 Jahre Halbwertszeit) ────────────────
+    recency = math.exp(-age_days / 730)
+
+    weight = temp_sim * wind_sim * solar_sim * hum_out_sim * recency
+    return round(weight, 6)
 
 
-def _observation_weight(obs_ts: str, now: datetime) -> float:
-    """Gewicht einer Beobachtung – kombiniert saisonale Ähnlichkeit + Aktualität.
-
-    Warum nicht nur Zeit-Decay?
-    Reines Zeit-Decay würde letzten Winter vergessen bevor dieser Winter kommt.
-    Das ist falsch – letzter Dezember ist für diesen Dezember viel relevanter
-    als der Juli dieses Jahres.
-
-    Formel:
-      Gewicht = saisonale_Ähnlichkeit(Jahrestag-Abstand) × Aktualität(Jahre)
-
-    Saisonale Ähnlichkeit (Gaußkurve, σ = 45 Tage):
-      ±0 Tage im Jahr  → 1.00  (gleiche Jahreszeit)
-      ±30 Tage         → 0.64
-      ±45 Tage         → 0.37
-      ±90 Tage         → 0.02
-      ±180 Tage        → ~0.00 (gegenüberliegende Jahreszeit)
-
-    Aktualität (sehr sanfter Abfall über Jahre):
-      0 Jahre alt  → 1.00
-      1 Jahr alt   → 0.78  (letzter Winter zählt noch stark!)
-      3 Jahre alt  → 0.47
-      5 Jahre alt  → 0.29
-    """
-    try:
-        obs_dt = datetime.fromisoformat(obs_ts)
-    except (ValueError, TypeError):
-        return 0.0
-
-    age_days = (now - obs_dt).total_seconds() / 86400
-    if age_days < 0:
-        return 0.0
-
-    # Saisonale Ähnlichkeit: Abstand im Jahreskreis (0–182 Tage)
-    obs_doy = obs_dt.timetuple().tm_yday
-    now_doy = now.timetuple().tm_yday
-    day_dist = abs(obs_doy - now_doy)
-    day_dist = min(day_dist, 365 - day_dist)  # Jahreswechsel berücksichtigen
-    seasonal = math.exp(-(day_dist / 45.0) ** 2)
-
-    # Aktualität: sanfter Abfall über Jahre (nicht Tage!)
-    years_old = age_days / 365.0
-    recency = math.exp(-years_old * 0.25)
-
-    return round(seasonal * recency, 6)
-
+# ── Hauptklasse ─────────────────────────────────────────────────────────────
 
 class LearningEngine:
-    """
-    Lernt kontinuierlich aus Beobachtungen und wird mit der Zeit immer besser.
+    """Multi-Faktor Lern-Engine für ThermoSmart.
 
-    Gespeichert wird:
-      - Beobachtungszeitpunkt
-      - Stunde + Wochentag
-      - Zieltemperatur + Ist-Temperatur
-      - Außentemperatur
-      - Heizrate (°C/min) aus aufeinanderfolgenden Messungen
+    Beobachtungs-Format (alles optional außer ts/target/indoor_temp):
+    {
+      "ts": ISO-Zeitstempel,
+      "hour": int, "minute": int, "weekday": int,
+      "target": float,           # Zieltemperatur
+      "indoor_temp": float,      # Innentemperatur
+      "indoor_humidity": float,  # Innenluftfeuchte (%)
+      "outdoor_temp": float,     # Außentemperatur
+      "outdoor_humidity": float, # Außenluftfeuchte (%)
+      "wind_speed": float,       # Windgeschwindigkeit
+      "solar_radiation": float,  # Sonneneinstrahlung (W/m²)
+      "delta": float,            # Ziel - Ist
+      "heat_rate": float         # °C/min Aufheizrate (wenn messbar)
+    }
     """
 
     def __init__(self, hass: HomeAssistant, enabled: bool = True) -> None:
         self._hass = hass
         self._enabled = enabled
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
-        # {zone_id: [{"ts": iso, "hour": int, "weekday": int,
-        #              "target": float, "indoor_temp": float,
-        #              "outdoor_temp": float|None, "delta": float}]}
         self._observations: dict[str, list[dict]] = defaultdict(list)
-        # Letzter gemessener Temperaturwert pro Zone für Heizraten-Berechnung
         self._last_temp: dict[str, tuple[datetime, float]] = {}
-        # Cached Konfidenz 0.0–1.0 (wächst monoton)
         self._confidence: dict[str, float] = {}
 
-    # ------------------------------------------------------------------
-    # Persistenz
-    # ------------------------------------------------------------------
+    # ── Persistenz ──────────────────────────────────────────────────────
 
     async def async_load(self) -> None:
-        """Beobachtungen aus HA-Storage laden."""
         stored = await self._store.async_load()
         if stored and isinstance(stored, dict):
             for zone_id, obs_list in stored.get("observations", {}).items():
                 self._observations[zone_id] = obs_list
+            total = sum(len(v) for v in self._observations.values())
             _LOGGER.info(
-                "LearningEngine: %d Zonen geladen, %d Gesamtbeobachtungen",
-                len(self._observations),
-                sum(len(v) for v in self._observations.values()),
+                "LearningEngine: %d Zonen, %d Beobachtungen geladen",
+                len(self._observations), total,
             )
         self._rebuild_confidence()
 
     async def async_save(self) -> None:
-        """Beobachtungen in HA-Storage schreiben."""
         await self._store.async_save({"observations": dict(self._observations)})
-        _LOGGER.debug("LearningEngine: gespeichert")
 
-    # ------------------------------------------------------------------
-    # Öffentliche API
-    # ------------------------------------------------------------------
+    # ── API ─────────────────────────────────────────────────────────────
 
     def set_enabled(self, enabled: bool) -> None:
         self._enabled = enabled
 
     async def async_observe(
-        self, zone_id: str, recommendation: dict, weather_data: dict
+        self,
+        zone_id: str,
+        recommendation: dict,
+        weather_data: dict,
+        indoor_humidity: float | None = None,
     ) -> None:
-        """Beobachtung aufzeichnen – läuft bei jedem Coordinator-Update."""
+        """Beobachtung aufzeichnen – alle verfügbaren Bedingungen speichern."""
         if not self._enabled:
             return
 
@@ -179,60 +197,58 @@ class LearningEngine:
 
         now = dt_util.now()
 
-        # Heizrate aus aufeinanderfolgenden Messungen ableiten
+        # Heizrate aus aufeinanderfolgenden Messungen
         heat_rate: float | None = None
         if zone_id in self._last_temp:
             last_time, last_temp = self._last_temp[zone_id]
             elapsed_min = (now - last_time).total_seconds() / 60
             if 3 <= elapsed_min <= 15 and current_temp > last_temp:
                 heat_rate = round((current_temp - last_temp) / elapsed_min, 5)
-
         self._last_temp[zone_id] = (now, current_temp)
 
-        obs: dict = {
+        obs: dict[str, Any] = {
             "ts": now.isoformat(),
             "hour": now.hour,
             "minute": now.minute,
-            "weekday": now.weekday(),       # 0=Mo … 6=So
+            "weekday": now.weekday(),
             "target": adjusted_target,
             "indoor_temp": current_temp,
-            "outdoor_temp": weather_data.get("temperature"),
             "delta": round(adjusted_target - current_temp, 2),
         }
+
+        # Alle verfügbaren Außenbedingungen speichern
+        for key in ("temperature", "humidity", "wind_speed", "solar_radiation"):
+            val = weather_data.get(key)
+            if val is not None:
+                map_key = {
+                    "temperature": "outdoor_temp",
+                    "humidity": "outdoor_humidity",
+                    "wind_speed": "wind_speed",
+                    "solar_radiation": "solar_radiation",
+                }[key]
+                obs[map_key] = val
+
+        if indoor_humidity is not None:
+            obs["indoor_humidity"] = indoor_humidity
         if heat_rate is not None:
             obs["heat_rate"] = heat_rate
 
         self._observations[zone_id].append(obs)
         self._rebuild_confidence(zone_id)
 
-        # Periodisch speichern (alle 50 neue Beobachtungen)
-        total = sum(len(v) for v in self._observations.values())
-        if total % 50 == 0:
+        # Alle 50 Beobachtungen speichern
+        if sum(len(v) for v in self._observations.values()) % 50 == 0:
             await self.async_save()
-
-    def get_seasonal_stats(self, zone_id: str) -> dict:
-        """Debug-Info: wie viele relevante Beobachtungen für die aktuelle Jahreszeit."""
-        now = dt_util.now()
-        obs = self._observations[zone_id]
-        high = sum(1 for o in obs if _observation_weight(o["ts"], now) > 0.5)
-        medium = sum(1 for o in obs if 0.1 < _observation_weight(o["ts"], now) <= 0.5)
-        low = sum(1 for o in obs if _observation_weight(o["ts"], now) <= 0.1)
-        return {"high_relevance": high, "medium_relevance": medium, "low_relevance": low}
 
     async def async_get_base_target(
         self, zone_id: str, mode: str = HEATING_MODE_AUTO
     ) -> float:
-        """Empfohlene Zieltemperatur für die aktuelle Uhrzeit zurückgeben.
-
-        Im Auto-Modus: Zeitplan als Basis, lernt darüber hinaus.
-        In anderen Modi: feste Komforttemperatur aus ZONE_TEMPS.
-        """
+        """Empfohlene Zieltemperatur – zeitbasiert gelernt."""
         if mode != HEATING_MODE_AUTO:
             return ZONE_TEMPS.get(zone_id, {}).get(mode, 18.0)
 
         schedule_temp = self._schedule_target(zone_id)
 
-        # Ohne ausreichend Daten: Zeitplan nehmen
         if not self._enabled or self.get_confidence(zone_id) < 0.25:
             return schedule_temp
 
@@ -243,7 +259,7 @@ class LearningEngine:
 
         learned = self._weighted_median(weighted_temps)
         _LOGGER.debug(
-            "LearningEngine [%s] gelernte Zieltemp=%.1f°C (Zeitplan=%.1f°C, n=%d)",
+            "LearningEngine [%s] Zieltemp=%.1f°C (Zeitplan=%.1f°C, n=%d)",
             zone_id, learned, schedule_temp, len(weighted_temps),
         )
         return round(learned, 1)
@@ -255,7 +271,7 @@ class LearningEngine:
         current_temp: float | None,
         weather_data: dict,
     ) -> int:
-        """Vorheizzeit in Minuten berechnen."""
+        """Vorheizzeit berechnen – Multi-Faktor-Heizrate nutzen."""
         if current_temp is None:
             return 0
         delta = target - current_temp
@@ -268,88 +284,68 @@ class LearningEngine:
 
         minutes = int(min(delta / rate * 60, PREHEAT_MAX_MINUTES))
         _LOGGER.debug(
-            "LearningEngine [%s] Vorheizzeit=%d min (delta=%.1f°C, rate=%.4f°C/min)",
+            "LearningEngine [%s] Vorheizzeit=%d min (Δ%.1f°C, %.4f°C/min)",
             zone_id, minutes, delta, rate,
         )
         return minutes
 
     def get_confidence(self, zone_id: str) -> float:
-        """Konfidenz 0.0–1.0 zurückgeben. Wächst monoton, sinkt nie."""
         return self._confidence.get(zone_id, 0.0)
 
     def get_stats(self, zone_id: str) -> dict:
-        """Statistiken für Dashboard-Anzeige."""
         obs = self._observations[zone_id]
         now = dt_util.now()
-        weighted_count = sum(_observation_weight(o["ts"], now) for o in obs)
+        # Zähle Beobachtungen mit verschiedenen Faktoren
+        with_wind = sum(1 for o in obs if o.get("wind_speed") is not None)
+        with_solar = sum(1 for o in obs if o.get("solar_radiation") is not None)
+        with_humidity = sum(1 for o in obs if o.get("indoor_humidity") is not None)
+        with_heat_rate = sum(1 for o in obs if o.get("heat_rate") is not None)
         return {
             "total_observations": len(obs),
-            "weighted_observations": round(weighted_count, 1),
             "confidence": self.get_confidence(zone_id),
-            "oldest_observation": obs[0]["ts"] if obs else None,
+            "with_wind_data": with_wind,
+            "with_solar_data": with_solar,
+            "with_humidity_data": with_humidity,
+            "with_heat_rate": with_heat_rate,
+            "oldest": obs[0]["ts"] if obs else None,
         }
 
-    # ------------------------------------------------------------------
-    # Interne Helfer
-    # ------------------------------------------------------------------
+    # ── Interne Helfer ───────────────────────────────────────────────────
 
     def _schedule_target(self, zone_id: str) -> float:
-        """Zieltemperatur aus dem konfigurierten Zeitplan lesen."""
         now = dt_util.now()
         is_weekend = now.weekday() >= 5
         day_key = "weekend" if is_weekend else "weekday"
-
         schedule = SCHEDULE.get(zone_id, {}).get(day_key, [])
         if not schedule:
             return ZONE_TEMPS.get(zone_id, {}).get("comfort", 21.0)
-
         now_minutes = now.hour * 60 + now.minute
-        active_temp = schedule[0]["temp"]  # Fallback: erster Eintrag
-
+        active_temp = schedule[0]["temp"]
         for entry in sorted(schedule, key=lambda e: e["time"]):
             h, m = map(int, entry["time"].split(":"))
             if h * 60 + m <= now_minutes:
                 active_temp = entry["temp"]
-
         return active_temp
 
     def _weighted_targets_for_hour(
         self, zone_id: str, now: datetime
     ) -> list[tuple[float, float]]:
-        """Gibt (target, weight)-Paare für die aktuelle Stunde zurück.
-
-        Nutzt KEINE saisonale Gewichtung – der Wunsch '21°C morgens'
-        gilt jeden Tag, unabhängig von der Jahreszeit.
-        Ob geheizt werden muss entscheidet der WeatherEngine separat.
-
-        Gewichtung: reine Aktualität (neuere Beobachtungen bevorzugt).
-        Halbwertszeit 180 Tage – alte Gewohnheiten zählen weiter,
-        aber aktuelle dominieren.
-        """
+        """Zeitbasierte Gewichtung – 21°C morgens gilt jeden Tag."""
         hour = now.hour
         is_weekend = now.weekday() >= 5
         result = []
-
         for obs in self._observations[zone_id]:
-            # Gleiche Tagesart (Wochentag / Wochenende)
             if (obs["weekday"] >= 5) != is_weekend:
                 continue
-            # Gleiche Stunde ±1
             if abs(obs["hour"] - hour) > 1:
                 continue
-
-            age_days = max(
-                (now - datetime.fromisoformat(obs["ts"])).total_seconds() / 86400, 0
-            )
-            weight = math.exp(-age_days / 180)  # 6 Monate Halbwertszeit
+            weight = _time_weight(obs["ts"], now, halflife_days=180)
             if weight < 0.01:
                 continue
             result.append((obs["target"], weight))
-
         return result
 
     def _weighted_median(self, weighted: list[tuple[float, float]]) -> float:
-        """Gewichteter Median – robuster als gewichteter Durchschnitt."""
         if not weighted:
             return 21.0
         sorted_w = sorted(weighted, key=lambda x: x[0])
@@ -362,28 +358,34 @@ class LearningEngine:
         return sorted_w[-1][0]
 
     def _get_heat_rate(self, zone_id: str, weather_data: dict) -> float:
-        """Heizrate in °C/min bestimmen (gelernt oder Schätzung)."""
         if self._enabled and self.get_confidence(zone_id) >= 0.3:
-            learned = self._learned_heat_rate(zone_id, weather_data)
+            learned = self._learned_heat_rate_multifactor(zone_id, weather_data)
             if learned > 0:
                 return learned
         return self._estimate_heat_rate(weather_data)
 
-    def _learned_heat_rate(self, zone_id: str, weather_data: dict) -> float:
-        """Gelernte Heizrate – nach Außentemperatur-Ähnlichkeit gewichtet.
+    def _learned_heat_rate_multifactor(
+        self, zone_id: str, weather_data: dict
+    ) -> float:
+        """Multi-Faktor Heizrate: lernt aus allen Außenbedingungen.
 
-        Nutzt _thermal_weight: Oktober bei 8°C = Januar bei 8°C.
-        Das System lernt die Physik des Gebäudes aus ALLEN Jahreszeiten.
+        Oktober bei 8°C + Wind 5m/s = Januar bei 8°C + Wind 5m/s.
+        Sommer bei 8°C + Sonne 600W/m² hebt sich heraus → niedrigere Rate.
         """
-        outdoor = weather_data.get("temperature") or 10.0
         now = dt_util.now()
+        conditions = {
+            "outdoor_temp": weather_data.get("temperature") or 10.0,
+            "wind_speed": weather_data.get("wind_speed"),
+            "solar_radiation": weather_data.get("solar_radiation"),
+            "outdoor_humidity": weather_data.get("humidity"),
+        }
+
         rates = []
         weights = []
-
         for obs in self._observations[zone_id]:
-            if "heat_rate" not in obs or obs["heat_rate"] <= 0:
+            if not obs.get("heat_rate") or obs["heat_rate"] <= 0:
                 continue
-            w = _thermal_weight(obs, outdoor, now)
+            w = _thermal_weight(obs, conditions, now)
             if w < 0.01:
                 continue
             rates.append(obs["heat_rate"])
@@ -397,31 +399,37 @@ class LearningEngine:
         return round(weighted_sum / weight_total, 5) if weight_total > 0 else 0.0
 
     def _estimate_heat_rate(self, weather_data: dict) -> float:
-        """Physikalische Schätzung der Heizrate als Fallback."""
+        """Physikalische Schätzung als Fallback."""
         outdoor = weather_data.get("temperature") or 10.0
+        wind = weather_data.get("wind_speed") or 0.0
+        solar = weather_data.get("solar_radiation") or 0.0
+
+        # Basis-Rate nach Außentemperatur
         if outdoor < 0:
-            return 0.040
-        if outdoor < 5:
-            return 0.048
-        if outdoor < 10:
-            return 0.055
-        if outdoor < 15:
-            return 0.063
-        return 0.070
+            base = 0.040
+        elif outdoor < 5:
+            base = 0.048
+        elif outdoor < 10:
+            base = 0.055
+        elif outdoor < 15:
+            base = 0.063
+        else:
+            base = 0.070
+
+        # Wind erhöht Wärmeverlust → langsamere Aufheizung
+        if wind > 5:
+            wind_factor = 1.0 - min(wind / 30, 0.20)
+            base *= wind_factor
+
+        # Sonne hilft beim Aufheizen → schneller
+        if solar > 300:
+            solar_boost = min((solar - 300) / 1000, 0.15)
+            base *= (1.0 + solar_boost)
+
+        return round(base, 5)
 
     def _rebuild_confidence(self, zone_id: str | None = None) -> None:
-        """Konfidenz (Vorhersage-Qualität) neu berechnen.
-
-        Bedeutung:
-          0%   = keine Daten, Zeitplan wird als Basis genutzt
-          100% = maximale Vorhersagezuverlässigkeit
-
-        Die Konfidenz basiert auf der Menge *aktuell relevanter* Daten
-        (gewichtet nach Alter). Sie kann steigen UND leicht fallen wenn
-        alte Daten an Gewicht verlieren und keine neuen hinzukommen
-        (z.B. nach langer Abwesenheit oder Jahreswechsel).
-        Das System lernt aber trotzdem immer weiter.
-        """
+        """Konfidenz = Qualität der aktuell relevanten Datenbasis."""
         zones = [zone_id] if zone_id else list(self._observations.keys())
         now = dt_util.now()
 
@@ -431,13 +439,15 @@ class LearningEngine:
                 self._confidence.setdefault(zid, 0.0)
                 continue
 
-            # Summe der gewichteten Beobachtungen
-            weighted_n = sum(
-                _observation_weight(o["ts"], now)
-                for o in obs
-            )
+            # Gewichtete effektive Beobachtungen (zeitbasiert)
+            weighted_n = sum(_time_weight(o["ts"], now) for o in obs)
 
-            # 0 → 1 über 150 gewichtete Beobachtungen (≈ 2-3 Wochen aktiver Nutzung)
-            # Kann leicht schwanken wenn alte Daten veralten – das ist gewollt
-            new_conf = min(weighted_n / 150, 1.0)
+            # Bonus für Datenvielfalt (mehr Faktoren = höhere Qualität)
+            has_wind = any(o.get("wind_speed") is not None for o in obs)
+            has_solar = any(o.get("solar_radiation") is not None for o in obs)
+            has_humidity = any(o.get("indoor_humidity") is not None for o in obs)
+            has_heat_rate = any(o.get("heat_rate") is not None for o in obs)
+            diversity_bonus = 1.0 + sum([has_wind, has_solar, has_humidity, has_heat_rate]) * 0.05
+
+            new_conf = min(weighted_n / 150 * diversity_bonus, 1.0)
             self._confidence[zid] = round(new_conf, 4)

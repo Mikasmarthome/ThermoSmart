@@ -72,6 +72,9 @@
           "comfort_temp": "Komforttemperatur (°C)",
           "night_temp": "Nachttemperatur (°C)",
           "away_temp": "Abwesenheitstemperatur (°C)",
+          "temp_tolerance": "Temperaturtoleranz (Hysterese)",
+          "window_open_delay": "Verzögerung Fenster auf (Minuten)",
+          "window_close_delay": "Verzögerung Fenster zu (Minuten)",
           "delete_zone": "Zone löschen"
         }
       }

@@ -72,6 +72,9 @@
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
+          "temp_tolerance": "Temperaturtoleranz – verhindert ständiges Ein-/Ausschalten",
+          "window_open_delay": "Verzögerung: Heizung aus nach Fenster öffnen (Minuten)",
+          "window_close_delay": "Verzögerung: Heizung an nach Fenster schließen (Minuten)",
           "delete_zone": "Zone löschen"
         }
       }

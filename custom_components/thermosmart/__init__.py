@@ -235,11 +235,15 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 )
                 zone_recommendations[zone_id] = recommendation
 
-                # Lernalgorithmus beobachtet
+                # Lernalgorithmus beobachtet – mit allen verfügbaren Bedingungen
+                indoor_humidity = self._read_avg_sensor(
+                    zone_cfg.get("humidity_sensors", [])
+                )
                 await self.learning_engine.async_observe(
                     zone_id=zone_id,
                     recommendation=recommendation,
                     weather_data=weather_data,
+                    indoor_humidity=indoor_humidity,
                 )
 
                 # ── NUR wenn Aktive Steuerung AN ──────────────────────
@@ -444,11 +448,13 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             if state is None or state.state in ("unavailable", "unknown"):
                 continue
 
-            # Nur schreiben wenn Änderung > 0.4°C (Unnötige Befehle vermeiden)
+            # Toleranz/Hysterese: nur schreiben wenn Änderung groß genug
+            # Verhindert ständiges Ein-/Ausschalten (wie Better Thermostat)
+            tolerance = zone_cfg.get("temp_tolerance", 0.4)
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:
-                    if abs(float(current_setpoint) - target) < 0.4:
+                    if abs(float(current_setpoint) - target) < tolerance:
                         continue
                 except (TypeError, ValueError):
                     pass

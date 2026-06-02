@@ -40,7 +40,7 @@ async def async_setup_entry(
         entities.append(
             ThermoSmartTemperatureOverride(entry, zone_id, zone_cfg)
         )
-    async_add_entities(entities, restore=True)
+    async_add_entities(entities)
 
 
 def _device_info(entry: ConfigEntry, zone_id: str, zone_name: str) -> DeviceInfo:

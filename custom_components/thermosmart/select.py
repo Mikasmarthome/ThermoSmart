@@ -43,7 +43,7 @@ async def async_setup_entry(
     entities: list[SelectEntity] = []
     for zone_id, zone_cfg in ZONES.items():
         entities.append(ThermoSmartModeSelect(entry, zone_id, zone_cfg))
-    async_add_entities(entities, restore=True)
+    async_add_entities(entities)
 
 
 def _device_info(entry: ConfigEntry, zone_id: str, zone_name: str) -> DeviceInfo:

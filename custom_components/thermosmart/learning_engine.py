@@ -21,7 +21,6 @@ from .const import (
     STORAGE_VERSION,
     STORAGE_KEY,
     LEARNING_MIN_SAMPLES,
-    LEARNING_DECAY_HALFLIFE,
     PREHEAT_MAX_MINUTES,
     PREHEAT_MIN_DELTA,
     SCHEDULE,
@@ -32,16 +31,51 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
-def _decay_weight(age_days: float, halflife: float = LEARNING_DECAY_HALFLIFE) -> float:
-    """Berechnet das Gewicht einer Beobachtung basierend auf ihrem Alter.
+def _observation_weight(obs_ts: str, now: datetime) -> float:
+    """Gewicht einer Beobachtung – kombiniert saisonale Ähnlichkeit + Aktualität.
 
-    Halbwertszeit = LEARNING_DECAY_HALFLIFE Tage (Standard: 90 Tage).
-    Beispiel: 0 Tage alt → Gewicht 1.0
-              90 Tage alt → Gewicht 0.5
-              180 Tage alt → Gewicht 0.25
-              1 Jahr alt → Gewicht ~0.06 (immer noch vorhanden!)
+    Warum nicht nur Zeit-Decay?
+    Reines Zeit-Decay würde letzten Winter vergessen bevor dieser Winter kommt.
+    Das ist falsch – letzter Dezember ist für diesen Dezember viel relevanter
+    als der Juli dieses Jahres.
+
+    Formel:
+      Gewicht = saisonale_Ähnlichkeit(Jahrestag-Abstand) × Aktualität(Jahre)
+
+    Saisonale Ähnlichkeit (Gaußkurve, σ = 45 Tage):
+      ±0 Tage im Jahr  → 1.00  (gleiche Jahreszeit)
+      ±30 Tage         → 0.64
+      ±45 Tage         → 0.37
+      ±90 Tage         → 0.02
+      ±180 Tage        → ~0.00 (gegenüberliegende Jahreszeit)
+
+    Aktualität (sehr sanfter Abfall über Jahre):
+      0 Jahre alt  → 1.00
+      1 Jahr alt   → 0.78  (letzter Winter zählt noch stark!)
+      3 Jahre alt  → 0.47
+      5 Jahre alt  → 0.29
     """
-    return math.exp(-math.log(2) * age_days / halflife)
+    try:
+        obs_dt = datetime.fromisoformat(obs_ts)
+    except (ValueError, TypeError):
+        return 0.0
+
+    age_days = (now - obs_dt).total_seconds() / 86400
+    if age_days < 0:
+        return 0.0
+
+    # Saisonale Ähnlichkeit: Abstand im Jahreskreis (0–182 Tage)
+    obs_doy = obs_dt.timetuple().tm_yday
+    now_doy = now.timetuple().tm_yday
+    day_dist = abs(obs_doy - now_doy)
+    day_dist = min(day_dist, 365 - day_dist)  # Jahreswechsel berücksichtigen
+    seasonal = math.exp(-(day_dist / 45.0) ** 2)
+
+    # Aktualität: sanfter Abfall über Jahre (nicht Tage!)
+    years_old = age_days / 365.0
+    recency = math.exp(-years_old * 0.25)
+
+    return round(seasonal * recency, 6)
 
 
 class LearningEngine:
@@ -143,6 +177,15 @@ class LearningEngine:
         if total % 50 == 0:
             await self.async_save()
 
+    def get_seasonal_stats(self, zone_id: str) -> dict:
+        """Debug-Info: wie viele relevante Beobachtungen für die aktuelle Jahreszeit."""
+        now = dt_util.now()
+        obs = self._observations[zone_id]
+        high = sum(1 for o in obs if _observation_weight(o["ts"], now) > 0.5)
+        medium = sum(1 for o in obs if 0.1 < _observation_weight(o["ts"], now) <= 0.5)
+        low = sum(1 for o in obs if _observation_weight(o["ts"], now) <= 0.1)
+        return {"high_relevance": high, "medium_relevance": medium, "low_relevance": low}
+
     async def async_get_base_target(
         self, zone_id: str, mode: str = HEATING_MODE_AUTO
     ) -> float:
@@ -205,10 +248,7 @@ class LearningEngine:
         """Statistiken für Dashboard-Anzeige."""
         obs = self._observations[zone_id]
         now = dt_util.now()
-        weighted_count = sum(
-            _decay_weight((now - datetime.fromisoformat(o["ts"])).days)
-            for o in obs
-        )
+        weighted_count = sum(_observation_weight(o["ts"], now) for o in obs)
         return {
             "total_observations": len(obs),
             "weighted_observations": round(weighted_count, 1),
@@ -257,8 +297,9 @@ class LearningEngine:
             if abs(obs["hour"] - hour) > 1:
                 continue
 
-            age_days = (now - datetime.fromisoformat(obs["ts"])).total_seconds() / 86400
-            weight = _decay_weight(age_days)
+            weight = _observation_weight(obs["ts"], now)
+            if weight < 0.01:
+                continue  # Irrelevante Beobachtungen überspringen
             result.append((obs["target"], weight))
 
         return result
@@ -285,7 +326,7 @@ class LearningEngine:
         return self._estimate_heat_rate(weather_data)
 
     def _learned_heat_rate(self, zone_id: str, weather_data: dict) -> float:
-        """Gelernte Heizrate aus gespeicherten Messungen."""
+        """Gelernte Heizrate – saisonal gewichtet statt reines Zeit-Decay."""
         outdoor = weather_data.get("temperature") or 10.0
         now = dt_util.now()
         rates = []
@@ -297,9 +338,11 @@ class LearningEngine:
             obs_outdoor = obs.get("outdoor_temp") or outdoor
             if abs(obs_outdoor - outdoor) > 8:
                 continue
-            age_days = (now - datetime.fromisoformat(obs["ts"])).total_seconds() / 86400
+            w = _observation_weight(obs["ts"], now)
+            if w < 0.01:
+                continue
             rates.append(obs["heat_rate"])
-            weights.append(_decay_weight(age_days))
+            weights.append(w)
 
         if len(rates) < LEARNING_MIN_SAMPLES:
             return 0.0
@@ -345,9 +388,7 @@ class LearningEngine:
 
             # Summe der gewichteten Beobachtungen
             weighted_n = sum(
-                _decay_weight(
-                    max((now - datetime.fromisoformat(o["ts"])).total_seconds() / 86400, 0)
-                )
+                _observation_weight(o["ts"], now)
                 for o in obs
             )
 

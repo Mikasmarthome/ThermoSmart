@@ -93,7 +93,7 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}_learning_data"
 
 # Platforms
-PLATFORMS = ["sensor", "number", "switch", "select"]
+PLATFORMS = ["sensor"]  # number, switch, select werden schrittweise ergänzt
 
 # Attributes
 ATTR_ZONE = "zone"
@@ -104,6 +104,7 @@ ATTR_WEATHER_CONDITION = "weather_condition"
 ATTR_WIND_SPEED = "wind_speed"
 ATTR_PREHEAT_MINUTES = "preheat_minutes"
 ATTR_LEARNING_CONFIDENCE = "learning_confidence"
+ATTR_WEATHER_OFFSET = "weather_offset"
 ATTR_LAST_UPDATED = "last_updated"
 
 # Icons

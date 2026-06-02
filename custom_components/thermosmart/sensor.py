@@ -31,9 +31,6 @@ from .const import (
 )
 from . import ThermoSmartCoordinator
 
-# Fix missing constant from const.py
-ATTR_WEATHER_OFFSET = "weather_offset"
-
 _LOGGER = logging.getLogger(__name__)
 
 

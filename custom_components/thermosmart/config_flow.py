@@ -204,12 +204,12 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
 
         return self.async_show_form(
             step_id="zone_edit",
-            data_schema=_zone_schema(zone),
+            data_schema=_zone_schema(zone, show_delete=True),
             description_placeholders={"zone_name": zone["name"]},
         )
 
 
-def _zone_schema(zone: dict | None = None) -> vol.Schema:
+def _zone_schema(zone: dict | None = None, show_delete: bool = False) -> vol.Schema:
     """Formular-Schema für Zone hinzufügen / bearbeiten."""
     d = zone or {}
     return vol.Schema({
@@ -258,6 +258,8 @@ def _zone_schema(zone: dict | None = None) -> vol.Schema:
                     unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX
                 )
             ),
-        vol.Optional("delete_zone", default=False):
-            selector.BooleanSelector(),
+        **(
+            {vol.Optional("delete_zone", default=False): selector.BooleanSelector()}
+            if show_delete else {}
+        ),
     })

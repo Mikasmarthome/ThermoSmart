@@ -1,7 +1,6 @@
 """Config flow für ThermoSmart – ein Eintrag pro Zone."""
 from __future__ import annotations
 
-import re
 import voluptuous as vol
 
 from homeassistant import config_entries

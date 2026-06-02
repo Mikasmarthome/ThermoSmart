@@ -44,12 +44,12 @@ class ThermoSmartTemperatureOverride(NumberEntity, RestoreEntity):
             sw_version=VERSION,
             entry_type="service",  # type: ignore[arg-type]
         )
-        self._value: float = 0.0
+        self._value: float | None = None
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
-        if last and last.state not in ("unknown", "unavailable", "None"):
+        if last and last.state not in ("unknown", "unavailable", "None", "0.0", "0"):
             try:
                 v = float(last.state)
                 if 5.0 <= v <= 30.0:
@@ -59,7 +59,7 @@ class ThermoSmartTemperatureOverride(NumberEntity, RestoreEntity):
                 pass
 
     @property
-    def native_value(self) -> float:
+    def native_value(self) -> float | None:
         return self._value
 
     async def async_set_native_value(self, value: float) -> None:

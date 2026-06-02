@@ -12,6 +12,10 @@ from .const import (
     DOMAIN,
     CONF_WEATHER_ENTITY,
     CONF_OUTDOOR_TEMP_SENSOR,
+    CONF_OUTDOOR_HUMIDITY_SENSOR,
+    CONF_OUTDOOR_WIND_SENSOR,
+    CONF_OUTDOOR_SOLAR_SENSOR,
+    CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
     DEFAULT_WEATHER_ENTITY,
     DEFAULT_LEARNING_ENABLED,
@@ -51,12 +55,6 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     selector.EntitySelector(
                         selector.EntitySelectorConfig(domain="weather")
                     ),
-                vol.Optional(CONF_OUTDOOR_TEMP_SENSOR):
-                    selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain="sensor", device_class="temperature"
-                        )
-                    ),
                 vol.Required(CONF_LEARNING_ENABLED, default=DEFAULT_LEARNING_ENABLED):
                     selector.BooleanSelector(),
             }),
@@ -91,16 +89,60 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
             new_opts.update(user_input)
             return self.async_create_entry(title="", data=new_opts)
 
+        def _opt(key: str, default=None):
+            return (
+                self.config_entry.options.get(key)
+                or self.config_entry.data.get(key)
+                or default
+            )
+
         return self.async_show_form(
             step_id="settings",
             data_schema=vol.Schema({
                 vol.Required(
                     CONF_LEARNING_ENABLED,
-                    default=self.config_entry.options.get(
-                        CONF_LEARNING_ENABLED,
-                        self.config_entry.data.get(CONF_LEARNING_ENABLED, True),
-                    ),
+                    default=_opt(CONF_LEARNING_ENABLED, True),
                 ): selector.BooleanSelector(),
+
+                # ── Außensensoren ────────────────────────────────────
+                vol.Optional(
+                    CONF_OUTDOOR_TEMP_SENSOR,
+                    default=_opt(CONF_OUTDOOR_TEMP_SENSOR, ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor", device_class="temperature"
+                    )
+                ),
+                vol.Optional(
+                    CONF_OUTDOOR_HUMIDITY_SENSOR,
+                    default=_opt(CONF_OUTDOOR_HUMIDITY_SENSOR, ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor", device_class="humidity"
+                    )
+                ),
+                vol.Optional(
+                    CONF_OUTDOOR_WIND_SENSOR,
+                    default=_opt(CONF_OUTDOOR_WIND_SENSOR, ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(domain="sensor")
+                ),
+                vol.Optional(
+                    CONF_OUTDOOR_SOLAR_SENSOR,
+                    default=_opt(CONF_OUTDOOR_SOLAR_SENSOR, ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor", device_class="irradiance"
+                    )
+                ),
+                vol.Optional(
+                    CONF_OUTDOOR_RAIN_SENSOR,
+                    default=_opt(CONF_OUTDOOR_RAIN_SENSOR, ""),
+                ): selector.EntitySelector(
+                    selector.EntitySelectorConfig(
+                        domain="sensor", device_class="precipitation"
+                    )
+                ),
             }),
         )
 

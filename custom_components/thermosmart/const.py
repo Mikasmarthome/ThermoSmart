@@ -1,12 +1,16 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.0.7"
+VERSION = "0.0.8"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
 CONF_WEATHER_ENTITY = "weather_entity"
 CONF_OUTDOOR_TEMP_SENSOR = "outdoor_temp_sensor"
+CONF_OUTDOOR_HUMIDITY_SENSOR = "outdoor_humidity_sensor"
+CONF_OUTDOOR_WIND_SENSOR = "outdoor_wind_sensor"
+CONF_OUTDOOR_SOLAR_SENSOR = "outdoor_solar_sensor"
+CONF_OUTDOOR_RAIN_SENSOR = "outdoor_rain_sensor"
 CONF_LEARNING_ENABLED = "learning_enabled"
 CONF_HEATING_ZONE = "heating_zone"
 

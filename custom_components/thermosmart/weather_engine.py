@@ -1,4 +1,4 @@
-"""WeatherEngine – fetches outdoor conditions and computes heating offsets."""
+"""WeatherEngine – Außenbedingungen aus Sensoren und/oder Wetter-Entity."""
 from __future__ import annotations
 
 import logging
@@ -19,9 +19,13 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class WeatherEngine:
-    """
-    Reads a Home Assistant weather entity (or a standalone outdoor temperature sensor)
-    and exposes helper methods used by the coordinator and learning engine.
+    """Liest Außenbedingungen aus konfigurierten Sensoren (bevorzugt)
+    oder aus einem HA-Wetter-Entity (Fallback).
+
+    Priorität pro Wert:
+      1. Dedizierter Sensor (eigene Wetterstation)
+      2. Wetter-Entity Attribut
+      3. None (unbekannt)
     """
 
     def __init__(
@@ -29,60 +33,62 @@ class WeatherEngine:
         hass: HomeAssistant,
         weather_entity: str,
         outdoor_temp_sensor: str | None = None,
+        outdoor_humidity_sensor: str | None = None,
+        outdoor_wind_sensor: str | None = None,
+        outdoor_solar_sensor: str | None = None,
+        outdoor_rain_sensor: str | None = None,
     ) -> None:
         self._hass = hass
         self._weather_entity = weather_entity
-        self._outdoor_temp_sensor = outdoor_temp_sensor
+        self._temp_sensor = outdoor_temp_sensor
+        self._humidity_sensor = outdoor_humidity_sensor
+        self._wind_sensor = outdoor_wind_sensor
+        self._solar_sensor = outdoor_solar_sensor
+        self._rain_sensor = outdoor_rain_sensor
+
+    def _read_sensor(self, entity_id: str | None) -> float | None:
+        """Einzelnen Sensor lesen. Gibt None zurück wenn unavailable."""
+        if not entity_id:
+            return None
+        state = self._hass.states.get(entity_id)
+        if state and state.state not in ("unknown", "unavailable", "None"):
+            try:
+                return float(state.state)
+            except (ValueError, TypeError):
+                pass
+        return None
 
     async def async_get_data(self) -> dict:
-        """Return a normalised weather snapshot."""
+        """Alle Außenbedingungen als normalisiertes Dict zurückgeben."""
         data: dict = {
             "temperature": None,
-            "condition": None,
-            "wind_speed": None,
             "humidity": None,
+            "wind_speed": None,
+            "solar_radiation": None,
+            "rain": None,
+            "condition": None,
             "forecast_high": None,
             "forecast_low": None,
         }
 
-        # Try dedicated outdoor temperature sensor first (more accurate)
-        if self._outdoor_temp_sensor:
-            state = self._hass.states.get(self._outdoor_temp_sensor)
-            if state and state.state not in ("unknown", "unavailable"):
-                try:
-                    data["temperature"] = float(state.state)
-                except ValueError:
-                    pass
-
-        # Weather entity
+        # ── Wetter-Entity (Basis & Forecast) ─────────────────────────
         weather_state = self._hass.states.get(self._weather_entity)
         if weather_state and weather_state.state not in ("unknown", "unavailable"):
             attrs = weather_state.attributes
             data["condition"] = weather_state.state
 
-            if data["temperature"] is None:
-                raw = attrs.get("temperature")
+            for key, attr in (
+                ("temperature", "temperature"),
+                ("humidity",    "humidity"),
+                ("wind_speed",  "wind_speed"),
+            ):
+                raw = attrs.get(attr)
                 if raw is not None:
                     try:
-                        data["temperature"] = float(raw)
+                        data[key] = float(raw)
                     except (TypeError, ValueError):
                         pass
 
-            raw_wind = attrs.get("wind_speed")
-            if raw_wind is not None:
-                try:
-                    data["wind_speed"] = float(raw_wind)
-                except (TypeError, ValueError):
-                    pass
-
-            raw_hum = attrs.get("humidity")
-            if raw_hum is not None:
-                try:
-                    data["humidity"] = float(raw_hum)
-                except (TypeError, ValueError):
-                    pass
-
-            # Grab first forecast entry if available
             forecast = attrs.get("forecast", [])
             if forecast:
                 first = forecast[0]
@@ -91,24 +97,33 @@ class WeatherEngine:
                 except (TypeError, ValueError):
                     pass
                 try:
-                    data["forecast_low"] = float(first.get("templow", data["forecast_high"] or 0))
+                    data["forecast_low"] = float(
+                        first.get("templow", data["forecast_high"] or 0)
+                    )
                 except (TypeError, ValueError):
                     pass
+
+        # ── Dedizierte Sensoren überschreiben Wetter-Entity-Werte ─────
+        sensor_map = {
+            "temperature":    self._temp_sensor,
+            "humidity":       self._humidity_sensor,
+            "wind_speed":     self._wind_sensor,
+            "solar_radiation": self._solar_sensor,
+            "rain":           self._rain_sensor,
+        }
+        for key, sensor_id in sensor_map.items():
+            value = self._read_sensor(sensor_id)
+            if value is not None:
+                data[key] = value
+                if key == "temperature":
+                    _LOGGER.debug(
+                        "WeatherEngine: Außentemp %.1f°C von %s", value, sensor_id
+                    )
 
         return data
 
     def compute_temperature_offset(self, weather_data: dict) -> float:
-        """
-        Return a °C offset to add to the base target temperature based on
-        outdoor conditions (temperature + wind chill).
-
-        Rules:
-          outdoor < 0 °C              → +1.5 °C boost
-          outdoor 0–10 °C             → +0.5 °C slight boost
-          outdoor 10–18 °C            → no change
-          outdoor >= 18 °C            → −1.0 °C reduction
-          additionally windy + cold   → extra +0.5 °C
-        """
+        """Temperatur-Offset basierend auf Außentemperatur + Wind berechnen."""
         outdoor = weather_data.get("temperature")
         if outdoor is None:
             return 0.0
@@ -122,25 +137,34 @@ class WeatherEngine:
         else:
             offset = WEATHER_REDUCE_OFFSET
 
-        # Wind-chill bonus
+        # Windkälte-Bonus
         wind = weather_data.get("wind_speed") or 0.0
         if outdoor < WEATHER_MILD_THRESHOLD and wind > WIND_THRESHOLD_MS:
             offset += WIND_CHILL_BOOST
             _LOGGER.debug(
-                "Wind chill boost applied: wind=%.1f m/s, outdoor=%.1f °C", wind, outdoor
+                "Windkälte-Boost: wind=%.1f m/s, outdoor=%.1f°C", wind, outdoor
+            )
+
+        # Sonneneinstrahlung reduziert Heizbedarf
+        solar = weather_data.get("solar_radiation")
+        if solar is not None and solar > 400 and outdoor > 5:
+            solar_reduction = min((solar - 400) / 600 * 0.5, 0.5)
+            offset -= solar_reduction
+            _LOGGER.debug(
+                "Solarbonus: %.0f W/m² → Offset −%.2f°C", solar, solar_reduction
             )
 
         return round(offset, 2)
 
     def is_heating_season(self, weather_data: dict) -> bool:
-        """Return True when heating is likely needed (outdoor temp below warm threshold)."""
+        """True wenn Heizung wahrscheinlich benötigt wird."""
         outdoor = weather_data.get("temperature")
         if outdoor is None:
-            return True  # assume heating needed when unknown
+            return True
         return outdoor < WEATHER_WARM_THRESHOLD
 
     def get_condition_category(self, weather_data: dict) -> str:
-        """Classify condition into cold / mild / warm / hot for the learning engine."""
+        """Wetterkategorie: cold / mild / warm / hot."""
         outdoor = weather_data.get("temperature")
         if outdoor is None:
             return "unknown"

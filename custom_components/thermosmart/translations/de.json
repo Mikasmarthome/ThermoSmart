@@ -30,8 +30,14 @@
       },
       "settings": {
         "title": "Globale Einstellungen",
+        "description": "Eigene Sensoren werden bevorzugt gegenüber dem Wetter-Entity verwendet.",
         "data": {
-          "learning_enabled": "Lernalgorithmus aktivieren"
+          "learning_enabled": "Lernalgorithmus aktivieren",
+          "outdoor_temp_sensor": "Außentemperatur (z.B. sensor.outdoor_temperature)",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit",
+          "outdoor_solar_sensor": "Sonneneinstrahlung (W/m²)",
+          "outdoor_rain_sensor": "Niederschlag"
         }
       },
       "zone_add": {

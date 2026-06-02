@@ -14,6 +14,10 @@ from .const import (
     PLATFORMS,
     CONF_WEATHER_ENTITY,
     CONF_OUTDOOR_TEMP_SENSOR,
+    CONF_OUTDOOR_HUMIDITY_SENSOR,
+    CONF_OUTDOOR_WIND_SENSOR,
+    CONF_OUTDOOR_SOLAR_SENSOR,
+    CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
     ZONES,
     ZONE_TEMPS,
@@ -38,10 +42,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
 
     weather_entity = entry.data.get(CONF_WEATHER_ENTITY, "weather.home")
-    outdoor_sensor = entry.data.get(CONF_OUTDOOR_TEMP_SENSOR)
     learning_enabled = entry.data.get(CONF_LEARNING_ENABLED, True)
 
-    weather_engine = WeatherEngine(hass, weather_entity, outdoor_sensor)
+    # Sensoren aus data (Ersteinrichtung) oder options (nachträglich geändert)
+    def _get_sensor(key: str) -> str | None:
+        return entry.options.get(key) or entry.data.get(key) or None
+
+    weather_engine = WeatherEngine(
+        hass,
+        weather_entity,
+        outdoor_temp_sensor=_get_sensor(CONF_OUTDOOR_TEMP_SENSOR),
+        outdoor_humidity_sensor=_get_sensor(CONF_OUTDOOR_HUMIDITY_SENSOR),
+        outdoor_wind_sensor=_get_sensor(CONF_OUTDOOR_WIND_SENSOR),
+        outdoor_solar_sensor=_get_sensor(CONF_OUTDOOR_SOLAR_SENSOR),
+        outdoor_rain_sensor=_get_sensor(CONF_OUTDOOR_RAIN_SENSOR),
+    )
     learning_engine = LearningEngine(hass, learning_enabled)
     await learning_engine.async_load()
 

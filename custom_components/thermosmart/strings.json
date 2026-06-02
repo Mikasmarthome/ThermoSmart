@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ThermoSmart einrichten",
+        "description": "Wähle deine Wetterquelle und aktiviere optional den Lernalgorithmus.",
+        "data": {
+          "weather_entity": "Wetterentität",
+          "outdoor_temp_sensor": "Außentemperatursensor (optional)",
+          "learning_enabled": "Lernalgorithmus aktivieren"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Die gewählte Wetterentität wurde nicht gefunden."
+    },
+    "abort": {
+      "already_configured": "ThermoSmart ist bereits konfiguriert."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ThermoSmart Optionen",
+        "data": {
+          "learning_enabled": "Lernalgorithmus aktivieren"
+        }
+      }
+    }
+  }
+}

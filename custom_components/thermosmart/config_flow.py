@@ -73,14 +73,11 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        return ThermoSmartOptionsFlow(config_entry)
+        return ThermoSmartOptionsFlow()
 
 
 class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
     """Handle ThermoSmart options."""
-
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict | None = None):
         """Manage the options."""

@@ -169,6 +169,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             )
 
             if self._active_control:
+                await self._watchdog_hvac(cfg, recommendation)
                 await self._apply_temperature(cfg, recommendation)
 
             return {
@@ -311,6 +312,36 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         return round(sum(values) / len(values), 1) if values else None
 
     # ── Thermostat schreiben ─────────────────────────────────────────
+
+    async def _watchdog_hvac(self, cfg: dict, recommendation: dict) -> None:
+        """TRV Watchdog: stellt Thermostate die auf 'off' gefallen sind wieder her.
+
+        Ersetzt die manuellen BT-Watchdog Automationen.
+        Läuft nur wenn:
+          - Aktive Steuerung AN
+          - Kein Fenster offen (dann ist 'off' gewollt)
+          - Nicht 100% Prognose-Unterdrückung (Sommer → Heizung aus ist korrekt)
+        """
+        if recommendation.get("window_open"):
+            return
+        # Im Sommer (volle Unterdrückung) ist 'off' gewollt → kein Watchdog
+        if recommendation.get("forecast_suppression", 0) >= 100:
+            return
+
+        for entity_id in cfg.get("climate_entities", []):
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+            if state.state == "off":
+                _LOGGER.info(
+                    "ThermoSmart Watchdog '%s': %s ist 'off' → stelle auf 'heat' zurück",
+                    self.zone_name, entity_id,
+                )
+                await self.hass.services.async_call(
+                    "climate", "set_hvac_mode",
+                    {"entity_id": entity_id, "hvac_mode": "heat"},
+                    blocking=False,
+                )
 
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
         target = recommendation.get("adjusted_target")

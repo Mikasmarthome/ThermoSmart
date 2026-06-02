@@ -5,7 +5,6 @@ import logging
 from datetime import timedelta
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
@@ -17,6 +16,13 @@ from .const import (
     CONF_OUTDOOR_TEMP_SENSOR,
     CONF_LEARNING_ENABLED,
     ZONES,
+    PRESENCE_PERSONS,
+    PRESENCE_PREHEAT_ZONE,
+    VACATION_BOOLEAN,
+    HEATING_MODE_AUTO,
+    HEATING_MODE_AWAY,
+    HEATING_MODE_VACATION,
+    ZONE_TEMPS,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -25,7 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up ThermoSmart from a config entry."""
+    """ThermoSmart aus einem Config Entry einrichten."""
     hass.data.setdefault(DOMAIN, {})
 
     weather_entity = entry.data.get(CONF_WEATHER_ENTITY, "weather.home")
@@ -52,15 +58,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
-    _LOGGER.info("ThermoSmart integration loaded successfully")
+    _LOGGER.info(
+        "ThermoSmart geladen – Beobachtungsmodus aktiv "
+        "(Aktive Steuerung ist AUS, Thermostate werden NICHT verändert)"
+    )
     return True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Unload a config entry."""
+    """Config Entry entladen."""
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
         data = hass.data[DOMAIN].pop(entry.entry_id, {})
         learning_engine: LearningEngine = data.get("learning_engine")
@@ -70,12 +78,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
-    """Handle options update."""
     await hass.config_entries.async_reload(entry.entry_id)
 
 
 class ThermoSmartCoordinator(DataUpdateCoordinator):
-    """Coordinator that fetches all ThermoSmart data and runs the heating logic."""
+    """Koordiniert alle Berechnungen und – wenn aktiv – die Thermostat-Steuerung."""
 
     def __init__(
         self,
@@ -94,57 +101,157 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self.weather_engine = weather_engine
         self.learning_engine = learning_engine
         self._zone_states: dict = {}
-        self._overrides: dict[str, float] = {}  # zone_id → override °C (0 = kein Override)
+        self._overrides: dict[str, float] = {}
+        self._zone_modes: dict[str, str] = {}
+
+        # ═══════════════════════════════════════════════════════════════
+        # BEOBACHTUNGSMODUS: Standard AUS
+        # Thermostate werden erst beschrieben wenn _active_control = True
+        # ═══════════════════════════════════════════════════════════════
+        self._active_control: bool = False
+
+    # ------------------------------------------------------------------
+    # Setter (von switch.py / select.py / number.py aufgerufen)
+    # ------------------------------------------------------------------
+
+    def set_active_control(self, active: bool) -> None:
+        """Aktive Steuerung ein-/ausschalten.
+        False = Beobachtungsmodus (Thermostate werden NICHT verändert).
+        True  = ThermoSmart übernimmt die Steuerung.
+        """
+        self._active_control = active
+        _LOGGER.warning(
+            "ThermoSmart Aktive Steuerung: %s",
+            "AN – Thermostate werden gesteuert" if active
+            else "AUS – Beobachtungsmodus, keine Änderungen an Thermostaten",
+        )
 
     def set_override(self, zone_id: str, value: float) -> None:
-        """Override für eine Zone setzen. value=0 → kein Override."""
         if value >= 5.0:
             self._overrides[zone_id] = value
-            _LOGGER.debug("Override gesetzt: %s → %.1f°C", zone_id, value)
         else:
             self._overrides.pop(zone_id, None)
-            _LOGGER.debug("Override entfernt: %s", zone_id)
 
     def get_override(self, zone_id: str) -> float | None:
-        """Aktiven Override zurückgeben, oder None wenn kein Override."""
         return self._overrides.get(zone_id)
 
+    def set_zone_mode(self, zone_id: str, mode: str) -> None:
+        self._zone_modes[zone_id] = mode
+
+    def get_zone_mode(self, zone_id: str) -> str:
+        return self._zone_modes.get(zone_id, HEATING_MODE_AUTO)
+
+    # ------------------------------------------------------------------
+    # Haupt-Update-Schleife
+    # ------------------------------------------------------------------
+
     async def _async_update_data(self) -> dict:
-        """Fetch data and compute recommendations for every zone."""
+        """Alle 5 Minuten: Daten holen, Empfehlungen berechnen, ggf. anwenden."""
         try:
             weather_data = await self.weather_engine.async_get_data()
+            presence = self._get_presence_state()
             zone_recommendations: dict = {}
 
             for zone_id, zone_cfg in ZONES.items():
+                mode = self._effective_mode(zone_id, presence)
                 recommendation = await self._compute_zone_recommendation(
-                    zone_id, zone_cfg, weather_data
+                    zone_id, zone_cfg, weather_data, mode
                 )
                 zone_recommendations[zone_id] = recommendation
 
-                # Let the learning engine observe the outcome
+                # Lernalgorithmus beobachtet
                 await self.learning_engine.async_observe(
                     zone_id=zone_id,
                     recommendation=recommendation,
                     weather_data=weather_data,
                 )
 
+                # ── NUR wenn Aktive Steuerung AN ──────────────────────
+                if self._active_control:
+                    await self._apply_zone_temperature(zone_id, zone_cfg, recommendation)
+
             return {
                 "weather": weather_data,
                 "zones": zone_recommendations,
+                "presence": presence,
+                "active_control": self._active_control,
             }
         except Exception as err:
-            raise UpdateFailed(f"ThermoSmart update failed: {err}") from err
+            raise UpdateFailed(f"ThermoSmart Update fehlgeschlagen: {err}") from err
+
+    # ------------------------------------------------------------------
+    # Präsenz-Erkennung
+    # ------------------------------------------------------------------
+
+    def _get_presence_state(self) -> dict:
+        """Gibt zurück wer zuhause ist und ob Urlaub aktiv ist."""
+        persons_home = []
+        persons_away = []
+
+        for person in PRESENCE_PERSONS:
+            state = self.hass.states.get(person)
+            if state and state.state == "home":
+                persons_home.append(person)
+            else:
+                persons_away.append(person)
+
+        # Urlaub prüfen
+        vacation = False
+        vac_state = self.hass.states.get(VACATION_BOOLEAN)
+        if vac_state and vac_state.state == "on":
+            vacation = True
+
+        # Jemand nähert sich der Heizungszone?
+        someone_approaching = False
+        if PRESENCE_PREHEAT_ZONE:
+            for person in PRESENCE_PERSONS:
+                state = self.hass.states.get(person)
+                if state and state.state == PRESENCE_PREHEAT_ZONE.replace("zone.", ""):
+                    someone_approaching = True
+
+        return {
+            "persons_home": persons_home,
+            "persons_away": persons_away,
+            "anyone_home": len(persons_home) > 0,
+            "all_away": len(persons_home) == 0,
+            "vacation": vacation,
+            "someone_approaching": someone_approaching,
+        }
+
+    def _effective_mode(self, zone_id: str, presence: dict) -> str:
+        """Effektiven Heizmodus für eine Zone bestimmen.
+
+        Priorität:
+          1. Urlaubsmodus (höchste Priorität)
+          2. Manuell gesetzter Modus (via select.py)
+          3. Präsenz-basierter Auto-Modus
+        """
+        # 1. Urlaub
+        if presence["vacation"]:
+            return HEATING_MODE_VACATION
+
+        # 2. Manuell gesetzt und nicht Auto
+        manual_mode = self._zone_modes.get(zone_id, HEATING_MODE_AUTO)
+        if manual_mode != HEATING_MODE_AUTO:
+            return manual_mode
+
+        # 3. Auto: Präsenz-basiert
+        if presence["all_away"]:
+            return HEATING_MODE_AWAY
+
+        return HEATING_MODE_AUTO
+
+    # ------------------------------------------------------------------
+    # Zonenberechnung
+    # ------------------------------------------------------------------
 
     async def _compute_zone_recommendation(
-        self, zone_id: str, zone_cfg: dict, weather_data: dict
+        self, zone_id: str, zone_cfg: dict, weather_data: dict, mode: str
     ) -> dict:
-        """
-        Core logic: combine schedule, weather offsets, window state,
-        and learning-engine preheat suggestion into a single recommendation.
-        """
-        # Current indoor temperature
-        temp_sensor = zone_cfg.get("temp_sensor")
+        """Empfehlung für eine Zone berechnen."""
+        # Ist-Temperatur
         current_temp: float | None = None
+        temp_sensor = zone_cfg.get("temp_sensor")
         if temp_sensor:
             state = self.hass.states.get(temp_sensor)
             if state and state.state not in ("unknown", "unavailable"):
@@ -153,25 +260,27 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 except ValueError:
                     pass
 
-        # Window open?
-        window_sensor = zone_cfg.get("window_sensor")
+        # Fenster offen?
         window_open = False
+        window_sensor = zone_cfg.get("window_sensor")
         if window_sensor:
             ws = self.hass.states.get(window_sensor)
             window_open = ws is not None and ws.state == "on"
 
-        # Base target from the learning engine (falls back to schedule)
-        base_target = await self.learning_engine.async_get_base_target(zone_id)
+        # Basis-Zieltemperatur (Lernalgorithmus + Modus)
+        base_target = await self.learning_engine.async_get_base_target(zone_id, mode)
 
-        # Weather adjustment
-        weather_offset = self.weather_engine.compute_temperature_offset(weather_data)
+        # Wetterkorrektur (nur im Auto-Modus)
+        weather_offset = 0.0
+        if mode == HEATING_MODE_AUTO:
+            weather_offset = self.weather_engine.compute_temperature_offset(weather_data)
 
-        # Preheat suggestion
+        # Vorheizzeit
         preheat_minutes = await self.learning_engine.async_get_preheat_minutes(
             zone_id, base_target, current_temp, weather_data
         )
 
-        # Manueller Override hat höchste Priorität
+        # Override hat höchste Priorität (außer Fenster offen)
         override = self.get_override(zone_id)
         if override is not None and not window_open:
             adjusted_target = override
@@ -186,6 +295,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         return {
             "zone_id": zone_id,
             "zone_name": zone_cfg["name"],
+            "mode": mode,
             "current_temp": current_temp,
             "window_open": window_open,
             "base_target": base_target,
@@ -198,3 +308,55 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             "outdoor_temp": weather_data.get("temperature"),
             "weather_condition": weather_data.get("condition"),
         }
+
+    # ------------------------------------------------------------------
+    # Thermostat-Steuerung (NUR wenn _active_control = True)
+    # ------------------------------------------------------------------
+
+    async def _apply_zone_temperature(
+        self, zone_id: str, zone_cfg: dict, recommendation: dict
+    ) -> None:
+        """Zieltemperatur ans Thermostat schicken.
+
+        Wird NUR aufgerufen wenn _active_control = True.
+        Sicherheitsprüfungen:
+          - Kein Schreiben wenn Zieltemperatur None (Fenster offen)
+          - Kein Schreiben wenn Temperatur außerhalb 5–30°C
+        """
+        target = recommendation.get("adjusted_target")
+        if target is None:
+            return
+        if not (5.0 <= target <= 30.0):
+            _LOGGER.warning(
+                "ThermoSmart [%s]: Zieltemperatur %.1f°C außerhalb Sicherheitsbereich, übersprungen",
+                zone_id, target,
+            )
+            return
+
+        climate_entities = zone_cfg.get("climate_entity", [])
+        if isinstance(climate_entities, str):
+            climate_entities = [climate_entities]
+
+        for entity_id in climate_entities:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+
+            # Nur schreiben wenn Änderung > 0.4°C (Unnötige Befehle vermeiden)
+            current_setpoint = state.attributes.get("temperature")
+            if current_setpoint is not None:
+                try:
+                    if abs(float(current_setpoint) - target) < 0.4:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+
+            await self.hass.services.async_call(
+                "climate",
+                "set_temperature",
+                {"entity_id": entity_id, "temperature": target},
+                blocking=False,
+            )
+            _LOGGER.debug(
+                "ThermoSmart [%s] → %s: %.1f°C gesetzt", zone_id, entity_id, target
+            )

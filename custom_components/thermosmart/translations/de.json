@@ -18,6 +18,29 @@
       "already_configured": "ThermoSmart ist bereits konfiguriert."
     }
   },
+  "entity": {
+    "switch": {
+      "active_control": {
+        "name": "Aktive Steuerung",
+        "state": {
+          "on": "Aktiv – ThermoSmart steuert",
+          "off": "Beobachtungsmodus"
+        }
+      }
+    },
+    "select": {
+      "mode": {
+        "name": "Heizmodus",
+        "state": {
+          "Auto": "Auto",
+          "Komfort": "Komfort",
+          "Nacht": "Nacht",
+          "Abwesend": "Abwesend",
+          "Urlaub": "Urlaub"
+        }
+      }
+    }
+  },
   "options": {
     "step": {
       "init": {

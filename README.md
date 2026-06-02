@@ -88,20 +88,6 @@ Pro Heizzone wird ein eigener Eintrag angelegt. Alle Felder sind über die UI ko
 
 ---
 
-## Vergleich mit Better Thermostat
-
-| Feature | Better Thermostat | ThermoSmart |
-|---------|-------------------|-------------|
-| Zeitplan-Lernen | ❌ manuell | ✅ automatisch |
-| Vorheizzeit | ❌ | ✅ aus Heiz- + Abkühlrate |
-| Prognose-Unterdrückung | ✅ | ✅ |
-| TRV-Kalibrierung | ✅ | ✅ EMA-geglättet |
-| Multi-Faktor Boost | ❌ | ✅ Temp + Wind + Feuchte |
-| Sommer-Modus | ✅ | ✅ 72h Rollmittelwert |
-| Ventil-Wartung | ✅ | ✅ |
-| Einfache Konfiguration | ❌ komplex | ✅ |
-
----
 
 ## Mithelfen & Contributing
 

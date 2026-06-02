@@ -54,6 +54,8 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
     Steuert: Zieltemperatur (Override), HVAC-Modus, Preset.
     """
 
+    _attr_has_entity_name = True
+    _attr_name = None  # Primärentität des Geräts → name = Gerätename
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_preset_modes = list(MODE_TO_PRESET.values())
@@ -72,7 +74,6 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         self._entry = entry
         zone_name = entry.data.get("name", "Zone")
         self._attr_unique_id = f"{entry.entry_id}_climate"
-        self._attr_name = f"ThermoSmart {zone_name}"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=f"ThermoSmart – {zone_name}",

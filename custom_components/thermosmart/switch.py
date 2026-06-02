@@ -1,4 +1,4 @@
-"""Switch platform für ThermoSmart – Aktive Steuerung & Lernmodus."""
+"""Switch platform für ThermoSmart."""
 from __future__ import annotations
 import logging
 
@@ -37,19 +37,15 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 
 
 class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
-    """Aktive Steuerung – Standard: AUS (Beobachtungsmodus).
-
-    Solange AUS: ThermoSmart berechnet + lernt, schreibt aber KEIN Thermostat.
-    Erst wenn AN: ThermoSmart übernimmt die Steuerung dieser Zone.
-    """
+    """Aktive Steuerung – Standard: AUS (Beobachtungsmodus)."""
+    _attr_has_entity_name = True
     _attr_icon = "mdi:thermostat-auto"
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
         self._entry = entry
-        zone_name = entry.data.get("name", "Zone")
         self._attr_unique_id = f"{entry.entry_id}_active_control"
-        self._attr_name = f"ThermoSmart {zone_name} Aktive Steuerung"
+        self._attr_name = "Aktive Steuerung"
         self._attr_device_info = _device_info(entry)
         self._is_on = False
 
@@ -67,11 +63,6 @@ class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
     def extra_state_attributes(self) -> dict:
         return {
             "modus": "Aktive Steuerung" if self._is_on else "Beobachtungsmodus",
-            "hinweis": (
-                "Thermostat wird von ThermoSmart gesteuert"
-                if self._is_on
-                else "ThermoSmart beobachtet nur – deine Automationen laufen weiter"
-            ),
         }
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -87,14 +78,14 @@ class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
 
 class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
     """Lernmodus – Standard: AN."""
+    _attr_has_entity_name = True
     _attr_icon = "mdi:brain"
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
         self._entry = entry
-        zone_name = entry.data.get("name", "Zone")
         self._attr_unique_id = f"{entry.entry_id}_learning"
-        self._attr_name = f"ThermoSmart {zone_name} Lernmodus"
+        self._attr_name = "Lernmodus"
         self._attr_device_info = _device_info(entry)
         self._is_on = True
 
@@ -119,6 +110,4 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
         self._get_engine().set_enabled(False)
 
     def _get_engine(self):
-        return self.hass.data.get(DOMAIN, {}).get(
-            self._entry.entry_id, {}
-        ).get("learning_engine")
+        return self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {}).get("learning_engine")

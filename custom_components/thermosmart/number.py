@@ -24,8 +24,7 @@ async def async_setup_entry(
 
 
 class ThermoSmartTemperatureOverride(NumberEntity, RestoreEntity):
-    """Manueller Override: 0 = kein Override, >0 = feste Zieltemperatur."""
-
+    _attr_has_entity_name = True
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
     _attr_native_min_value = 5.0
@@ -35,13 +34,11 @@ class ThermoSmartTemperatureOverride(NumberEntity, RestoreEntity):
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
-        self._entry = entry
-        zone_name = entry.data.get("name", "Zone")
         self._attr_unique_id = f"{entry.entry_id}_temp_override"
-        self._attr_name = f"ThermoSmart {zone_name} Temperatur Override"
+        self._attr_name = "Temperatur Override"
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=f"ThermoSmart – {zone_name}",
+            name=f"ThermoSmart – {entry.data.get('name', 'Zone')}",
             manufacturer="ThermoSmart",
             model="AI Heating Controller",
             sw_version=VERSION,
@@ -64,13 +61,6 @@ class ThermoSmartTemperatureOverride(NumberEntity, RestoreEntity):
     @property
     def native_value(self) -> float:
         return self._value
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {
-            "override_aktiv": self._value >= 5.0,
-            "hinweis": "Override aktiv" if self._value >= 5.0 else "Kein Override – Auto",
-        }
 
     async def async_set_native_value(self, value: float) -> None:
         self._value = value

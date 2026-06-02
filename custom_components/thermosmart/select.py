@@ -1,4 +1,4 @@
-"""Select platform für ThermoSmart – Heizmodus pro Zone."""
+"""Select platform für ThermoSmart."""
 from __future__ import annotations
 import logging
 
@@ -36,18 +36,18 @@ async def async_setup_entry(
 
 
 class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
+    _attr_has_entity_name = True
     _attr_icon = "mdi:home-thermometer-outline"
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
         self._entry = entry
-        zone_name = entry.data.get("name", "Zone")
         self._attr_unique_id = f"{entry.entry_id}_mode"
-        self._attr_name = f"ThermoSmart {zone_name} Modus"
+        self._attr_name = "Heizmodus"
         self._attr_options = list(MODE_LABELS.values())
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
-            name=f"ThermoSmart – {zone_name}",
+            name=f"ThermoSmart – {entry.data.get('name', 'Zone')}",
             manufacturer="ThermoSmart",
             model="AI Heating Controller",
             sw_version=VERSION,
@@ -64,17 +64,6 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
     @property
     def current_option(self) -> str:
         return MODE_LABELS[self._mode]
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        cfg = self._coordinator.zone_cfg
-        return {
-            "modus_schlüssel": self._mode,
-            "komfort": cfg.get("comfort_temp"),
-            "nacht": cfg.get("night_temp"),
-            "abwesend": cfg.get("away_temp"),
-            "urlaub": 12.0,
-        }
 
     async def async_select_option(self, option: str) -> None:
         self._mode = LABEL_TO_MODE.get(option, HEATING_MODE_AUTO)

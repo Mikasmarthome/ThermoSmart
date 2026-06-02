@@ -182,7 +182,7 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
             )),
 
         # ── TRV-Verhalten ─────────────────────────────────────────────
-        vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.4)):
+        vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.5)):
             selector.NumberSelector(selector.NumberSelectorConfig(
                 min=0.1, max=2.0, step=0.1,
                 unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,

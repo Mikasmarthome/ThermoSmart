@@ -1,4 +1,4 @@
-"""Sensor platform für ThermoSmart – Diagnose-Sensoren pro Zone."""
+"""Sensor platform für ThermoSmart."""
 from __future__ import annotations
 from typing import Any
 import logging
@@ -41,10 +41,11 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 
 
 class _Base(CoordinatorEntity, SensorEntity):
+    _attr_has_entity_name = True
+
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry, key: str):
         super().__init__(coordinator)
         self._key = key
-        self._entry = entry
         self._attr_device_info = _device_info(entry)
 
     @property
@@ -62,7 +63,7 @@ class ThermoSmartTargetTempSensor(_Base):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "adjusted_target")
         self._attr_unique_id = f"{entry.entry_id}_adjusted_target"
-        self._attr_name = f"ThermoSmart {entry.data.get('name','Zone')} Zieltemperatur"
+        self._attr_name = "Zieltemperatur"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -76,16 +77,13 @@ class ThermoSmartTargetTempSensor(_Base):
     def extra_state_attributes(self) -> dict[str, Any]:
         z = self._zone
         return {
-            "basis_zieltemperatur": z.get("base_target"),
+            "basis": z.get("base_target"),
             "wetterkorrektur": z.get("weather_offset"),
             "prognose_unterdrückung": f"{z.get('forecast_suppression', 0)}%",
-            "prognose_hoch": z.get("forecast_high"),
             "fenster_offen": z.get("window_open"),
             "ist_temperatur": z.get("current_temp"),
             "außentemperatur": z.get("outdoor_temp"),
-            "wetterlage": z.get("weather_condition"),
             "modus": z.get("mode"),
-            "override_aktiv": z.get("override_active"),
         }
 
 
@@ -93,7 +91,7 @@ class ThermoSmartPreheatSensor(_Base):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "preheat_minutes")
         self._attr_unique_id = f"{entry.entry_id}_preheat_minutes"
-        self._attr_name = f"ThermoSmart {entry.data.get('name','Zone')} Vorheizzeit"
+        self._attr_name = "Vorheizzeit"
         self._attr_native_unit_of_measurement = "min"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_PREHEAT
@@ -107,40 +105,31 @@ class ThermoSmartConfidenceSensor(_Base):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "learning_confidence")
         self._attr_unique_id = f"{entry.entry_id}_confidence"
-        self._attr_name = f"ThermoSmart {entry.data.get('name','Zone')} Vorhersage-Konfidenz"
+        self._attr_name = "Vorhersage-Konfidenz"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_LEARNING
 
     @property
     def native_value(self):
-        raw = self._zone.get("learning_confidence", 0.0)
-        return round(raw * 100, 1)
+        return round((self._zone.get("learning_confidence", 0.0) * 100), 1)
 
     @property
     def extra_state_attributes(self) -> dict:
         pct = self.native_value or 0
-        if pct < 25:
-            status = "Sammle Daten – nutze Zeitplan"
-        elif pct < 50:
-            status = "Erste Muster erkennbar"
-        elif pct < 80:
-            status = "Vorhersagen werden zuverlässiger"
-        elif pct < 100:
-            status = "Hohe Zuverlässigkeit"
-        else:
-            status = "Maximale Zuverlässigkeit"
-        return {
-            "status": status,
-            "hinweis": "100% = maximale Qualität, Lernen läuft dauerhaft weiter",
-        }
+        if pct < 25:   status = "Sammle Daten"
+        elif pct < 50: status = "Erste Muster erkennbar"
+        elif pct < 80: status = "Wird zuverlässiger"
+        elif pct < 100: status = "Hohe Zuverlässigkeit"
+        else:           status = "Maximale Zuverlässigkeit"
+        return {"status": status}
 
 
 class ThermoSmartWeatherOffsetSensor(_Base):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "weather_offset")
         self._attr_unique_id = f"{entry.entry_id}_weather_offset"
-        self._attr_name = f"ThermoSmart {entry.data.get('name','Zone')} Wetterkorrektur"
+        self._attr_name = "Wetterkorrektur"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_WEATHER_ADJUST

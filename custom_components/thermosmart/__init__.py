@@ -323,7 +323,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             )
             return
 
-        tolerance = cfg.get("temp_tolerance", 0.4)
+        tolerance = cfg.get("temp_tolerance", 0.5)
         for entity_id in cfg.get("climate_entities", []):
             state = self.hass.states.get(entity_id)
             if not state or state.state in ("unavailable", "unknown"):

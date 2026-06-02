@@ -131,17 +131,13 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
                     CONF_OUTDOOR_SOLAR_SENSOR,
                     default=_opt(CONF_OUTDOOR_SOLAR_SENSOR, ""),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain="sensor", device_class="irradiance"
-                    )
+                    selector.EntitySelectorConfig(domain="sensor")
                 ),
                 vol.Optional(
                     CONF_OUTDOOR_RAIN_SENSOR,
                     default=_opt(CONF_OUTDOOR_RAIN_SENSOR, ""),
                 ): selector.EntitySelector(
-                    selector.EntitySelectorConfig(
-                        domain="sensor", device_class="precipitation"
-                    )
+                    selector.EntitySelectorConfig(domain="sensor")
                 ),
             }),
         )

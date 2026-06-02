@@ -16,8 +16,17 @@ CONF_HEATING_ZONE = "heating_zone"
 CONF_PRESENCE_PERSONS = "presence_persons"
 CONF_VACATION_BOOLEAN = "vacation_boolean"
 CONF_CALIBRATION_ENTITIES = "calibration_entities"
-CONF_QUIRK_ENTITIES = "quirk_entities"       # Schalter die immer AUS sein sollen (z.B. TRV-eigene Fenstererkennung)
-CONF_VALVE_MAINTENANCE = "valve_maintenance"  # Ventil-Wartung aktivieren
+CONF_QUIRK_ENTITIES = "quirk_entities"
+CONF_VALVE_MAINTENANCE = "valve_maintenance"
+
+# Zeitplan-Konfiguration (HH:MM Strings)
+CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
+CONF_SCHED_WD_DAY      = "sched_wd_day"       # Werktag: Tagsüber   → sched_day_temp
+CONF_SCHED_WD_DAY_TEMP = "sched_wd_day_temp"  # Werktag: Tagtemp (reduziert, z.B. niemand zuhause)
+CONF_SCHED_WD_EVENING  = "sched_wd_evening"   # Werktag: Abend      → comfort_temp
+CONF_SCHED_WD_NIGHT    = "sched_wd_night"     # Werktag: Nacht      → night_temp
+CONF_SCHED_WE_MORNING  = "sched_we_morning"   # Wochenende: Aufwachen → comfort_temp
+CONF_SCHED_WE_NIGHT    = "sched_we_night"     # Wochenende: Nacht     → night_temp
 
 VALVE_MAINTENANCE_HOUR = 3     # 03:00 Uhr nachts
 VALVE_MAINTENANCE_WEEKDAY = 6  # Sonntag (0=Mo … 6=So)

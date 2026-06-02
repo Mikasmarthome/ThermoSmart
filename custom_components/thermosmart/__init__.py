@@ -384,6 +384,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             comfort_temp=cfg.get("comfort_temp", 21.0),
             night_temp=cfg.get("night_temp", 18.0),
             away_temp=cfg.get("away_temp", 17.0),
+            schedule_cfg=cfg,
         )
 
         # Wetterkorrektur (nur Auto-Modus)

@@ -21,6 +21,9 @@ from .const import (
     CONF_CALIBRATION_ENTITIES,
     CONF_QUIRK_ENTITIES,
     CONF_VALVE_MAINTENANCE,
+    CONF_SCHED_WD_MORNING, CONF_SCHED_WD_DAY, CONF_SCHED_WD_DAY_TEMP,
+    CONF_SCHED_WD_EVENING, CONF_SCHED_WD_NIGHT,
+    CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
     DEFAULT_WEATHER_ENTITY,
     DEFAULT_LEARNING_ENABLED,
 )
@@ -204,6 +207,25 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
                 min=5, max=25, step=0.5,
                 unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
             )),
+
+        # ── Zeitplan ──────────────────────────────────────────────────
+        vol.Optional(CONF_SCHED_WD_MORNING, default=d.get(CONF_SCHED_WD_MORNING, "06:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WD_DAY, default=d.get(CONF_SCHED_WD_DAY, "09:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WD_DAY_TEMP, default=d.get(CONF_SCHED_WD_DAY_TEMP, 19.0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=5, max=25, step=0.5,
+                unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Optional(CONF_SCHED_WD_EVENING, default=d.get(CONF_SCHED_WD_EVENING, "17:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WD_NIGHT, default=d.get(CONF_SCHED_WD_NIGHT, "22:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WE_MORNING, default=d.get(CONF_SCHED_WE_MORNING, "08:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WE_NIGHT, default=d.get(CONF_SCHED_WE_NIGHT, "23:00")):
+            selector.TimeSelector(),
 
         # ── TRV-Verhalten ─────────────────────────────────────────────
         vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.5)):

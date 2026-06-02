@@ -35,6 +35,9 @@ from .const import (
     PREHEAT_MAX_MINUTES,
     PREHEAT_MIN_DELTA,
     HEATING_MODE_AUTO,
+    CONF_SCHED_WD_MORNING, CONF_SCHED_WD_DAY, CONF_SCHED_WD_DAY_TEMP,
+    CONF_SCHED_WD_EVENING, CONF_SCHED_WD_NIGHT,
+    CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -267,8 +270,9 @@ class LearningEngine:
         comfort_temp: float = 21.0,
         night_temp: float = 18.0,
         away_temp: float = 17.0,
+        schedule_cfg: dict | None = None,
     ) -> float:
-        """Empfohlene Zieltemperatur – zeitbasiert gelernt oder Modus-Temperatur."""
+        """Empfohlene Zieltemperatur – Zeitplan oder Modus-Temperatur."""
         mode_temps = {
             "comfort": comfort_temp,
             "night": night_temp,
@@ -278,7 +282,9 @@ class LearningEngine:
         if mode != HEATING_MODE_AUTO:
             return mode_temps.get(mode, night_temp)
 
-        schedule_temp = self._schedule_target(zone_id, comfort_temp, night_temp)
+        schedule_temp = self._schedule_target(
+            zone_id, comfort_temp, night_temp, away_temp, schedule_cfg
+        )
 
         if not self._enabled or self.get_confidence(zone_id) < 0.25:
             return schedule_temp
@@ -375,18 +381,46 @@ class LearningEngine:
     # ── Interne Helfer ───────────────────────────────────────────────────
 
     def _schedule_target(
-        self, zone_id: str, comfort_temp: float = 21.0, night_temp: float = 18.0
+        self,
+        zone_id: str,
+        comfort_temp: float = 21.0,
+        night_temp: float = 18.0,
+        away_temp: float = 17.0,
+        schedule_cfg: dict | None = None,
     ) -> float:
-        """Einfacher Zeitplan: Komfort tagsüber, Nacht ab 22 Uhr."""
+        """Konfigurierbarer Zeitplan: Werktag 4 Blöcke, Wochenende 2 Blöcke."""
         now = dt_util.now()
-        hour = now.hour
-        # Nacht: 22-5 Uhr
-        if hour >= 22 or hour < 5:
-            return night_temp
-        # Morgens früh: noch Nachttemp bis 5:30
-        if hour == 5 and now.minute < 30:
-            return night_temp
-        return comfort_temp
+        is_weekend = now.weekday() >= 5
+        cur = now.hour * 60 + now.minute
+
+        def t(key: str, fallback: str) -> int:
+            raw = (schedule_cfg or {}).get(key, fallback)
+            try:
+                h, m = str(raw).split(":")
+                return int(h) * 60 + int(m)
+            except (ValueError, AttributeError):
+                h2, m2 = fallback.split(":")
+                return int(h2) * 60 + int(m2)
+
+        if not is_weekend:
+            morning  = t(CONF_SCHED_WD_MORNING, "06:00")
+            day      = t(CONF_SCHED_WD_DAY,     "09:00")
+            evening  = t(CONF_SCHED_WD_EVENING, "17:00")
+            night    = t(CONF_SCHED_WD_NIGHT,   "22:00")
+            day_temp = float((schedule_cfg or {}).get(CONF_SCHED_WD_DAY_TEMP, away_temp))
+            if cur < morning or cur >= night:
+                return night_temp
+            if cur < day:
+                return comfort_temp   # Aufwachen
+            if cur < evening:
+                return day_temp       # Tagsüber (z.B. alle bei der Arbeit)
+            return comfort_temp       # Abend
+        else:
+            morning = t(CONF_SCHED_WE_MORNING, "08:00")
+            night   = t(CONF_SCHED_WE_NIGHT,   "23:00")
+            if cur < morning or cur >= night:
+                return night_temp
+            return comfort_temp
 
     def _weighted_targets_for_hour(
         self, zone_id: str, now: datetime

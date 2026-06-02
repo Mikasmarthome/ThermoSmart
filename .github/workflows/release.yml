@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version from tag
+        id: version
+        run: echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Get version from manifest
+        id: manifest
+        run: |
+          VERSION=$(python3 -c "import json; print(json.load(open('custom_components/thermosmart/manifest.json'))['version'])")
+          echo "manifest_version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: "ThermoSmart ${{ github.ref_name }}"
+          body: |
+            ## ThermoSmart ${{ github.ref_name }}
+
+            Installiere oder aktualisiere über HACS.
+
+            ### Installation
+            1. HACS → Integrationen → ⋮ → Benutzerdefinierte Repositories
+            2. URL: `https://github.com/Mikasmarthome/ThermoSmart`
+            3. Kategorie: Integration
+            4. Hinzufügen → ThermoSmart installieren
+
+            ### Update
+            HACS → Integrationen → ThermoSmart → Update
+          draft: false
+          prerelease: ${{ contains(github.ref_name, 'alpha') || contains(github.ref_name, 'beta') }}

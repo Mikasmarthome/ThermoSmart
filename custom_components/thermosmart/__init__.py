@@ -29,11 +29,17 @@ from .const import (
     CONF_PRESENCE_PERSONS,
     CONF_VACATION_BOOLEAN,
     CONF_CALIBRATION_ENTITIES,
+    CONF_QUIRK_ENTITIES,
+    CONF_VALVE_MAINTENANCE,
     TEMP_NIGHT,
     TEMP_FROST_PROTECTION,
     SUMMER_THRESHOLD,
     WINTER_THRESHOLD,
     SEASON_HOURS,
+    VALVE_MAINTENANCE_HOUR,
+    VALVE_MAINTENANCE_WEEKDAY,
+    VALVE_MAINTENANCE_BOOST_TEMP,
+    VALVE_MAINTENANCE_DURATION_SEC,
     HEATING_MODE_AUTO,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
@@ -131,9 +137,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._window_close_at: dict[str, datetime] = {}
         self._boost_active: dict[str, dict] = {}
         self._calibration_offsets: dict[str, float] = {}
-        # Sommer-Erkennung: rollendes Fenster der letzten SEASON_HOURS Außentemperaturen
         self._outdoor_temp_history: deque = deque(maxlen=int(SEASON_HOURS * 3600 / DEFAULT_SCAN_INTERVAL))
         self._is_summer: bool = False
+        self._last_maintenance: datetime | None = None
+        self._maintenance_running: bool = False
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -258,11 +265,13 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             )
 
             if self._active_control and not self._is_summer:
+                await self._async_apply_quirks(cfg)
                 await self._watchdog_hvac(cfg, recommendation)
                 await self._async_calibrate_trvs(cfg, recommendation)
                 await self._apply_temperature(cfg, recommendation)
+                await self._async_valve_maintenance(cfg, recommendation)
             elif self._active_control and self._is_summer:
-                # Sommer: alle TRVs auf Frostschutz
+                await self._async_apply_quirks(cfg)
                 await self._apply_frost_protection(cfg)
 
             return {
@@ -677,6 +686,110 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 {"entity_id": cal_entity, "value": clamped},
                 blocking=False,
             ))
+
+    async def _async_apply_quirks(self, cfg: dict) -> None:
+        """TRV-Eigenlogik deaktivieren die mit ThermoSmart konkurriert.
+
+        Typisch beim Sonoff TRVZB via Zigbee2MQTT:
+          - switch.*_window_detection  → TRV erkennt Fenster selbst (Konflikt mit unseren Sensoren)
+          - switch.*_child_lock        → sperrt externe Setpoint-Änderungen
+          - Jeder switch in quirk_entities wird auf OFF gehalten.
+        """
+        quirk_entities = cfg.get(CONF_QUIRK_ENTITIES, [])
+        if not quirk_entities:
+            return
+        tasks = []
+        for entity_id in quirk_entities:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+            if state.state == "on":
+                _LOGGER.info(
+                    "ThermoSmart '%s': Quirk deaktivieren %s (war 'on')",
+                    self.zone_name, entity_id,
+                )
+                tasks.append(self.hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": entity_id}, blocking=True,
+                ))
+        if tasks:
+            await asyncio.gather(*tasks)
+
+    async def _async_valve_maintenance(self, cfg: dict, recommendation: dict) -> None:
+        """Ventil-Wartung: einmal pro Woche Ventil vollständig auf und zu fahren.
+
+        Verhindert Festklemmen nach dem Sommer (Kalk, Gummi klebt).
+        Ablauf:
+          1. Sonntag 03:00 Uhr
+          2. Alle TRVs auf VALVE_MAINTENANCE_BOOST_TEMP (28°C) → Ventil fährt voll auf
+          3. VALVE_MAINTENANCE_DURATION_SEC warten (async, blockiert nicht HA)
+          4. Zurück auf adjustierten Zielwert
+        """
+        if not cfg.get(CONF_VALVE_MAINTENANCE, True):
+            return
+        if self._maintenance_running:
+            return
+
+        now = dt_util.now()
+        if now.weekday() != VALVE_MAINTENANCE_WEEKDAY or now.hour != VALVE_MAINTENANCE_HOUR:
+            return
+
+        # Nur einmal pro Woche auslösen (nicht jede 5-Min-Runde)
+        if self._last_maintenance is not None:
+            if (now - self._last_maintenance).days < 6:
+                return
+
+        self._last_maintenance = now
+        self._maintenance_running = True
+        target_after = recommendation.get("adjusted_target") or cfg.get("comfort_temp", 21.0)
+        climate_entities = cfg.get("climate_entities", [])
+
+        _LOGGER.info(
+            "ThermoSmart '%s': Ventil-Wartung gestartet – fahre auf %.0f°C",
+            self.zone_name, VALVE_MAINTENANCE_BOOST_TEMP,
+        )
+
+        async def _run_maintenance() -> None:
+            try:
+                # Vollständig öffnen
+                tasks = [
+                    self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": eid, "temperature": VALVE_MAINTENANCE_BOOST_TEMP},
+                        blocking=True,
+                    )
+                    for eid in climate_entities
+                    if self.hass.states.get(eid) and
+                    self.hass.states.get(eid).state not in ("unavailable", "unknown")
+                ]
+                if tasks:
+                    await asyncio.gather(*tasks)
+
+                # Warten
+                await asyncio.sleep(VALVE_MAINTENANCE_DURATION_SEC)
+
+                # Zurück auf Zieltemperatur
+                tasks = [
+                    self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": eid, "temperature": target_after},
+                        blocking=True,
+                    )
+                    for eid in climate_entities
+                    if self.hass.states.get(eid) and
+                    self.hass.states.get(eid).state not in ("unavailable", "unknown")
+                ]
+                if tasks:
+                    await asyncio.gather(*tasks)
+
+                _LOGGER.info(
+                    "ThermoSmart '%s': Ventil-Wartung abgeschlossen → zurück auf %.1f°C",
+                    self.zone_name, target_after,
+                )
+            finally:
+                self._maintenance_running = False
+
+        # Als Hintergrund-Task starten – blockiert nicht den normalen Update-Zyklus
+        self.hass.async_create_task(_run_maintenance())
 
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
         target = recommendation.get("adjusted_target")

@@ -16,6 +16,13 @@ CONF_HEATING_ZONE = "heating_zone"
 CONF_PRESENCE_PERSONS = "presence_persons"
 CONF_VACATION_BOOLEAN = "vacation_boolean"
 CONF_CALIBRATION_ENTITIES = "calibration_entities"
+CONF_QUIRK_ENTITIES = "quirk_entities"       # Schalter die immer AUS sein sollen (z.B. TRV-eigene Fenstererkennung)
+CONF_VALVE_MAINTENANCE = "valve_maintenance"  # Ventil-Wartung aktivieren
+
+VALVE_MAINTENANCE_HOUR = 3     # 03:00 Uhr nachts
+VALVE_MAINTENANCE_WEEKDAY = 6  # Sonntag (0=Mo … 6=So)
+VALVE_MAINTENANCE_BOOST_TEMP = 28.0  # °C für Vollöffnung
+VALVE_MAINTENANCE_DURATION_SEC = 180  # 3 Minuten offen lassen
 
 # Default values
 DEFAULT_WEATHER_ENTITY = "weather.home"

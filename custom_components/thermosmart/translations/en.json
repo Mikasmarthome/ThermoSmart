@@ -1,0 +1,31 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up ThermoSmart",
+        "description": "Select your weather source and optionally enable the learning algorithm.",
+        "data": {
+          "weather_entity": "Weather entity",
+          "outdoor_temp_sensor": "Outdoor temperature sensor (optional)",
+          "learning_enabled": "Enable learning algorithm"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "The selected weather entity was not found."
+    },
+    "abort": {
+      "already_configured": "ThermoSmart is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ThermoSmart Options",
+        "data": {
+          "learning_enabled": "Enable learning algorithm"
+        }
+      }
+    }
+  }
+}

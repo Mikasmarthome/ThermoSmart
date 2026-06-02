@@ -65,9 +65,6 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="user",
             data_schema=schema,
             errors=errors,
-            description_placeholders={
-                "name": "ThermoSmart",
-            },
         )
 
     @staticmethod

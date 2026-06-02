@@ -137,7 +137,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                     "climate_entities": z.get("climate_entities", []),
                     "temp_sensors": z.get("temp_sensors", []),
                     "humidity_sensors": z.get("humidity_sensors", []),
-                    "window_sensor": z.get("window_sensor"),
+                    "window_sensors": z.get("window_sensors", []),
                     "comfort_temp": z.get("comfort_temp", TEMP_COMFORT),
                     "night_temp": z.get("night_temp", TEMP_NIGHT),
                     "away_temp": z.get("away_temp", TEMP_AWAY),
@@ -154,7 +154,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 "climate_entities": [climate] if isinstance(climate, str) else list(climate),
                 "temp_sensors": [s for s in [zone_cfg.get("temp_sensor")] if s],
                 "humidity_sensors": [s for s in [zone_cfg.get("humidity_sensor")] if s],
-                "window_sensor": zone_cfg.get("window_sensor"),
+                "window_sensors": [s for s in [zone_cfg.get("window_sensor")] if s],
                 "comfort_temp": temps.get("comfort", TEMP_COMFORT),
                 "night_temp": temps.get("night", TEMP_NIGHT),
                 "away_temp": temps.get("away", TEMP_AWAY),
@@ -313,12 +313,19 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         # Ist-Temperatur – Durchschnitt aller konfigurierten Sensoren
         current_temp = self._read_avg_sensor(zone_cfg.get("temp_sensors", []))
 
-        # Fenster offen?
+        # Fenster offen? → offen wenn mindestens ein Sensor "on" meldet
         window_open = False
-        window_sensor = zone_cfg.get("window_sensor")
-        if window_sensor:
-            ws = self.hass.states.get(window_sensor)
-            window_open = ws is not None and ws.state == "on"
+        window_sensors: list[str] = zone_cfg.get("window_sensors", [])
+        # Fallback: altes Einzelfeld (const.py Zonen)
+        if not window_sensors and zone_cfg.get("window_sensor"):
+            window_sensors = [zone_cfg["window_sensor"]]
+        for ws_id in window_sensors:
+            if not ws_id:
+                continue
+            ws = self.hass.states.get(ws_id)
+            if ws is not None and ws.state == "on":
+                window_open = True
+                break
 
         # Basis-Zieltemperatur (Lernalgorithmus + Modus)
         base_target = await self.learning_engine.async_get_base_target(zone_id, mode)

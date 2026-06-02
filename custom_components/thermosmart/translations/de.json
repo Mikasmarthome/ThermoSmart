@@ -42,7 +42,7 @@
           "climate_entities": "Thermostate / Heizkörperventile (TRVs)",
           "temp_sensors": "Temperatursensoren (Durchschnitt wird berechnet)",
           "humidity_sensors": "Feuchtigkeitssensoren (optional)",
-          "window_sensor": "Fenstersensor (optional)",
+          "window_sensors": "Fenstersensoren (optional, mehrere möglich)",
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur"
@@ -62,7 +62,7 @@
           "climate_entities": "Thermostate / TRVs",
           "temp_sensors": "Temperatursensoren",
           "humidity_sensors": "Feuchtigkeitssensoren",
-          "window_sensor": "Fenstersensor",
+          "window_sensors": "Fenstersensoren",
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",

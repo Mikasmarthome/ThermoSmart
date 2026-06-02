@@ -127,7 +127,7 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
                     "climate_entities": user_input.get("climate_entities", []),
                     "temp_sensors": user_input.get("temp_sensors", []),
                     "humidity_sensors": user_input.get("humidity_sensors", []),
-                    "window_sensor": user_input.get("window_sensor") or None,
+                    "window_sensors": user_input.get("window_sensors", []),
                     "comfort_temp": float(user_input.get("comfort_temp", 21.0)),
                     "night_temp": float(user_input.get("night_temp", 18.0)),
                     "away_temp": float(user_input.get("away_temp", 17.0)),
@@ -189,7 +189,7 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
                     "climate_entities": user_input.get("climate_entities", []),
                     "temp_sensors": user_input.get("temp_sensors", []),
                     "humidity_sensors": user_input.get("humidity_sensors", []),
-                    "window_sensor": user_input.get("window_sensor") or None,
+                    "window_sensors": user_input.get("window_sensors", []),
                     "comfort_temp": float(user_input.get("comfort_temp", 21.0)),
                     "night_temp": float(user_input.get("night_temp", 18.0)),
                     "away_temp": float(user_input.get("away_temp", 17.0)),
@@ -233,9 +233,9 @@ def _zone_schema(zone: dict | None = None) -> vol.Schema:
                     domain="sensor", device_class="humidity", multiple=True
                 )
             ),
-        vol.Optional("window_sensor", default=d.get("window_sensor", "")):
+        vol.Optional("window_sensors", default=d.get("window_sensors", [])):
             selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="binary_sensor")
+                selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
             ),
         vol.Required("comfort_temp", default=d.get("comfort_temp", 21.0)):
             selector.NumberSelector(

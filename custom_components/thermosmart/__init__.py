@@ -94,6 +94,20 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self.weather_engine = weather_engine
         self.learning_engine = learning_engine
         self._zone_states: dict = {}
+        self._overrides: dict[str, float] = {}  # zone_id → override °C (0 = kein Override)
+
+    def set_override(self, zone_id: str, value: float) -> None:
+        """Override für eine Zone setzen. value=0 → kein Override."""
+        if value >= 5.0:
+            self._overrides[zone_id] = value
+            _LOGGER.debug("Override gesetzt: %s → %.1f°C", zone_id, value)
+        else:
+            self._overrides.pop(zone_id, None)
+            _LOGGER.debug("Override entfernt: %s", zone_id)
+
+    def get_override(self, zone_id: str) -> float | None:
+        """Aktiven Override zurückgeben, oder None wenn kein Override."""
+        return self._overrides.get(zone_id)
 
     async def _async_update_data(self) -> dict:
         """Fetch data and compute recommendations for every zone."""
@@ -157,7 +171,17 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             zone_id, base_target, current_temp, weather_data
         )
 
-        adjusted_target = round(base_target + weather_offset, 1) if not window_open else None
+        # Manueller Override hat höchste Priorität
+        override = self.get_override(zone_id)
+        if override is not None and not window_open:
+            adjusted_target = override
+            override_active = True
+        elif not window_open:
+            adjusted_target = round(base_target + weather_offset, 1)
+            override_active = False
+        else:
+            adjusted_target = None
+            override_active = False
 
         return {
             "zone_id": zone_id,
@@ -167,6 +191,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             "base_target": base_target,
             "weather_offset": weather_offset,
             "adjusted_target": adjusted_target,
+            "override_active": override_active,
+            "override_temp": override,
             "preheat_minutes": preheat_minutes,
             "learning_confidence": self.learning_engine.get_confidence(zone_id),
             "outdoor_temp": weather_data.get("temperature"),

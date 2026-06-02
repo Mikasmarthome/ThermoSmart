@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -93,7 +93,7 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}_learning_data"
 
 # Platforms
-PLATFORMS = ["sensor"]  # number, switch, select werden schrittweise ergänzt
+PLATFORMS = ["sensor", "number"]  # switch, select werden schrittweise ergänzt
 
 # Attributes
 ATTR_ZONE = "zone"

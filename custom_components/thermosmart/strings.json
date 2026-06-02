@@ -3,25 +3,28 @@
     "step": {
       "user": {
         "title": "Heizzone einrichten",
-        "description": "Jede Zone wird als eigener Eintrag angelegt. Wetter-Einstellungen werden von bestehenden Zonen übernommen.",
+        "description": "Jede Zone wird als eigener Eintrag angelegt. Wetter-Einstellungen werden von bestehenden Zonen automatisch übernommen.",
         "data": {
           "name": "Zonenname (z.B. Wohnzimmer)",
           "climate_entities": "Thermostate / TRVs",
+          "calibration_entities": "TRV-Kalibrierungs-Entities (local_temperature_calibration)",
           "temp_sensors": "Innensensoren Temperatur (Durchschnitt)",
           "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
-          "window_sensors": "Fenstersensoren (mehrere möglich)",
+          "window_sensors": "Fenstersensoren",
+          "presence_persons": "Personen (Präsenzerkennung)",
+          "vacation_boolean": "Urlaubsmodus (input_boolean)",
           "weather_entity": "Wetter-Entität",
           "outdoor_temp_sensor": "Außentemperatur (eigene Wetterstation)",
           "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
           "outdoor_wind_sensor": "Windgeschwindigkeit",
-          "outdoor_solar_sensor": "Sonneneinstrahlung",
+          "outdoor_solar_sensor": "Sonneneinstrahlung (W/m²)",
           "outdoor_rain_sensor": "Niederschlag",
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
           "temp_tolerance": "Temperaturtoleranz (Hysterese)",
-          "window_open_delay": "Verzögerung: Heizung aus nach Fenster auf (min)",
-          "window_close_delay": "Verzögerung: Heizung an nach Fenster zu (min)",
+          "window_open_delay": "Verzögerung: Heizung aus nach Fenster öffnen (min)",
+          "window_close_delay": "Verzögerung: Heizung an nach Fenster schließen (min)",
           "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }
@@ -42,9 +45,12 @@
         "data": {
           "name": "Zonenname",
           "climate_entities": "Thermostate / TRVs",
+          "calibration_entities": "TRV-Kalibrierungs-Entities (local_temperature_calibration)",
           "temp_sensors": "Innensensoren Temperatur",
           "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
           "window_sensors": "Fenstersensoren",
+          "presence_persons": "Personen (Präsenzerkennung)",
+          "vacation_boolean": "Urlaubsmodus (input_boolean)",
           "weather_entity": "Wetter-Entität",
           "outdoor_temp_sensor": "Außentemperatur",
           "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
@@ -55,8 +61,8 @@
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
           "temp_tolerance": "Temperaturtoleranz",
-          "window_open_delay": "Verzögerung Fenster auf (min)",
-          "window_close_delay": "Verzögerung Fenster zu (min)",
+          "window_open_delay": "Verzögerung Fenster öffnen (min)",
+          "window_close_delay": "Verzögerung Fenster schließen (min)",
           "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }

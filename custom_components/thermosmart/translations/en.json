@@ -2,20 +2,70 @@
   "config": {
     "step": {
       "user": {
-        "title": "Set up ThermoSmart",
-        "description": "Select your weather source and optionally enable the learning algorithm.",
+        "title": "Set up ThermoSmart heating zone",
+        "description": "Each zone is a separate config entry. Weather settings are automatically copied from existing zones.",
         "data": {
+          "name": "Zone name (e.g. Living Room)",
+          "climate_entities": "Thermostats / TRVs",
+          "calibration_entities": "TRV calibration entities (local_temperature_calibration)",
+          "temp_sensors": "Indoor temperature sensors (averaged)",
+          "humidity_sensors": "Indoor humidity sensors",
+          "window_sensors": "Window sensors",
+          "presence_persons": "Persons (presence detection)",
+          "vacation_boolean": "Vacation mode (input_boolean)",
           "weather_entity": "Weather entity",
-          "outdoor_temp_sensor": "Outdoor temperature sensor (optional)",
+          "outdoor_temp_sensor": "Outdoor temperature (own weather station)",
+          "outdoor_humidity_sensor": "Outdoor humidity",
+          "outdoor_wind_sensor": "Wind speed",
+          "outdoor_solar_sensor": "Solar radiation (W/m²)",
+          "outdoor_rain_sensor": "Precipitation",
+          "comfort_temp": "Comfort temperature",
+          "night_temp": "Night temperature",
+          "away_temp": "Away temperature",
+          "temp_tolerance": "Temperature tolerance (hysteresis)",
+          "window_open_delay": "Delay: heating off after window opens (min)",
+          "window_close_delay": "Delay: heating on after window closes (min)",
           "learning_enabled": "Enable learning algorithm"
         }
       }
     },
     "error": {
-      "entity_not_found": "The selected weather entity was not found."
+      "entity_not_found": "Weather entity not found.",
+      "name_required": "Please enter a zone name.",
+      "required": "At least one thermostat/TRV is required."
     },
     "abort": {
-      "already_configured": "ThermoSmart is already configured."
+      "already_configured": "This zone is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Edit zone",
+        "data": {
+          "name": "Zone name",
+          "climate_entities": "Thermostats / TRVs",
+          "calibration_entities": "TRV calibration entities (local_temperature_calibration)",
+          "temp_sensors": "Indoor temperature sensors",
+          "humidity_sensors": "Indoor humidity sensors",
+          "window_sensors": "Window sensors",
+          "presence_persons": "Persons (presence detection)",
+          "vacation_boolean": "Vacation mode (input_boolean)",
+          "weather_entity": "Weather entity",
+          "outdoor_temp_sensor": "Outdoor temperature",
+          "outdoor_humidity_sensor": "Outdoor humidity",
+          "outdoor_wind_sensor": "Wind speed",
+          "outdoor_solar_sensor": "Solar radiation",
+          "outdoor_rain_sensor": "Precipitation",
+          "comfort_temp": "Comfort temperature",
+          "night_temp": "Night temperature",
+          "away_temp": "Away temperature",
+          "temp_tolerance": "Temperature tolerance",
+          "window_open_delay": "Window open delay (min)",
+          "window_close_delay": "Window close delay (min)",
+          "learning_enabled": "Enable learning algorithm"
+        }
+      }
     }
   },
   "entity": {
@@ -26,6 +76,9 @@
           "on": "Active – ThermoSmart controls",
           "off": "Observation mode"
         }
+      },
+      "learning": {
+        "name": "Learning mode"
       }
     },
     "select": {
@@ -39,16 +92,14 @@
           "Urlaub": "Vacation"
         }
       }
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "ThermoSmart Options",
-        "data": {
-          "learning_enabled": "Enable learning algorithm"
-        }
-      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Target temperature" },
+      "trv_setpoint": { "name": "TRV setpoint" },
+      "preheat_minutes": { "name": "Preheat time" },
+      "confidence": { "name": "Prediction confidence" },
+      "weather_offset": { "name": "Weather correction" },
+      "status": { "name": "Status" }
     }
   }
 }

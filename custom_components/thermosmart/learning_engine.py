@@ -153,7 +153,9 @@ class LearningEngine:
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._observations: dict[str, list[dict]] = defaultdict(list)
         self._last_temp: dict[str, tuple[datetime, float]] = {}
+        self._last_idle_temp: dict[str, tuple[datetime, float]] = {}
         self._confidence: dict[str, float] = {}
+        self._boost_factors: dict[str, float] = {}
 
     # ── Persistenz ──────────────────────────────────────────────────────
 
@@ -162,6 +164,7 @@ class LearningEngine:
         if stored and isinstance(stored, dict):
             for zone_id, obs_list in stored.get("observations", {}).items():
                 self._observations[zone_id] = obs_list
+            self._boost_factors = stored.get("boost_factors", {})
             total = sum(len(v) for v in self._observations.values())
             _LOGGER.info(
                 "LearningEngine: %d Zonen, %d Beobachtungen geladen",
@@ -170,7 +173,10 @@ class LearningEngine:
         self._rebuild_confidence()
 
     async def async_save(self) -> None:
-        await self._store.async_save({"observations": dict(self._observations)})
+        await self._store.async_save({
+            "observations": dict(self._observations),
+            "boost_factors": self._boost_factors,
+        })
 
     # ── API ─────────────────────────────────────────────────────────────
 
@@ -204,6 +210,20 @@ class LearningEngine:
                 heat_rate = round((current_temp - last_temp) / elapsed_min, 5)
         self._last_temp[zone_id] = (now, current_temp)
 
+        # Abkühlrate messen wenn Raum unter Ziel liegt und sich abkühlt
+        # → passiert wenn Heizung ausgefallen ist oder Sommer-Nacht
+        cool_rate: float | None = None
+        is_cooling = current_temp < adjusted_target - 0.5
+        if is_cooling and zone_id in self._last_idle_temp:
+            idle_time, idle_temp = self._last_idle_temp[zone_id]
+            elapsed_min = (now - idle_time).total_seconds() / 60
+            if 10 <= elapsed_min <= 60 and current_temp < idle_temp:
+                cool_rate = round((idle_temp - current_temp) / elapsed_min, 5)
+        if is_cooling:
+            self._last_idle_temp[zone_id] = (now, current_temp)
+        else:
+            self._last_idle_temp.pop(zone_id, None)
+
         obs: dict[str, Any] = {
             "ts": now.isoformat(),
             "hour": now.hour,
@@ -230,6 +250,8 @@ class LearningEngine:
             obs["indoor_humidity"] = indoor_humidity
         if heat_rate is not None:
             obs["heat_rate"] = heat_rate
+        if cool_rate is not None:
+            obs["cool_rate"] = cool_rate
 
         self._observations[zone_id].append(obs)
         self._rebuild_confidence(zone_id)
@@ -291,15 +313,39 @@ class LearningEngine:
         if rate <= 0:
             return 0
 
-        minutes = int(min(delta / rate * 60, PREHEAT_MAX_MINUTES))
+        # Effektive Heizrate = Heizrate minus Abkühlrate (Haus kühlt während Vorheizen weiter ab)
+        cool_rate = self._get_avg_cool_rate(zone_id)
+        effective_rate = max(rate - cool_rate, rate * 0.3)
+
+        minutes = int(min(delta / effective_rate * 60, PREHEAT_MAX_MINUTES))
         _LOGGER.debug(
-            "LearningEngine [%s] Vorheizzeit=%d min (Δ%.1f°C, %.4f°C/min)",
-            zone_id, minutes, delta, rate,
+            "LearningEngine [%s] Vorheizzeit=%d min (Δ%.1f°C, Heiz=%.4f°C/min, Kühl=%.4f°C/min)",
+            zone_id, minutes, delta, rate, cool_rate,
         )
         return minutes
 
     def get_confidence(self, zone_id: str) -> float:
         return self._confidence.get(zone_id, 0.0)
+
+    def get_boost_factor(self, zone_id: str) -> float:
+        return self._boost_factors.get(zone_id, 1.0)
+
+    def update_boost_factor(self, zone_id: str, overshot: bool) -> None:
+        """Boost-Faktor nach Heizzyklus anpassen.
+
+        Überschießen → Faktor reduzieren (Ventil war zu weit auf).
+        Nur Erhöhen wenn explizit langsam (slow=True) – kommt später.
+        """
+        if not self._enabled:
+            return
+        factor = self._boost_factors.get(zone_id, 1.0)
+        if overshot:
+            factor = max(0.5, round(factor * 0.92, 3))
+            _LOGGER.info(
+                "LearningEngine [%s] Boost-Faktor reduziert → %.3f (Überschießen)",
+                zone_id, factor,
+            )
+        self._boost_factors[zone_id] = factor
 
     def get_stats(self, zone_id: str) -> dict:
         obs = self._observations[zone_id]
@@ -309,6 +355,11 @@ class LearningEngine:
         with_solar = sum(1 for o in obs if o.get("solar_radiation") is not None)
         with_humidity = sum(1 for o in obs if o.get("indoor_humidity") is not None)
         with_heat_rate = sum(1 for o in obs if o.get("heat_rate") is not None)
+        with_cool_rate = sum(1 for o in obs if o.get("cool_rate") is not None)
+        avg_cool_rate = None
+        cool_samples = [o["cool_rate"] for o in obs if o.get("cool_rate")]
+        if cool_samples:
+            avg_cool_rate = round(sum(cool_samples) / len(cool_samples), 5)
         return {
             "total_observations": len(obs),
             "confidence": self.get_confidence(zone_id),
@@ -316,6 +367,8 @@ class LearningEngine:
             "with_solar_data": with_solar,
             "with_humidity_data": with_humidity,
             "with_heat_rate": with_heat_rate,
+            "with_cool_rate": with_cool_rate,
+            "avg_cool_rate_per_min": avg_cool_rate,
             "oldest": obs[0]["ts"] if obs else None,
         }
 
@@ -364,6 +417,15 @@ class LearningEngine:
             if cumulative >= total_weight / 2:
                 return value
         return sorted_w[-1][0]
+
+    def _get_avg_cool_rate(self, zone_id: str) -> float:
+        """Durchschnittliche Abkühlrate aus gespeicherten Beobachtungen."""
+        samples = [o["cool_rate"] for o in self._observations[zone_id] if o.get("cool_rate")]
+        if not samples:
+            return 0.0
+        # Letzte 50 Messungen – aktuellere Saison gewichtet
+        recent = samples[-50:]
+        return round(sum(recent) / len(recent), 5)
 
     def _get_heat_rate(self, zone_id: str, weather_data: dict) -> float:
         if self._enabled and self.get_confidence(zone_id) >= 0.3:

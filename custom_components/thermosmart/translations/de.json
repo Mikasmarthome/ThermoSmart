@@ -2,80 +2,68 @@
   "config": {
     "step": {
       "user": {
-        "title": "ThermoSmart einrichten",
-        "description": "Wähle deine Wetterquelle und aktiviere optional den Lernalgorithmus.",
+        "title": "ThermoSmart – Heizzone einrichten",
+        "description": "Jede Zone wird als eigener Eintrag angelegt. Wetter-Einstellungen werden von bestehenden Zonen automatisch übernommen.",
         "data": {
-          "weather_entity": "Wetterentität",
-          "outdoor_temp_sensor": "Außentemperatursensor (optional)",
+          "name": "Zonenname (z.B. Wohnzimmer)",
+          "climate_entities": "Thermostate / TRVs",
+          "calibration_entities": "TRV-Kalibrierungs-Entities (local_temperature_calibration)",
+          "temp_sensors": "Innensensoren Temperatur (Durchschnitt)",
+          "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
+          "window_sensors": "Fenstersensoren",
+          "presence_persons": "Personen (Präsenzerkennung)",
+          "vacation_boolean": "Urlaubsmodus (input_boolean)",
+          "weather_entity": "Wetter-Entität",
+          "outdoor_temp_sensor": "Außentemperatur (eigene Wetterstation)",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit",
+          "outdoor_solar_sensor": "Sonneneinstrahlung (W/m²)",
+          "outdoor_rain_sensor": "Niederschlag",
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Nachttemperatur",
+          "away_temp": "Abwesenheitstemperatur",
+          "temp_tolerance": "Temperaturtoleranz (Hysterese)",
+          "window_open_delay": "Verzögerung: Heizung aus nach Fenster öffnen (min)",
+          "window_close_delay": "Verzögerung: Heizung an nach Fenster schließen (min)",
           "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }
     },
     "error": {
-      "entity_not_found": "Die gewählte Wetterentität wurde nicht gefunden."
+      "entity_not_found": "Wetter-Entität nicht gefunden.",
+      "name_required": "Bitte einen Zonennamen eingeben.",
+      "required": "Mindestens ein Thermostat/TRV erforderlich."
     },
     "abort": {
-      "already_configured": "ThermoSmart ist bereits konfiguriert."
+      "already_configured": "Diese Zone ist bereits konfiguriert."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "ThermoSmart",
-        "menu_options": {
-          "settings": "Einstellungen",
-          "zone_add": "Zone hinzufügen",
-          "zone_manage": "Zone bearbeiten / löschen"
-        }
-      },
-      "settings": {
-        "title": "Globale Einstellungen",
-        "description": "Eigene Sensoren werden bevorzugt gegenüber dem Wetter-Entity verwendet.",
-        "data": {
-          "learning_enabled": "Lernalgorithmus aktivieren",
-          "outdoor_temp_sensor": "Außentemperatur (z.B. sensor.outdoor_temperature)",
-          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
-          "outdoor_wind_sensor": "Windgeschwindigkeit",
-          "outdoor_solar_sensor": "Sonneneinstrahlung (W/m²)",
-          "outdoor_rain_sensor": "Niederschlag"
-        }
-      },
-      "zone_add": {
-        "title": "Zone hinzufügen",
-        "description": "Erstelle eine neue Heizzone. Mehrere Temperatursensoren werden automatisch gemittelt – du brauchst keine Template-Sensoren mehr.",
-        "data": {
-          "name": "Zonenname (z.B. Wohnzimmer)",
-          "climate_entities": "Thermostate / Heizkörperventile (TRVs)",
-          "temp_sensors": "Temperatursensoren (Durchschnitt wird berechnet)",
-          "humidity_sensors": "Feuchtigkeitssensoren (optional)",
-          "window_sensors": "Fenstersensoren (optional, mehrere möglich)",
-          "comfort_temp": "Komforttemperatur",
-          "night_temp": "Nachttemperatur",
-          "away_temp": "Abwesenheitstemperatur"
-        }
-      },
-      "zone_manage": {
-        "title": "Zone auswählen",
-        "data": {
-          "zone": "Zone"
-        }
-      },
-      "zone_edit": {
-        "title": "Zone bearbeiten: {zone_name}",
-        "description": "Einstellungen ändern. 'Zone löschen' entfernt die Zone dauerhaft.",
+        "title": "Zone bearbeiten",
         "data": {
           "name": "Zonenname",
           "climate_entities": "Thermostate / TRVs",
-          "temp_sensors": "Temperatursensoren",
-          "humidity_sensors": "Feuchtigkeitssensoren",
+          "calibration_entities": "TRV-Kalibrierungs-Entities (local_temperature_calibration)",
+          "temp_sensors": "Innensensoren Temperatur",
+          "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
           "window_sensors": "Fenstersensoren",
+          "presence_persons": "Personen (Präsenzerkennung)",
+          "vacation_boolean": "Urlaubsmodus (input_boolean)",
+          "weather_entity": "Wetter-Entität",
+          "outdoor_temp_sensor": "Außentemperatur",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit",
+          "outdoor_solar_sensor": "Sonneneinstrahlung",
+          "outdoor_rain_sensor": "Niederschlag",
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
-          "temp_tolerance": "Temperaturtoleranz – verhindert ständiges Ein-/Ausschalten",
-          "window_open_delay": "Verzögerung: Heizung aus nach Fenster öffnen (Minuten)",
-          "window_close_delay": "Verzögerung: Heizung an nach Fenster schließen (Minuten)",
-          "delete_zone": "Zone löschen"
+          "temp_tolerance": "Temperaturtoleranz",
+          "window_open_delay": "Verzögerung Fenster öffnen (min)",
+          "window_close_delay": "Verzögerung Fenster schließen (min)",
+          "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }
     }
@@ -85,9 +73,12 @@
       "active_control": {
         "name": "Aktive Steuerung",
         "state": {
-          "on": "Aktiv",
+          "on": "Aktiv – ThermoSmart steuert",
           "off": "Beobachtungsmodus"
         }
+      },
+      "learning": {
+        "name": "Lernmodus"
       }
     },
     "select": {
@@ -101,6 +92,14 @@
           "Urlaub": "Urlaub"
         }
       }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Zieltemperatur" },
+      "trv_setpoint": { "name": "TRV Setpoint" },
+      "preheat_minutes": { "name": "Vorheizzeit" },
+      "confidence": { "name": "Vorhersage-Konfidenz" },
+      "weather_offset": { "name": "Wetterkorrektur" },
+      "status": { "name": "Status" }
     }
   }
 }

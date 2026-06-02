@@ -125,12 +125,18 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         z = self._zone
+        trv = z.get("trv_setpoint")
+        target = z.get("adjusted_target")
+        boost_delta = round(trv - target, 1) if trv is not None and target is not None and trv > target else 0.0
         return {
             "vorhersage_unterdrückung": f"{z.get('forecast_suppression', 0)}%",
             "vorheizzeit": f"{z.get('preheat_minutes', 0)} min",
             "vorhersage_konfidenz": f"{round((z.get('learning_confidence', 0) * 100), 1)}%",
             "wetterkorrektur": z.get("weather_offset"),
             "außentemperatur": z.get("outdoor_temp"),
+            "trv_setpoint": trv,
+            "boost_delta": f"+{boost_delta}°C" if boost_delta > 0 else "0°C",
+            "boost_faktor": z.get("boost_factor", 1.0),
             "beobachtungsmodus": not self.coordinator._active_control,
         }
 
@@ -148,8 +154,6 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         """Aktive Steuerung ein- oder ausschalten."""
         active = hvac_mode == HVACMode.HEAT
         self.coordinator.set_active_control(active)
-        # Switch-Entität synchronisieren
-        self._sync_active_switch(active)
         self.async_write_ha_state()
 
     async def async_turn_on(self) -> None:
@@ -164,12 +168,3 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         self.coordinator.set_mode(mode)
         await self.coordinator.async_request_refresh()
 
-    def _sync_active_switch(self, active: bool) -> None:
-        """Switch-Entität synchron halten."""
-        for entity in self.hass.states.async_all():
-            if (
-                entity.entity_id.startswith(f"switch.thermosmart_")
-                and "aktive_steuerung" in entity.entity_id
-                and self._entry.entry_id[:8].lower() in entity.entity_id
-            ):
-                break

@@ -17,6 +17,9 @@ from .const import (
     CONF_OUTDOOR_SOLAR_SENSOR,
     CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
+    CONF_PRESENCE_PERSONS,
+    CONF_VACATION_BOOLEAN,
+    CONF_CALIBRATION_ENTITIES,
     DEFAULT_WEATHER_ENTITY,
     DEFAULT_LEARNING_ENABLED,
 )
@@ -103,6 +106,10 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
             selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate", multiple=True)
             ),
+        vol.Optional(CONF_CALIBRATION_ENTITIES, default=d.get(CONF_CALIBRATION_ENTITIES, [])):
+            selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="number", multiple=True)
+            ),
 
         # ── Innensensoren ─────────────────────────────────────────────
         vol.Optional("temp_sensors", default=d.get("temp_sensors", [])):
@@ -122,6 +129,16 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
         vol.Optional("window_sensors", default=d.get("window_sensors", [])):
             selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
+            ),
+
+        # ── Präsenz & Urlaub ──────────────────────────────────────────
+        vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
+            selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="person", multiple=True)
+            ),
+        vol.Optional(CONF_VACATION_BOOLEAN, default=d.get(CONF_VACATION_BOOLEAN, "")):
+            selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="input_boolean")
             ),
 
         # ── Wetter-Entity ─────────────────────────────────────────────

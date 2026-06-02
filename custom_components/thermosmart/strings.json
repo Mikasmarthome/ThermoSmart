@@ -2,80 +2,62 @@
   "config": {
     "step": {
       "user": {
-        "title": "ThermoSmart einrichten",
-        "description": "Wähle deine Wetterquelle und aktiviere optional den Lernalgorithmus.",
+        "title": "Heizzone einrichten",
+        "description": "Jede Zone wird als eigener Eintrag angelegt. Wetter-Einstellungen werden von bestehenden Zonen übernommen.",
         "data": {
-          "weather_entity": "Wetterentität",
-          "outdoor_temp_sensor": "Außentemperatursensor (optional)",
+          "name": "Zonenname (z.B. Wohnzimmer)",
+          "climate_entities": "Thermostate / TRVs",
+          "temp_sensors": "Innensensoren Temperatur (Durchschnitt)",
+          "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
+          "window_sensors": "Fenstersensoren (mehrere möglich)",
+          "weather_entity": "Wetter-Entität",
+          "outdoor_temp_sensor": "Außentemperatur (eigene Wetterstation)",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit",
+          "outdoor_solar_sensor": "Sonneneinstrahlung",
+          "outdoor_rain_sensor": "Niederschlag",
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Nachttemperatur",
+          "away_temp": "Abwesenheitstemperatur",
+          "temp_tolerance": "Temperaturtoleranz (Hysterese)",
+          "window_open_delay": "Verzögerung: Heizung aus nach Fenster auf (min)",
+          "window_close_delay": "Verzögerung: Heizung an nach Fenster zu (min)",
           "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }
     },
     "error": {
-      "entity_not_found": "Die gewählte Wetterentität wurde nicht gefunden."
+      "entity_not_found": "Wetter-Entität nicht gefunden.",
+      "name_required": "Bitte einen Zonennamen eingeben.",
+      "required": "Mindestens ein Thermostat/TRV erforderlich."
     },
     "abort": {
-      "already_configured": "ThermoSmart ist bereits konfiguriert."
+      "already_configured": "Diese Zone ist bereits konfiguriert."
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "ThermoSmart",
-        "menu_options": {
-          "settings": "Einstellungen",
-          "zone_add": "Zone hinzufügen",
-          "zone_manage": "Zone bearbeiten / löschen"
-        }
-      },
-      "settings": {
-        "title": "Globale Einstellungen",
-        "description": "Außensensoren werden bevorzugt gegenüber dem Wetter-Entity verwendet.",
-        "data": {
-          "learning_enabled": "Lernalgorithmus aktivieren",
-          "outdoor_temp_sensor": "Außentemperatur-Sensor (z.B. eigene Wetterstation)",
-          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit-Sensor",
-          "outdoor_wind_sensor": "Windgeschwindigkeit-Sensor",
-          "outdoor_solar_sensor": "Sonneneinstrahlung-Sensor (W/m²)",
-          "outdoor_rain_sensor": "Niederschlag-Sensor"
-        }
-      },
-      "zone_add": {
-        "title": "Zone hinzufügen",
-        "description": "Erstelle eine neue Heizzone mit Thermostaten und Temperatursensoren.",
-        "data": {
-          "name": "Zonenname (z.B. Wohnzimmer)",
-          "climate_entities": "Thermostate / Heizkörperventile (TRVs)",
-          "temp_sensors": "Temperatursensoren (Durchschnitt wird berechnet)",
-          "humidity_sensors": "Feuchtigkeitssensoren (optional)",
-          "window_sensors": "Fenstersensoren (optional, mehrere möglich)",
-          "comfort_temp": "Komforttemperatur (°C)",
-          "night_temp": "Nachttemperatur (°C)",
-          "away_temp": "Abwesenheitstemperatur (°C)"
-        }
-      },
-      "zone_manage": {
-        "title": "Zone auswählen",
-        "data": {
-          "zone": "Zone"
-        }
-      },
-      "zone_edit": {
-        "title": "Zone bearbeiten: {zone_name}",
-        "description": "Einstellungen der Zone ändern. 'Zone löschen' entfernt die Zone dauerhaft.",
+        "title": "Zone bearbeiten",
         "data": {
           "name": "Zonenname",
           "climate_entities": "Thermostate / TRVs",
-          "temp_sensors": "Temperatursensoren",
-          "humidity_sensors": "Feuchtigkeitssensoren",
-          "window_sensor": "Fenstersensor",
-          "comfort_temp": "Komforttemperatur (°C)",
-          "night_temp": "Nachttemperatur (°C)",
-          "away_temp": "Abwesenheitstemperatur (°C)",
-          "temp_tolerance": "Temperaturtoleranz (Hysterese)",
-          "window_open_delay": "Verzögerung Fenster auf (Minuten)",
-          "window_close_delay": "Verzögerung Fenster zu (Minuten)",
-          "delete_zone": "Zone löschen"
+          "temp_sensors": "Innensensoren Temperatur",
+          "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
+          "window_sensors": "Fenstersensoren",
+          "weather_entity": "Wetter-Entität",
+          "outdoor_temp_sensor": "Außentemperatur",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit",
+          "outdoor_solar_sensor": "Sonneneinstrahlung",
+          "outdoor_rain_sensor": "Niederschlag",
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Nachttemperatur",
+          "away_temp": "Abwesenheitstemperatur",
+          "temp_tolerance": "Temperaturtoleranz",
+          "window_open_delay": "Verzögerung Fenster auf (min)",
+          "window_close_delay": "Verzögerung Fenster zu (min)",
+          "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }
     }

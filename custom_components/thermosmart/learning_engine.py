@@ -241,13 +241,24 @@ class LearningEngine:
             await self.async_save()
 
     async def async_get_base_target(
-        self, zone_id: str, mode: str = HEATING_MODE_AUTO
+        self,
+        zone_id: str,
+        mode: str = HEATING_MODE_AUTO,
+        comfort_temp: float = 21.0,
+        night_temp: float = 18.0,
+        away_temp: float = 17.0,
     ) -> float:
-        """Empfohlene Zieltemperatur – zeitbasiert gelernt."""
+        """Empfohlene Zieltemperatur – zeitbasiert gelernt oder Modus-Temperatur."""
+        mode_temps = {
+            "comfort": comfort_temp,
+            "night": night_temp,
+            "away": away_temp,
+            "vacation": 12.0,
+        }
         if mode != HEATING_MODE_AUTO:
-            return ZONE_TEMPS.get(zone_id, {}).get(mode, 18.0)
+            return mode_temps.get(mode, night_temp)
 
-        schedule_temp = self._schedule_target(zone_id)
+        schedule_temp = self._schedule_target(zone_id, comfort_temp, night_temp)
 
         if not self._enabled or self.get_confidence(zone_id) < 0.25:
             return schedule_temp
@@ -312,20 +323,19 @@ class LearningEngine:
 
     # ── Interne Helfer ───────────────────────────────────────────────────
 
-    def _schedule_target(self, zone_id: str) -> float:
+    def _schedule_target(
+        self, zone_id: str, comfort_temp: float = 21.0, night_temp: float = 18.0
+    ) -> float:
+        """Einfacher Zeitplan: Komfort tagsüber, Nacht ab 22 Uhr."""
         now = dt_util.now()
-        is_weekend = now.weekday() >= 5
-        day_key = "weekend" if is_weekend else "weekday"
-        schedule = SCHEDULE.get(zone_id, {}).get(day_key, [])
-        if not schedule:
-            return ZONE_TEMPS.get(zone_id, {}).get("comfort", 21.0)
-        now_minutes = now.hour * 60 + now.minute
-        active_temp = schedule[0]["temp"]
-        for entry in sorted(schedule, key=lambda e: e["time"]):
-            h, m = map(int, entry["time"].split(":"))
-            if h * 60 + m <= now_minutes:
-                active_temp = entry["temp"]
-        return active_temp
+        hour = now.hour
+        # Nacht: 22-5 Uhr
+        if hour >= 22 or hour < 5:
+            return night_temp
+        # Morgens früh: noch Nachttemp bis 5:30
+        if hour == 5 and now.minute < 30:
+            return night_temp
+        return comfort_temp
 
     def _weighted_targets_for_hour(
         self, zone_id: str, now: datetime

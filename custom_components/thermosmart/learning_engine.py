@@ -322,29 +322,36 @@ class LearningEngine:
         return 0.070
 
     def _rebuild_confidence(self, zone_id: str | None = None) -> None:
-        """Konfidenz neu berechnen. Wächst monoton basierend auf gewichteten Daten."""
+        """Konfidenz (Vorhersage-Qualität) neu berechnen.
+
+        Bedeutung:
+          0%   = keine Daten, Zeitplan wird als Basis genutzt
+          100% = maximale Vorhersagezuverlässigkeit
+
+        Die Konfidenz basiert auf der Menge *aktuell relevanter* Daten
+        (gewichtet nach Alter). Sie kann steigen UND leicht fallen wenn
+        alte Daten an Gewicht verlieren und keine neuen hinzukommen
+        (z.B. nach langer Abwesenheit oder Jahreswechsel).
+        Das System lernt aber trotzdem immer weiter.
+        """
         zones = [zone_id] if zone_id else list(self._observations.keys())
         now = dt_util.now()
 
         for zid in zones:
             obs = self._observations[zid]
             if not obs:
-                # Nie auf 0 setzen wenn bereits Konfidenz vorhanden
-                if zid not in self._confidence:
-                    self._confidence[zid] = 0.0
+                self._confidence.setdefault(zid, 0.0)
                 continue
 
-            # Gewichtete Anzahl effektiver Beobachtungen
+            # Summe der gewichteten Beobachtungen
             weighted_n = sum(
                 _decay_weight(
-                    (now - datetime.fromisoformat(o["ts"])).total_seconds() / 86400
+                    max((now - datetime.fromisoformat(o["ts"])).total_seconds() / 86400, 0)
                 )
                 for o in obs
             )
 
-            # Konfidenz: 0 → 1 über 150 gewichtete Beobachtungen
-            # Wächst nie rückwärts (max mit aktuellem Wert)
+            # 0 → 1 über 150 gewichtete Beobachtungen (≈ 2-3 Wochen aktiver Nutzung)
+            # Kann leicht schwanken wenn alte Daten veralten – das ist gewollt
             new_conf = min(weighted_n / 150, 1.0)
-            self._confidence[zid] = max(
-                self._confidence.get(zid, 0.0), new_conf
-            )
+            self._confidence[zid] = round(new_conf, 4)

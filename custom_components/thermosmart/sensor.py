@@ -144,7 +144,7 @@ class ThermoSmartConfidenceSensor(_ThermoSmartBaseSensor):
     def __init__(self, coordinator, entry, zone_id, zone_cfg):
         super().__init__(coordinator, entry, zone_id, zone_cfg, "learning_confidence")
         self._attr_unique_id = f"{DOMAIN}_{zone_id}_confidence"
-        self._attr_name = f"ThermoSmart {zone_cfg['name']} Lernfortschritt"
+        self._attr_name = f"ThermoSmart {zone_cfg['name']} Vorhersage-Konfidenz"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_LEARNING
@@ -153,6 +153,28 @@ class ThermoSmartConfidenceSensor(_ThermoSmartBaseSensor):
     def native_value(self):
         raw = self._zone_data.get("learning_confidence", 0.0)
         return round(raw * 100, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        raw = self._zone_data.get("learning_confidence", 0.0)
+        pct = round(raw * 100, 1)
+        if pct < 25:
+            status = "Sammle Daten – nutze Zeitplan als Basis"
+        elif pct < 50:
+            status = "Erste Muster erkennbar"
+        elif pct < 80:
+            status = "Vorhersagen werden zuverlässiger"
+        elif pct < 100:
+            status = "Hohe Zuverlässigkeit"
+        else:
+            status = "Maximale Zuverlässigkeit – Feinabstimmung läuft weiter"
+        return {
+            "status": status,
+            "hinweis": (
+                "100% bedeutet nicht 'fertig' – das System lernt dauerhaft weiter "
+                "und passt sich an Jahreszeiten und Gewohnheiten an."
+            ),
+        }
 
 
 class ThermoSmartWeatherOffsetSensor(_ThermoSmartBaseSensor):

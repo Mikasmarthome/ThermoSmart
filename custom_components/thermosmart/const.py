@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.2.0"
+VERSION = "0.2.1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -19,59 +19,11 @@ DEFAULT_WEATHER_ENTITY = "weather.home"
 DEFAULT_LEARNING_ENABLED = True
 DEFAULT_SCAN_INTERVAL = 300  # seconds
 
-# Zone names (matching your setup)
-ZONES = {
-    "wohnbereich": {
-        "name": "Wohnbereich",
-        "climate_entity": "climate.wohnbereich_thermostat_steuerung",
-        "window_sensor": "binary_sensor.fenster_wohnbereich",
-        "temp_sensor": "sensor.temperatur_wohnbereich_durchschnitt",
-        "humidity_sensor": "sensor.luftfeuchtigkeit_wohnbereich_durchschnitt",
-    },
-    "schlafbereich": {
-        "name": "Schlafbereich",
-        "climate_entity": "climate.schlafbereich_thermostat_steuerung",
-        "window_sensor": "binary_sensor.fenster_schlafbereich",
-        "temp_sensor": "sensor.temperatur_schlafbereich_durchschnitt",
-        "humidity_sensor": "sensor.luftfeuchtigkeit_schlafbereich_durchschnitt",
-    },
-    "badezimmer": {
-        "name": "Badezimmer",
-        "climate_entity": "climate.badezimmer_thermostat_steuerung",
-        "window_sensor": "binary_sensor.fenster_badezimmer",
-        "temp_sensor": "sensor.temperatursensor_badezimmer_temperature",
-        "humidity_sensor": "sensor.temperatursensor_badezimmer_humidity",
-    },
-    "gaste_wc": {
-        "name": "Gäste-WC",
-        "climate_entity": "climate.gaste_wc_thermostat_steuerung",
-        "window_sensor": None,
-        "temp_sensor": "sensor.temperatursensor_gaste_wc_temperature",
-        "humidity_sensor": "sensor.temperatursensor_gaste_wc_humidity",
-    },
-    "keller": {
-        "name": "Keller",
-        "climate_entity": [
-            "climate.keller_1_thermostat_steuerung",
-            "climate.keller_2_thermostat_steuerung",
-            "climate.keller_hinten_thermostat_steuerung",
-            "climate.waschkuche_thermostat_steuerung",
-        ],
-        "window_sensor": "binary_sensor.fenster_keller_raum_1",
-        "temp_sensor": "sensor.temperatursensor_keller_1_temperature",
-        "humidity_sensor": "sensor.temperatursensor_keller_1_humidity",
-    },
-}
-
-# Heating schedule defaults (°C)
+# Temperatur-Standardwerte (für Fallbacks)
 TEMP_COMFORT = 21.0
 TEMP_NIGHT = 18.0
 TEMP_AWAY = 17.0
 TEMP_FROST_PROTECTION = 12.0
-TEMP_BATHROOM_COMFORT = 22.0
-TEMP_BATHROOM_NIGHT = 18.0
-TEMP_GASTE_WC_COMFORT = 20.0
-TEMP_KELLER_COMFORT = 15.0
 
 # Weather-based adjustments
 WEATHER_COLD_THRESHOLD = 0.0     # °C outdoor — boost heating
@@ -118,63 +70,6 @@ HEATING_MODES = [
     HEATING_MODE_VACATION,
 ]
 
-# Komforttemperaturen pro Zone und Modus
-ZONE_TEMPS: dict[str, dict[str, float]] = {
-    "wohnbereich":  {"comfort": 21.0, "night": 18.0, "away": 17.0, "vacation": 12.0},
-    "schlafbereich":{"comfort": 21.0, "night": 18.0, "away": 17.0, "vacation": 12.0},
-    "badezimmer":   {"comfort": 22.0, "night": 18.0, "away": 17.0, "vacation": 12.0},
-    "gaste_wc":     {"comfort": 20.0, "night": 18.0, "away": 17.0, "vacation": 12.0},
-    "keller":       {"comfort": 15.0, "night": 15.0, "away": 15.0, "vacation": 12.0},
-}
-
-# Wochentags-Zeitplan (aus deinen Automationen extrahiert)
-# Format: [{"time": "HH:MM", "temp": float}]
-SCHEDULE: dict[str, dict[str, list]] = {
-    "wohnbereich": {
-        "weekday": [
-            {"time": "05:30", "temp": 21.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-        "weekend": [
-            {"time": "06:30", "temp": 21.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-    },
-    "schlafbereich": {
-        "weekday": [
-            {"time": "05:30", "temp": 21.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-        "weekend": [
-            {"time": "06:30", "temp": 21.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-    },
-    "badezimmer": {
-        "weekday": [
-            {"time": "05:30", "temp": 22.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-        "weekend": [
-            {"time": "06:30", "temp": 22.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-    },
-    "gaste_wc": {
-        "weekday": [
-            {"time": "06:00", "temp": 20.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-        "weekend": [
-            {"time": "06:00", "temp": 20.0},
-            {"time": "22:00", "temp": 18.0},
-        ],
-    },
-    "keller": {
-        "weekday": [{"time": "00:00", "temp": 15.0}],
-        "weekend": [{"time": "00:00", "temp": 15.0}],
-    },
-}
 
 # Storage keys
 STORAGE_VERSION = 1

@@ -34,8 +34,6 @@ from .const import (
     LEARNING_MIN_SAMPLES,
     PREHEAT_MAX_MINUTES,
     PREHEAT_MIN_DELTA,
-    SCHEDULE,
-    ZONE_TEMPS,
     HEATING_MODE_AUTO,
 )
 

@@ -20,7 +20,8 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, VERSION, ZONES
+from .const import DOMAIN, VERSION
+from . import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,13 +32,14 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Switch-Entities einrichten."""
+    coordinator: ThermoSmartCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[SwitchEntity] = []
 
     # Globaler Master-Schalter
     entities.append(ThermoSmartMasterSwitch(entry))
 
     # Lernschalter pro Zone
-    for zone_id, zone_cfg in ZONES.items():
+    for zone_id, zone_cfg in coordinator.zones.items():
         entities.append(ThermoSmartLearningSwitch(entry, zone_id, zone_cfg))
 
     async_add_entities(entities)

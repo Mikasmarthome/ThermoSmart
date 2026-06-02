@@ -18,12 +18,65 @@
       "already_configured": "ThermoSmart ist bereits konfiguriert."
     }
   },
+  "options": {
+    "step": {
+      "init": {
+        "title": "ThermoSmart",
+        "menu_options": {
+          "settings": "Einstellungen",
+          "zone_add": "Zone hinzufügen",
+          "zone_manage": "Zone bearbeiten / löschen"
+        }
+      },
+      "settings": {
+        "title": "Globale Einstellungen",
+        "data": {
+          "learning_enabled": "Lernalgorithmus aktivieren"
+        }
+      },
+      "zone_add": {
+        "title": "Zone hinzufügen",
+        "description": "Erstelle eine neue Heizzone. Mehrere Temperatursensoren werden automatisch gemittelt – du brauchst keine Template-Sensoren mehr.",
+        "data": {
+          "name": "Zonenname (z.B. Wohnzimmer)",
+          "climate_entities": "Thermostate / Heizkörperventile (TRVs)",
+          "temp_sensors": "Temperatursensoren (Durchschnitt wird berechnet)",
+          "humidity_sensors": "Feuchtigkeitssensoren (optional)",
+          "window_sensor": "Fenstersensor (optional)",
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Nachttemperatur",
+          "away_temp": "Abwesenheitstemperatur"
+        }
+      },
+      "zone_manage": {
+        "title": "Zone auswählen",
+        "data": {
+          "zone": "Zone"
+        }
+      },
+      "zone_edit": {
+        "title": "Zone bearbeiten: {zone_name}",
+        "description": "Einstellungen ändern. 'Zone löschen' entfernt die Zone dauerhaft.",
+        "data": {
+          "name": "Zonenname",
+          "climate_entities": "Thermostate / TRVs",
+          "temp_sensors": "Temperatursensoren",
+          "humidity_sensors": "Feuchtigkeitssensoren",
+          "window_sensor": "Fenstersensor",
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Nachttemperatur",
+          "away_temp": "Abwesenheitstemperatur",
+          "delete_zone": "Zone löschen"
+        }
+      }
+    }
+  },
   "entity": {
     "switch": {
       "active_control": {
         "name": "Aktive Steuerung",
         "state": {
-          "on": "Aktiv – ThermoSmart steuert",
+          "on": "Aktiv",
           "off": "Beobachtungsmodus"
         }
       }
@@ -37,16 +90,6 @@
           "Nacht": "Nacht",
           "Abwesend": "Abwesend",
           "Urlaub": "Urlaub"
-        }
-      }
-    }
-  },
-  "options": {
-    "step": {
-      "init": {
-        "title": "ThermoSmart Optionen",
-        "data": {
-          "learning_enabled": "Lernalgorithmus aktivieren"
         }
       }
     }

@@ -21,9 +21,52 @@
   "options": {
     "step": {
       "init": {
-        "title": "ThermoSmart Optionen",
+        "title": "ThermoSmart",
+        "menu_options": {
+          "settings": "Einstellungen",
+          "zone_add": "Zone hinzufügen",
+          "zone_manage": "Zone bearbeiten / löschen"
+        }
+      },
+      "settings": {
+        "title": "Globale Einstellungen",
         "data": {
           "learning_enabled": "Lernalgorithmus aktivieren"
+        }
+      },
+      "zone_add": {
+        "title": "Zone hinzufügen",
+        "description": "Erstelle eine neue Heizzone mit Thermostaten und Temperatursensoren.",
+        "data": {
+          "name": "Zonenname (z.B. Wohnzimmer)",
+          "climate_entities": "Thermostate / Heizkörperventile (TRVs)",
+          "temp_sensors": "Temperatursensoren (Durchschnitt wird berechnet)",
+          "humidity_sensors": "Feuchtigkeitssensoren (optional)",
+          "window_sensor": "Fenstersensor (optional)",
+          "comfort_temp": "Komforttemperatur (°C)",
+          "night_temp": "Nachttemperatur (°C)",
+          "away_temp": "Abwesenheitstemperatur (°C)"
+        }
+      },
+      "zone_manage": {
+        "title": "Zone auswählen",
+        "data": {
+          "zone": "Zone"
+        }
+      },
+      "zone_edit": {
+        "title": "Zone bearbeiten: {zone_name}",
+        "description": "Einstellungen der Zone ändern. 'Zone löschen' entfernt die Zone dauerhaft.",
+        "data": {
+          "name": "Zonenname",
+          "climate_entities": "Thermostate / TRVs",
+          "temp_sensors": "Temperatursensoren",
+          "humidity_sensors": "Feuchtigkeitssensoren",
+          "window_sensor": "Fenstersensor",
+          "comfort_temp": "Komforttemperatur (°C)",
+          "night_temp": "Nachttemperatur (°C)",
+          "away_temp": "Abwesenheitstemperatur (°C)",
+          "delete_zone": "Zone löschen"
         }
       }
     }

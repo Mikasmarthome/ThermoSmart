@@ -13,7 +13,6 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import (
     DOMAIN,
     VERSION,
-    ZONES,
     HEATING_MODES,
     HEATING_MODE_AUTO,
     HEATING_MODE_COMFORT,
@@ -21,6 +20,7 @@ from .const import (
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
 )
+from . import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -40,8 +40,9 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
+    coordinator: ThermoSmartCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities: list[SelectEntity] = []
-    for zone_id, zone_cfg in ZONES.items():
+    for zone_id, zone_cfg in coordinator.zones.items():
         entities.append(ThermoSmartModeSelect(entry, zone_id, zone_cfg))
     async_add_entities(entities)
 

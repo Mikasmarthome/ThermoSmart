@@ -27,7 +27,6 @@ from .const import (
     ICON_PREHEAT,
     ICON_WEATHER_ADJUST,
     VERSION,
-    ZONES,
 )
 from . import ThermoSmartCoordinator
 
@@ -43,7 +42,7 @@ async def async_setup_entry(
     coordinator: ThermoSmartCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     entities: list[SensorEntity] = []
-    for zone_id, zone_cfg in ZONES.items():
+    for zone_id, zone_cfg in coordinator.zones.items():
         entities.extend([
             ThermoSmartTargetTempSensor(coordinator, entry, zone_id, zone_cfg),
             ThermoSmartPreheatSensor(coordinator, entry, zone_id, zone_cfg),

@@ -16,13 +16,16 @@ from .const import (
     CONF_OUTDOOR_TEMP_SENSOR,
     CONF_LEARNING_ENABLED,
     ZONES,
+    ZONE_TEMPS,
+    TEMP_COMFORT,
+    TEMP_NIGHT,
+    TEMP_AWAY,
     PRESENCE_PERSONS,
     PRESENCE_PREHEAT_ZONE,
     VACATION_BOOLEAN,
     HEATING_MODE_AUTO,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
-    ZONE_TEMPS,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -109,10 +112,68 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         # Thermostate werden erst beschrieben wenn _active_control = True
         # ═══════════════════════════════════════════════════════════════
         self._active_control: bool = False
+        self._zones_cache: dict | None = None  # wird bei Options-Änderung geleert
 
     # ------------------------------------------------------------------
     # Setter (von switch.py / select.py / number.py aufgerufen)
     # ------------------------------------------------------------------
+
+    @property
+    def zones(self) -> dict:
+        """Aktive Zonen – aus UI-Konfiguration oder const.py-Fallback.
+
+        Gibt immer ein normalisiertes Dict zurück:
+          zone_id → {name, climate_entities, temp_sensors,
+                     humidity_sensors, window_sensor,
+                     comfort_temp, night_temp, away_temp}
+        """
+        options_zones: list = self.entry.options.get("zones", [])
+        if options_zones:
+            result = {}
+            for z in options_zones:
+                zid = z["zone_id"]
+                result[zid] = {
+                    "name": z["name"],
+                    "climate_entities": z.get("climate_entities", []),
+                    "temp_sensors": z.get("temp_sensors", []),
+                    "humidity_sensors": z.get("humidity_sensors", []),
+                    "window_sensor": z.get("window_sensor"),
+                    "comfort_temp": z.get("comfort_temp", TEMP_COMFORT),
+                    "night_temp": z.get("night_temp", TEMP_NIGHT),
+                    "away_temp": z.get("away_temp", TEMP_AWAY),
+                }
+            return result
+
+        # Fallback: hardcodierte Zonen aus const.py
+        result = {}
+        for zone_id, zone_cfg in ZONES.items():
+            temps = ZONE_TEMPS.get(zone_id, {})
+            climate = zone_cfg.get("climate_entity", [])
+            result[zone_id] = {
+                "name": zone_cfg["name"],
+                "climate_entities": [climate] if isinstance(climate, str) else list(climate),
+                "temp_sensors": [s for s in [zone_cfg.get("temp_sensor")] if s],
+                "humidity_sensors": [s for s in [zone_cfg.get("humidity_sensor")] if s],
+                "window_sensor": zone_cfg.get("window_sensor"),
+                "comfort_temp": temps.get("comfort", TEMP_COMFORT),
+                "night_temp": temps.get("night", TEMP_NIGHT),
+                "away_temp": temps.get("away", TEMP_AWAY),
+            }
+        return result
+
+    def _read_avg_sensor(self, sensor_ids: list[str]) -> float | None:
+        """Durchschnittswert mehrerer Sensoren berechnen (unavailable wird übersprungen)."""
+        values = []
+        for sid in sensor_ids:
+            if not sid:
+                continue
+            state = self.hass.states.get(sid)
+            if state and state.state not in ("unknown", "unavailable", "None"):
+                try:
+                    values.append(float(state.state))
+                except ValueError:
+                    pass
+        return round(sum(values) / len(values), 1) if values else None
 
     def set_active_control(self, active: bool) -> None:
         """Aktive Steuerung ein-/ausschalten.
@@ -152,7 +213,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             presence = self._get_presence_state()
             zone_recommendations: dict = {}
 
-            for zone_id, zone_cfg in ZONES.items():
+            for zone_id, zone_cfg in self.zones.items():
                 mode = self._effective_mode(zone_id, presence)
                 recommendation = await self._compute_zone_recommendation(
                     zone_id, zone_cfg, weather_data, mode
@@ -249,16 +310,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self, zone_id: str, zone_cfg: dict, weather_data: dict, mode: str
     ) -> dict:
         """Empfehlung für eine Zone berechnen."""
-        # Ist-Temperatur
-        current_temp: float | None = None
-        temp_sensor = zone_cfg.get("temp_sensor")
-        if temp_sensor:
-            state = self.hass.states.get(temp_sensor)
-            if state and state.state not in ("unknown", "unavailable"):
-                try:
-                    current_temp = float(state.state)
-                except ValueError:
-                    pass
+        # Ist-Temperatur – Durchschnitt aller konfigurierten Sensoren
+        current_temp = self._read_avg_sensor(zone_cfg.get("temp_sensors", []))
 
         # Fenster offen?
         window_open = False
@@ -333,9 +386,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             )
             return
 
-        climate_entities = zone_cfg.get("climate_entity", [])
-        if isinstance(climate_entities, str):
-            climate_entities = [climate_entities]
+        climate_entities = zone_cfg.get("climate_entities", [])
 
         for entity_id in climate_entities:
             state = self.hass.states.get(entity_id)

@@ -1,6 +1,6 @@
 {
   "name": "ThermoSmart",
-  "description": "AI-powered, weather-aware heating control with learning algorithms",
-  "render_readme": true,
-  "homeassistant": "2024.1.0"
+  "content_type": "integration",
+  "homeassistant": "2024.1.0",
+  "render_readme": true
 }

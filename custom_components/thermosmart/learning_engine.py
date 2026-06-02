@@ -31,6 +31,39 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _thermal_weight(obs: dict, outdoor: float, now: datetime) -> float:
+    """Gewicht für thermisches Lernen (Heizrate, Vorheizzeit).
+
+    Fragt: 'Wie ähnlich waren die Außenbedingungen?' – NICHT 'Welche Jahreszeit?'
+
+    Ein Oktober-Tag bei 8°C ist für die Heizrate genauso relevant wie
+    ein Januar-Tag bei 8°C. Das Gebäude heizt sich physikalisch gleich auf.
+    Daher KEINE saisonale Gewichtung hier.
+
+    Gewichtung nach:
+      1. Außentemperatur-Ähnlichkeit (wichtigster Faktor)
+      2. Leichte Aktualitätspräferenz (neuere Kalibrierungen bevorzugt)
+    """
+    try:
+        obs_dt = datetime.fromisoformat(obs["ts"])
+    except (ValueError, TypeError, KeyError):
+        return 0.0
+
+    obs_outdoor = obs.get("outdoor_temp") or outdoor
+    temp_diff = abs(obs_outdoor - outdoor)
+
+    # Temperaturähnlichkeit: σ = 5°C – bei >15°C Unterschied fast irrelevant
+    temp_similarity = math.exp(-(temp_diff / 5.0) ** 2)
+    if temp_similarity < 0.01:
+        return 0.0
+
+    # Leichte Aktualitätspräferenz: neuere Messungen etwas bevorzugt
+    age_days = max((now - obs_dt).total_seconds() / 86400, 0)
+    recency = math.exp(-age_days / 730)  # 2 Jahre Halbwertzeit
+
+    return round(temp_similarity * recency, 6)
+
+
 def _observation_weight(obs_ts: str, now: datetime) -> float:
     """Gewicht einer Beobachtung – kombiniert saisonale Ähnlichkeit + Aktualität.
 
@@ -326,7 +359,11 @@ class LearningEngine:
         return self._estimate_heat_rate(weather_data)
 
     def _learned_heat_rate(self, zone_id: str, weather_data: dict) -> float:
-        """Gelernte Heizrate – saisonal gewichtet statt reines Zeit-Decay."""
+        """Gelernte Heizrate – nach Außentemperatur-Ähnlichkeit gewichtet.
+
+        Nutzt _thermal_weight: Oktober bei 8°C = Januar bei 8°C.
+        Das System lernt die Physik des Gebäudes aus ALLEN Jahreszeiten.
+        """
         outdoor = weather_data.get("temperature") or 10.0
         now = dt_util.now()
         rates = []
@@ -335,10 +372,7 @@ class LearningEngine:
         for obs in self._observations[zone_id]:
             if "heat_rate" not in obs or obs["heat_rate"] <= 0:
                 continue
-            obs_outdoor = obs.get("outdoor_temp") or outdoor
-            if abs(obs_outdoor - outdoor) > 8:
-                continue
-            w = _observation_weight(obs["ts"], now)
+            w = _thermal_weight(obs, outdoor, now)
             if w < 0.01:
                 continue
             rates.append(obs["heat_rate"])

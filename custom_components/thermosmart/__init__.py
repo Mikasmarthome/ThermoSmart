@@ -42,7 +42,7 @@ from .const import (
     TEMP_NIGHT,
     TEMP_FROST_PROTECTION,
     TEMP_ECO,
-    FROST_FALLBACK_TEMP,
+    WINDOW_OPEN_SETPOINT,
     SUMMER_THRESHOLD,
     WINTER_THRESHOLD,
     SEASON_HOURS,
@@ -192,6 +192,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._last_written_setpoints: dict[str, float] = {}
         self._window_open_temp: dict[str, float] = {}
         self._summer_override: bool | None = None   # Gesetzt vom globalen Sommer-Schalter
+        self._pre_vacation_mode: str | None = None  # Modus vor globalem Urlaub – für Restore
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -219,6 +220,20 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
+
+    def set_vacation_override(self, active: bool) -> None:
+        """Globaler Urlaubs-Override – speichert/restauriert den bisherigen Modus."""
+        if active:
+            if self._mode != HEATING_MODE_VACATION:
+                self._pre_vacation_mode = self._mode
+            self._mode = HEATING_MODE_VACATION
+        else:
+            self._mode = self._pre_vacation_mode or HEATING_MODE_AUTO
+            self._pre_vacation_mode = None
+        _LOGGER.info(
+            "ThermoSmart '%s': Urlaubs-Override %s (Modus: %s)",
+            self.zone_name, "AN" if active else "AUS", self._mode,
+        )
 
     def set_summer_override(self, value: bool | None) -> None:
         """Globaler Sommer-Override vom domain-weiten Schalter."""
@@ -1235,7 +1250,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         # Fenster offen → TRV auf 5°C setzen (automatisch, kein Schalter)
         if target is None:
             if recommendation.get("window_open"):
-                frost_temp = FROST_FALLBACK_TEMP
+                frost_temp = WINDOW_OPEN_SETPOINT
                 tasks = []
                 for entity_id in cfg.get("climate_entities", []):
                     state = self._get_trv_state(entity_id)

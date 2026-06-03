@@ -11,7 +11,10 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, VERSION, ICON_ZONE, ICON_LEARNING, ICON_PREHEAT, ICON_WEATHER_ADJUST
+from .const import (
+    DOMAIN, VERSION, ICON_ZONE, ICON_LEARNING, ICON_PREHEAT, ICON_WEATHER_ADJUST,
+    SOLAR_GAIN_THRESHOLD_W, SOLAR_GAIN_MIN_OUTDOOR_C, SOLAR_GAIN_MAX_REDUCTION,
+)
 from . import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -376,9 +379,9 @@ class ThermoSmartSunIntensitySensor(_Base):
         weather = data.get("weather", {})
         solar = weather.get("solar_radiation") or 0.0
         outdoor = weather.get("temperature") or 0.0
-        if solar <= 300 or outdoor <= 3:
+        if solar <= SOLAR_GAIN_THRESHOLD_W or outdoor <= SOLAR_GAIN_MIN_OUTDOOR_C:
             return 0
-        reduction = min((solar - 300) / 1000.0, 0.30)
+        reduction = min((solar - SOLAR_GAIN_THRESHOLD_W) / 1000.0, SOLAR_GAIN_MAX_REDUCTION)
         return round(reduction * 100, 1)
 
     @property

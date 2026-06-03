@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.4.4b1"
+VERSION = "0.4.5b1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -58,7 +58,7 @@ TEMP_NIGHT = 18.0
 TEMP_AWAY = 17.0
 TEMP_FROST_PROTECTION = 12.0
 TEMP_ECO = 19.0
-FROST_FALLBACK_TEMP = 5.0   # TRV-Setpoint wenn Fenster offen (statt hvac_mode off)
+WINDOW_OPEN_SETPOINT = 5.0  # TRV-Setpoint bei geöffnetem Fenster
 
 # Weather-based adjustments
 WEATHER_COLD_THRESHOLD = 0.0     # °C outdoor — boost heating
@@ -77,6 +77,11 @@ WIND_CHILL_BOOST = 0.5          # °C extra when cold AND windy
 LEARNING_MIN_SAMPLES = 5        # Mindest-Beobachtungen bevor Lernen aktiv wird
 PREHEAT_MAX_MINUTES = 60        # maximale Vorheizzeit
 PREHEAT_MIN_DELTA = 2.0         # °C Differenz ab der Vorheizung ausgelöst wird
+
+# Solar-Gain-Erkennung (SunIntensitySensor)
+SOLAR_GAIN_THRESHOLD_W = 300.0   # W/m² – unterhalb kein relevanter Solar-Wärmeeintrag
+SOLAR_GAIN_MIN_OUTDOOR_C = 3.0   # °C – bei Kälte trotz Sonne keinen Abzug
+SOLAR_GAIN_MAX_REDUCTION = 0.30  # max. 30 % Reduktion des Heizbedarfs durch Sonne
 
 # Sommer/Winter-Erkennung
 SUMMER_THRESHOLD = 18.0   # °C Außentemperatur über X Stunden → Sommer

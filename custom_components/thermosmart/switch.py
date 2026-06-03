@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_SUMMER, DOMAIN_GLOBAL_VACATION, HEATING_MODE_VACATION, HEATING_MODE_AUTO
+from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_SUMMER, DOMAIN_GLOBAL_VACATION
 from . import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -208,7 +208,7 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
         self._is_on = last is not None and last.state == "on"
         if self._is_on:
             for coord in _all_coordinators(self._hass):
-                coord.set_mode(HEATING_MODE_VACATION)
+                coord.set_vacation_override(True)
 
     @property
     def is_on(self) -> bool:
@@ -223,12 +223,12 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
         self._is_on = True
         self.async_write_ha_state()
         for coord in _all_coordinators(self._hass):
-            coord.set_mode(HEATING_MODE_VACATION)
+            coord.set_vacation_override(True)
             await coord.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
         self.async_write_ha_state()
         for coord in _all_coordinators(self._hass):
-            coord.set_mode(HEATING_MODE_AUTO)
+            coord.set_vacation_override(False)
             await coord.async_request_refresh()

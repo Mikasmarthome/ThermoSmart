@@ -52,8 +52,6 @@ from .const import (
     VALVE_MAINTENANCE_BOOST_TEMP,
     VALVE_MAINTENANCE_DURATION_SEC,
     VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
-    DOMAIN_GLOBAL_SUMMER,
-    DOMAIN_GLOBAL_VACATION,
     RESIDUAL_HEAT_ZONE,
     EMA_1H_ALPHA,
     HEATING_MODE_AUTO,
@@ -136,7 +134,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # keine weiteren Zonen mehr aktiv sind
         remaining = [
             k for k in hass.data[DOMAIN]
-            if k not in ("learning_engine",)
+            if k not in ("learning_engine", "global_switches_created")
         ]
         if not remaining:
             if le := hass.data[DOMAIN].pop("learning_engine", None):

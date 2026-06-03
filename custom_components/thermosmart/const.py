@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.2.8b1"
+VERSION = "0.4.3b1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -75,19 +75,11 @@ WIND_THRESHOLD_MS = 10.0        # m/s
 WIND_CHILL_BOOST = 0.5          # °C extra when cold AND windy
 
 # Learning algorithm settings
-LEARNING_WINDOW_DAYS = 30       # Tage für Konfidenz-Berechnung (Daten bleiben dauerhaft)
 LEARNING_MIN_SAMPLES = 5        # Mindest-Beobachtungen bevor Lernen aktiv wird
-LEARNING_DECAY_HALFLIFE = 90    # Halbwertszeit in Tagen (ältere Daten verlieren Gewicht)
 PREHEAT_MAX_MINUTES = 60        # maximale Vorheizzeit
 PREHEAT_MIN_DELTA = 2.0         # °C Differenz ab der Vorheizung ausgelöst wird
 
-# Präsenz & Automatik
-PRESENCE_PERSONS = ["person.resident_1", "person.resident_2"]
-PRESENCE_PREHEAT_ZONE = "zone.heizungszone"   # Zone → Heizung startet beim Reinfahren
-VACATION_BOOLEAN = "input_boolean.urlaubsmodus"
-OUTDOOR_TEMP_SENSOR_EXTRA = "sensor.outdoor_temperature"  # eigene Wetterstation
-
-# Sommer/Winter-Erkennung (aus deinen Automationen übernommen)
+# Sommer/Winter-Erkennung
 SUMMER_THRESHOLD = 18.0   # °C Außentemperatur über X Stunden → Sommer
 WINTER_THRESHOLD = 15.0   # °C Außentemperatur unter X Stunden → Heizung an
 SEASON_HOURS = 72         # Stunden die der Schwellwert überschritten sein muss

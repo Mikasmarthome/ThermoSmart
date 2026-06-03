@@ -32,11 +32,8 @@ async def async_setup_entry(
         ThermoSmartWeatherOffsetSensor(coordinator, entry),
         ThermoSmartStatusSensor(coordinator, entry),
         ThermoSmartTempSlopeSensor(coordinator, entry),
-        ThermoSmartEMA1hSensor(coordinator, entry),
-        ThermoSmartHeatLossSensor(coordinator, entry),
         ThermoSmartHeatingPowerSensor(coordinator, entry),
         ThermoSmartSunIntensitySensor(coordinator, entry),
-        ThermoSmartWindowCoolingRateSensor(coordinator, entry),
         ThermoSmartTRVObservationsSensor(coordinator, entry),
     ])
 
@@ -105,7 +102,7 @@ class ThermoSmartTargetTempSensor(_Base):
 
 class ThermoSmartTRVSetpointSensor(_Base):
     """Zeigt den tatsächlichen Setpoint der ans TRV gesendet wird (inkl. Boost)."""
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "trv_setpoint")
@@ -136,7 +133,7 @@ class ThermoSmartTRVSetpointSensor(_Base):
 
 
 class ThermoSmartPreheatSensor(_Base):
-    _attr_entity_registry_enabled_default = False
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "preheat_minutes")
@@ -294,59 +291,6 @@ class ThermoSmartTempSlopeSensor(_Base):
         return {"trend": trend}
 
 
-class ThermoSmartEMA1hSensor(_Base):
-    """1-Stunden-EMA der Innentemperatur – zeigt den Langzeit-Trend."""
-    _attr_entity_registry_enabled_default = False
-
-    def __init__(self, coordinator, entry):
-        super().__init__(coordinator, entry, "temp_ema_1h")
-        self._attr_unique_id = f"{entry.entry_id}_temp_ema_1h"
-        self._attr_name = "Temperatur EMA 1h"
-        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
-        self._attr_device_class = SensorDeviceClass.TEMPERATURE
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:chart-bell-curve"
-
-    @property
-    def native_value(self):
-        return self._zone.get("temp_ema_1h")
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        ema = self._zone.get("temp_ema_1h")
-        current = self._zone.get("current_temp")
-        delta = round(current - ema, 2) if ema is not None and current is not None else None
-        return {"abweichung_von_ema": delta}
-
-
-class ThermoSmartHeatLossSensor(_Base):
-    """Durchschnittliche Wärmeverlust-Rate (K/min) – aus gelernten Abkühlphasen."""
-    _attr_entity_registry_enabled_default = False
-
-    def __init__(self, coordinator, entry):
-        super().__init__(coordinator, entry, "heat_loss")
-        self._attr_unique_id = f"{entry.entry_id}_heat_loss"
-        self._attr_name = "Heat Loss"
-        self._attr_native_unit_of_measurement = "K/min"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:thermometer-minus"
-
-    @property
-    def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
-            return None
-        stats = le.get_stats(self.coordinator.zone_id)
-        return stats.get("avg_cool_rate_per_min")
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {}
-        stats = le.get_stats(self.coordinator.zone_id)
-        return {"messungen": stats.get("with_cool_rate", 0)}
-
 
 class ThermoSmartHeatingPowerSensor(_Base):
     """Durchschnittliche Aufheizrate (K/min) – aus gelernten Heizphasen."""
@@ -412,35 +356,6 @@ class ThermoSmartSunIntensitySensor(_Base):
             "außentemperatur": weather.get("temperature"),
         }
 
-
-class ThermoSmartWindowCoolingRateSensor(_Base):
-    """Gelernte Fenster-Abkühlrate – wie schnell kühlt der Raum bei geöffnetem Fenster."""
-    _attr_entity_registry_enabled_default = False
-
-    def __init__(self, coordinator, entry):
-        super().__init__(coordinator, entry, "window_cooling_rate")
-        self._attr_unique_id = f"{entry.entry_id}_window_cooling_rate"
-        self._attr_name = "Fenster Abkühlrate"
-        self._attr_native_unit_of_measurement = "K/min"
-        self._attr_state_class = SensorStateClass.MEASUREMENT
-        self._attr_icon = "mdi:window-open"
-
-    @property
-    def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
-            return None
-        data = self.coordinator.data or {}
-        weather = data.get("weather", {})
-        return le.get_window_cooling_rate(self.coordinator.zone_id, weather)
-
-    @property
-    def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {}
-        stats = le.get_trv_stats(self.coordinator.zone_id)
-        return {"fenster_beobachtungen": stats.get("window_observations", 0)}
 
 
 class ThermoSmartTRVObservationsSensor(_Base):

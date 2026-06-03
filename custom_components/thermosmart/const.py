@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.2.7b"
+VERSION = "0.2.8b"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -32,6 +32,9 @@ AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
 
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
+CONF_BOOST_TEMP        = "boost_temp"          # Boost-Preset Temperatur
+CONF_ECO_TEMP          = "eco_temp"            # Eco-Preset Temperatur
+CONF_NO_OFF_FALLBACK   = "no_off_fallback"     # Bei Fensteroffen: 5°C statt nichts
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
 CONF_SCHED_WD_NIGHT    = "sched_wd_night"     # Werktag: Nacht      → night_temp
 CONF_SCHED_WE_MORNING  = "sched_we_morning"   # Wochenende: Aufwachen → comfort_temp
@@ -52,6 +55,9 @@ TEMP_COMFORT = 21.0
 TEMP_NIGHT = 18.0
 TEMP_AWAY = 17.0
 TEMP_FROST_PROTECTION = 12.0
+TEMP_BOOST = 24.0
+TEMP_ECO = 19.0
+FROST_FALLBACK_TEMP = 5.0   # TRV-Setpoint wenn Fenster offen (statt hvac_mode off)
 
 # Weather-based adjustments
 WEATHER_COLD_THRESHOLD = 0.0     # °C outdoor — boost heating
@@ -91,16 +97,26 @@ NOISE_FILTER_EMA_ALPHA = 0.2        # EMA-Glättungsfaktor (kleiner = träger/st
 # Heizmodi
 HEATING_MODE_AUTO     = "auto"
 HEATING_MODE_COMFORT  = "comfort"
+HEATING_MODE_ECO      = "eco"
 HEATING_MODE_NIGHT    = "night"
 HEATING_MODE_AWAY     = "away"
 HEATING_MODE_VACATION = "vacation"
+HEATING_MODE_BOOST    = "boost"
 HEATING_MODES = [
     HEATING_MODE_AUTO,
+    HEATING_MODE_BOOST,
     HEATING_MODE_COMFORT,
+    HEATING_MODE_ECO,
     HEATING_MODE_NIGHT,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
 ]
+
+# Restwärme-Kompensation
+RESIDUAL_HEAT_ZONE = 1.5   # °C – Annäherungszone zum Ziel, ab der Setpoint reduziert wird
+
+# EMA-Zeitkonstante für 1h-Trend-Sensor (α ≈ 1-e^(-5min/60min))
+EMA_1H_ALPHA = 0.08
 
 
 # Storage keys

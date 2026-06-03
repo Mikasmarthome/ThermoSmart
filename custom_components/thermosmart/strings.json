@@ -12,7 +12,8 @@
           "window_sensors": "Fenstersensoren (binary_sensor)",
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
-          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)"
+          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)",
+          "no_off_fallback": "Bei geöffnetem Fenster: TRVs auf 5°C setzen (statt auf letztem Wert lassen)"
         }
       },
       "schedule": {
@@ -23,6 +24,8 @@
           "night_temp": "Nachttemperatur (Absenkung beim Schlafen)",
           "away_temp": "Abwesenheitstemperatur (automatisch wenn alle weg sind)",
           "vacation_temp": "Urlaubstemperatur (Frostschutz wenn Wohnung längere Zeit leer steht)",
+          "boost_temp": "Boost-Temperatur (schnelles Aufheizen, z. B. nach dem Lüften)",
+          "eco_temp": "Eco-Temperatur (energiesparend, zwischen Nacht und Komfort)",
           "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
           "sched_wd_morning": "Werktag: Komfort ab",
           "sched_wd_night": "Werktag: Nacht ab",
@@ -99,6 +102,9 @@
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
+          "vacation_temp": "Urlaubstemperatur",
+          "boost_temp": "Boost-Temperatur",
+          "eco_temp": "Eco-Temperatur",
           "temp_tolerance": "Temperaturtoleranz",
           "sched_wd_morning": "Werktag: Komfort ab",
           "sched_wd_night": "Werktag: Nacht ab",

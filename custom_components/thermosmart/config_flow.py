@@ -19,11 +19,16 @@ from .const import (
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
     CONF_VACATION_TEMP,
+    CONF_BOOST_TEMP,
+    CONF_ECO_TEMP,
     CONF_VACATION_BOOLEAN,
     CONF_VALVE_MAINTENANCE,
+    CONF_NO_OFF_FALLBACK,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
     DEFAULT_LEARNING_ENABLED,
+    TEMP_BOOST,
+    TEMP_ECO,
 )
 
 
@@ -59,6 +64,8 @@ def _schema_devices(d: dict) -> vol.Schema:
             )),
         vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
             selector.BooleanSelector(),
+        vol.Optional(CONF_NO_OFF_FALLBACK, default=d.get(CONF_NO_OFF_FALLBACK, True)):
+            selector.BooleanSelector(),
     })
 
 
@@ -81,6 +88,14 @@ def _schema_schedule(d: dict) -> vol.Schema:
         vol.Required(CONF_VACATION_TEMP, default=d.get(CONF_VACATION_TEMP, 12.0)):
             selector.NumberSelector(selector.NumberSelectorConfig(
                 min=5, max=20, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required(CONF_BOOST_TEMP, default=d.get(CONF_BOOST_TEMP, TEMP_BOOST)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=20, max=30, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required(CONF_ECO_TEMP, default=d.get(CONF_ECO_TEMP, TEMP_ECO)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=15, max=22, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
             )),
         vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.5)):
             selector.NumberSelector(selector.NumberSelectorConfig(

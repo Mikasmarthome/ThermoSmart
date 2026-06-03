@@ -36,6 +36,10 @@ from .const import (
     PREHEAT_MIN_DELTA,
     HEATING_MODE_AUTO,
     CONF_VACATION_TEMP,
+    CONF_BOOST_TEMP,
+    CONF_ECO_TEMP,
+    TEMP_BOOST,
+    TEMP_ECO,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
 )
@@ -271,6 +275,8 @@ class LearningEngine:
         night_temp: float = 18.0,
         away_temp: float = 17.0,
         vacation_temp: float = 12.0,
+        boost_temp: float = TEMP_BOOST,
+        eco_temp: float = TEMP_ECO,
         schedule_cfg: dict | None = None,
     ) -> float:
         """Empfohlene Zieltemperatur – Zeitplan oder Modus-Temperatur."""
@@ -279,6 +285,8 @@ class LearningEngine:
             "night": night_temp,
             "away": away_temp,
             "vacation": vacation_temp,
+            "boost": boost_temp,
+            "eco": eco_temp,
         }
         if mode != HEATING_MODE_AUTO:
             return mode_temps.get(mode, night_temp)
@@ -337,11 +345,11 @@ class LearningEngine:
     def get_boost_factor(self, zone_id: str) -> float:
         return self._boost_factors.get(zone_id, 1.0)
 
-    def update_boost_factor(self, zone_id: str, overshot: bool) -> None:
+    def update_boost_factor(self, zone_id: str, overshot: bool, slow: bool = False) -> None:
         """Boost-Faktor nach Heizzyklus anpassen.
 
         Überschießen → Faktor reduzieren (Ventil war zu weit auf).
-        Nur Erhöhen wenn explizit langsam (slow=True) – kommt später.
+        Zu langsam    → Faktor erhöhen (Ventil öffnet zu wenig).
         """
         if not self._enabled:
             return
@@ -352,12 +360,16 @@ class LearningEngine:
                 "LearningEngine [%s] Boost-Faktor reduziert → %.3f (Überschießen)",
                 zone_id, factor,
             )
+        elif slow:
+            factor = min(2.0, round(factor * 1.05, 3))
+            _LOGGER.info(
+                "LearningEngine [%s] Boost-Faktor erhöht → %.3f (langsames Heizen)",
+                zone_id, factor,
+            )
         self._boost_factors[zone_id] = factor
 
     def get_stats(self, zone_id: str) -> dict:
         obs = self._observations[zone_id]
-        now = dt_util.now()
-        # Zähle Beobachtungen mit verschiedenen Faktoren
         with_wind = sum(1 for o in obs if o.get("wind_speed") is not None)
         with_solar = sum(1 for o in obs if o.get("solar_radiation") is not None)
         with_humidity = sum(1 for o in obs if o.get("indoor_humidity") is not None)
@@ -367,6 +379,10 @@ class LearningEngine:
         cool_samples = [o["cool_rate"] for o in obs if o.get("cool_rate")]
         if cool_samples:
             avg_cool_rate = round(sum(cool_samples) / len(cool_samples), 5)
+        avg_heat_rate = None
+        heat_samples = [o["heat_rate"] for o in obs if o.get("heat_rate")]
+        if heat_samples:
+            avg_heat_rate = round(sum(heat_samples[-50:]) / len(heat_samples[-50:]), 5)
         return {
             "total_observations": len(obs),
             "confidence": self.get_confidence(zone_id),
@@ -375,6 +391,7 @@ class LearningEngine:
             "with_humidity_data": with_humidity,
             "with_heat_rate": with_heat_rate,
             "with_cool_rate": with_cool_rate,
+            "avg_heat_rate_per_min": avg_heat_rate,
             "avg_cool_rate_per_min": avg_cool_rate,
             "oldest": obs[0]["ts"] if obs else None,
         }

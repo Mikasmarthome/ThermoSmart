@@ -36,10 +36,16 @@ from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERN,
     CONF_VACATION_TEMP,
+    CONF_BOOST_TEMP,
+    CONF_ECO_TEMP,
+    CONF_NO_OFF_FALLBACK,
     NOISE_FILTER_SPIKE_THRESHOLD,
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
     TEMP_FROST_PROTECTION,
+    TEMP_BOOST,
+    TEMP_ECO,
+    FROST_FALLBACK_TEMP,
     SUMMER_THRESHOLD,
     WINTER_THRESHOLD,
     SEASON_HOURS,
@@ -47,11 +53,15 @@ from .const import (
     VALVE_MAINTENANCE_WEEKDAY,
     VALVE_MAINTENANCE_BOOST_TEMP,
     VALVE_MAINTENANCE_DURATION_SEC,
+    RESIDUAL_HEAT_ZONE,
+    EMA_1H_ALPHA,
     HEATING_MODE_AUTO,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
     HEATING_MODE_COMFORT,
     HEATING_MODE_NIGHT,
+    HEATING_MODE_BOOST,
+    HEATING_MODE_ECO,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -155,6 +165,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._auto_calibration_map: dict[str, str] = {}   # climate_id → cal_entity_id
         self._sensor_ema: dict[str, float] = {}
         self._sensor_noise_count: dict[str, int] = {}
+        self._indoor_temp_prev: tuple[datetime, float] | None = None
+        self._indoor_temp_slope: float = 0.0
+        self._ema_1h: float | None = None
+        self._last_written_setpoints: dict[str, float] = {}
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -222,49 +236,81 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
     # ── Event-Listener ───────────────────────────────────────────────
 
     def setup_event_listeners(self) -> None:
-        """Sofort-Reaktion auf Fenster-, Personen- und Urlaubsänderungen."""
+        """Sofort-Reaktion auf Fenster-, Personen-, Urlaubs- und TRV-Änderungen."""
         cfg = self.zone_cfg
         window_sensors: set[str] = set(s for s in cfg.get("window_sensors", []) if s)
         presence: set[str] = set(p for p in cfg.get(CONF_PRESENCE_PERSONS, []) if p)
         vacation_entity = cfg.get(CONF_VACATION_BOOLEAN, "")
         if vacation_entity:
             presence.add(vacation_entity)
+        climate_entities: set[str] = set(e for e in cfg.get("climate_entities", []) if e)
 
+        # Fenster + Personen + Urlaub → Sofort-Refresh
         all_tracked = window_sensors | presence
-        if not all_tracked:
-            return
+        if all_tracked:
+            @callback
+            def _handle_state_change(event) -> None:
+                old = event.data.get("old_state")
+                new = event.data.get("new_state")
+                if old is None or new is None or old.state == new.state:
+                    return
+                entity_id = event.data["entity_id"]
+                now = dt_util.now()
 
-        @callback
-        def _handle_state_change(event) -> None:
-            old = event.data.get("old_state")
-            new = event.data.get("new_state")
-            if old is None or new is None or old.state == new.state:
-                return
-            entity_id = event.data["entity_id"]
-            now = dt_util.now()
+                if entity_id in window_sensors:
+                    if new.state == "on":
+                        self._window_open_at[entity_id] = now
+                        self._window_close_at.pop(entity_id, None)
+                    else:
+                        if entity_id in self._window_open_at:
+                            self._window_close_at[entity_id] = now
+                        self._window_open_at.pop(entity_id, None)
 
-            if entity_id in window_sensors:
-                if new.state == "on":
-                    self._window_open_at[entity_id] = now
-                    self._window_close_at.pop(entity_id, None)
-                else:
-                    if entity_id in self._window_open_at:
-                        self._window_close_at[entity_id] = now
-                    self._window_open_at.pop(entity_id, None)
+                _LOGGER.info(
+                    "ThermoSmart '%s': %s geändert (%s → %s) – Sofort-Update",
+                    self.zone_name, entity_id, old.state, new.state,
+                )
+                self.hass.async_create_task(self.async_request_refresh())
 
-            _LOGGER.info(
-                "ThermoSmart '%s': %s geändert (%s → %s) – Sofort-Update",
-                self.zone_name, entity_id, old.state, new.state,
+            cancel = async_track_state_change_event(
+                self.hass, list(all_tracked), _handle_state_change
             )
-            self.hass.async_create_task(self.async_request_refresh())
+            self._event_unsub.append(cancel)
 
-        cancel = async_track_state_change_event(
-            self.hass, list(all_tracked), _handle_state_change
-        )
-        self._event_unsub.append(cancel)
+        # TRV-Entities → manuelle Setpoint-Änderungen sofort korrigieren
+        if climate_entities and self._active_control:
+            @callback
+            def _handle_trv_change(event) -> None:
+                if not self._active_control:
+                    return
+                new = event.data.get("new_state")
+                if new is None:
+                    return
+                entity_id = event.data["entity_id"]
+                new_setpoint = new.attributes.get("temperature")
+                last_written = self._last_written_setpoints.get(entity_id)
+                if new_setpoint is None or last_written is None:
+                    return
+                try:
+                    if abs(float(new_setpoint) - last_written) > 0.4:
+                        _LOGGER.info(
+                            "ThermoSmart '%s': Manuelle TRV-Änderung erkannt %s "
+                            "(%.1f°C statt %.1f°C) – Sofort-Korrektur",
+                            self.zone_name, entity_id, float(new_setpoint), last_written,
+                        )
+                        self.hass.async_create_task(self.async_request_refresh())
+                except (TypeError, ValueError):
+                    pass
+
+            cancel_trv = async_track_state_change_event(
+                self.hass, list(climate_entities), _handle_trv_change
+            )
+            self._event_unsub.append(cancel_trv)
+
         _LOGGER.debug(
-            "ThermoSmart '%s': Event-Listener für %d Entities registriert",
-            self.zone_name, len(all_tracked),
+            "ThermoSmart '%s': Event-Listener registriert "
+            "(%d Presenz/Fenster, %d TRVs)",
+            self.zone_name, len(all_tracked), len(climate_entities),
         )
 
     def cleanup_event_listeners(self) -> None:
@@ -524,6 +570,22 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         # Innentemperatur (Durchschnitt mehrerer Sensoren)
         current_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
 
+        # Temperatur-Slope (K/min) und EMA 1h aus aufeinanderfolgenden Messungen
+        now = dt_util.now()
+        if current_temp is not None:
+            if self._indoor_temp_prev is not None:
+                prev_time, prev_temp = self._indoor_temp_prev
+                elapsed_min = (now - prev_time).total_seconds() / 60
+                if 1.0 <= elapsed_min <= 30.0:
+                    self._indoor_temp_slope = round((current_temp - prev_temp) / elapsed_min, 4)
+            self._indoor_temp_prev = (now, current_temp)
+            if self._ema_1h is None:
+                self._ema_1h = current_temp
+            else:
+                self._ema_1h = round(
+                    EMA_1H_ALPHA * current_temp + (1 - EMA_1H_ALPHA) * self._ema_1h, 2
+                )
+
         # Fenster offen?
         window_open = self._check_window_open(cfg)
 
@@ -534,6 +596,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             night_temp=cfg.get("night_temp", 18.0),
             away_temp=cfg.get("away_temp", 17.0),
             vacation_temp=cfg.get(CONF_VACATION_TEMP, 12.0),
+            boost_temp=cfg.get(CONF_BOOST_TEMP, TEMP_BOOST),
+            eco_temp=cfg.get(CONF_ECO_TEMP, TEMP_ECO),
             schedule_cfg=cfg,
         )
 
@@ -607,6 +671,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             "outdoor_temp": weather_data.get("temperature"),
             "forecast_high": weather_data.get("forecast_high"),
             "weather_condition": weather_data.get("condition"),
+            "temp_slope": self._indoor_temp_slope,
+            "temp_ema_1h": self._ema_1h,
         }
 
     def _check_window_open(self, cfg: dict) -> bool:
@@ -702,8 +768,17 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             return target
 
         delta = target - current_temp
-        if delta < 1.0:
-            return target  # Nah am Ziel → kein Boost nötig
+
+        # Restwärme-Kompensation: Ventil schließt früher, Radiator-Restwärme übernimmt den Rest.
+        # Verhindert Überschwingen ohne auf Boost-Erfahrungswerte warten zu müssen.
+        if delta <= 0:
+            # Ziel erreicht oder überschritten → Setpoint unter Ziel um Ventil zu schließen
+            return round(max(target - RESIDUAL_HEAT_ZONE * 0.5, 5.0), 1)
+        if delta < RESIDUAL_HEAT_ZONE:
+            # Annäherungszone: Setpoint linear von target bis (target - zone/2) reduzieren
+            fraction = delta / RESIDUAL_HEAT_ZONE
+            reduction = (1.0 - fraction) * (RESIDUAL_HEAT_ZONE * 0.5)
+            return round(target - reduction, 1)
 
         outdoor = weather_data.get("temperature") or 15.0
         wind = weather_data.get("wind_speed") or 0.0
@@ -737,24 +812,36 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         return round(trv_setpoint, 1)
 
     def _check_boost_outcome(self, cfg: dict) -> None:
-        """Erkennt Überschießen nach Boost → reduziert Lernfaktor."""
+        """Erkennt Überschießen und zu langsames Heizen → passt Boost-Faktor an."""
         if self.zone_id not in self._boost_active:
             return
         current = self._read_avg_sensor(cfg.get("temp_sensors", []))
         if current is None:
             return
-        prev_target = self._boost_active[self.zone_id]["target"]
+        entry = self._boost_active[self.zone_id]
+        prev_target = entry["target"]
         tolerance = cfg.get("temp_tolerance", 0.5)
         if current > prev_target + tolerance:
             self.learning_engine.update_boost_factor(self.zone_id, overshot=True)
             _LOGGER.info(
-                "ThermoSmart '%s': Boost-Überschießen %.1f°C > %.1f°C – Faktor angepasst",
+                "ThermoSmart '%s': Boost-Überschießen %.1f°C > %.1f°C – Faktor reduziert",
                 self.zone_name, current, prev_target,
             )
             self._boost_active.pop(self.zone_id)
         elif current >= prev_target - tolerance * 0.5:
             # Ziel sauber erreicht – kein Überschießen
             self._boost_active.pop(self.zone_id)
+        else:
+            # Zu langsames Heizen: nach 30 min noch deutlich unter Ziel → Faktor erhöhen
+            started = entry.get("started")
+            if started and (dt_util.now() - started).total_seconds() > 1800:
+                if current < prev_target - 1.0:
+                    self.learning_engine.update_boost_factor(self.zone_id, overshot=False, slow=True)
+                    _LOGGER.info(
+                        "ThermoSmart '%s': Langsames Heizen nach 30 min %.1f°C < %.1f°C – Faktor erhöht",
+                        self.zone_name, current, prev_target,
+                    )
+                self._boost_active.pop(self.zone_id)
 
     # ── Thermostat schreiben ─────────────────────────────────────────
 
@@ -993,8 +1080,31 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
         target = recommendation.get("adjusted_target")
+
+        # Fenster offen → Frostschutz-Fallback (statt TRV auf letztem Wert lassen)
         if target is None:
+            if recommendation.get("window_open") and cfg.get(CONF_NO_OFF_FALLBACK, True):
+                frost_temp = FROST_FALLBACK_TEMP
+                tasks = []
+                for entity_id in cfg.get("climate_entities", []):
+                    state = self._get_trv_state(entity_id)
+                    if state is None:
+                        continue
+                    try:
+                        if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+                    self._last_written_setpoints[entity_id] = frost_temp
+                    tasks.append(self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": entity_id, "temperature": frost_temp},
+                        blocking=True,
+                    ))
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
             return
+
         if not (5.0 <= target <= 30.0):
             _LOGGER.warning(
                 "ThermoSmart '%s': Ziel %.1f°C außerhalb Sicherheitsbereich",
@@ -1023,6 +1133,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",
                 self.zone_name, entity_id, trv_setpoint, target, trv_setpoint - target,
             )
+            self._last_written_setpoints[entity_id] = trv_setpoint
             tasks.append(self.hass.services.async_call(
                 "climate", "set_temperature",
                 {"entity_id": entity_id, "temperature": trv_setpoint},
@@ -1037,4 +1148,12 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
         # Boost-Tracking für Überschieß-Erkennung
         if trv_setpoint > target:
-            self._boost_active[self.zone_id] = {"target": target, "setpoint": trv_setpoint}
+            if self.zone_id not in self._boost_active:
+                self._boost_active[self.zone_id] = {
+                    "target": target,
+                    "setpoint": trv_setpoint,
+                    "started": dt_util.now(),
+                }
+            else:
+                self._boost_active[self.zone_id]["target"] = target
+                self._boost_active[self.zone_id]["setpoint"] = trv_setpoint

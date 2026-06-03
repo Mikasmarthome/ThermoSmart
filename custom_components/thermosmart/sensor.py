@@ -28,6 +28,11 @@ async def async_setup_entry(
         ThermoSmartConfidenceSensor(coordinator, entry),
         ThermoSmartWeatherOffsetSensor(coordinator, entry),
         ThermoSmartStatusSensor(coordinator, entry),
+        ThermoSmartTempSlopeSensor(coordinator, entry),
+        ThermoSmartEMA1hSensor(coordinator, entry),
+        ThermoSmartHeatLossSensor(coordinator, entry),
+        ThermoSmartHeatingPowerSensor(coordinator, entry),
+        ThermoSmartSunIntensitySensor(coordinator, entry),
     ])
 
 
@@ -232,4 +237,148 @@ class ThermoSmartStatusSensor(_Base):
             "alle_weg": presence.get("all_away", False),
             "urlaub": presence.get("vacation", False),
             "sommer_modus": z.get("is_summer", False),
+        }
+
+
+# ── Diagnose-Sensoren ─────────────────────────────────────────────────────────
+
+class ThermoSmartTempSlopeSensor(_Base):
+    """Temperatur-Änderungsrate – positiv = Raum wärmer, negativ = kühler."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "temp_slope")
+        self._attr_unique_id = f"{entry.entry_id}_temp_slope"
+        self._attr_name = "Temperatur Slope"
+        self._attr_native_unit_of_measurement = "K/min"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:chart-line"
+
+    @property
+    def native_value(self):
+        return self._zone.get("temp_slope", 0.0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        slope = self._zone.get("temp_slope", 0.0)
+        if slope > 0.01:
+            trend = "Aufheizend"
+        elif slope < -0.01:
+            trend = "Abkühlend"
+        else:
+            trend = "Stabil"
+        return {"trend": trend}
+
+
+class ThermoSmartEMA1hSensor(_Base):
+    """1-Stunden-EMA der Innentemperatur – zeigt den Langzeit-Trend."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "temp_ema_1h")
+        self._attr_unique_id = f"{entry.entry_id}_temp_ema_1h"
+        self._attr_name = "Temperatur EMA 1h"
+        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:chart-bell-curve"
+
+    @property
+    def native_value(self):
+        return self._zone.get("temp_ema_1h")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        ema = self._zone.get("temp_ema_1h")
+        current = self._zone.get("current_temp")
+        delta = round(current - ema, 2) if ema is not None and current is not None else None
+        return {"abweichung_von_ema": delta}
+
+
+class ThermoSmartHeatLossSensor(_Base):
+    """Durchschnittliche Wärmeverlust-Rate (K/min) – aus gelernten Abkühlphasen."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "heat_loss")
+        self._attr_unique_id = f"{entry.entry_id}_heat_loss"
+        self._attr_name = "Heat Loss"
+        self._attr_native_unit_of_measurement = "K/min"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:thermometer-minus"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return None
+        stats = le.get_stats(self.coordinator.zone_id)
+        return stats.get("avg_cool_rate_per_min")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        stats = le.get_stats(self.coordinator.zone_id)
+        return {"messungen": stats.get("with_cool_rate", 0)}
+
+
+class ThermoSmartHeatingPowerSensor(_Base):
+    """Durchschnittliche Aufheizrate (K/min) – aus gelernten Heizphasen."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "heating_power")
+        self._attr_unique_id = f"{entry.entry_id}_heating_power"
+        self._attr_name = "Heating Power"
+        self._attr_native_unit_of_measurement = "K/min"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:thermometer-plus"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return None
+        stats = le.get_stats(self.coordinator.zone_id)
+        return stats.get("avg_heat_rate_per_min")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        stats = le.get_stats(self.coordinator.zone_id)
+        return {
+            "messungen": stats.get("with_heat_rate", 0),
+            "boost_faktor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
+        }
+
+
+class ThermoSmartSunIntensitySensor(_Base):
+    """Solarer Wärmeeintrag – wie stark die Sonne gerade den Heizbedarf reduziert."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "sun_intensity")
+        self._attr_unique_id = f"{entry.entry_id}_sun_intensity"
+        self._attr_name = "Sun Intensity Heatup"
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:weather-sunny"
+
+    @property
+    def native_value(self):
+        data = self.coordinator.data or {}
+        weather = data.get("weather", {})
+        solar = weather.get("solar_radiation") or 0.0
+        outdoor = weather.get("temperature") or 0.0
+        if solar <= 300 or outdoor <= 3:
+            return 0
+        reduction = min((solar - 300) / 1000.0, 0.30)
+        return round(reduction * 100, 1)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        data = self.coordinator.data or {}
+        weather = data.get("weather", {})
+        return {
+            "solar_w_m2": weather.get("solar_radiation"),
+            "außentemperatur": weather.get("temperature"),
         }

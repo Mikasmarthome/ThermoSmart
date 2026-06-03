@@ -160,14 +160,19 @@ class ThermoSmartConfidenceSensor(_Base):
     @property
     def extra_state_attributes(self) -> dict:
         le = self.coordinator.learning_engine
-        stats = le.get_stats(self.coordinator.zone_id) if le else {}
-        trv_stats = le.get_trv_stats(self.coordinator.zone_id) if le else {}
-        phase = le.get_cold_start_phase(self.coordinator.zone_id) if le else "Unbekannt"
+        if le is None:
+            return {}
+        breakdown = le.get_confidence_breakdown(self.coordinator.zone_id)
+        phase = le.get_cold_start_phase(self.coordinator.zone_id)
+        stats = le.get_stats(self.coordinator.zone_id)
         return {
             "lernphase": phase,
-            "beobachtungen": stats.get("total_observations", 0),
-            "trv_beobachtungen": trv_stats.get("trv_observations", 0),
-            "fenster_beobachtungen": trv_stats.get("window_observations", 0),
+            "raum_muster_%": breakdown["raum_muster_%"],
+            "trv_effizienz_%": breakdown["trv_effizienz_%"],
+            "fenster_abkühlung_%": breakdown["fenster_abkühlung_%"],
+            "beobachtungen_gesamt": breakdown["beobachtungen_gesamt"],
+            "trv_beobachtungen": breakdown["trv_beobachtungen"],
+            "fenster_ereignisse": breakdown["fenster_ereignisse"],
             "älteste_beobachtung": stats.get("oldest"),
         }
 

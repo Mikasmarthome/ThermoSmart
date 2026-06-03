@@ -269,6 +269,10 @@ class LearningEngine:
             obs["cool_rate"] = cool_rate
 
         self._observations[zone_id].append(obs)
+        # Speicher begrenzen: max. 2000 Beobachtungen pro Zone
+        # Zeitgewichtung stellt sicher dass alte Daten ohnehin wenig Einfluss haben
+        if len(self._observations[zone_id]) > 2000:
+            self._observations[zone_id] = self._observations[zone_id][-2000:]
         self._rebuild_confidence(zone_id)
 
         # Alle 50 Beobachtungen speichern
@@ -319,6 +323,9 @@ class LearningEngine:
                 obs[map_key] = val
 
         self._trv_observations[zone_id].append(obs)
+        # Speicher begrenzen: max. 500 TRV-Beobachtungen pro Zone (älteste fallen raus)
+        if len(self._trv_observations[zone_id]) > 500:
+            self._trv_observations[zone_id] = self._trv_observations[zone_id][-500:]
 
         if sum(len(v) for v in self._trv_observations.values()) % 20 == 0:
             await self.async_save()
@@ -358,6 +365,9 @@ class LearningEngine:
                 obs[map_key] = val
 
         self._window_cooling_obs[zone_id].append(obs)
+        # Speicher begrenzen: max. 200 Fenster-Beobachtungen pro Zone
+        if len(self._window_cooling_obs[zone_id]) > 200:
+            self._window_cooling_obs[zone_id] = self._window_cooling_obs[zone_id][-200:]
         _LOGGER.info(
             "LearningEngine [%s]: Fenster-Abkühlrate %.3f°C/min gelernt "
             "(%.1f°C in %.0f min, Outdoor: %s°C)",
@@ -543,6 +553,28 @@ class LearningEngine:
 
     def get_confidence(self, zone_id: str) -> float:
         return self._confidence.get(zone_id, 0.0)
+
+    def get_confidence_breakdown(self, zone_id: str) -> dict:
+        """Aufschlüsselung der Konfidenz nach Lernspuren."""
+        now = dt_util.now()
+        obs = self._observations.get(zone_id, [])
+        trv_n = len(self._trv_observations.get(zone_id, []))
+        win_n = len(self._window_cooling_obs.get(zone_id, []))
+
+        weighted_n = sum(_time_weight(o["ts"], now) for o in obs) if obs else 0
+        base_conf = round(min(weighted_n / 150, 1.0) * 100, 1)
+        trv_conf  = round(min(trv_n / 30, 1.0) * 100, 1)
+        win_conf  = round(min(win_n / 5, 1.0) * 100, 1)
+
+        return {
+            "gesamt_%": round(self.get_confidence(zone_id) * 100, 1),
+            "raum_muster_%": base_conf,
+            "trv_effizienz_%": trv_conf,
+            "fenster_abkühlung_%": win_conf,
+            "beobachtungen_gesamt": len(obs),
+            "trv_beobachtungen": trv_n,
+            "fenster_ereignisse": win_n,
+        }
 
     def get_boost_factor(self, zone_id: str) -> float:
         return self._boost_factors.get(zone_id, 1.0)
@@ -771,25 +803,40 @@ class LearningEngine:
         return f"Phase 3 – Personalisiert ({n} Beob., {trv_n} TRV-Beob.)"
 
     def _rebuild_confidence(self, zone_id: str | None = None) -> None:
-        """Konfidenz = Qualität der aktuell relevanten Datenbasis."""
+        """Gesamtkonfidenz aus allen drei Lernspuren.
+
+        Zusammensetzung:
+          60% Basis-Lernen   (Raumtemperatur-Muster, Heiz-/Abkühlraten)
+          30% TRV-Lernen     (Setpoint-Effizienz aus Beobachtungsmodus)
+          10% Fenster-Lernen (Abkühlraten beim Lüften)
+
+        Jede Lernspur wächst unabhängig und verbessert sich mit der Zeit.
+        """
         zones = [zone_id] if zone_id else list(self._observations.keys())
         now = dt_util.now()
 
         for zid in zones:
+            # ── Basis-Lernen (60%) ─────────────────────────────────────────
             obs = self._observations[zid]
-            if not obs:
-                self._confidence.setdefault(zid, 0.0)
-                continue
+            if obs:
+                weighted_n = sum(_time_weight(o["ts"], now) for o in obs)
+                has_wind      = any(o.get("wind_speed") is not None for o in obs)
+                has_solar     = any(o.get("solar_radiation") is not None for o in obs)
+                has_humidity  = any(o.get("indoor_humidity") is not None for o in obs)
+                has_heat_rate = any(o.get("heat_rate") is not None for o in obs)
+                diversity     = 1.0 + sum([has_wind, has_solar, has_humidity, has_heat_rate]) * 0.05
+                base_conf = min(weighted_n / 150 * diversity, 1.0)
+            else:
+                base_conf = 0.0
 
-            # Gewichtete effektive Beobachtungen (zeitbasiert)
-            weighted_n = sum(_time_weight(o["ts"], now) for o in obs)
+            # ── TRV-Lernen (30%) ──────────────────────────────────────────
+            trv_n = len(self._trv_observations.get(zid, []))
+            trv_conf = min(trv_n / 30, 1.0)   # 30 Beobachtungen = volle TRV-Konfidenz
 
-            # Bonus für Datenvielfalt (mehr Faktoren = höhere Qualität)
-            has_wind = any(o.get("wind_speed") is not None for o in obs)
-            has_solar = any(o.get("solar_radiation") is not None for o in obs)
-            has_humidity = any(o.get("indoor_humidity") is not None for o in obs)
-            has_heat_rate = any(o.get("heat_rate") is not None for o in obs)
-            diversity_bonus = 1.0 + sum([has_wind, has_solar, has_humidity, has_heat_rate]) * 0.05
+            # ── Fenster-Lernen (10%) ──────────────────────────────────────
+            win_n = len(self._window_cooling_obs.get(zid, []))
+            win_conf = min(win_n / 5, 1.0)    # 5 Lüftungsereignisse = volle Fenster-Konfidenz
 
-            new_conf = min(weighted_n / 150 * diversity_bonus, 1.0)
-            self._confidence[zid] = round(new_conf, 4)
+            # ── Gesamtkonfidenz ───────────────────────────────────────────
+            combined = base_conf * 0.6 + trv_conf * 0.3 + win_conf * 0.1
+            self._confidence[zid] = round(combined, 4)

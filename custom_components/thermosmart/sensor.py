@@ -51,6 +51,7 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 
 class _Base(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
+    _attr_entity_registry_enabled_default = True  # Standard: sichtbar
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry, key: str):
         super().__init__(coordinator)
@@ -99,6 +100,7 @@ class ThermoSmartTargetTempSensor(_Base):
 
 class ThermoSmartTRVSetpointSensor(_Base):
     """Zeigt den tatsächlichen Setpoint der ans TRV gesendet wird (inkl. Boost)."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "trv_setpoint")
@@ -157,29 +159,22 @@ class ThermoSmartConfidenceSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict:
-        pct = self.native_value or 0
-        if pct < 25:    status = "Sammle Daten"
-        elif pct < 50:  status = "Erste Muster erkennbar"
-        elif pct < 80:  status = "Wird zuverlässiger"
-        elif pct < 100: status = "Hohe Zuverlässigkeit"
-        else:           status = "Maximale Zuverlässigkeit"
-
-        # Lernstatistiken aus LearningEngine
         le = self.coordinator.learning_engine
         stats = le.get_stats(self.coordinator.zone_id) if le else {}
+        trv_stats = le.get_trv_stats(self.coordinator.zone_id) if le else {}
+        phase = le.get_cold_start_phase(self.coordinator.zone_id) if le else "Unbekannt"
         return {
-            "status": status,
+            "lernphase": phase,
             "beobachtungen": stats.get("total_observations", 0),
-            "mit_wind_daten": stats.get("with_wind_data", 0),
-            "mit_solar_daten": stats.get("with_solar_data", 0),
-            "mit_heizrate": stats.get("with_heat_rate", 0),
-            "mit_abkühlrate": stats.get("with_cool_rate", 0),
-            "abkühlrate_°c_min": stats.get("avg_cool_rate_per_min"),
+            "trv_beobachtungen": trv_stats.get("trv_observations", 0),
+            "fenster_beobachtungen": trv_stats.get("window_observations", 0),
             "älteste_beobachtung": stats.get("oldest"),
         }
 
 
 class ThermoSmartWeatherOffsetSensor(_Base):
+    _attr_entity_registry_enabled_default = False
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "weather_offset")
         self._attr_unique_id = f"{entry.entry_id}_weather_offset"
@@ -246,6 +241,7 @@ class ThermoSmartStatusSensor(_Base):
 
 class ThermoSmartTempSlopeSensor(_Base):
     """Temperatur-Änderungsrate – positiv = Raum wärmer, negativ = kühler."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "temp_slope")
@@ -273,6 +269,7 @@ class ThermoSmartTempSlopeSensor(_Base):
 
 class ThermoSmartEMA1hSensor(_Base):
     """1-Stunden-EMA der Innentemperatur – zeigt den Langzeit-Trend."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "temp_ema_1h")
@@ -297,6 +294,7 @@ class ThermoSmartEMA1hSensor(_Base):
 
 class ThermoSmartHeatLossSensor(_Base):
     """Durchschnittliche Wärmeverlust-Rate (K/min) – aus gelernten Abkühlphasen."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "heat_loss")
@@ -325,6 +323,7 @@ class ThermoSmartHeatLossSensor(_Base):
 
 class ThermoSmartHeatingPowerSensor(_Base):
     """Durchschnittliche Aufheizrate (K/min) – aus gelernten Heizphasen."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "heating_power")
@@ -356,6 +355,7 @@ class ThermoSmartHeatingPowerSensor(_Base):
 
 class ThermoSmartSunIntensitySensor(_Base):
     """Solarer Wärmeeintrag – wie stark die Sonne gerade den Heizbedarf reduziert."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "sun_intensity")
@@ -388,6 +388,7 @@ class ThermoSmartSunIntensitySensor(_Base):
 
 class ThermoSmartWindowCoolingRateSensor(_Base):
     """Gelernte Fenster-Abkühlrate – wie schnell kühlt der Raum bei geöffnetem Fenster."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "window_cooling_rate")
@@ -417,6 +418,7 @@ class ThermoSmartWindowCoolingRateSensor(_Base):
 
 class ThermoSmartTRVObservationsSensor(_Base):
     """Anzahl gelernter TRV-Setpoint-Beobachtungen aus dem Beobachtungsmodus."""
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "trv_observations")

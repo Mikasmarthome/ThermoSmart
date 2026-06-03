@@ -716,22 +716,29 @@ class LearningEngine:
         return round(weighted_sum / weight_total, 5) if weight_total > 0 else 0.0
 
     def _estimate_heat_rate(self, weather_data: dict) -> float:
-        """Physikalische Schätzung als Fallback."""
+        """Physikalische Schätzung als Cold-Start Fallback.
+
+        Konservative Standardwerte die für die meisten deutschen Wohngebäude passen.
+        Werden durch gelerntes Wissen sobald verfügbar ersetzt.
+        """
         outdoor = weather_data.get("temperature") or 10.0
         wind = weather_data.get("wind_speed") or 0.0
         solar = weather_data.get("solar_radiation") or 0.0
 
         # Basis-Rate nach Außentemperatur
-        if outdoor < 0:
-            base = 0.040
+        # Kalibiert auf typisches deutsches Wohngebäude (Mehrfamilienhaus, mittlere Dämmung)
+        if outdoor < -5:
+            base = 0.035   # Sehr kalt: TRV arbeitet hart, Haus kühlt schnell
+        elif outdoor < 0:
+            base = 0.042
         elif outdoor < 5:
-            base = 0.048
+            base = 0.050
         elif outdoor < 10:
-            base = 0.055
+            base = 0.058
         elif outdoor < 15:
-            base = 0.063
+            base = 0.065
         else:
-            base = 0.070
+            base = 0.072   # Mild: Haus heizt sehr schnell
 
         # Wind erhöht Wärmeverlust → langsamere Aufheizung
         if wind > 5:
@@ -744,6 +751,24 @@ class LearningEngine:
             base *= (1.0 + solar_boost)
 
         return round(base, 5)
+
+    def get_cold_start_phase(self, zone_id: str) -> str:
+        """Gibt die aktuelle Lernphase zurück.
+
+        Phase 1 (0-5 Beob.):   Reine Physik-Formel, kein Lernen aktiv
+        Phase 2 (5-50 Beob.):  Erste Muster sichtbar, gemischter Betrieb
+        Phase 3 (50+ Beob.):   Lernalgorithmus dominiert
+        Phase 4 (150+ Beob.):  Vollständig personalisiert
+        """
+        n = len(self._observations.get(zone_id, []))
+        trv_n = len(self._trv_observations.get(zone_id, []))
+        if n < 5:
+            return "Initialisierung – Physik-Formel aktiv"
+        if n < 50:
+            return f"Phase 1 – Erste Muster ({n} Beob.)"
+        if n < 150:
+            return f"Phase 2 – Lernend ({n} Beob., {trv_n} TRV-Beob.)"
+        return f"Phase 3 – Personalisiert ({n} Beob., {trv_n} TRV-Beob.)"
 
     def _rebuild_confidence(self, zone_id: str | None = None) -> None:
         """Konfidenz = Qualität der aktuell relevanten Datenbasis."""

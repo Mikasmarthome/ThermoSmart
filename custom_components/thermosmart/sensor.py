@@ -222,6 +222,8 @@ class ThermoSmartStatusSensor(_Base):
         if not learning:
             return "Steuert (Lernmodus aus)"
         # Aktiv + Lernen an → detaillierter Status
+        if z.get("preheat_active"):
+            return "Vorheizen"
         if z.get("is_summer"):
             return "Sommer – Heizung aus"
         if z.get("window_open"):

@@ -280,6 +280,34 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             return f"{day_type}_night"
         return f"{day_type}_comfort"
 
+    def _minutes_until_next_comfort(self, cfg: dict) -> int | None:
+        """Minuten bis zur nächsten Komfortphase – None wenn bereits aktiv oder nicht heute."""
+        now = dt_util.now()
+        is_weekend = now.weekday() >= 5
+        cur = now.hour * 60 + now.minute
+
+        def t(key: str, fallback: str) -> int:
+            raw = cfg.get(key, fallback)
+            try:
+                h, m = str(raw).split(":")
+                return int(h) * 60 + int(m)
+            except (ValueError, AttributeError):
+                h2, m2 = fallback.split(":")
+                return int(h2) * 60 + int(m2)
+
+        if is_weekend:
+            morning = t("sched_we_morning", "08:00")
+            night   = t("sched_we_night",   "23:00")
+        else:
+            morning = t("sched_wd_morning", "06:00")
+            night   = t("sched_wd_night",   "22:00")
+
+        if morning <= cur < night:
+            return None  # Bereits in Komfortphase
+        if cur < morning:
+            return morning - cur  # Minuten bis Komfort-Start heute Morgen
+        return None  # Abend-Nacht → Vorheizen erst wieder morgen früh
+
     def get_override(self) -> float | None:
         return self._override
 
@@ -673,10 +701,12 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         window_open = self._check_window_open(cfg)
 
         # Basis-Zieltemperatur
+        comfort_temp = cfg.get("comfort_temp", 21.0)
+        night_temp_cfg = cfg.get("night_temp", TEMP_NIGHT)
         base_target = await self.learning_engine.async_get_base_target(
             self.zone_id, mode,
-            comfort_temp=cfg.get("comfort_temp", 21.0),
-            night_temp=cfg.get("night_temp", 18.0),
+            comfort_temp=comfort_temp,
+            night_temp=night_temp_cfg,
             away_temp=cfg.get("away_temp", 17.0),
             vacation_temp=cfg.get(CONF_VACATION_TEMP, 12.0),
             eco_temp=cfg.get(CONF_ECO_TEMP, TEMP_ECO),
@@ -688,10 +718,23 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         if mode == HEATING_MODE_AUTO:
             weather_offset = self.weather_engine.compute_temperature_offset(weather_data)
 
-        # Vorheizzeit
+        # Vorheizzeit immer auf Basis der Komforttemperatur berechnen –
+        # das ist das eigentliche Ziel der Heizphase, nicht die aktuelle Nachtabsenkung
         preheat_minutes = await self.learning_engine.async_get_preheat_minutes(
-            self.zone_id, base_target, current_temp, weather_data
+            self.zone_id, comfort_temp, current_temp, weather_data
         )
+
+        # Preheat-Override: wenn die Komfortphase bald beginnt, jetzt schon vorheizen
+        preheat_active = False
+        if mode == HEATING_MODE_AUTO and preheat_minutes > 0 and base_target < comfort_temp:
+            mins_until_comfort = self._minutes_until_next_comfort(cfg)
+            if mins_until_comfort is not None and 0 < mins_until_comfort <= preheat_minutes:
+                base_target = comfort_temp
+                preheat_active = True
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Vorheizen – %d min bis Komfortphase, %d min geschätzte Aufheizzeit",
+                    self.zone_name, mins_until_comfort, preheat_minutes,
+                )
 
         # Override auto-reset: wenn Zeitplan-Slot gewechselt hat → zurück auf Automatik
         if self._override is not None and self._override_schedule_period is not None:
@@ -714,41 +757,51 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         elif not window_open:
             raw_target = round(base_target + weather_offset, 1)
             if mode == HEATING_MODE_AUTO:
-                night_temp = cfg.get("night_temp", TEMP_NIGHT)
-
-                # Rohe physikalische Prognose-Unterdrückung
-                raw_suppression = self.weather_engine.compute_forecast_suppression(
-                    weather_data, raw_target, night_temp
-                )
-
-                # Gelernten Prognose-Bias anwenden
-                # (bias=1.0 → Prognose voll vertrauen; bias<1.0 → konservativer heizen)
-                forecast_bias = self.learning_engine.get_forecast_bias(self.zone_id)
-                biased_suppression = 1.0 - (1.0 - raw_suppression) * forecast_bias
-
-                # Delta-Schutz: wenn Raum kalt ist, nicht auf Außenwärme warten
-                # Beispiel: Haus 18°C, Ziel 21°C, Prognose 27°C → trotzdem heizen
-                if current_temp is not None:
-                    delta = raw_target - current_temp
-                    if delta >= FORECAST_DELTA_FULL_HEAT:
-                        # Raum deutlich unter Ziel → vollständig heizen
-                        biased_suppression = 1.0
-                    elif delta >= FORECAST_DELTA_BLEND:
-                        # Übergangszone: Prognose-Einfluss linear ausblenden
-                        blend = (delta - FORECAST_DELTA_BLEND) / (FORECAST_DELTA_FULL_HEAT - FORECAST_DELTA_BLEND)
-                        biased_suppression = min(1.0, biased_suppression + blend * (1.0 - biased_suppression))
-
-                adjusted_target = round(
-                    night_temp + biased_suppression * (raw_target - night_temp), 1
-                )
-
-                # Prognose-Entscheidung für spätere Auswertung aufzeichnen
-                forecast_high = weather_data.get("forecast_high")
-                if biased_suppression < 0.95 and forecast_high is not None and current_temp is not None:
-                    self.learning_engine.record_forecast_decision(
-                        self.zone_id, adjusted_target, raw_target, forecast_high,
-                        current_temp, biased_suppression, weather_data.get("temperature"),
+                # Beim Vorheizen nie unterdrücken – Ziel muss bis Komfortstart erreicht sein
+                if preheat_active:
+                    biased_suppression = 1.0
+                    adjusted_target = raw_target
+                else:
+                    # Rohe physikalische Prognose-Unterdrückung
+                    raw_suppression = self.weather_engine.compute_forecast_suppression(
+                        weather_data, raw_target, night_temp_cfg
                     )
+
+                    # Gelernten Prognose-Bias anwenden
+                    forecast_bias = self.learning_engine.get_forecast_bias(self.zone_id)
+                    biased_suppression = 1.0 - (1.0 - raw_suppression) * forecast_bias
+
+                    # Delta-Schutz: wenn Raum kalt ist, nicht auf Außenwärme warten
+                    if current_temp is not None:
+                        delta = raw_target - current_temp
+                        if delta >= FORECAST_DELTA_FULL_HEAT:
+                            biased_suppression = 1.0
+                        elif delta >= FORECAST_DELTA_BLEND:
+                            blend = (delta - FORECAST_DELTA_BLEND) / (FORECAST_DELTA_FULL_HEAT - FORECAST_DELTA_BLEND)
+                            biased_suppression = min(1.0, biased_suppression + blend * (1.0 - biased_suppression))
+
+                    adjusted_target = round(
+                        night_temp_cfg + biased_suppression * (raw_target - night_temp_cfg), 1
+                    )
+
+                    # Komfort-Boden: Prognose darf Raum nicht unter aktuelle Temp fallen lassen
+                    # (Schützt vor "Haus kühlt auf 18°C weil heute 27°C prognostiziert")
+                    if current_temp is not None and biased_suppression < 0.95:
+                        comfort_floor = round(current_temp - 0.5, 1)
+                        if adjusted_target < comfort_floor:
+                            _LOGGER.debug(
+                                "ThermoSmart '%s': Komfort-Boden greift (%.1f°C → %.1f°C)",
+                                self.zone_name, adjusted_target, comfort_floor,
+                            )
+                            adjusted_target = comfort_floor
+
+                    # Prognose-Entscheidung für spätere Auswertung aufzeichnen
+                    forecast_high = weather_data.get("forecast_high")
+                    if biased_suppression < 0.95 and forecast_high is not None and current_temp is not None:
+                        self.learning_engine.record_forecast_decision(
+                            self.zone_id, adjusted_target, raw_target, forecast_high,
+                            current_temp, biased_suppression, weather_data.get("temperature"),
+                        )
             else:
                 adjusted_target = raw_target
             override_active = False
@@ -756,7 +809,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             adjusted_target = None
             override_active = False
 
-        # Prognose-Unterdrückungs-Prozentsatz für Sensor (zeigt biased-Wert)
+        # Prognose-Unterdrückungs-Prozentsatz für Sensor
         if mode == HEATING_MODE_AUTO and not window_open and override is None:
             suppression_pct = round((1.0 - biased_suppression) * 100)
         else:
@@ -773,6 +826,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             "override_active": override_active,
             "override_temp": override,
             "preheat_minutes": preheat_minutes,
+            "preheat_active": preheat_active,
             "forecast_suppression": suppression_pct,
             "learning_confidence": self.learning_engine.get_confidence(self.zone_id),
             "outdoor_temp": weather_data.get("temperature"),

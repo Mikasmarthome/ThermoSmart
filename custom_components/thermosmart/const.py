@@ -45,7 +45,8 @@ VALVE_MAINTENANCE_BOOST_TEMP = 28.0  # °C für Vollöffnung
 VALVE_MAINTENANCE_DURATION_SEC = 30        # Sekunden offen (Winter/Beobachtung)
 VALVE_MAINTENANCE_DURATION_SUMMER_SEC = 8  # Sekunden offen (Sommer – kurze Übung)
 
-CONF_SUMMER_BOOLEAN = "summer_boolean"  # Manueller Sommer-Override (wie Urlaubsschalter)
+DOMAIN_GLOBAL_SUMMER   = f"{DOMAIN}_global_summer"
+DOMAIN_GLOBAL_VACATION = f"{DOMAIN}_global_vacation"
 
 # Default values
 DEFAULT_WEATHER_ENTITY = "weather.home"

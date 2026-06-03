@@ -52,7 +52,8 @@ from .const import (
     VALVE_MAINTENANCE_BOOST_TEMP,
     VALVE_MAINTENANCE_DURATION_SEC,
     VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
-    CONF_SUMMER_BOOLEAN,
+    DOMAIN_GLOBAL_SUMMER,
+    DOMAIN_GLOBAL_VACATION,
     RESIDUAL_HEAT_ZONE,
     EMA_1H_ALPHA,
     HEATING_MODE_AUTO,
@@ -192,7 +193,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._indoor_temp_slope: float = 0.0
         self._ema_1h: float | None = None
         self._last_written_setpoints: dict[str, float] = {}
-        self._window_open_temp: dict[str, float] = {}   # entity_id → Raumtemp beim Öffnen
+        self._window_open_temp: dict[str, float] = {}
+        self._summer_override: bool | None = None   # Gesetzt vom globalen Sommer-Schalter
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -220,6 +222,16 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
+
+    def set_summer_override(self, value: bool | None) -> None:
+        """Globaler Sommer-Override vom domain-weiten Schalter."""
+        self._summer_override = value
+        if value is True:
+            self._is_summer = True
+        _LOGGER.info(
+            "ThermoSmart '%s': Sommer-Override %s",
+            self.zone_name, "AN" if value else "AUS – automatische Erkennung aktiv",
+        )
 
     def set_override(self, value: float) -> None:
         self._override = value if value >= 5.0 else None
@@ -267,9 +279,6 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         vacation_entity = cfg.get(CONF_VACATION_BOOLEAN, "")
         if vacation_entity:
             presence.add(vacation_entity)
-        summer_entity = cfg.get(CONF_SUMMER_BOOLEAN, "")
-        if summer_entity:
-            presence.add(summer_entity)   # Sofort-Reaktion auf Summer-Boolean
         climate_entities: set[str] = set(e for e in cfg.get("climate_entities", []) if e)
 
         # Fenster + Personen + Urlaub → Sofort-Refresh
@@ -500,33 +509,15 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
     # ── Sommer-Erkennung ─────────────────────────────────────────────
 
     def _update_summer_mode(self, weather_data: dict) -> None:
-        """Sommer-Erkennung: automatisch (72h-Ø) oder manuell via Summer Boolean.
+        """Sommer-Erkennung: automatisch (72h-Ø) oder via globalem Sommer-Schalter.
 
-        Automatisch: 72h-Rollmittelwert der Außentemperatur
-          - >SUMMER_THRESHOLD → Sommer
-          - <WINTER_THRESHOLD → Winter
-
-        Manuell: wenn summer_boolean auf "on" → sofortiger Sommer-Modus.
-        Der Boolean hat Vorrang vor der automatischen Erkennung.
+        Globaler Schalter hat Vorrang – wenn gesetzt, wird automatische Erkennung übersprungen.
         """
-        cfg = self.zone_cfg
-        prev_summer = self._is_summer
+        # Globaler Override aktiv → nichts zu tun, bereits gesetzt in set_summer_override()
+        if self._summer_override is not None:
+            return
 
-        # Manueller Override via Summer Boolean
-        summer_entity = cfg.get(CONF_SUMMER_BOOLEAN, "")
-        if summer_entity:
-            state = self.hass.states.get(summer_entity)
-            if state and state.state == "on":
-                self._is_summer = True
-                if not prev_summer:
-                    _LOGGER.warning(
-                        "ThermoSmart '%s': Sommer-Modus manuell aktiviert via %s",
-                        self.zone_name, summer_entity,
-                    )
-                return
-            elif state and state.state == "off":
-                # Boolean explizit off → automatische Erkennung greift
-                pass
+        prev_summer = self._is_summer
 
         # Automatische Erkennung via 72h-Ø
         outdoor = weather_data.get("temperature")

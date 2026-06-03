@@ -19,7 +19,6 @@ from .const import (
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
     CONF_VACATION_BOOLEAN,
-    CONF_CALIBRATION_ENTITIES,
     CONF_VALVE_MAINTENANCE,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_DAY, CONF_SCHED_WD_DAY_TEMP,
     CONF_SCHED_WD_EVENING, CONF_SCHED_WD_NIGHT,
@@ -110,12 +109,8 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
             selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="climate", multiple=True)
             ),
-        vol.Optional(CONF_CALIBRATION_ENTITIES, default=d.get(CONF_CALIBRATION_ENTITIES, [])):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="number", multiple=True)
-            ),
-        # CONF_QUIRK_ENTITIES wird nicht mehr manuell konfiguriert –
-        # ThermoSmart erkennt Quirk-Switches automatisch via Device Registry.
+        # CONF_CALIBRATION_ENTITIES und CONF_QUIRK_ENTITIES werden nicht mehr
+        # manuell konfiguriert – ThermoSmart erkennt beide automatisch via Device Registry.
         vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
             selector.BooleanSelector(),
 

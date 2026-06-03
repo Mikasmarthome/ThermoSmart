@@ -27,6 +27,9 @@ AUTO_QUIRK_PATTERNS = [
     "frost_protection",   # Interner Frostschutz – kollidiert mit ThermoSmart
 ]
 
+# Muster für automatisch erkannte Kalibrierungs-Entities
+AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
+
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
 CONF_SCHED_WD_DAY      = "sched_wd_day"       # Werktag: Tagsüber   → sched_day_temp

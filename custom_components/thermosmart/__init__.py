@@ -34,6 +34,7 @@ from .const import (
     CONF_QUIRK_ENTITIES,
     CONF_VALVE_MAINTENANCE,
     AUTO_QUIRK_PATTERNS,
+    AUTO_CALIBRATION_PATTERN,
     NOISE_FILTER_SPIKE_THRESHOLD,
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
@@ -85,7 +86,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         learning_engine=learning_engine,
     )
     await coordinator.async_config_entry_first_refresh()
-    await coordinator.async_detect_auto_quirks()
+    await coordinator.async_detect_device_entities()
     coordinator.setup_event_listeners()
     entry.async_on_unload(coordinator.cleanup_event_listeners)
 
@@ -149,6 +150,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._maintenance_running: bool = False
         self._trv_offline: set[str] = set()
         self._auto_quirk_entities: list[str] = []
+        self._auto_calibration_map: dict[str, str] = {}   # climate_id → cal_entity_id
         self._sensor_ema: dict[str, float] = {}
         self._sensor_noise_count: dict[str, int] = {}
 
@@ -240,12 +242,13 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     # ── Quirk-Autodetect ─────────────────────────────────────────────
 
-    async def async_detect_auto_quirks(self) -> None:
-        """Erkennt Quirk-Switches automatisch über die HA Device Registry.
+    async def async_detect_device_entities(self) -> None:
+        """Erkennt Quirk-Switches und Kalibrierungs-Entities via Device Registry.
 
-        Sucht Switches die zum selben Gerät wie konfigurierte TRVs gehören
-        und einem bekannten Quirk-Muster entsprechen (AUTO_QUIRK_PATTERNS).
-        Ergänzt manuell konfigurierte Einträge – überschreibt sie nicht.
+        Ein Durchlauf über alle Entities der TRV-Geräte:
+          - switch.*  → Quirk-Muster (AUTO_QUIRK_PATTERNS)
+          - number.*  → local_temperature_calibration
+        Ergebnis wird in _auto_quirk_entities und _auto_calibration_map gespeichert.
         """
         cfg = self.zone_cfg
         climate_entities = cfg.get("climate_entities", [])
@@ -254,33 +257,42 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
         ent_reg = er.async_get(self.hass)
 
-        device_ids: set[str] = set()
+        # device_id → climate_entity_id (für Kalibrierungs-Mapping)
+        device_to_climate: dict[str, str] = {}
         for entity_id in climate_entities:
             entry = ent_reg.async_get(entity_id)
             if entry and entry.device_id:
-                device_ids.add(entry.device_id)
+                device_to_climate[entry.device_id] = entity_id
 
-        if not device_ids:
+        if not device_to_climate:
             return
 
-        found: list[str] = []
-        for device_id in device_ids:
-            for entry in er.async_entries_for_device(ent_reg, device_id):
-                if entry.entity_id.split(".")[0] != "switch":
-                    continue
-                for pattern in AUTO_QUIRK_PATTERNS:
-                    if pattern in entry.entity_id:
-                        found.append(entry.entity_id)
-                        break
+        quirks: list[str] = []
+        cal_map: dict[str, str] = {}
 
-        manual = set(cfg.get(CONF_QUIRK_ENTITIES, []))
-        new_auto = [e for e in found if e not in manual]
-        if new_auto:
-            _LOGGER.info(
-                "ThermoSmart '%s': Quirk-Autodetect: %s",
-                self.zone_name, new_auto,
-            )
-        self._auto_quirk_entities = found
+        for device_id, climate_id in device_to_climate.items():
+            for entry in er.async_entries_for_device(ent_reg, device_id):
+                domain = entry.entity_id.split(".")[0]
+
+                if domain == "switch":
+                    for pattern in AUTO_QUIRK_PATTERNS:
+                        if pattern in entry.entity_id:
+                            quirks.append(entry.entity_id)
+                            break
+
+                elif domain == "number":
+                    if AUTO_CALIBRATION_PATTERN in entry.entity_id:
+                        cal_map[climate_id] = entry.entity_id
+
+        manual_quirks = set(cfg.get(CONF_QUIRK_ENTITIES, []))
+        new_quirks = [e for e in quirks if e not in manual_quirks]
+        if new_quirks:
+            _LOGGER.info("ThermoSmart '%s': Quirk-Autodetect: %s", self.zone_name, new_quirks)
+        if cal_map:
+            _LOGGER.info("ThermoSmart '%s': Kalibrierungs-Autodetect: %s", self.zone_name, cal_map)
+
+        self._auto_quirk_entities = quirks
+        self._auto_calibration_map = cal_map
 
     # ── TRV-Offline-Tracking ─────────────────────────────────────────
 
@@ -741,30 +753,36 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
           → schreiben wenn |smoothed - aktuelle_kalibrierung| > 0.5°C
 
         Nicht kalibrieren wenn TRV deutlich wärmer als Raum ist (Heizkörper heizt Sensor).
+        Kalibrierungs-Entity wird automatisch via Device Registry erkannt (Vorrang)
+        oder aus der manuellen Fallback-Liste gelesen (rückwärtskompatibel).
         """
-        calibration_entities = cfg.get(CONF_CALIBRATION_ENTITIES, [])
-        if not calibration_entities:
-            return
-
         room_temp = recommendation.get("current_temp")
         if room_temp is None:
             return
 
         climate_entities = cfg.get("climate_entities", [])
+        manual_cal = cfg.get(CONF_CALIBRATION_ENTITIES, [])
 
-        for i, cal_entity in enumerate(calibration_entities):
+        # Kein Auto-Mapping und keine manuelle Liste → nichts zu tun
+        if not self._auto_calibration_map and not manual_cal:
+            return
+
+        for i, climate_id in enumerate(climate_entities):
+            # Auto-erkannte Kalibrierungs-Entity hat Vorrang
+            cal_entity = self._auto_calibration_map.get(climate_id)
+            if not cal_entity:
+                cal_entity = manual_cal[i] if i < len(manual_cal) else None
             if not cal_entity:
                 continue
 
-            # TRV-eigene Temperaturmessung aus zugehöriger Climate-Entity (gleicher Index)
+            # TRV-eigene Temperatur direkt aus der Climate-Entity lesen
             trv_temp: float | None = None
-            if i < len(climate_entities):
-                trv_state = self.hass.states.get(climate_entities[i])
-                if trv_state and trv_state.state not in ("unavailable", "unknown"):
-                    try:
-                        trv_temp = float(trv_state.attributes.get("current_temperature", 0))
-                    except (TypeError, ValueError):
-                        pass
+            trv_state = self._get_trv_state(climate_id)
+            if trv_state:
+                try:
+                    trv_temp = float(trv_state.attributes.get("current_temperature", 0))
+                except (TypeError, ValueError):
+                    pass
 
             if trv_temp is None:
                 continue

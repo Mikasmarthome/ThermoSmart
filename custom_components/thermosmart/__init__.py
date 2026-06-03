@@ -436,9 +436,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 recommendation["trv_setpoint"] = trv_setpoint
                 recommendation["boost_factor"] = round(boost_factor, 3)
 
-            # TRV-Setpoints beobachten (lernt was externer Regler wie BT verwendet)
-            if not self._active_control:
-                await self._async_observe_external_trv_setpoints(cfg, recommendation, weather_data)
+            # TRV-Setpoints beobachten – immer, egal ob BT oder TS steuert
+            # Observation-Modus: liest was BT ans TRV schickt
+            # Active-Modus:      beobachtet was TS selbst geschickt hat → lernt weiter
+            await self._async_observe_trv_setpoints(cfg, recommendation, weather_data)
 
             indoor_humidity = self._read_avg_sensor(cfg.get("humidity_sensors", []))
             await self.learning_engine.async_observe(
@@ -879,13 +880,16 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     # ── Externer Regler beobachten ────────────────────────────────────
 
-    async def _async_observe_external_trv_setpoints(
+    async def _async_observe_trv_setpoints(
         self, cfg: dict, recommendation: dict, weather_data: dict
     ) -> None:
-        """Liest TRV-Setpoints die ein externer Regler (z.B. BT) setzt und lernt daraus.
+        """Beobachtet TRV-Setpoints und lernt daraus – immer, egal wer steuert.
 
-        Berechnet: welche Heizrate entstand bei welchem Setpoint unter welchen Bedingungen?
-        Ergebnis: ThermoSmart kennt beim Übernehmen den optimalen Setpoint direkt.
+        Observation-Modus: Liest was BT (oder anderer externer Regler) ans TRV schickt.
+        Active-Modus:      Nutzt den Setpoint den TS selbst berechnet und geschickt hat.
+
+        So lernt TS in Phase 1 aus BT's Erfahrung und verbessert sich in Phase 2
+        kontinuierlich aus dem eigenen Betrieb.
         """
         current_temp = recommendation.get("current_temp")
         target = recommendation.get("adjusted_target")
@@ -894,6 +898,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         if target <= current_temp:
             return
 
+        # Heizrate aus aufeinanderfolgenden Raummessungen
         heat_rate = None
         now = dt_util.now()
         if self.zone_id in self.learning_engine._last_temp:
@@ -902,17 +907,11 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             if 3 <= elapsed_min <= 15 and current_temp > last_temp:
                 heat_rate = round((current_temp - last_temp) / elapsed_min, 5)
 
-        for entity_id in cfg.get("climate_entities", []):
-            state = self.hass.states.get(entity_id)
-            if state is None or state.state in ("unavailable", "unknown", "off"):
-                continue
-            try:
-                trv_setpoint = float(state.attributes.get("temperature", 0))
-            except (TypeError, ValueError):
-                continue
-            if trv_setpoint < current_temp:
-                continue
-
+        if self._active_control:
+            # TS steuert: gelernten/berechneten Setpoint aus der Recommendation verwenden
+            trv_setpoint = recommendation.get("trv_setpoint")
+            if trv_setpoint is None or trv_setpoint < current_temp:
+                return
             await self.learning_engine.async_observe_trv_setpoint(
                 zone_id=self.zone_id,
                 trv_setpoint=trv_setpoint,
@@ -921,6 +920,26 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 weather_data=weather_data,
                 heat_rate=heat_rate,
             )
+        else:
+            # Observation-Modus: Setpoint vom echten TRV lesen (was BT gesetzt hat)
+            for entity_id in cfg.get("climate_entities", []):
+                state = self.hass.states.get(entity_id)
+                if state is None or state.state in ("unavailable", "unknown", "off"):
+                    continue
+                try:
+                    trv_setpoint = float(state.attributes.get("temperature", 0))
+                except (TypeError, ValueError):
+                    continue
+                if trv_setpoint < current_temp:
+                    continue
+                await self.learning_engine.async_observe_trv_setpoint(
+                    zone_id=self.zone_id,
+                    trv_setpoint=trv_setpoint,
+                    indoor_temp=current_temp,
+                    target=target,
+                    weather_data=weather_data,
+                    heat_rate=heat_rate,
+                )
 
     # ── Thermostat schreiben ─────────────────────────────────────────
 

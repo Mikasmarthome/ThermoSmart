@@ -156,6 +156,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         active = hvac_mode == HVACMode.HEAT
         self.coordinator.set_active_control(active)
         self.async_write_ha_state()
+        await self.coordinator.async_request_refresh()
 
     async def async_turn_on(self) -> None:
         await self.async_set_hvac_mode(HVACMode.HEAT)

@@ -94,11 +94,13 @@ class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
         self._is_on = True
         self.async_write_ha_state()
         self._coordinator.set_active_control(True)
+        await self._coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
         self.async_write_ha_state()
         self._coordinator.set_active_control(False)
+        await self._coordinator.async_request_refresh()
 
 
 class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
@@ -133,6 +135,7 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
         engine = self._get_engine()
         if engine:
             engine.set_zone_enabled(self._entry.entry_id, True)
+        await self._coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
@@ -140,6 +143,7 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
         engine = self._get_engine()
         if engine:
             engine.set_zone_enabled(self._entry.entry_id, False)
+        await self._coordinator.async_request_refresh()
 
     def _get_engine(self):
         return self.hass.data.get(DOMAIN, {}).get("learning_engine")

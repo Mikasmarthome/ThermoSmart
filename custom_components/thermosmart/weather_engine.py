@@ -71,7 +71,7 @@ class WeatherEngine:
             "forecast_low": None,
         }
 
-        # ── Wetter-Entity (Basis & Forecast) ─────────────────────────
+        # ── Wetter-Entity (Basis) ─────────────────────────────────────
         weather_state = self._hass.states.get(self._weather_entity)
         if weather_state and weather_state.state not in ("unknown", "unavailable"):
             attrs = weather_state.attributes
@@ -89,19 +89,34 @@ class WeatherEngine:
                     except (TypeError, ValueError):
                         pass
 
-            forecast = attrs.get("forecast", [])
-            if forecast:
-                first = forecast[0]
-                try:
-                    data["forecast_high"] = float(first.get("temperature", 0))
-                except (TypeError, ValueError):
-                    pass
-                try:
-                    data["forecast_low"] = float(
-                        first.get("templow", data["forecast_high"] or 0)
-                    )
-                except (TypeError, ValueError):
-                    pass
+        # ── Forecast über neue HA-API (ab 2024.3) ────────────────────
+        # Alte Methode (attrs.get("forecast")) ist deprecated und entfernt.
+        # Neue Methode: weather.get_forecasts Service-Call.
+        try:
+            result = await self._hass.services.async_call(
+                "weather",
+                "get_forecasts",
+                {"entity_id": self._weather_entity, "type": "daily"},
+                blocking=True,
+                return_response=True,
+            )
+            if result:
+                forecast_list = result.get(self._weather_entity, {}).get("forecast", [])
+                if forecast_list:
+                    first = forecast_list[0]
+                    try:
+                        data["forecast_high"] = float(first.get("temperature") or 0)
+                    except (TypeError, ValueError):
+                        pass
+                    try:
+                        data["forecast_low"] = float(
+                            first.get("templow") or data["forecast_high"] or 0
+                        )
+                    except (TypeError, ValueError):
+                        pass
+        except Exception:
+            # Service nicht verfügbar oder Entity nicht unterstützt → kein Forecast
+            pass
 
         # ── Dedizierte Sensoren überschreiben Wetter-Entity-Werte ─────
         sensor_map = {

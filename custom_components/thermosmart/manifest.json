@@ -1,7 +1,7 @@
 {
   "domain": "thermosmart",
   "name": "ThermoSmart",
-  "version": "0.2.5",
+  "version": "0.2.6b1",
   "description": "AI-powered, weather-aware heating control for Home Assistant with learning algorithms",
   "documentation": "https://github.com/Mikasmarthome/ThermoSmart",
   "issue_tracker": "https://github.com/Mikasmarthome/ThermoSmart/issues",

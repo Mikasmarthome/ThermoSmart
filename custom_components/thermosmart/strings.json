@@ -2,47 +2,80 @@
   "config": {
     "step": {
       "user": {
-        "title": "Heizzone einrichten",
-        "description": "Jede Zone wird als eigener Eintrag angelegt. Wetter-Einstellungen werden von bestehenden Zonen automatisch übernommen.",
+        "title": "Schritt 1 / 4 – Geräte & Sensoren",
+        "description": "Wähle die TRVs und Sensoren für diese Heizzone. Kalibrierungs-Entities und Quirk-Switches erkennt ThermoSmart automatisch.",
         "data": {
-          "name": "Zonenname (z.B. Wohnzimmer)",
+          "name": "Zonenname (z. B. Wohnzimmer)",
           "climate_entities": "Thermostate / TRVs",
-          "calibration_entities": "TRV-Kalibrierungs-Entities (local_temperature_calibration)",
-          "quirk_entities": "TRV-Eigenlogik deaktivieren (z.B. switch.*_window_detection)",
-          "valve_maintenance": "Ventil-Wartung aktivieren (sonntags 03:00 Uhr)",
-          "sched_wd_morning": "Werktag: Aufwachen (→ Komforttemp)",
-          "sched_wd_day": "Werktag: Tagsüber ab (→ Tagtemp)",
-          "sched_wd_day_temp": "Werktag: Tagtemperatur",
-          "sched_wd_evening": "Werktag: Abend ab (→ Komforttemp)",
-          "sched_wd_night": "Werktag: Nacht ab (→ Nachttemp)",
-          "sched_we_morning": "Wochenende: Aufwachen (→ Komforttemp)",
-          "sched_we_night": "Wochenende: Nacht ab (→ Nachttemp)",
-          "temp_sensors": "Innensensoren Temperatur (Durchschnitt)",
-          "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
-          "window_sensors": "Fenstersensoren",
-          "presence_persons": "Personen (Präsenzerkennung)",
-          "home_zone": "Heimzone (z.B. zone.heizungszone)",
-          "vacation_boolean": "Urlaubsmodus (optional)",
-          "weather_entity": "Wetter-Entität",
-          "outdoor_temp_sensor": "Außentemperatur (eigene Wetterstation)",
-          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
-          "outdoor_wind_sensor": "Windgeschwindigkeit",
-          "outdoor_solar_sensor": "Sonneneinstrahlung (W/m²)",
-          "outdoor_rain_sensor": "Niederschlag",
-          "comfort_temp": "Komforttemperatur",
-          "night_temp": "Nachttemperatur",
-          "away_temp": "Abwesenheitstemperatur",
-          "temp_tolerance": "Temperaturtoleranz (Hysterese)",
-          "window_open_delay": "Verzögerung: Heizung aus nach Fenster öffnen (min)",
-          "window_close_delay": "Verzögerung: Heizung an nach Fenster schließen (min)",
+          "temp_sensors": "Temperatursensoren im Raum (Durchschnitt wird gebildet)",
+          "humidity_sensors": "Luftfeuchtigkeitssensoren im Raum",
+          "window_sensors": "Fenstersensoren (binary_sensor)",
+          "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
+          "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
+          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)"
+        }
+      },
+      "schedule": {
+        "title": "Schritt 2 / 4 – Temperaturen & Zeitplan",
+        "description": "Lege die Zieltemperaturen fest und wann welche Phase gilt.\n\nWerktag-Tagesablauf: Morgens → Komfort | Tagsüber → Tagtemp | Abends → Komfort | Nachts → Nacht\nWochenende-Tagesablauf: Morgens → Komfort | Nachts → Nacht",
+        "data": {
+          "comfort_temp": "Komforttemperatur (aktiv wenn jemand zuhause)",
+          "night_temp": "Nachttemperatur (Absenkung beim Schlafen)",
+          "away_temp": "Abwesenheitstemperatur (niemand zuhause)",
+          "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
+          "sched_wd_morning": "Werktag: Komfort-Start (Aufwachen)",
+          "sched_wd_day": "Werktag: Tagtemp-Start (Tagsüber, z. B. alle weg)",
+          "sched_wd_day_temp": "Werktag: Tagtemperatur (reduzierte Temperatur tagsüber)",
+          "sched_wd_evening": "Werktag: Komfort-Start (Heimkommen / Abend)",
+          "sched_wd_night": "Werktag: Nacht-Start (Schlafenszeit)",
+          "sched_we_morning": "Wochenende: Komfort-Start (Aufwachen)",
+          "sched_we_night": "Wochenende: Nacht-Start (Schlafenszeit)"
+        },
+        "data_description": {
+          "sched_wd_morning": "Ab dieser Uhrzeit gilt die Komforttemperatur",
+          "sched_wd_day": "Ab dieser Uhrzeit wird auf die Tagtemperatur abgesenkt",
+          "sched_wd_day_temp": "Temperatur für den Tageslicht-Slot (z. B. 19 °C wenn niemand zuhause ist)",
+          "sched_wd_evening": "Ab dieser Uhrzeit gilt wieder die Komforttemperatur",
+          "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
+          "sched_we_morning": "Ab dieser Uhrzeit gilt die Komforttemperatur",
+          "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
+        }
+      },
+      "presence": {
+        "title": "Schritt 3 / 4 – Präsenz & Automatik",
+        "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.",
+        "data": {
+          "presence_persons": "Personen für Präsenzerkennung",
+          "home_zone": "Heimzone (Standard: zone.home)",
+          "vacation_boolean": "Urlaubsschalter (optional)",
           "learning_enabled": "Lernalgorithmus aktivieren"
+        },
+        "data_description": {
+          "vacation_boolean": "Entity die auf 'on' / 'active' wechselt wenn Urlaub aktiv ist. Funktioniert mit input_boolean, binary_sensor, calendar oder switch.",
+          "learning_enabled": "ThermoSmart lernt Heizraten, Abkühlraten und optimale Temperaturen für diese Zone."
+        }
+      },
+      "weather": {
+        "title": "Schritt 4 / 4 – Wetter & Außensensoren",
+        "description": "Wetter-Daten verbessern die Heizprognose. Alle Felder sind optional – eigene Sensoren haben Vorrang vor der Wetter-Entity.",
+        "data": {
+          "weather_entity": "Wetter-Entity (z. B. weather.home)",
+          "outdoor_temp_sensor": "Außentemperatur – eigene Wetterstation (Vorrang)",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit (m/s oder km/h)",
+          "outdoor_solar_sensor": "Sonneneinstrahlung (W/m²)",
+          "outdoor_rain_sensor": "Niederschlag"
+        },
+        "data_description": {
+          "weather_entity": "Wird für Wettervorhersagen und Prognose-Unterdrückung genutzt. Leer lassen wenn nur eigene Sensoren verwendet werden.",
+          "outdoor_temp_sensor": "Eigene Sensoren sind genauer als die Wetter-Entity und werden bevorzugt."
         }
       }
     },
     "error": {
-      "entity_not_found": "Wetter-Entität nicht gefunden.",
+      "entity_not_found": "Wetter-Entity nicht gefunden. Bitte eine gültige Entity auswählen oder das Feld leer lassen.",
       "name_required": "Bitte einen Zonennamen eingeben.",
-      "required": "Mindestens ein Thermostat/TRV erforderlich."
+      "required": "Mindestens ein Thermostat / TRV erforderlich."
     },
     "abort": {
       "already_configured": "Diese Zone ist bereits konfiguriert."
@@ -51,39 +84,67 @@
   "options": {
     "step": {
       "init": {
-        "title": "Zone bearbeiten",
+        "title": "Schritt 1 / 4 – Geräte & Sensoren",
+        "description": "Kalibrierungs-Entities und Quirk-Switches erkennt ThermoSmart automatisch.",
         "data": {
           "name": "Zonenname",
           "climate_entities": "Thermostate / TRVs",
-          "calibration_entities": "TRV-Kalibrierungs-Entities (local_temperature_calibration)",
-          "quirk_entities": "TRV-Eigenlogik deaktivieren (z.B. switch.*_window_detection)",
-          "valve_maintenance": "Ventil-Wartung aktivieren (sonntags 03:00 Uhr)",
-          "sched_wd_morning": "Werktag: Aufwachen",
-          "sched_wd_day": "Werktag: Tagsüber ab",
-          "sched_wd_day_temp": "Werktag: Tagtemperatur",
-          "sched_wd_evening": "Werktag: Abend ab",
-          "sched_wd_night": "Werktag: Nacht ab",
-          "sched_we_morning": "Wochenende: Aufwachen",
-          "sched_we_night": "Wochenende: Nacht ab",
-          "temp_sensors": "Innensensoren Temperatur",
-          "humidity_sensors": "Innensensoren Luftfeuchtigkeit",
+          "temp_sensors": "Temperatursensoren im Raum",
+          "humidity_sensors": "Luftfeuchtigkeitssensoren im Raum",
           "window_sensors": "Fenstersensoren",
-          "presence_persons": "Personen (Präsenzerkennung)",
-          "home_zone": "Heimzone (z.B. zone.heizungszone)",
-          "vacation_boolean": "Urlaubsmodus (optional)",
-          "weather_entity": "Wetter-Entität",
-          "outdoor_temp_sensor": "Außentemperatur",
-          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
-          "outdoor_wind_sensor": "Windgeschwindigkeit",
-          "outdoor_solar_sensor": "Sonneneinstrahlung",
-          "outdoor_rain_sensor": "Niederschlag",
+          "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
+          "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
+          "valve_maintenance": "Ventil-Wartung aktivieren"
+        }
+      },
+      "schedule": {
+        "title": "Schritt 2 / 4 – Temperaturen & Zeitplan",
+        "description": "Werktag: Morgens → Komfort | Tagsüber → Tagtemp | Abends → Komfort | Nachts → Nacht\nWochenende: Morgens → Komfort | Nachts → Nacht",
+        "data": {
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
           "temp_tolerance": "Temperaturtoleranz",
-          "window_open_delay": "Verzögerung Fenster öffnen (min)",
-          "window_close_delay": "Verzögerung Fenster schließen (min)",
+          "sched_wd_morning": "Werktag: Komfort-Start",
+          "sched_wd_day": "Werktag: Tagtemp-Start",
+          "sched_wd_day_temp": "Werktag: Tagtemperatur",
+          "sched_wd_evening": "Werktag: Komfort-Start Abend",
+          "sched_wd_night": "Werktag: Nacht-Start",
+          "sched_we_morning": "Wochenende: Komfort-Start",
+          "sched_we_night": "Wochenende: Nacht-Start"
+        },
+        "data_description": {
+          "sched_wd_morning": "Ab dieser Uhrzeit gilt die Komforttemperatur",
+          "sched_wd_day": "Ab dieser Uhrzeit wird auf die Tagtemperatur abgesenkt",
+          "sched_wd_day_temp": "Temperatur für den Tageslicht-Slot (z. B. 19 °C wenn tagsüber niemand zuhause ist)",
+          "sched_wd_evening": "Ab dieser Uhrzeit gilt wieder die Komforttemperatur",
+          "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
+          "sched_we_morning": "Ab dieser Uhrzeit gilt die Komforttemperatur",
+          "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
+        }
+      },
+      "presence": {
+        "title": "Schritt 3 / 4 – Präsenz & Automatik",
+        "data": {
+          "presence_persons": "Personen für Präsenzerkennung",
+          "home_zone": "Heimzone",
+          "vacation_boolean": "Urlaubsschalter",
           "learning_enabled": "Lernalgorithmus aktivieren"
+        },
+        "data_description": {
+          "vacation_boolean": "Entity die auf 'on' / 'active' wechselt wenn Urlaub aktiv ist (input_boolean, binary_sensor, calendar, switch)."
+        }
+      },
+      "weather": {
+        "title": "Schritt 4 / 4 – Wetter & Außensensoren",
+        "description": "Alle Felder optional. Eigene Sensoren haben Vorrang vor der Wetter-Entity.",
+        "data": {
+          "weather_entity": "Wetter-Entity",
+          "outdoor_temp_sensor": "Außentemperatur (eigene Station)",
+          "outdoor_humidity_sensor": "Außenluftfeuchtigkeit",
+          "outdoor_wind_sensor": "Windgeschwindigkeit",
+          "outdoor_solar_sensor": "Sonneneinstrahlung",
+          "outdoor_rain_sensor": "Niederschlag"
         }
       }
     }

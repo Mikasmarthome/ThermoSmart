@@ -1,4 +1,4 @@
-"""Config flow für ThermoSmart – ein Eintrag pro Zone."""
+"""Config flow für ThermoSmart – 4 Schritte pro Zone."""
 from __future__ import annotations
 
 import voluptuous as vol
@@ -23,43 +23,206 @@ from .const import (
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_DAY, CONF_SCHED_WD_DAY_TEMP,
     CONF_SCHED_WD_EVENING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
-    DEFAULT_WEATHER_ENTITY,
     DEFAULT_LEARNING_ENABLED,
 )
 
 
+# ── Schema-Hilfsfunktionen (eine pro Schritt) ────────────────────────────────
+
+def _schema_devices(d: dict) -> vol.Schema:
+    """Schritt 1: Geräte & Sensoren."""
+    return vol.Schema({
+        vol.Required("name", default=d.get("name", "")):
+            selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)),
+
+        vol.Required("climate_entities", default=d.get("climate_entities", [])):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="climate", multiple=True)),
+
+        vol.Optional("temp_sensors", default=d.get("temp_sensors", [])):
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class="temperature", multiple=True
+            )),
+        vol.Optional("humidity_sensors", default=d.get("humidity_sensors", [])):
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class="humidity", multiple=True
+            )),
+        vol.Optional("window_sensors", default=d.get("window_sensors", [])):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)),
+
+        vol.Required("window_open_delay", default=d.get("window_open_delay", 5)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required("window_close_delay", default=d.get("window_close_delay", 2)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0, max=30, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
+            selector.BooleanSelector(),
+    })
+
+
+def _schema_schedule(d: dict) -> vol.Schema:
+    """Schritt 2: Temperaturen & Zeitplan."""
+    return vol.Schema({
+        # ── Zieltemperaturen ───────────────────────────────────────────
+        vol.Required("comfort_temp", default=d.get("comfort_temp", 21.0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=5, max=30, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required("night_temp", default=d.get("night_temp", 18.0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=5, max=25, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required("away_temp", default=d.get("away_temp", 17.0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=5, max=25, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.5)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0.1, max=2.0, step=0.1, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+
+        # ── Werktag-Zeitplan ───────────────────────────────────────────
+        vol.Optional(CONF_SCHED_WD_MORNING, default=d.get(CONF_SCHED_WD_MORNING, "06:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WD_DAY, default=d.get(CONF_SCHED_WD_DAY, "09:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WD_DAY_TEMP, default=d.get(CONF_SCHED_WD_DAY_TEMP, 19.0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=5, max=25, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Optional(CONF_SCHED_WD_EVENING, default=d.get(CONF_SCHED_WD_EVENING, "17:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WD_NIGHT, default=d.get(CONF_SCHED_WD_NIGHT, "22:00")):
+            selector.TimeSelector(),
+
+        # ── Wochenend-Zeitplan ─────────────────────────────────────────
+        vol.Optional(CONF_SCHED_WE_MORNING, default=d.get(CONF_SCHED_WE_MORNING, "08:00")):
+            selector.TimeSelector(),
+        vol.Optional(CONF_SCHED_WE_NIGHT, default=d.get(CONF_SCHED_WE_NIGHT, "23:00")):
+            selector.TimeSelector(),
+    })
+
+
+def _schema_presence(d: dict) -> vol.Schema:
+    """Schritt 3: Präsenz & Automatik."""
+    return vol.Schema({
+        vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True)),
+
+        vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="zone")),
+
+        # Akzeptiert jeden Entity-Typ dessen state == "on" → Urlaub aktiv
+        # z.B. input_boolean, binary_sensor, calendar
+        vol.Optional(CONF_VACATION_BOOLEAN, default=d.get(CONF_VACATION_BOOLEAN, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain=["input_boolean", "binary_sensor", "calendar", "switch"]
+            )),
+
+        vol.Required(CONF_LEARNING_ENABLED, default=d.get(CONF_LEARNING_ENABLED, DEFAULT_LEARNING_ENABLED)):
+            selector.BooleanSelector(),
+    })
+
+
+def _schema_weather(d: dict) -> vol.Schema:
+    """Schritt 4: Wetter & Außensensoren (alles optional)."""
+    return vol.Schema({
+        # Kein Standardwert – Nutzer wählt aktiv seine Wetter-Entity
+        vol.Optional(CONF_WEATHER_ENTITY, default=d.get(CONF_WEATHER_ENTITY, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
+
+        vol.Optional(CONF_OUTDOOR_TEMP_SENSOR, default=d.get(CONF_OUTDOOR_TEMP_SENSOR, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class="temperature"
+            )),
+        vol.Optional(CONF_OUTDOOR_HUMIDITY_SENSOR, default=d.get(CONF_OUTDOOR_HUMIDITY_SENSOR, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class="humidity"
+            )),
+        vol.Optional(CONF_OUTDOOR_WIND_SENSOR, default=d.get(CONF_OUTDOOR_WIND_SENSOR, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        vol.Optional(CONF_OUTDOOR_SOLAR_SENSOR, default=d.get(CONF_OUTDOOR_SOLAR_SENSOR, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+        vol.Optional(CONF_OUTDOOR_RAIN_SENSOR, default=d.get(CONF_OUTDOOR_RAIN_SENSOR, "")):
+            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+    })
+
+
+# ── Config Flow (Ersteinrichtung) ────────────────────────────────────────────
+
 class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Ersteinrichtung: Ein Eintrag = Eine Heizzone."""
+    """4-Schritt-Einrichtung: Ein Eintrag = Eine Heizzone."""
 
     VERSION = 1
 
+    def __init__(self) -> None:
+        self._data: dict = {}
+
+    # Schritt 1: Geräte & Sensoren
     async def async_step_user(self, user_input: dict | None = None):
         errors: dict[str, str] = {}
-
         if user_input is not None:
             if not user_input.get("name", "").strip():
                 errors["name"] = "name_required"
             elif not user_input.get("climate_entities"):
                 errors["climate_entities"] = "required"
-            elif self.hass.states.get(user_input.get(CONF_WEATHER_ENTITY, "")) is None:
-                errors[CONF_WEATHER_ENTITY] = "entity_not_found"
             else:
-                return self.async_create_entry(
-                    title=user_input["name"],
-                    data=user_input,
-                )
-
-        # Wetter & Außensensoren aus bestehenden Einträgen vorbelegen
-        defaults = self._defaults_from_existing()
+                self._data.update(user_input)
+                return await self.async_step_schedule()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=_zone_schema(defaults),
+            data_schema=_schema_devices(self._data),
+            errors=errors,
+        )
+
+    # Schritt 2: Temperaturen & Zeitplan
+    async def async_step_schedule(self, user_input: dict | None = None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_presence()
+
+        return self.async_show_form(
+            step_id="schedule",
+            data_schema=_schema_schedule(self._data),
+        )
+
+    # Schritt 3: Präsenz & Automatik
+    async def async_step_presence(self, user_input: dict | None = None):
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_weather()
+
+        return self.async_show_form(
+            step_id="presence",
+            data_schema=_schema_presence(self._data),
+        )
+
+    # Schritt 4: Wetter & Außensensoren
+    async def async_step_weather(self, user_input: dict | None = None):
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            weather = user_input.get(CONF_WEATHER_ENTITY, "")
+            if weather and self.hass.states.get(weather) is None:
+                errors[CONF_WEATHER_ENTITY] = "entity_not_found"
+            else:
+                self._data.update(user_input)
+                return self.async_create_entry(
+                    title=self._data["name"],
+                    data=self._data,
+                )
+
+        defaults = self._defaults_from_existing()
+        return self.async_show_form(
+            step_id="weather",
+            data_schema=_schema_weather({**defaults, **self._data}),
             errors=errors,
         )
 
     def _defaults_from_existing(self) -> dict:
-        """Wetter-Entity und Außensensoren aus vorhandenem Eintrag übernehmen."""
+        """Wetter-Entity und Außensensoren aus vorhandenem Eintrag vorbelegen."""
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             data = {**entry.data, **entry.options}
             if data.get(CONF_WEATHER_ENTITY):
@@ -79,171 +242,71 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return ThermoSmartOptionsFlow()
 
 
+# ── Options Flow (Zone bearbeiten) ───────────────────────────────────────────
+
 class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
-    """Zone bearbeiten – alle Einstellungen änderbar."""
+    """Gleiche 4 Schritte wie die Ersteinrichtung, vorausgefüllt mit aktuellen Werten."""
+
+    def __init__(self) -> None:
+        self._data: dict = {}
+
+    def _current(self) -> dict:
+        return {**self.config_entry.data, **self.config_entry.options}
 
     async def async_step_init(self, user_input: dict | None = None):
+        errors: dict[str, str] = {}
+        current = self._current()
         if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+            if not user_input.get("name", "").strip():
+                errors["name"] = "name_required"
+            elif not user_input.get("climate_entities"):
+                errors["climate_entities"] = "required"
+            else:
+                self._data.update(user_input)
+                return await self.async_step_schedule()
 
-        current = {**self.config_entry.data, **self.config_entry.options}
         return self.async_show_form(
             step_id="init",
-            data_schema=_zone_schema(current),
+            data_schema=_schema_devices(current),
+            errors=errors,
         )
 
+    async def async_step_schedule(self, user_input: dict | None = None):
+        current = self._current()
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_presence()
 
-def _zone_schema(d: dict | None = None) -> vol.Schema:
-    """Vollständiges Zonen-Schema für Ersteinrichtung und Bearbeitung."""
-    d = d or {}
-    return vol.Schema({
+        return self.async_show_form(
+            step_id="schedule",
+            data_schema=_schema_schedule(current),
+        )
 
-        # ── Zonenname ────────────────────────────────────────────────
-        vol.Required("name", default=d.get("name", "")):
-            selector.TextSelector(
-                selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)
-            ),
+    async def async_step_presence(self, user_input: dict | None = None):
+        current = self._current()
+        if user_input is not None:
+            self._data.update(user_input)
+            return await self.async_step_weather()
 
-        # ── Thermostate / TRVs ────────────────────────────────────────
-        vol.Required("climate_entities", default=d.get("climate_entities", [])):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="climate", multiple=True)
-            ),
-        # CONF_CALIBRATION_ENTITIES und CONF_QUIRK_ENTITIES werden nicht mehr
-        # manuell konfiguriert – ThermoSmart erkennt beide automatisch via Device Registry.
-        vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
-            selector.BooleanSelector(),
+        return self.async_show_form(
+            step_id="presence",
+            data_schema=_schema_presence(current),
+        )
 
-        # ── Innensensoren ─────────────────────────────────────────────
-        vol.Optional("temp_sensors", default=d.get("temp_sensors", [])):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    domain="sensor", device_class="temperature", multiple=True
-                )
-            ),
-        vol.Optional("humidity_sensors", default=d.get("humidity_sensors", [])):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(
-                    domain="sensor", device_class="humidity", multiple=True
-                )
-            ),
+    async def async_step_weather(self, user_input: dict | None = None):
+        errors: dict[str, str] = {}
+        current = self._current()
+        if user_input is not None:
+            weather = user_input.get(CONF_WEATHER_ENTITY, "")
+            if weather and self.hass.states.get(weather) is None:
+                errors[CONF_WEATHER_ENTITY] = "entity_not_found"
+            else:
+                self._data.update(user_input)
+                # Alle gespeicherten Werte mit geänderten Feldern zusammenführen
+                return self.async_create_entry(title="", data={**current, **self._data})
 
-        # ── Fenstersensoren ───────────────────────────────────────────
-        vol.Optional("window_sensors", default=d.get("window_sensors", [])):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)
-            ),
-
-        # ── Präsenz & Urlaub ──────────────────────────────────────────
-        vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="person", multiple=True)
-            ),
-        vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="zone")
-            ),
-        vol.Optional(CONF_VACATION_BOOLEAN, default=d.get(CONF_VACATION_BOOLEAN, "")):
-            selector.EntitySelector(
-                selector.EntitySelectorConfig()
-            ),
-
-        # ── Wetter-Entity ─────────────────────────────────────────────
-        vol.Required(
-            CONF_WEATHER_ENTITY,
-            default=d.get(CONF_WEATHER_ENTITY, DEFAULT_WEATHER_ENTITY),
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="weather")
-        ),
-
-        # ── Außensensoren (eigene Wetterstation) ──────────────────────
-        vol.Optional(
-            CONF_OUTDOOR_TEMP_SENSOR,
-            default=d.get(CONF_OUTDOOR_TEMP_SENSOR, ""),
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor", device_class="temperature")
-        ),
-        vol.Optional(
-            CONF_OUTDOOR_HUMIDITY_SENSOR,
-            default=d.get(CONF_OUTDOOR_HUMIDITY_SENSOR, ""),
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor", device_class="humidity")
-        ),
-        vol.Optional(
-            CONF_OUTDOOR_WIND_SENSOR,
-            default=d.get(CONF_OUTDOOR_WIND_SENSOR, ""),
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor")
-        ),
-        vol.Optional(
-            CONF_OUTDOOR_SOLAR_SENSOR,
-            default=d.get(CONF_OUTDOOR_SOLAR_SENSOR, ""),
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor")
-        ),
-        vol.Optional(
-            CONF_OUTDOOR_RAIN_SENSOR,
-            default=d.get(CONF_OUTDOOR_RAIN_SENSOR, ""),
-        ): selector.EntitySelector(
-            selector.EntitySelectorConfig(domain="sensor")
-        ),
-
-        # ── Temperaturen ──────────────────────────────────────────────
-        vol.Required("comfort_temp", default=d.get("comfort_temp", 21.0)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=5, max=30, step=0.5,
-                unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
-            )),
-        vol.Required("night_temp", default=d.get("night_temp", 18.0)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=5, max=25, step=0.5,
-                unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
-            )),
-        vol.Required("away_temp", default=d.get("away_temp", 17.0)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=5, max=25, step=0.5,
-                unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
-            )),
-
-        # ── Zeitplan ──────────────────────────────────────────────────
-        vol.Optional(CONF_SCHED_WD_MORNING, default=d.get(CONF_SCHED_WD_MORNING, "06:00")):
-            selector.TimeSelector(),
-        vol.Optional(CONF_SCHED_WD_DAY, default=d.get(CONF_SCHED_WD_DAY, "09:00")):
-            selector.TimeSelector(),
-        vol.Optional(CONF_SCHED_WD_DAY_TEMP, default=d.get(CONF_SCHED_WD_DAY_TEMP, 19.0)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=5, max=25, step=0.5,
-                unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
-            )),
-        vol.Optional(CONF_SCHED_WD_EVENING, default=d.get(CONF_SCHED_WD_EVENING, "17:00")):
-            selector.TimeSelector(),
-        vol.Optional(CONF_SCHED_WD_NIGHT, default=d.get(CONF_SCHED_WD_NIGHT, "22:00")):
-            selector.TimeSelector(),
-        vol.Optional(CONF_SCHED_WE_MORNING, default=d.get(CONF_SCHED_WE_MORNING, "08:00")):
-            selector.TimeSelector(),
-        vol.Optional(CONF_SCHED_WE_NIGHT, default=d.get(CONF_SCHED_WE_NIGHT, "23:00")):
-            selector.TimeSelector(),
-
-        # ── TRV-Verhalten ─────────────────────────────────────────────
-        vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.5)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=0.1, max=2.0, step=0.1,
-                unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
-            )),
-        vol.Required("window_open_delay", default=d.get("window_open_delay", 5)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=0, max=60, step=1,
-                unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
-            )),
-        vol.Required("window_close_delay", default=d.get("window_close_delay", 2)):
-            selector.NumberSelector(selector.NumberSelectorConfig(
-                min=0, max=30, step=1,
-                unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
-            )),
-
-        # ── Lernalgorithmus ───────────────────────────────────────────
-        vol.Required(
-            CONF_LEARNING_ENABLED,
-            default=d.get(CONF_LEARNING_ENABLED, DEFAULT_LEARNING_ENABLED),
-        ): selector.BooleanSelector(),
-    })
+        return self.async_show_form(
+            step_id="weather",
+            data_schema=_schema_weather(current),
+            errors=errors,
+        )

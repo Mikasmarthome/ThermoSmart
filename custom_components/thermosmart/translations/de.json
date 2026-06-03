@@ -29,9 +29,9 @@
           "sched_we_night": "Wochenende: Nacht ab"
         },
         "data_description": {
-          "sched_wd_morning": "Ab dieser Uhrzeit heizt ThermoSmart auf Komforttemperatur",
+          "sched_wd_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
-          "sched_we_morning": "Ab dieser Uhrzeit heizt ThermoSmart auf Komforttemperatur",
+          "sched_we_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
         }
       },
@@ -105,9 +105,9 @@
           "sched_we_night": "Wochenende: Nacht ab"
         },
         "data_description": {
-          "sched_wd_morning": "Ab dieser Uhrzeit heizt ThermoSmart auf Komforttemperatur",
+          "sched_wd_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
-          "sched_we_morning": "Ab dieser Uhrzeit heizt ThermoSmart auf Komforttemperatur",
+          "sched_we_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
         }
       },

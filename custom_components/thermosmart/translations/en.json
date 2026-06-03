@@ -29,9 +29,9 @@
           "sched_we_night": "Weekend: Night from"
         },
         "data_description": {
-          "sched_wd_morning": "ThermoSmart heats to comfort temperature from this time",
+          "sched_wd_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_wd_night": "Night temperature applies from this time",
-          "sched_we_morning": "ThermoSmart heats to comfort temperature from this time",
+          "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_we_night": "Night temperature applies from this time"
         }
       },
@@ -105,9 +105,9 @@
           "sched_we_night": "Weekend: Night from"
         },
         "data_description": {
-          "sched_wd_morning": "ThermoSmart heats to comfort temperature from this time",
+          "sched_wd_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_wd_night": "Night temperature applies from this time",
-          "sched_we_morning": "ThermoSmart heats to comfort temperature from this time",
+          "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_we_night": "Night temperature applies from this time"
         }
       },

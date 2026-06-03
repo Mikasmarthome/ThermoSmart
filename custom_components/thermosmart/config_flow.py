@@ -99,6 +99,16 @@ def _schema_schedule(d: dict) -> vol.Schema:
 
 def _schema_presence(d: dict) -> vol.Schema:
     """Schritt 3: Präsenz & Automatik."""
+    # EntitySelector validiert leere Strings als ungültige Entity-ID.
+    # Lösung: default nur setzen wenn ein Wert existiert – dann sendet HA
+    # None statt "" wenn das Feld leer bleibt, und vol.Optional akzeptiert None.
+    vacation_existing = d.get(CONF_VACATION_BOOLEAN) or None
+    vacation_key = (
+        vol.Optional(CONF_VACATION_BOOLEAN, default=vacation_existing)
+        if vacation_existing
+        else vol.Optional(CONF_VACATION_BOOLEAN)
+    )
+
     return vol.Schema({
         vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True)),
@@ -106,10 +116,9 @@ def _schema_presence(d: dict) -> vol.Schema:
         vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="zone")),
 
-        # Wirklich optional – kein Domain-Filter (erzwingt sonst eine Auswahl)
-        # Funktioniert mit jeder Entity deren state == "on": input_boolean,
-        # binary_sensor, calendar, switch …
-        vol.Optional(CONF_VACATION_BOOLEAN, default=d.get(CONF_VACATION_BOOLEAN) or ""):
+        # Wirklich optional – funktioniert mit input_boolean, binary_sensor,
+        # calendar, switch … jede Entity deren state == "on"
+        vacation_key:
             selector.EntitySelector(selector.EntitySelectorConfig()),
 
         vol.Required(CONF_LEARNING_ENABLED, default=d.get(CONF_LEARNING_ENABLED, DEFAULT_LEARNING_ENABLED)):

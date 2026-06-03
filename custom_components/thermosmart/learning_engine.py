@@ -35,8 +35,7 @@ from .const import (
     PREHEAT_MAX_MINUTES,
     PREHEAT_MIN_DELTA,
     HEATING_MODE_AUTO,
-    CONF_SCHED_WD_MORNING, CONF_SCHED_WD_DAY, CONF_SCHED_WD_DAY_TEMP,
-    CONF_SCHED_WD_EVENING, CONF_SCHED_WD_NIGHT,
+    CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
 )
 
@@ -402,25 +401,18 @@ class LearningEngine:
                 h2, m2 = fallback.split(":")
                 return int(h2) * 60 + int(m2)
 
+        # Werktag und Wochenende: gleiches Schema (Nacht → Komfort → Nacht)
+        # Abwesenheit wird automatisch via Präsenzerkennung → away_temp gehandelt
         if not is_weekend:
-            morning  = t(CONF_SCHED_WD_MORNING, "06:00")
-            day      = t(CONF_SCHED_WD_DAY,     "09:00")
-            evening  = t(CONF_SCHED_WD_EVENING, "17:00")
-            night    = t(CONF_SCHED_WD_NIGHT,   "22:00")
-            day_temp = float((schedule_cfg or {}).get(CONF_SCHED_WD_DAY_TEMP, away_temp))
-            if cur < morning or cur >= night:
-                return night_temp
-            if cur < day:
-                return comfort_temp   # Aufwachen
-            if cur < evening:
-                return day_temp       # Tagsüber (z.B. alle bei der Arbeit)
-            return comfort_temp       # Abend
+            morning = t(CONF_SCHED_WD_MORNING, "06:00")
+            night   = t(CONF_SCHED_WD_NIGHT,   "22:00")
         else:
             morning = t(CONF_SCHED_WE_MORNING, "08:00")
             night   = t(CONF_SCHED_WE_NIGHT,   "23:00")
-            if cur < morning or cur >= night:
-                return night_temp
-            return comfort_temp
+
+        if cur < morning or cur >= night:
+            return night_temp
+        return comfort_temp
 
     def _weighted_targets_for_hour(
         self, zone_id: str, now: datetime

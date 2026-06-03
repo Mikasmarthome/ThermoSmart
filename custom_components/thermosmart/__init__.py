@@ -27,6 +27,7 @@ from .const import (
     CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
     CONF_PRESENCE_PERSONS,
+    CONF_HOME_ZONE,
     CONF_VACATION_BOOLEAN,
     CONF_CALIBRATION_ENTITIES,
     CONF_QUIRK_ENTITIES,
@@ -339,12 +340,42 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     # ── Präsenz ──────────────────────────────────────────────────────
 
+    def _is_person_home(self, person_state: str, zone_entity: str) -> bool:
+        """Prüft ob eine Person in der konfigurierten Zone ist.
+
+        HA setzt person.state auf:
+          - "home"           wenn in der Standard-Heimzone (zone.home)
+          - "<zone_name>"    wenn in einer anderen benannten Zone
+          - "not_home"       wenn nirgends
+        """
+        if not zone_entity or zone_entity in ("zone.home", "home"):
+            return person_state == "home"
+
+        # Entity-ID-Suffix vergleichen (z.B. "zone.heizungszone" → "heizungszone")
+        zone_slug = zone_entity.replace("zone.", "").lower()
+        if person_state.lower() == zone_slug:
+            return True
+
+        # Friendly-Name der Zone vergleichen (z.B. "Heizungszone")
+        zone_state = self.hass.states.get(zone_entity)
+        if zone_state:
+            friendly = zone_state.attributes.get("friendly_name", "")
+            if person_state.lower() == friendly.lower():
+                return True
+
+        return False
+
     def _get_presence_state(self) -> dict:
         cfg = self.zone_cfg
+        home_zone = cfg.get(CONF_HOME_ZONE, "zone.home") or "zone.home"
         persons_home, persons_away = [], []
+
         for person in cfg.get(CONF_PRESENCE_PERSONS, []):
             state = self.hass.states.get(person)
-            (persons_home if (state and state.state == "home") else persons_away).append(person)
+            if state and self._is_person_home(state.state, home_zone):
+                persons_home.append(person)
+            else:
+                persons_away.append(person)
 
         vacation = False
         vacation_entity = cfg.get(CONF_VACATION_BOOLEAN, "")

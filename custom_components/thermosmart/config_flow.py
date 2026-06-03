@@ -17,6 +17,7 @@ from .const import (
     CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
     CONF_PRESENCE_PERSONS,
+    CONF_HOME_ZONE,
     CONF_VACATION_BOOLEAN,
     CONF_CALIBRATION_ENTITIES,
     CONF_QUIRK_ENTITIES,
@@ -145,6 +146,10 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
         vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
             selector.EntitySelector(
                 selector.EntitySelectorConfig(domain="person", multiple=True)
+            ),
+        vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
+            selector.EntitySelector(
+                selector.EntitySelectorConfig(domain="zone")
             ),
         vol.Optional(CONF_VACATION_BOOLEAN, default=d.get(CONF_VACATION_BOOLEAN, "")):
             selector.EntitySelector(

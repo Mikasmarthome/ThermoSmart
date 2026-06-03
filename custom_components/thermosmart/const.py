@@ -31,10 +31,8 @@ AUTO_QUIRK_PATTERNS = [
 AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
 
 # Zeitplan-Konfiguration (HH:MM Strings)
+CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
-CONF_SCHED_WD_DAY      = "sched_wd_day"       # Werktag: Tagsüber   → sched_day_temp
-CONF_SCHED_WD_DAY_TEMP = "sched_wd_day_temp"  # Werktag: Tagtemp (reduziert, z.B. niemand zuhause)
-CONF_SCHED_WD_EVENING  = "sched_wd_evening"   # Werktag: Abend      → comfort_temp
 CONF_SCHED_WD_NIGHT    = "sched_wd_night"     # Werktag: Nacht      → night_temp
 CONF_SCHED_WE_MORNING  = "sched_we_morning"   # Wochenende: Aufwachen → comfort_temp
 CONF_SCHED_WE_NIGHT    = "sched_we_night"     # Wochenende: Nacht     → night_temp
@@ -110,7 +108,7 @@ STORAGE_VERSION = 1
 STORAGE_KEY = f"{DOMAIN}_learning_data"
 
 # Platforms
-PLATFORMS = ["climate", "sensor", "number", "switch", "select"]
+PLATFORMS = ["climate", "sensor", "switch", "select"]
 
 # Attributes
 ATTR_ZONE = "zone"

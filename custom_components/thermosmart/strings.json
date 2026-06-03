@@ -22,6 +22,7 @@
           "comfort_temp": "Komforttemperatur (wenn jemand zuhause)",
           "night_temp": "Nachttemperatur (Absenkung beim Schlafen)",
           "away_temp": "Abwesenheitstemperatur (automatisch wenn alle weg sind)",
+          "vacation_temp": "Urlaubstemperatur (Frostschutz wenn Wohnung längere Zeit leer steht)",
           "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
           "sched_wd_morning": "Werktag: Komfort ab",
           "sched_wd_night": "Werktag: Nacht ab",

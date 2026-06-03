@@ -35,6 +35,7 @@ from .const import (
     CONF_VALVE_MAINTENANCE,
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERN,
+    CONF_VACATION_TEMP,
     NOISE_FILTER_SPIKE_THRESHOLD,
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
@@ -139,6 +140,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._active_control: bool = False
         self._mode: str = HEATING_MODE_AUTO
         self._override: float | None = None
+        self._override_schedule_period: str | None = None  # Zeitplan-Slot bei Override-Setzen
         self._event_unsub: list = []
         self._window_open_at: dict[str, datetime] = {}
         self._window_close_at: dict[str, datetime] = {}
@@ -183,6 +185,36 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
     def set_override(self, value: float) -> None:
         self._override = value if value >= 5.0 else None
+        # Zeitplan-Slot beim Setzen merken → wird beim nächsten Übergang zurückgesetzt
+        self._override_schedule_period = self._current_schedule_period() if self._override else None
+
+    def _current_schedule_period(self) -> str:
+        """Gibt einen String zurück der den aktuellen Zeitplan-Slot eindeutig identifiziert."""
+        now = dt_util.now()
+        cfg = self.zone_cfg
+        is_weekend = now.weekday() >= 5
+        cur = now.hour * 60 + now.minute
+
+        def t(key: str, fallback: str) -> int:
+            raw = cfg.get(key, fallback)
+            try:
+                h, m = str(raw).split(":")
+                return int(h) * 60 + int(m)
+            except (ValueError, AttributeError):
+                h2, m2 = fallback.split(":")
+                return int(h2) * 60 + int(m2)
+
+        if is_weekend:
+            morning = t("sched_we_morning", "08:00")
+            night   = t("sched_we_night",   "23:00")
+        else:
+            morning = t("sched_wd_morning", "06:00")
+            night   = t("sched_wd_night",   "22:00")
+
+        day_type = "we" if is_weekend else "wd"
+        if cur < morning or cur >= night:
+            return f"{day_type}_night"
+        return f"{day_type}_comfort"
 
     def get_override(self) -> float | None:
         return self._override
@@ -501,6 +533,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             comfort_temp=cfg.get("comfort_temp", 21.0),
             night_temp=cfg.get("night_temp", 18.0),
             away_temp=cfg.get("away_temp", 17.0),
+            vacation_temp=cfg.get(CONF_VACATION_TEMP, 12.0),
             schedule_cfg=cfg,
         )
 
@@ -513,6 +546,17 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         preheat_minutes = await self.learning_engine.async_get_preheat_minutes(
             self.zone_id, base_target, current_temp, weather_data
         )
+
+        # Override auto-reset: wenn Zeitplan-Slot gewechselt hat → zurück auf Automatik
+        if self._override is not None and self._override_schedule_period is not None:
+            current_period = self._current_schedule_period()
+            if current_period != self._override_schedule_period:
+                _LOGGER.info(
+                    "ThermoSmart '%s': Manueller Override abgelaufen (Slot %s → %s) – zurück auf Automatik",
+                    self.zone_name, self._override_schedule_period, current_period,
+                )
+                self._override = None
+                self._override_schedule_period = None
 
         # Zieltemperatur berechnen
         override = self.get_override()

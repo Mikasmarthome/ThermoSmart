@@ -22,6 +22,7 @@
           "comfort_temp": "Comfort temperature (when someone is home)",
           "night_temp": "Night temperature (setback during sleep)",
           "away_temp": "Away temperature (automatically when everyone is gone)",
+          "vacation_temp": "Vacation temperature (frost protection when home is empty for extended period)",
           "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",

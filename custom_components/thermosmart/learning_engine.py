@@ -35,6 +35,7 @@ from .const import (
     PREHEAT_MAX_MINUTES,
     PREHEAT_MIN_DELTA,
     HEATING_MODE_AUTO,
+    CONF_VACATION_TEMP,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
 )
@@ -269,6 +270,7 @@ class LearningEngine:
         comfort_temp: float = 21.0,
         night_temp: float = 18.0,
         away_temp: float = 17.0,
+        vacation_temp: float = 12.0,
         schedule_cfg: dict | None = None,
     ) -> float:
         """Empfohlene Zieltemperatur – Zeitplan oder Modus-Temperatur."""
@@ -276,7 +278,7 @@ class LearningEngine:
             "comfort": comfort_temp,
             "night": night_temp,
             "away": away_temp,
-            "vacation": 12.0,
+            "vacation": vacation_temp,
         }
         if mode != HEATING_MODE_AUTO:
             return mode_temps.get(mode, night_temp)

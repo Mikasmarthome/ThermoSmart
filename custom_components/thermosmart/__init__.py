@@ -1126,18 +1126,25 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                     _LOGGER.debug("ThermoSmart '%s': Quirk-Deaktivierung fehlgeschlagen: %s", self.zone_name, result)
 
     async def _async_valve_maintenance(self, cfg: dict, recommendation: dict) -> None:
-        """Ventil-Wartung: einmal pro Woche Ventil vollständig auf und zu fahren.
+        """Ventil-Wartung: Ventil vollständig auf und zu fahren wenn es lange stillstand.
 
-        Verhindert Festklemmen nach dem Sommer (Kalk, Gummi klebt).
-        Ablauf:
-          1. Sonntag 03:00 Uhr
-          2. Alle TRVs auf VALVE_MAINTENANCE_BOOST_TEMP (28°C) → Ventil fährt voll auf
-          3. VALVE_MAINTENANCE_DURATION_SEC warten (async, blockiert nicht HA)
-          4. Zurück auf adjustierten Zielwert
+        Verhindert Festklemmen (Kalk, Gummi klebt) nach langer Inaktivität.
+
+        Wird NUR ausgeführt wenn Ventile wahrscheinlich längere Zeit stillstanden:
+          - Sommer-Modus: Heizung komplett aus, Ventile wochenlang nicht bewegt
+          - Beobachtungsmodus: TS steuert nicht (BT ggf. auch wenig aktiv)
+
+        Im Winter mit aktiver Steuerung bewegen sich Ventile ohnehin regelmäßig –
+        dort wäre eine Wartung (28°C um 3 Uhr) störend und unnötig.
         """
         if not cfg.get(CONF_VALVE_MAINTENANCE, True):
             return
         if self._maintenance_running:
+            return
+
+        # Nur wenn Ventile wahrscheinlich längere Zeit nichts getan haben
+        valve_likely_idle = self._is_summer or not self._active_control
+        if not valve_likely_idle:
             return
 
         now = dt_util.now()

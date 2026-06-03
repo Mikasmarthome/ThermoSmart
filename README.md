@@ -7,15 +7,15 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v0.9.0b1-blue.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0-blue.svg" alt="Version"/></a>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
 </p>
 
 ---
 
-> ⚠️ **Custom Integration – Use at your own risk.**
-> ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices in your home. Always ensure a safe minimum temperature is configured. Test thoroughly before relying on it for critical heating.
+> ⚠️ **Use at your own risk.**
+> ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices in your home. Always configure a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
 ---
 
@@ -97,7 +97,7 @@ ThermoSmart learns how long your room takes to reach the comfort temperature und
 | Solar > 400 W/m² + outdoor > 5°C | Up to −0.5°C |
 
 **Forecast-Based Suppression with Feedback Learning**
-When today's forecast high exceeds the target temperature, ThermoSmart reduces heating — the house will warm up naturally. This is protected by two safety mechanisms:
+When today's forecast high exceeds the target temperature, ThermoSmart reduces heating — the house will warm up naturally. This is protected by three safety mechanisms:
 
 1. **Delta protection**: If the room is ≥3°C below target, heating is always applied regardless of the forecast. Blend zone 1.5–3°C.
 2. **Comfort floor**: Even with forecast suppression active, the TRV setpoint never drops below `current_temp − 0.5°C`. The room cannot actively cool.
@@ -364,7 +364,7 @@ ThermoSmart automatically averages the remaining available sensors. The zone con
 Phase 1 (limited learning) starts after ~5 observations (25 minutes). Full personalisation (Phase 3) requires 150+ observations, typically 1–2 weeks of normal operation. TRV setpoint learning from Observation mode accelerates this significantly.
 
 **Can ThermoSmart collect anonymous usage data to improve itself?**
-Not currently. ThermoSmart is a fully local integration — no data leaves your Home Assistant instance. Future opt-in telemetry is being considered but would require explicit user consent.
+No. ThermoSmart is a fully local integration — no data ever leaves your Home Assistant instance.
 
 **I want to share my learning data for debugging / development.**
 The learning data is stored locally at `/config/.storage/thermosmart_learning_data`. You can share this file to help diagnose issues or contribute to improving the algorithm.

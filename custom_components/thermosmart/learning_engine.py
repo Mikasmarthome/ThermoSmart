@@ -778,7 +778,7 @@ class LearningEngine:
         ]
 
         if changed:
-            self.hass.async_create_task(self.async_save())
+            self._hass.async_create_task(self.async_save())
 
     def update_boost_factor(self, zone_id: str, overshot: bool, slow: bool = False) -> None:
         """Boost-Faktor nach Heizzyklus anpassen.

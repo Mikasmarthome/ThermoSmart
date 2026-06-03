@@ -38,15 +38,17 @@ jobs:
           body: |
             ## ThermoSmart ${{ github.ref_name }}
 
-            ${{ steps.prerelease.outputs.is_prerelease == 'true' && '> ⚠️ **Beta-Version** – zum Testen gedacht. Bitte Feedback über [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues) melden.' || '✅ **Stabile Version**' }}
+            ${{ steps.prerelease.outputs.is_prerelease == 'true' && '> ⚠️ **Pre-release** – for testing only. Please report issues via [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues).' || '✅ **Stable release** — recommended for all users.' }}
 
             ### Installation (HACS)
-            1. HACS → Integrationen → ⋮ → Benutzerdefinierte Repositories
-            2. URL: `https://github.com/Mikasmarthome/ThermoSmart`
-            3. Kategorie: Integration → Hinzufügen
-            4. ThermoSmart installieren → Home Assistant neu starten
+            1. HACS → Integrations → ⋮ → Custom Repositories
+            2. URL: `https://github.com/Mikasmarthome/ThermoSmart` — Category: Integration → Add
+            3. Find **ThermoSmart** → Download → Restart Home Assistant
+            4. Settings → Integrations → Add Integration → **ThermoSmart**
 
-            ### Update
-            HACS → Integrationen → ThermoSmart → Update → Home Assistant neu starten
+            ### Update from a previous version
+            HACS → Integrations → ThermoSmart → Update → Restart Home Assistant
+
+            > Learning data is preserved across updates.
           draft: false
           prerelease: ${{ steps.prerelease.outputs.is_prerelease == 'true' }}

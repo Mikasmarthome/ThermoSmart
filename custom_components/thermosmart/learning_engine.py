@@ -40,6 +40,10 @@ from .const import (
     TEMP_ECO,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
+    FORECAST_EVAL_HOURS,
+    FORECAST_BIAS_MIN,
+    FORECAST_BIAS_MAX,
+    FORECAST_BIAS_LEARNING_RATE,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -164,6 +168,8 @@ class LearningEngine:
         self._last_trv_snapshot: dict[str, dict] = {}
         self._confidence: dict[str, float] = {}
         self._boost_factors: dict[str, float] = {}
+        self._forecast_bias: dict[str, float] = {}
+        self._forecast_decisions: dict[str, list[dict]] = defaultdict(list)
 
     # ── Persistenz ──────────────────────────────────────────────────────
 
@@ -177,6 +183,7 @@ class LearningEngine:
             for zone_id, obs_list in stored.get("window_cooling_obs", {}).items():
                 self._window_cooling_obs[zone_id] = obs_list
             self._boost_factors = stored.get("boost_factors", {})
+            self._forecast_bias = stored.get("forecast_bias", {})
             total = sum(len(v) for v in self._observations.values())
             trv_total = sum(len(v) for v in self._trv_observations.values())
             _LOGGER.info(
@@ -192,6 +199,7 @@ class LearningEngine:
             "trv_observations": dict(self._trv_observations),
             "window_cooling_obs": dict(self._window_cooling_obs),
             "boost_factors": self._boost_factors,
+            "forecast_bias": self._forecast_bias,
         })
 
     def _prune_old_observations(self, max_age_days: int = 1095) -> None:
@@ -336,6 +344,8 @@ class LearningEngine:
             obs["heat_rate"] = heat_rate
         if cool_rate is not None:
             obs["cool_rate"] = cool_rate
+        if recommendation.get("forecast_high") is not None:
+            obs["forecast_high"] = recommendation["forecast_high"]
 
         outdoor = weather_data.get("temperature") or 10.0
         is_weekend = now.weekday() >= 5
@@ -649,10 +659,126 @@ class LearningEngine:
             "beobachtungen_gesamt": len(obs),
             "trv_beobachtungen": trv_n,
             "fenster_ereignisse": win_n,
+            "prognose_vertrauen_%": round(self.get_forecast_bias(zone_id) * 100, 1),
         }
 
     def get_boost_factor(self, zone_id: str) -> float:
         return self._boost_factors.get(zone_id, 1.0)
+
+    def get_forecast_bias(self, zone_id: str) -> float:
+        """Gelerntes Vertrauen in Wetterprognosen (1.0 = voll vertrauen, 0.3 = skeptisch)."""
+        return self._forecast_bias.get(zone_id, FORECAST_BIAS_MAX)
+
+    def record_forecast_decision(
+        self,
+        zone_id: str,
+        decision_target: float,
+        raw_target: float,
+        forecast_high: float,
+        current_temp: float,
+        suppression: float,
+        outdoor_temp: float | None,
+    ) -> None:
+        """Prognose-Entscheidung aufzeichnen – wird nach FORECAST_EVAL_HOURS ausgewertet."""
+        if not self._is_enabled(zone_id):
+            return
+        now = dt_util.now()
+        # Duplikat-Schutz: kein neuer Eintrag wenn eine noch unausgewertete Entscheidung
+        # aus den letzten 2 Stunden existiert
+        recent = self._forecast_decisions[zone_id]
+        if recent:
+            try:
+                last_ts = datetime.fromisoformat(recent[-1]["ts"])
+                if (now - last_ts).total_seconds() < 7200:
+                    return
+            except (ValueError, KeyError):
+                pass
+        self._forecast_decisions[zone_id].append({
+            "ts": now.isoformat(),
+            "decision_target": decision_target,
+            "raw_target": raw_target,
+            "forecast_high": forecast_high,
+            "current_temp_at_decision": current_temp,
+            "suppression": suppression,
+            "outdoor_temp": outdoor_temp,
+            "evaluated": False,
+        })
+        _LOGGER.debug(
+            "LearningEngine [%s]: Prognose-Entscheidung aufgezeichnet "
+            "(Ziel=%.1f°C statt %.1f°C, Prognose=%.1f°C, Suppression=%.0f%%)",
+            zone_id, decision_target, raw_target, forecast_high, (1 - suppression) * 100,
+        )
+
+    def evaluate_forecast_decisions(
+        self,
+        zone_id: str,
+        current_temp: float | None,
+        outdoor_temp: float | None,
+    ) -> None:
+        """Ausstehende Prognose-Entscheidungen auswerten und Forecast-Bias anpassen.
+
+        Logik:
+          - Ziel nicht erreicht (Raum kalt) → Prognose war zu optimistisch → Bias senken
+          - Ziel deutlich überschritten     → Prognose war konservativ     → Bias leicht erhöhen
+          - Ziel im Toleranzbereich         → Prognose war korrekt          → Bias leicht erhöhen
+        """
+        if current_temp is None:
+            return
+        now = dt_util.now()
+        decisions = self._forecast_decisions.get(zone_id, [])
+        changed = False
+
+        for dec in decisions:
+            if dec.get("evaluated"):
+                continue
+            try:
+                decision_time = datetime.fromisoformat(dec["ts"])
+            except (ValueError, KeyError):
+                dec["evaluated"] = True
+                continue
+            if (now - decision_time).total_seconds() / 3600 < FORECAST_EVAL_HOURS:
+                continue
+
+            shortfall = dec["decision_target"] - current_temp  # positiv = Ziel verfehlt
+            bias = self._forecast_bias.get(zone_id, FORECAST_BIAS_MAX)
+
+            if shortfall > 0.5:
+                # Raum zu kalt → Prognose war zu optimistisch
+                reduction = FORECAST_BIAS_LEARNING_RATE * min(shortfall / 2.0, 1.0)
+                bias = max(FORECAST_BIAS_MIN, round(bias - reduction, 3))
+                _LOGGER.info(
+                    "LearningEngine [%s]: Prognose-Auswertung – Ziel %.1f°C verfehlt "
+                    "(Ist: %.1f°C, Δ%.1f°C) → Bias %.3f",
+                    zone_id, dec["decision_target"], current_temp, shortfall, bias,
+                )
+            elif shortfall < -1.5:
+                # Raum deutlich über Ziel → Prognose war eher konservativ oder Heizung lief trotzdem
+                bias = min(FORECAST_BIAS_MAX, round(bias + FORECAST_BIAS_LEARNING_RATE * 0.3, 3))
+                _LOGGER.debug(
+                    "LearningEngine [%s]: Prognose-Auswertung – Ziel überschritten "
+                    "(Ist: %.1f°C) → Bias %.3f", zone_id, current_temp, bias,
+                )
+            else:
+                # Ziel erreicht – Prognose war korrekt
+                bias = min(FORECAST_BIAS_MAX, round(bias + FORECAST_BIAS_LEARNING_RATE * 0.15, 3))
+                _LOGGER.debug(
+                    "LearningEngine [%s]: Prognose-Auswertung – Ziel erreicht → Bias %.3f",
+                    zone_id, bias,
+                )
+
+            self._forecast_bias[zone_id] = bias
+            dec["evaluated"] = True
+            changed = True
+
+        # Alte ausgewertete Einträge bereinigen (> 7 Tage)
+        cutoff_iso = (now - timedelta(days=7)).isoformat()
+        self._forecast_decisions[zone_id] = [
+            d for d in decisions
+            if not d.get("evaluated") or d.get("ts", "") >= cutoff_iso
+        ]
+
+        if changed:
+            self.hass.async_create_task(self.async_save())
 
     def update_boost_factor(self, zone_id: str, overshot: bool, slow: bool = False) -> None:
         """Boost-Faktor nach Heizzyklus anpassen.

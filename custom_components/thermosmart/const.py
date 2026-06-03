@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.4.7b1"
+VERSION = "0.5.0b1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -77,6 +77,14 @@ WIND_CHILL_BOOST = 0.5          # °C extra when cold AND windy
 LEARNING_MIN_SAMPLES = 5        # Mindest-Beobachtungen bevor Lernen aktiv wird
 PREHEAT_MAX_MINUTES = 60        # maximale Vorheizzeit
 PREHEAT_MIN_DELTA = 2.0         # °C Differenz ab der Vorheizung ausgelöst wird
+
+# Prognose-Feedback-Loop
+FORECAST_EVAL_HOURS = 5          # Stunden bis Prognose-Entscheidung ausgewertet wird
+FORECAST_BIAS_MIN = 0.3          # Mindest-Vertrauen in Prognose (nie komplett ignorieren)
+FORECAST_BIAS_MAX = 1.0          # Vollständiges Vertrauen (Standard / Cold-Start)
+FORECAST_BIAS_LEARNING_RATE = 0.06  # Anpassungsrate pro Auswertung
+FORECAST_DELTA_FULL_HEAT = 3.0   # °C unter Ziel → vollständig heizen, Prognose ignorieren
+FORECAST_DELTA_BLEND = 1.0       # °C unter Ziel → Übergang beginnt
 
 # Solar-Gain-Erkennung (SunIntensitySensor)
 SOLAR_GAIN_THRESHOLD_W = 300.0   # W/m² – unterhalb kein relevanter Solar-Wärmeeintrag

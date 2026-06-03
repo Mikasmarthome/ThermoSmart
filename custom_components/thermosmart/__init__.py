@@ -53,6 +53,8 @@ from .const import (
     VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
     RESIDUAL_HEAT_ZONE,
     EMA_1H_ALPHA,
+    FORECAST_DELTA_FULL_HEAT,
+    FORECAST_DELTA_BLEND,
     HEATING_MODE_AUTO,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
@@ -473,6 +475,13 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             recommendation = await self._compute_recommendation(cfg, weather_data, mode)
             recommendation["is_summer"] = self._is_summer
 
+            # Prognose-Entscheidungen aus vergangenen Zyklen auswerten
+            self.learning_engine.evaluate_forecast_decisions(
+                self.zone_id,
+                recommendation.get("current_temp"),
+                weather_data.get("temperature"),
+            )
+
             # TRV-Boost-Setpoint berechnen und zur Recommendation hinzufügen
             target = recommendation.get("adjusted_target")
             if target is not None:
@@ -697,6 +706,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
         # Zieltemperatur berechnen
         override = self.get_override()
+        biased_suppression = 1.0  # Standard: vollständig heizen
+
         if override is not None and not window_open:
             adjusted_target = override
             override_active = True
@@ -704,12 +715,40 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             raw_target = round(base_target + weather_offset, 1)
             if mode == HEATING_MODE_AUTO:
                 night_temp = cfg.get("night_temp", TEMP_NIGHT)
-                suppression = self.weather_engine.compute_forecast_suppression(
+
+                # Rohe physikalische Prognose-Unterdrückung
+                raw_suppression = self.weather_engine.compute_forecast_suppression(
                     weather_data, raw_target, night_temp
                 )
+
+                # Gelernten Prognose-Bias anwenden
+                # (bias=1.0 → Prognose voll vertrauen; bias<1.0 → konservativer heizen)
+                forecast_bias = self.learning_engine.get_forecast_bias(self.zone_id)
+                biased_suppression = 1.0 - (1.0 - raw_suppression) * forecast_bias
+
+                # Delta-Schutz: wenn Raum kalt ist, nicht auf Außenwärme warten
+                # Beispiel: Haus 18°C, Ziel 21°C, Prognose 27°C → trotzdem heizen
+                if current_temp is not None:
+                    delta = raw_target - current_temp
+                    if delta >= FORECAST_DELTA_FULL_HEAT:
+                        # Raum deutlich unter Ziel → vollständig heizen
+                        biased_suppression = 1.0
+                    elif delta >= FORECAST_DELTA_BLEND:
+                        # Übergangszone: Prognose-Einfluss linear ausblenden
+                        blend = (delta - FORECAST_DELTA_BLEND) / (FORECAST_DELTA_FULL_HEAT - FORECAST_DELTA_BLEND)
+                        biased_suppression = min(1.0, biased_suppression + blend * (1.0 - biased_suppression))
+
                 adjusted_target = round(
-                    night_temp + suppression * (raw_target - night_temp), 1
-                ) if suppression < 1.0 else raw_target
+                    night_temp + biased_suppression * (raw_target - night_temp), 1
+                )
+
+                # Prognose-Entscheidung für spätere Auswertung aufzeichnen
+                forecast_high = weather_data.get("forecast_high")
+                if biased_suppression < 0.95 and forecast_high is not None and current_temp is not None:
+                    self.learning_engine.record_forecast_decision(
+                        self.zone_id, adjusted_target, raw_target, forecast_high,
+                        current_temp, biased_suppression, weather_data.get("temperature"),
+                    )
             else:
                 adjusted_target = raw_target
             override_active = False
@@ -717,14 +756,9 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             adjusted_target = None
             override_active = False
 
-        # Prognose-Unterdrückung für Sensor
+        # Prognose-Unterdrückungs-Prozentsatz für Sensor (zeigt biased-Wert)
         if mode == HEATING_MODE_AUTO and not window_open and override is None:
-            night_temp = cfg.get("night_temp", TEMP_NIGHT)
-            suppression_pct = round(
-                (1 - self.weather_engine.compute_forecast_suppression(
-                    weather_data, round(base_target + weather_offset, 1), night_temp
-                )) * 100
-            )
+            suppression_pct = round((1.0 - biased_suppression) * 100)
         else:
             suppression_pct = 0
 

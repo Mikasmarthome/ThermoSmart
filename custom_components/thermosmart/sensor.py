@@ -175,6 +175,7 @@ class ThermoSmartConfidenceSensor(_Base):
             "raum_muster_%": breakdown["raum_muster_%"],
             "trv_effizienz_%": breakdown["trv_effizienz_%"],
             "fenster_abkühlung_%": breakdown["fenster_abkühlung_%"],
+            "prognose_vertrauen_%": breakdown["prognose_vertrauen_%"],
             "beobachtungen_gesamt": breakdown["beobachtungen_gesamt"],
             "trv_beobachtungen": breakdown["trv_beobachtungen"],
             "fenster_ereignisse": breakdown["fenster_ereignisse"],

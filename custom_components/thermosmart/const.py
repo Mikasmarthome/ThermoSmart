@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.2.6b"
+VERSION = "0.2.7b"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -82,6 +82,10 @@ OUTDOOR_TEMP_SENSOR_EXTRA = "sensor.outdoor_temperature"  # eigene Wetterstation
 SUMMER_THRESHOLD = 18.0   # °C Außentemperatur über X Stunden → Sommer
 WINTER_THRESHOLD = 15.0   # °C Außentemperatur unter X Stunden → Heizung an
 SEASON_HOURS = 72         # Stunden die der Schwellwert überschritten sein muss
+
+# Sensor-Noise-Filter
+NOISE_FILTER_SPIKE_THRESHOLD = 4.0  # °C – Abweichung > Wert vom EMA → Messung ignorieren
+NOISE_FILTER_EMA_ALPHA = 0.2        # EMA-Glättungsfaktor (kleiner = träger/stabiler)
 
 # Heizmodi
 HEATING_MODE_AUTO     = "auto"

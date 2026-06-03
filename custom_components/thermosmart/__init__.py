@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
@@ -33,6 +34,8 @@ from .const import (
     CONF_QUIRK_ENTITIES,
     CONF_VALVE_MAINTENANCE,
     AUTO_QUIRK_PATTERNS,
+    NOISE_FILTER_SPIKE_THRESHOLD,
+    NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
     TEMP_FROST_PROTECTION,
     SUMMER_THRESHOLD,
@@ -82,6 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         learning_engine=learning_engine,
     )
     await coordinator.async_config_entry_first_refresh()
+    await coordinator.async_detect_auto_quirks()
     coordinator.setup_event_listeners()
     entry.async_on_unload(coordinator.cleanup_event_listeners)
 
@@ -143,6 +147,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._is_summer: bool = False
         self._last_maintenance: datetime | None = None
         self._maintenance_running: bool = False
+        self._trv_offline: set[str] = set()
+        self._auto_quirk_entities: list[str] = []
+        self._sensor_ema: dict[str, float] = {}
+        self._sensor_noise_count: dict[str, int] = {}
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -229,6 +237,71 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         for cancel in self._event_unsub:
             cancel()
         self._event_unsub.clear()
+
+    # ── Quirk-Autodetect ─────────────────────────────────────────────
+
+    async def async_detect_auto_quirks(self) -> None:
+        """Erkennt Quirk-Switches automatisch über die HA Device Registry.
+
+        Sucht Switches die zum selben Gerät wie konfigurierte TRVs gehören
+        und einem bekannten Quirk-Muster entsprechen (AUTO_QUIRK_PATTERNS).
+        Ergänzt manuell konfigurierte Einträge – überschreibt sie nicht.
+        """
+        cfg = self.zone_cfg
+        climate_entities = cfg.get("climate_entities", [])
+        if not climate_entities:
+            return
+
+        ent_reg = er.async_get(self.hass)
+
+        device_ids: set[str] = set()
+        for entity_id in climate_entities:
+            entry = ent_reg.async_get(entity_id)
+            if entry and entry.device_id:
+                device_ids.add(entry.device_id)
+
+        if not device_ids:
+            return
+
+        found: list[str] = []
+        for device_id in device_ids:
+            for entry in er.async_entries_for_device(ent_reg, device_id):
+                if entry.entity_id.split(".")[0] != "switch":
+                    continue
+                for pattern in AUTO_QUIRK_PATTERNS:
+                    if pattern in entry.entity_id:
+                        found.append(entry.entity_id)
+                        break
+
+        manual = set(cfg.get(CONF_QUIRK_ENTITIES, []))
+        new_auto = [e for e in found if e not in manual]
+        if new_auto:
+            _LOGGER.info(
+                "ThermoSmart '%s': Quirk-Autodetect: %s",
+                self.zone_name, new_auto,
+            )
+        self._auto_quirk_entities = found
+
+    # ── TRV-Offline-Tracking ─────────────────────────────────────────
+
+    def _get_trv_state(self, entity_id: str):
+        """Gibt TRV-State zurück; loggt Offline/Online-Übergänge."""
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown"):
+            if entity_id not in self._trv_offline:
+                self._trv_offline.add(entity_id)
+                _LOGGER.warning(
+                    "ThermoSmart '%s': TRV %s nicht erreichbar – Steuerung ausgesetzt",
+                    self.zone_name, entity_id,
+                )
+            return None
+        if entity_id in self._trv_offline:
+            self._trv_offline.discard(entity_id)
+            _LOGGER.info(
+                "ThermoSmart '%s': TRV %s wieder erreichbar",
+                self.zone_name, entity_id,
+            )
+        return state
 
     # ── Hauptschleife ────────────────────────────────────────────────
 
@@ -516,10 +589,37 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             state = self.hass.states.get(sid)
             if state and state.state not in ("unknown", "unavailable", "None"):
                 try:
-                    values.append(float(state.state))
+                    filtered = self._filter_sensor_value(sid, float(state.state))
+                    if filtered is not None:
+                        values.append(filtered)
                 except ValueError:
                     pass
         return round(sum(values) / len(values), 1) if values else None
+
+    def _filter_sensor_value(self, sensor_id: str, raw: float) -> float | None:
+        """EMA-Glättung mit Spike-Erkennung für Temperatursensoren.
+
+        Kurze Ausreißer (defekter Sensor, Zigbee-Übertragungsfehler) werden
+        ignoriert. Nachhaltige Temperaturänderungen folgen dem EMA graduell.
+        """
+        if sensor_id not in self._sensor_ema:
+            self._sensor_ema[sensor_id] = raw
+            return raw
+
+        ema = self._sensor_ema[sensor_id]
+        if abs(raw - ema) > NOISE_FILTER_SPIKE_THRESHOLD:
+            count = self._sensor_noise_count.get(sensor_id, 0) + 1
+            self._sensor_noise_count[sensor_id] = count
+            if count == 1:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Sensor %s Spike ignoriert %.1f°C (EMA=%.1f°C)",
+                    self.zone_name, sensor_id, raw, ema,
+                )
+            return None
+
+        self._sensor_noise_count[sensor_id] = 0
+        self._sensor_ema[sensor_id] = NOISE_FILTER_EMA_ALPHA * raw + (1 - NOISE_FILTER_EMA_ALPHA) * ema
+        return round(self._sensor_ema[sensor_id], 1)
 
     def _compute_trv_setpoint(
         self,
@@ -618,8 +718,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             return
 
         for entity_id in cfg.get("climate_entities", []):
-            state = self.hass.states.get(entity_id)
-            if state is None or state.state in ("unavailable", "unknown"):
+            state = self._get_trv_state(entity_id)
+            if state is None:
                 continue
             if state.state == "off":
                 _LOGGER.info(
@@ -728,7 +828,9 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
           - switch.*_child_lock        → sperrt externe Setpoint-Änderungen
           - Jeder switch in quirk_entities wird auf OFF gehalten.
         """
-        quirk_entities = cfg.get(CONF_QUIRK_ENTITIES, [])
+        manual = cfg.get(CONF_QUIRK_ENTITIES, [])
+        # Auto-erkannte und manuell konfigurierte Quirks zusammenführen (dedupliziert)
+        quirk_entities = list(dict.fromkeys(manual + self._auto_quirk_entities))
         if not quirk_entities:
             return
         tasks = []
@@ -745,7 +847,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                     "switch", "turn_off", {"entity_id": entity_id}, blocking=True,
                 ))
         if tasks:
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    _LOGGER.debug("ThermoSmart '%s': Quirk-Deaktivierung fehlgeschlagen: %s", self.zone_name, result)
 
     async def _async_valve_maintenance(self, cfg: dict, recommendation: dict) -> None:
         """Ventil-Wartung: einmal pro Woche Ventil vollständig auf und zu fahren.
@@ -795,7 +900,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                     self.hass.states.get(eid).state not in ("unavailable", "unknown")
                 ]
                 if tasks:
-                    await asyncio.gather(*tasks)
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
                 # Warten
                 await asyncio.sleep(VALVE_MAINTENANCE_DURATION_SEC)
@@ -812,7 +917,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                     self.hass.states.get(eid).state not in ("unavailable", "unknown")
                 ]
                 if tasks:
-                    await asyncio.gather(*tasks)
+                    await asyncio.gather(*tasks, return_exceptions=True)
 
                 _LOGGER.info(
                     "ThermoSmart '%s': Ventil-Wartung abgeschlossen → zurück auf %.1f°C",
@@ -842,8 +947,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         # Parallel alle TRVs gleichzeitig ansteuern (wie Better Thermostat)
         tasks = []
         for entity_id in cfg.get("climate_entities", []):
-            state = self.hass.states.get(entity_id)
-            if not state or state.state in ("unavailable", "unknown"):
+            state = self._get_trv_state(entity_id)
+            if state is None:
                 continue
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
@@ -863,7 +968,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             ))
 
         if tasks:
-            await asyncio.gather(*tasks)
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    _LOGGER.debug("ThermoSmart '%s': Temperatur-Setpoint fehlgeschlagen: %s", self.zone_name, result)
 
         # Boost-Tracking für Überschieß-Erkennung
         if trv_setpoint > target:

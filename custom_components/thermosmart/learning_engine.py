@@ -370,7 +370,7 @@ class LearningEngine:
         weather_data: dict,
         heat_rate: float | None,
     ) -> None:
-        """Beobachtet welchen TRV-Setpoint ein externer Regler (z.B. BT) verwendet
+        """Beobachtet welchen TRV-Setpoint der aktive Regler verwendet
         und welche Heizrate dabei resultiert.
 
         Lernt: setpoint_efficiency = heat_rate / (trv_setpoint - indoor_temp)

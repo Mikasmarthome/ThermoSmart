@@ -25,10 +25,9 @@ ThermoSmart is not a classic thermostat controller.
 
 It **learns the thermal behaviour of your building** — how fast each room heats up and cools down, how much solar radiation or wind affects the heat demand, and what temperatures you actually want at which times of day. It uses this knowledge together with weather forecasts, presence detection, and multi-factor AI to **predict and optimise your heating before you need it**.
 
-**Key difference to Better Thermostat or Versatile Thermostat:**
-Those integrations control TRVs precisely. ThermoSmart learns *why* and *when* to heat — and gets smarter over time.
+ThermoSmart learns *why* and *when* to heat — and gets smarter over time.
 
-**Works alongside any thermostat integration.** In Observation mode, ThermoSmart watches what your existing controller (BT, VT, or any other) does and learns from it — without touching your setup. Switch to Active mode when you're ready.
+**Works alongside your existing setup.** In Observation mode, ThermoSmart watches what your current controller does and learns from it — without touching anything. Switch to Active mode when you're ready.
 
 **One config entry = one heating zone.** Multiple zones are fully independent.
 
@@ -47,7 +46,7 @@ Any Home Assistant `climate` entity that supports `set_temperature` — includin
 - Eurotronic Spirit Z-Wave
 - Tuya TRVs
 - Generic Z-Wave / Zigbee TRVs exposed as climate entities
-- Virtual thermostats (Better Thermostat, Versatile Thermostat, Generic Thermostat)
+- Any HA virtual thermostat exposed as a climate entity
 
 > If you test ThermoSmart with a device not listed here, please open an issue and let us know!
 
@@ -140,7 +139,7 @@ ThermoSmart continuously learns the thermal behaviour of each zone.
 3. Phase 2 (50–150): Learning algorithm dominates
 4. Phase 3 (150+): Fully personalised
 
-**Works with any thermostat integration.** In Observation mode, ThermoSmart reads setpoints from your existing controller (Better Thermostat, Versatile Thermostat, etc.) and learns from them. When you switch to Active mode, it already knows your heating system.
+**Works with your existing setup.** In Observation mode, ThermoSmart reads TRV setpoints from any active climate entity and learns from them. When you switch to Active mode, it already knows your heating system.
 
 ---
 
@@ -355,8 +354,8 @@ Self-correction:
 **Can I use ThermoSmart without weather data?**
 Yes. Without a weather entity or sensors, ThermoSmart uses physical estimates based on standard German residential building parameters. Accuracy improves when weather data is provided.
 
-**Can ThermoSmart learn from Better Thermostat / Versatile Thermostat?**
-Yes. In Observation mode, ThermoSmart reads TRV setpoints from any climate entity and learns from them. Just add your BT or VT entities as the zone's climate entities and run in Observation mode for a few weeks before switching to Active mode.
+**Can ThermoSmart learn from an existing heating setup?**
+Yes. In Observation mode, ThermoSmart reads TRV setpoints from any climate entity and learns from them. Add your existing thermostat entities as the zone's climate entities and run in Observation mode for a few weeks before switching to Active mode.
 
 **What if a temperature sensor goes offline?**
 ThermoSmart automatically averages the remaining available sensors. The zone continues without interruption. Only if all sensors are offline does ThermoSmart pause temperature-based decisions for that zone.

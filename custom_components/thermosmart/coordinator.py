@@ -720,7 +720,7 @@ class ThermoSmartCoordinator(
     async def _async_observe_trv_setpoints(
         self, cfg: dict, recommendation: dict, weather_data: dict
     ) -> None:
-        """TRV-Setpoints von externem Regler oder eigener Steuerung beobachten und lernen."""
+        """TRV-Setpoints im Beobachtungsmodus oder der aktiven Steuerung erfassen und lernen."""
         current_temp = recommendation.get("current_temp")
         target = recommendation.get("adjusted_target")
         if current_temp is None or target is None:

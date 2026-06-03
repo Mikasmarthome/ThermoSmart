@@ -1,0 +1,124 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Arc gradient: warm orange von links nach rechts -->
+    <linearGradient id="arcGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%"   stop-color="#ffb347"/>
+      <stop offset="50%"  stop-color="#e8573f"/>
+      <stop offset="100%" stop-color="#c0392b"/>
+    </linearGradient>
+
+    <!-- Radialer Glow hinter dem Ring -->
+    <radialGradient id="bgGlow" cx="50%" cy="58%" r="42%">
+      <stop offset="0%"   stop-color="#e8573f" stop-opacity="0.28"/>
+      <stop offset="100%" stop-color="#e8573f" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Quecksilber-Gradient im Thermometer -->
+    <linearGradient id="mercuryGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+      <stop offset="0%"   stop-color="#c0392b"/>
+      <stop offset="100%" stop-color="#ff6b4a"/>
+    </linearGradient>
+
+    <!-- Weicher Glow-Filter für den Arc -->
+    <filter id="arcGlow" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Weicher Glow für Bulb -->
+    <filter id="bulbGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- ── Hintergrund ─────────────────────────────────────── -->
+  <circle cx="256" cy="256" r="256" fill="#1c1c1e"/>
+
+  <!-- Subtiler Glow hinter Thermometer -->
+  <circle cx="256" cy="270" r="200" fill="url(#bgGlow)"/>
+
+  <!-- ── Äußerer Arc (Spur) ──────────────────────────────── -->
+  <!--
+    cx=256, cy=256, r=190
+    Start: 240°  → (cos150°, sin150°) = (-0.866, 0.5)
+           x = 256 + 190×(-0.866) = 91.5
+           y = 256 + 190×0.5      = 351
+    Ende:  480°  → (cos30°, sin30°)  = (0.866, 0.5)
+           x = 256 + 190×0.866  = 420.5
+           y = 256 + 190×0.5    = 351
+    large-arc=1 (240°>180°), sweep=1 (clockwise)
+  -->
+  <path d="M 91.5 351 A 190 190 0 1 1 420.5 351"
+        fill="none" stroke="#2c2c2e" stroke-width="30" stroke-linecap="round"/>
+
+  <!-- ── Arc-Füllung (orange) ───────────────────────────── -->
+  <path d="M 91.5 351 A 190 190 0 1 1 420.5 351"
+        fill="none" stroke="url(#arcGrad)" stroke-width="30" stroke-linecap="round"
+        filter="url(#arcGlow)"/>
+
+  <!-- Innerer Akzent-Arc (dünner, leicht transparent) -->
+  <!--
+    r=155: Start(91.7, 333.5) Ende(420.3, 333.5)
+    x = 256 + 155×(-0.866) = 256 - 134.2 = 121.8
+    y = 256 + 155×0.5      = 256 + 77.5  = 333.5
+  -->
+  <path d="M 121.8 333.5 A 155 155 0 1 1 390.2 333.5"
+        fill="none" stroke="#e8573f" stroke-width="3" stroke-linecap="round"
+        opacity="0.30"/>
+
+  <!-- ── Thermometer-Schaft ─────────────────────────────── -->
+  <!-- Äußeres Gehäuse (weiß/hellgrau) -->
+  <rect x="232" y="118" width="48" height="178" rx="24"
+        fill="#eceff1"/>
+
+  <!-- Quecksilber-Füllung (beginnt bei ~60% Höhe) -->
+  <rect x="237" y="208" width="38" height="98" rx="19"
+        fill="url(#mercuryGrad)"/>
+
+  <!-- Schaft-Glanzlinie links -->
+  <rect x="236" y="130" width="8" height="140" rx="4"
+        fill="white" opacity="0.45"/>
+
+  <!-- ── Temperatur-Strichmarken ────────────────────────── -->
+  <line x1="222" y1="165" x2="232" y2="165" stroke="#90a4ae" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="227" y1="190" x2="232" y2="190" stroke="#90a4ae" stroke-width="2"   stroke-linecap="round"/>
+  <line x1="222" y1="215" x2="232" y2="215" stroke="#90a4ae" stroke-width="3.5" stroke-linecap="round"/>
+  <line x1="227" y1="240" x2="232" y2="240" stroke="#90a4ae" stroke-width="2"   stroke-linecap="round"/>
+  <line x1="222" y1="265" x2="232" y2="265" stroke="#90a4ae" stroke-width="3.5" stroke-linecap="round"/>
+
+  <!-- ── Bulb (Thermometer-Kugel) ──────────────────────── -->
+  <!-- Glow hinter Bulb -->
+  <circle cx="256" cy="338" r="50" fill="#e8573f" filter="url(#bulbGlow)" opacity="0.5"/>
+  <!-- Bulb selbst -->
+  <circle cx="256" cy="338" r="44" fill="url(#mercuryGrad)"/>
+  <!-- Bulb-Rand (passt an Schaft) -->
+  <circle cx="256" cy="338" r="44" fill="none" stroke="#eceff1" stroke-width="3" opacity="0.6"/>
+  <!-- Glanzpunkt auf Bulb -->
+  <ellipse cx="242" cy="322" rx="11" ry="8" fill="white" opacity="0.30"/>
+
+  <!-- ── Smart-Indikator: 3 Pulse-Punkte (oben) ─────────── -->
+  <!--
+    Drei Punkte im oberen Bereich des Rings –
+    symbolisieren Lernen / Konnektivität / KI
+  -->
+  <!-- Links -->
+  <circle cx="192" cy="155" r="10" fill="#ffb347" opacity="0.85"/>
+  <circle cx="192" cy="155" r="16" fill="#ffb347" opacity="0.15"/>
+  <!-- Mitte -->
+  <circle cx="256" cy="136" r="12" fill="#ff8c42" opacity="0.90"/>
+  <circle cx="256" cy="136" r="20" fill="#ff8c42" opacity="0.15"/>
+  <!-- Rechts -->
+  <circle cx="320" cy="155" r="10" fill="#ffb347" opacity="0.85"/>
+  <circle cx="320" cy="155" r="16" fill="#ffb347" opacity="0.15"/>
+
+  <!-- Verbindungslinien zwischen den Punkten (sehr subtil) -->
+  <line x1="199" y1="150" x2="246" y2="141" stroke="#ff8c42" stroke-width="1.5" opacity="0.25" stroke-linecap="round"/>
+  <line x1="266" y1="141" x2="313" y2="150" stroke="#ff8c42" stroke-width="1.5" opacity="0.25" stroke-linecap="round"/>
+</svg>

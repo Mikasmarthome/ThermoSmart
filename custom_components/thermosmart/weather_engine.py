@@ -13,6 +13,9 @@ from .const import (
     WEATHER_REDUCE_OFFSET,
     WIND_THRESHOLD_MS,
     WIND_CHILL_BOOST,
+    SOLAR_GAIN_THRESHOLD_W,
+    SOLAR_GAIN_MIN_OUTDOOR_C,
+    SOLAR_GAIN_MAX_REDUCTION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -216,9 +219,8 @@ class WeatherEngine:
 
         # ── Sonneneinstrahlungs-Bonus ─────────────────────────────────
         # Sonne heizt den Raum zusätzlich → weitere Reduktion
-        if solar > 300 and outdoor > 3 and factor > 0:
-            # >300 W/m² und nicht zu kalt → bis zu 30% extra Reduktion
-            solar_reduction = min((solar - 300) / 1000.0, 0.30)
+        if solar > SOLAR_GAIN_THRESHOLD_W and outdoor > SOLAR_GAIN_MIN_OUTDOOR_C and factor > 0:
+            solar_reduction = min((solar - SOLAR_GAIN_THRESHOLD_W) / 1000.0, SOLAR_GAIN_MAX_REDUCTION)
             factor = max(0.0, factor - solar_reduction)
             _LOGGER.debug(
                 "Solarunterdrückung: %.0f W/m² → −%.0f%% Heizfaktor",

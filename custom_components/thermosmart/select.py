@@ -61,6 +61,10 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
         last = await self.async_get_last_state()
         if last and last.state in self._attr_options:
             self._mode = LABEL_TO_MODE.get(last.state, HEATING_MODE_AUTO)
+            # Nur zum Coordinator syncen wenn der noch im Default-Modus ist –
+            # Globaler Urlaubsschalter (läuft vor select) hat sonst Vorrang.
+            if self._coordinator._mode == HEATING_MODE_AUTO:
+                self._coordinator.set_mode(self._mode)
 
     @property
     def current_option(self) -> str:

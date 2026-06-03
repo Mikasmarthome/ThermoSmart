@@ -220,10 +220,6 @@ class LearningEngine:
 
     # ── API ─────────────────────────────────────────────────────────────
 
-    def set_enabled(self, enabled: bool) -> None:
-        """Veraltet – set_zone_enabled verwenden."""
-        pass
-
     def set_zone_enabled(self, zone_id: str, enabled: bool) -> None:
         """Lernmodus für eine einzelne Zone setzen."""
         self._zone_enabled[zone_id] = enabled

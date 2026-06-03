@@ -42,7 +42,10 @@ CONF_SCHED_WE_NIGHT    = "sched_we_night"     # Wochenende: Nacht     → night_
 VALVE_MAINTENANCE_HOUR = 3     # 03:00 Uhr nachts
 VALVE_MAINTENANCE_WEEKDAY = 6  # Sonntag (0=Mo … 6=So)
 VALVE_MAINTENANCE_BOOST_TEMP = 28.0  # °C für Vollöffnung
-VALVE_MAINTENANCE_DURATION_SEC = 30   # 30 Sekunden offen lassen (Ventil üben)
+VALVE_MAINTENANCE_DURATION_SEC = 30        # Sekunden offen (Winter/Beobachtung)
+VALVE_MAINTENANCE_DURATION_SUMMER_SEC = 8  # Sekunden offen (Sommer – kurze Übung)
+
+CONF_SUMMER_BOOLEAN = "summer_boolean"  # Manueller Sommer-Override (wie Urlaubsschalter)
 
 # Default values
 DEFAULT_WEATHER_ENTITY = "weather.home"

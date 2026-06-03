@@ -51,6 +51,8 @@ from .const import (
     VALVE_MAINTENANCE_WEEKDAY,
     VALVE_MAINTENANCE_BOOST_TEMP,
     VALVE_MAINTENANCE_DURATION_SEC,
+    VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
+    CONF_SUMMER_BOOLEAN,
     RESIDUAL_HEAT_ZONE,
     EMA_1H_ALPHA,
     HEATING_MODE_AUTO,
@@ -265,6 +267,9 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         vacation_entity = cfg.get(CONF_VACATION_BOOLEAN, "")
         if vacation_entity:
             presence.add(vacation_entity)
+        summer_entity = cfg.get(CONF_SUMMER_BOOLEAN, "")
+        if summer_entity:
+            presence.add(summer_entity)   # Sofort-Reaktion auf Summer-Boolean
         climate_entities: set[str] = set(e for e in cfg.get("climate_entities", []) if e)
 
         # Fenster + Personen + Urlaub → Sofort-Refresh
@@ -495,12 +500,35 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
     # ── Sommer-Erkennung ─────────────────────────────────────────────
 
     def _update_summer_mode(self, weather_data: dict) -> None:
-        """72h-Rollmittelwert der Außentemperatur → automatische Sommer/Winter-Erkennung.
+        """Sommer-Erkennung: automatisch (72h-Ø) oder manuell via Summer Boolean.
 
-        Verhindert Fehlauslösung durch einzelne Ausreißer-Tage:
-          - Erst nach SEASON_HOURS Stunden konsistent >SUMMER_THRESHOLD → Sommer
-          - Erst nach SEASON_HOURS Stunden konsistent <WINTER_THRESHOLD → Winter
+        Automatisch: 72h-Rollmittelwert der Außentemperatur
+          - >SUMMER_THRESHOLD → Sommer
+          - <WINTER_THRESHOLD → Winter
+
+        Manuell: wenn summer_boolean auf "on" → sofortiger Sommer-Modus.
+        Der Boolean hat Vorrang vor der automatischen Erkennung.
         """
+        cfg = self.zone_cfg
+        prev_summer = self._is_summer
+
+        # Manueller Override via Summer Boolean
+        summer_entity = cfg.get(CONF_SUMMER_BOOLEAN, "")
+        if summer_entity:
+            state = self.hass.states.get(summer_entity)
+            if state and state.state == "on":
+                self._is_summer = True
+                if not prev_summer:
+                    _LOGGER.warning(
+                        "ThermoSmart '%s': Sommer-Modus manuell aktiviert via %s",
+                        self.zone_name, summer_entity,
+                    )
+                return
+            elif state and state.state == "off":
+                # Boolean explizit off → automatische Erkennung greift
+                pass
+
+        # Automatische Erkennung via 72h-Ø
         outdoor = weather_data.get("temperature")
         if outdoor is None:
             return
@@ -511,7 +539,6 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
         avg = sum(self._outdoor_temp_history) / len(self._outdoor_temp_history)
 
-        prev_summer = self._is_summer
         if avg >= SUMMER_THRESHOLD:
             self._is_summer = True
         elif avg <= WINTER_THRESHOLD:
@@ -1158,7 +1185,12 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
         self._last_maintenance = now
         self._maintenance_running = True
-        target_after = recommendation.get("adjusted_target") or cfg.get("comfort_temp", 21.0)
+        # Im Sommer: kurze Übung (8s) – kein langer Durchfluss bei ausgeschalteter Heizung
+        # Im Winter/Beobachtung: volle Dauer (30s) für gründliche Ventilübung
+        duration = VALVE_MAINTENANCE_DURATION_SUMMER_SEC if self._is_summer else VALVE_MAINTENANCE_DURATION_SEC
+        target_after = recommendation.get("adjusted_target") or cfg.get(
+            "vacation_temp" if self._is_summer else "comfort_temp", 12.0 if self._is_summer else 21.0
+        )
         climate_entities = cfg.get("climate_entities", [])
 
         _LOGGER.info(
@@ -1182,8 +1214,8 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
-                # Warten
-                await asyncio.sleep(VALVE_MAINTENANCE_DURATION_SEC)
+                # Warten (Sommer: kurz, Winter/Beobachtung: länger)
+                await asyncio.sleep(duration)
 
                 # Zurück auf Zieltemperatur
                 tasks = [

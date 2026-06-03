@@ -21,6 +21,7 @@ from .const import (
     CONF_VACATION_TEMP,
     CONF_ECO_TEMP,
     CONF_VACATION_BOOLEAN,
+    CONF_SUMMER_BOOLEAN,
     CONF_VALVE_MAINTENANCE,
     CONF_NO_OFF_FALLBACK,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
@@ -137,6 +138,10 @@ def _schema_presence(d: dict) -> vol.Schema:
 
         vol.Required(CONF_LEARNING_ENABLED, default=d.get(CONF_LEARNING_ENABLED, DEFAULT_LEARNING_ENABLED)):
             selector.BooleanSelector(),
+
+        vol.Optional(CONF_SUMMER_BOOLEAN) if not d.get(CONF_SUMMER_BOOLEAN) else
+        vol.Optional(CONF_SUMMER_BOOLEAN, default=d.get(CONF_SUMMER_BOOLEAN)):
+            selector.EntitySelector(selector.EntitySelectorConfig()),
     })
 
 

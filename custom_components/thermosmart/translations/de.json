@@ -45,10 +45,12 @@
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone (Standard: zone.home)",
           "vacation_boolean": "Urlaubsschalter (optional)",
-          "learning_enabled": "Lernalgorithmus aktivieren"
+          "learning_enabled": "Lernalgorithmus aktivieren",
+          "summer_boolean": "Sommer-Schalter (optional) – Sofort-Override für Sommer-Modus"
         },
         "data_description": {
           "vacation_boolean": "Beliebige Entity die auf 'on' wechselt wenn Urlaub aktiv ist (input_boolean, binary_sensor, calendar …). Kann leer bleiben.",
+          "summer_boolean": "Wenn diese Entity 'on' ist, aktiviert ThermoSmart sofort den Sommer-Modus – ohne auf den 72h-Temperatur-Durchschnitt zu warten. Kann leer bleiben.",
           "learning_enabled": "ThermoSmart lernt Heizraten, Abkühlraten und optimale Temperaturen für diese Zone."
         }
       },
@@ -122,10 +124,12 @@
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone",
           "vacation_boolean": "Urlaubsschalter (optional)",
-          "learning_enabled": "Lernalgorithmus aktivieren"
+          "learning_enabled": "Lernalgorithmus aktivieren",
+          "summer_boolean": "Sommer-Schalter (optional)"
         },
         "data_description": {
-          "vacation_boolean": "Beliebige Entity die auf 'on' wechselt wenn Urlaub aktiv ist. Kann leer bleiben."
+          "vacation_boolean": "Beliebige Entity die auf 'on' wechselt wenn Urlaub aktiv ist. Kann leer bleiben.",
+          "summer_boolean": "Wenn 'on': sofortiger Sommer-Modus ohne 72h-Wartezeit. Kann leer bleiben."
         }
       },
       "weather": {

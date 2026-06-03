@@ -148,7 +148,7 @@ def _zone_schema(d: dict | None = None) -> vol.Schema:
             ),
         vol.Optional(CONF_VACATION_BOOLEAN, default=d.get(CONF_VACATION_BOOLEAN, "")):
             selector.EntitySelector(
-                selector.EntitySelectorConfig(domain="input_boolean")
+                selector.EntitySelectorConfig()
             ),
 
         # ── Wetter-Entity ─────────────────────────────────────────────

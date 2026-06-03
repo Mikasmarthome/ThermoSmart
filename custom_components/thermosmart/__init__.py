@@ -31,6 +31,7 @@ from .const import (
     CONF_CALIBRATION_ENTITIES,
     CONF_QUIRK_ENTITIES,
     CONF_VALVE_MAINTENANCE,
+    AUTO_QUIRK_PATTERNS,
     TEMP_NIGHT,
     TEMP_FROST_PROTECTION,
     SUMMER_THRESHOLD,
@@ -132,7 +133,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._active_control: bool = False
         self._mode: str = HEATING_MODE_AUTO
         self._override: float | None = None
-        self._listeners: list = []
+        self._event_unsub: list = []
         self._window_open_at: dict[str, datetime] = {}
         self._window_close_at: dict[str, datetime] = {}
         self._boost_active: dict[str, dict] = {}
@@ -217,16 +218,16 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         cancel = async_track_state_change_event(
             self.hass, list(all_tracked), _handle_state_change
         )
-        self._listeners.append(cancel)
+        self._event_unsub.append(cancel)
         _LOGGER.debug(
             "ThermoSmart '%s': Event-Listener für %d Entities registriert",
             self.zone_name, len(all_tracked),
         )
 
     def cleanup_event_listeners(self) -> None:
-        for cancel in self._listeners:
+        for cancel in self._event_unsub:
             cancel()
-        self._listeners.clear()
+        self._event_unsub.clear()
 
     # ── Hauptschleife ────────────────────────────────────────────────
 

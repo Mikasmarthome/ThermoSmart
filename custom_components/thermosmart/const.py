@@ -19,6 +19,13 @@ CONF_CALIBRATION_ENTITIES = "calibration_entities"
 CONF_QUIRK_ENTITIES = "quirk_entities"
 CONF_VALVE_MAINTENANCE = "valve_maintenance"
 
+# Bekannte Switch-Muster die bei TRVs automatisch deaktiviert werden sollen
+AUTO_QUIRK_PATTERNS = [
+    "window_detection",   # Sonoff TRVZB, Danfoss – eigene Fenstererkennung
+    "child_lock",         # Sperrt externe Befehle → ThermoSmart kann nichts setzen
+    "frost_protection",   # Interner Frostschutz – kollidiert mit ThermoSmart
+]
+
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
 CONF_SCHED_WD_DAY      = "sched_wd_day"       # Werktag: Tagsüber   → sched_day_temp

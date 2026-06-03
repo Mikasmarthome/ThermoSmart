@@ -1,0 +1,304 @@
+"""TRV control, calibration and quirk management – ThermoSmart TRVControlMixin."""
+from __future__ import annotations
+
+import asyncio
+import logging
+
+from homeassistant.helpers import entity_registry as er
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    AUTO_QUIRK_PATTERNS,
+    AUTO_CALIBRATION_PATTERN,
+    CONF_CALIBRATION_ENTITIES,
+    CONF_QUIRK_ENTITIES,
+    WINDOW_OPEN_SETPOINT,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class TRVControlMixin:
+    """TRV-Steuerung, automatische Kalibrierung, Quirk-Management und Geräteerkennung."""
+
+    # ── Geräteerkennung ──────────────────────────────────────────────
+
+    async def async_detect_device_entities(self) -> None:
+        """Erkennt Quirk-Switches und Kalibrierungs-Entities via Device Registry."""
+        cfg = self.zone_cfg
+        climate_entities = cfg.get("climate_entities", [])
+        if not climate_entities:
+            return
+
+        ent_reg = er.async_get(self.hass)
+
+        device_to_climate: dict[str, str] = {}
+        for entity_id in climate_entities:
+            entry = ent_reg.async_get(entity_id)
+            if entry and entry.device_id:
+                device_to_climate[entry.device_id] = entity_id
+
+        if not device_to_climate:
+            return
+
+        quirks: list[str] = []
+        cal_map: dict[str, str] = {}
+
+        for device_id, climate_id in device_to_climate.items():
+            for entry in er.async_entries_for_device(ent_reg, device_id):
+                domain = entry.entity_id.split(".")[0]
+
+                if domain == "switch":
+                    for pattern in AUTO_QUIRK_PATTERNS:
+                        if pattern in entry.entity_id:
+                            quirks.append(entry.entity_id)
+                            break
+
+                elif domain == "number":
+                    if AUTO_CALIBRATION_PATTERN in entry.entity_id:
+                        cal_map[climate_id] = entry.entity_id
+
+        manual_quirks = set(cfg.get(CONF_QUIRK_ENTITIES, []))
+        new_quirks = [e for e in quirks if e not in manual_quirks]
+        if new_quirks:
+            _LOGGER.info("ThermoSmart '%s': Quirk-Autodetect: %s", self.zone_name, new_quirks)
+        if cal_map:
+            _LOGGER.info("ThermoSmart '%s': Kalibrierungs-Autodetect: %s", self.zone_name, cal_map)
+
+        self._auto_quirk_entities = quirks
+        self._auto_calibration_map = cal_map
+
+    # ── TRV-Offline-Tracking ─────────────────────────────────────────
+
+    def _get_trv_state(self, entity_id: str):
+        """Gibt TRV-State zurück; loggt Offline/Online-Übergänge."""
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in ("unavailable", "unknown"):
+            if entity_id not in self._trv_offline:
+                self._trv_offline.add(entity_id)
+                _LOGGER.warning(
+                    "ThermoSmart '%s': TRV %s nicht erreichbar – Steuerung ausgesetzt",
+                    self.zone_name, entity_id,
+                )
+            return None
+        if entity_id in self._trv_offline:
+            self._trv_offline.discard(entity_id)
+            _LOGGER.info(
+                "ThermoSmart '%s': TRV %s wieder erreichbar",
+                self.zone_name, entity_id,
+            )
+        return state
+
+    # ── Watchdog ─────────────────────────────────────────────────────
+
+    async def _watchdog_hvac(self, cfg: dict, recommendation: dict) -> None:
+        """TRVs die ungewollt auf 'off' gefallen sind auf 'heat' zurücksetzen."""
+        if recommendation.get("window_open"):
+            return
+        if recommendation.get("forecast_suppression", 0) >= 100:
+            return
+
+        for entity_id in cfg.get("climate_entities", []):
+            state = self._get_trv_state(entity_id)
+            if state is None:
+                continue
+            if state.state == "off":
+                _LOGGER.info(
+                    "ThermoSmart Watchdog '%s': %s ist 'off' → stelle auf 'heat' zurück",
+                    self.zone_name, entity_id,
+                )
+                await self.hass.services.async_call(
+                    "climate", "set_hvac_mode",
+                    {"entity_id": entity_id, "hvac_mode": "heat"},
+                    blocking=False,
+                )
+
+    # ── Kalibrierung ─────────────────────────────────────────────────
+
+    async def _async_calibrate_trvs(self, cfg: dict, recommendation: dict) -> None:
+        """Lokale TRV-Kalibrierung: Offset zwischen Raumsensor und TRV-Sensor.
+
+        EMA-geglättet (α=0.25), Schreiben nur bei Änderung > 0.5°C.
+        Überspringt wenn Heizkörper gerade heizt (Sensor verfälscht durch Radiatorkontakt).
+        """
+        room_temp = recommendation.get("current_temp")
+        if room_temp is None:
+            return
+
+        climate_entities = cfg.get("climate_entities", [])
+        manual_cal = cfg.get(CONF_CALIBRATION_ENTITIES, [])
+
+        if not self._auto_calibration_map and not manual_cal:
+            return
+
+        for i, climate_id in enumerate(climate_entities):
+            cal_entity = self._auto_calibration_map.get(climate_id)
+            if not cal_entity:
+                cal_entity = manual_cal[i] if i < len(manual_cal) else None
+            if not cal_entity:
+                continue
+
+            trv_temp: float | None = None
+            trv_state = self._get_trv_state(climate_id)
+            if trv_state:
+                try:
+                    trv_temp = float(trv_state.attributes.get("current_temperature", 0))
+                except (TypeError, ValueError):
+                    pass
+
+            if trv_temp is None:
+                continue
+
+            if trv_temp - room_temp > 3.0:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Kalibrierung %s übersprungen – TRV %.1f°C > Raum %.1f°C",
+                    self.zone_name, cal_entity, trv_temp, room_temp,
+                )
+                continue
+
+            raw_offset = room_temp - trv_temp
+
+            if abs(raw_offset) > 7.0:
+                _LOGGER.warning(
+                    "ThermoSmart '%s': Kalibrierungs-Offset %.1f°C für %s unplausibel – übersprungen",
+                    self.zone_name, raw_offset, cal_entity,
+                )
+                continue
+
+            prev = self._calibration_offsets.get(cal_entity, raw_offset)
+            smoothed = round(0.25 * raw_offset + 0.75 * prev, 1)
+            self._calibration_offsets[cal_entity] = smoothed
+
+            cal_state = self.hass.states.get(cal_entity)
+            if cal_state is None:
+                continue
+            try:
+                current_cal = float(cal_state.state)
+            except (TypeError, ValueError):
+                current_cal = 0.0
+
+            if abs(smoothed - current_cal) < 0.5:
+                continue
+
+            clamped = max(-5.0, min(5.0, smoothed))
+            _LOGGER.info(
+                "ThermoSmart '%s': TRV-Kalibrierung %s → %.1f°C (Raum=%.1f°C, TRV=%.1f°C)",
+                self.zone_name, cal_entity, clamped, room_temp, trv_temp,
+            )
+            self.hass.async_create_task(self.hass.services.async_call(
+                "number", "set_value",
+                {"entity_id": cal_entity, "value": clamped},
+                blocking=False,
+            ))
+
+    # ── Quirks ───────────────────────────────────────────────────────
+
+    async def _async_apply_quirks(self, cfg: dict) -> None:
+        """TRV-interne Logiken deaktivieren die mit ThermoSmart konkurrieren."""
+        manual = cfg.get(CONF_QUIRK_ENTITIES, [])
+        quirk_entities = list(dict.fromkeys(manual + self._auto_quirk_entities))
+        if not quirk_entities:
+            return
+        tasks = []
+        for entity_id in quirk_entities:
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+            if state.state == "on":
+                _LOGGER.info(
+                    "ThermoSmart '%s': Quirk deaktivieren %s (war 'on')",
+                    self.zone_name, entity_id,
+                )
+                tasks.append(self.hass.services.async_call(
+                    "switch", "turn_off", {"entity_id": entity_id}, blocking=True,
+                ))
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': Quirk-Deaktivierung fehlgeschlagen: %s",
+                        self.zone_name, result,
+                    )
+
+    # ── Temperatur schreiben ──────────────────────────────────────────
+
+    async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
+        """TRV-Setpoints schreiben oder 5°C bei geöffnetem Fenster setzen."""
+        target = recommendation.get("adjusted_target")
+
+        if target is None:
+            if recommendation.get("window_open"):
+                frost_temp = WINDOW_OPEN_SETPOINT
+                tasks = []
+                for entity_id in cfg.get("climate_entities", []):
+                    state = self._get_trv_state(entity_id)
+                    if state is None:
+                        continue
+                    try:
+                        if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
+                            continue
+                    except (TypeError, ValueError):
+                        pass
+                    self._last_written_setpoints[entity_id] = frost_temp
+                    tasks.append(self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": entity_id, "temperature": frost_temp},
+                        blocking=True,
+                    ))
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+            return
+
+        if not (5.0 <= target <= 30.0):
+            _LOGGER.warning(
+                "ThermoSmart '%s': Ziel %.1f°C außerhalb Sicherheitsbereich",
+                self.zone_name, target,
+            )
+            return
+
+        trv_setpoint = recommendation.get("trv_setpoint", target)
+        tolerance = cfg.get("temp_tolerance", 0.5)
+
+        tasks = []
+        for entity_id in cfg.get("climate_entities", []):
+            state = self._get_trv_state(entity_id)
+            if state is None:
+                continue
+            current_setpoint = state.attributes.get("temperature")
+            if current_setpoint is not None:
+                try:
+                    if abs(float(current_setpoint) - trv_setpoint) < tolerance:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            _LOGGER.debug(
+                "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",
+                self.zone_name, entity_id, trv_setpoint, target, trv_setpoint - target,
+            )
+            self._last_written_setpoints[entity_id] = trv_setpoint
+            tasks.append(self.hass.services.async_call(
+                "climate", "set_temperature",
+                {"entity_id": entity_id, "temperature": trv_setpoint},
+                blocking=True,
+            ))
+
+        if tasks:
+            results = await asyncio.gather(*tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, Exception):
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': Temperatur-Setpoint fehlgeschlagen: %s",
+                        self.zone_name, result,
+                    )
+
+        if trv_setpoint > target:
+            if self.zone_id not in self._boost_active:
+                self._boost_active[self.zone_id] = {
+                    "target": target,
+                    "setpoint": trv_setpoint,
+                    "started": dt_util.now(),
+                }
+            else:
+                self._boost_active[self.zone_id]["target"] = target
+                self._boost_active[self.zone_id]["setpoint"] = trv_setpoint

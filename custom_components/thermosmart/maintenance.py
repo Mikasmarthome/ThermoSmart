@@ -1,0 +1,101 @@
+"""Valve maintenance – ThermoSmart MaintenanceMixin."""
+from __future__ import annotations
+
+import asyncio
+import logging
+
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CONF_VALVE_MAINTENANCE,
+    VALVE_MAINTENANCE_HOUR,
+    VALVE_MAINTENANCE_WEEKDAY,
+    VALVE_MAINTENANCE_BOOST_TEMP,
+    VALVE_MAINTENANCE_DURATION_SEC,
+    VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
+)
+
+_LOGGER = logging.getLogger(__name__)
+
+
+class MaintenanceMixin:
+    """Wöchentliche Ventil-Übung gegen Festklemmen durch Kalk oder Gummi."""
+
+    async def _async_valve_maintenance(self, cfg: dict, recommendation: dict) -> None:
+        """Ventil vollständig auf und zu fahren wenn es lange stillstand.
+
+        Wird NUR ausgeführt wenn Ventile wahrscheinlich längere Zeit stillstanden:
+          - Sommer-Modus: Heizung komplett aus, Ventile wochenlang nicht bewegt
+          - Beobachtungsmodus: TS steuert nicht
+        Im Winter mit aktiver Steuerung bewegen sich Ventile ohnehin regelmäßig.
+        """
+        if not cfg.get(CONF_VALVE_MAINTENANCE, True):
+            return
+        if self._maintenance_running:
+            return
+
+        valve_likely_idle = self._is_summer or not self._active_control
+        if not valve_likely_idle:
+            return
+
+        now = dt_util.now()
+        if now.weekday() != VALVE_MAINTENANCE_WEEKDAY or now.hour != VALVE_MAINTENANCE_HOUR:
+            return
+
+        # Nur einmal pro Woche auslösen
+        if self._last_maintenance is not None:
+            if (now - self._last_maintenance).days < 6:
+                return
+
+        self._last_maintenance = now
+        self._maintenance_running = True
+        duration = VALVE_MAINTENANCE_DURATION_SUMMER_SEC if self._is_summer else VALVE_MAINTENANCE_DURATION_SEC
+        target_after = recommendation.get("adjusted_target") or cfg.get(
+            "vacation_temp" if self._is_summer else "comfort_temp",
+            12.0 if self._is_summer else 21.0,
+        )
+        climate_entities = cfg.get("climate_entities", [])
+
+        _LOGGER.info(
+            "ThermoSmart '%s': Ventil-Wartung gestartet – fahre auf %.0f°C",
+            self.zone_name, VALVE_MAINTENANCE_BOOST_TEMP,
+        )
+
+        async def _run_maintenance() -> None:
+            try:
+                tasks = [
+                    self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": eid, "temperature": VALVE_MAINTENANCE_BOOST_TEMP},
+                        blocking=True,
+                    )
+                    for eid in climate_entities
+                    if self.hass.states.get(eid)
+                    and self.hass.states.get(eid).state not in ("unavailable", "unknown")
+                ]
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                await asyncio.sleep(duration)
+
+                tasks = [
+                    self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": eid, "temperature": target_after},
+                        blocking=True,
+                    )
+                    for eid in climate_entities
+                    if self.hass.states.get(eid)
+                    and self.hass.states.get(eid).state not in ("unavailable", "unknown")
+                ]
+                if tasks:
+                    await asyncio.gather(*tasks, return_exceptions=True)
+
+                _LOGGER.info(
+                    "ThermoSmart '%s': Ventil-Wartung abgeschlossen → zurück auf %.1f°C",
+                    self.zone_name, target_after,
+                )
+            finally:
+                self._maintenance_running = False
+
+        self.hass.async_create_task(_run_maintenance())

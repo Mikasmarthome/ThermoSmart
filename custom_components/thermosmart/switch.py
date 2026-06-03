@@ -10,7 +10,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_SUMMER, DOMAIN_GLOBAL_VACATION
-from . import ThermoSmartCoordinator
+from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 

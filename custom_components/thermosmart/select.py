@@ -14,7 +14,7 @@ from .const import (
     HEATING_MODE_AUTO, HEATING_MODE_COMFORT, HEATING_MODE_NIGHT,
     HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_ECO,
 )
-from . import ThermoSmartCoordinator
+from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 

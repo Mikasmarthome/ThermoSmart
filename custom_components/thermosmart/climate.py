@@ -23,7 +23,7 @@ from .const import (
     HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_ECO,
     TEMP_FROST_PROTECTION,
 )
-from . import ThermoSmartCoordinator
+from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 

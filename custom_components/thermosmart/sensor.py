@@ -15,7 +15,7 @@ from .const import (
     DOMAIN, VERSION, ICON_ZONE, ICON_LEARNING, ICON_PREHEAT, ICON_WEATHER_ADJUST,
     SOLAR_GAIN_THRESHOLD_W, SOLAR_GAIN_MIN_OUTDOOR_C, SOLAR_GAIN_MAX_REDUCTION,
 )
-from . import ThermoSmartCoordinator
+from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -313,8 +313,8 @@ class LearningEngine:
             window_min=30, temp_tol=2.0, delta_tol=0.8,
         ):
             self._observations[zone_id].append(obs)
-            if len(self._observations[zone_id]) > 2000:
-                self._observations[zone_id] = self._observations[zone_id][-2000:]
+            if len(self._observations[zone_id]) > 5000:
+                self._observations[zone_id] = self._observations[zone_id][-5000:]
         self._rebuild_confidence(zone_id)
 
         # Alle 50 Beobachtungen speichern
@@ -372,9 +372,9 @@ class LearningEngine:
             window_min=60, temp_tol=2.0, delta_tol=0.8,
         ):
             self._trv_observations[zone_id].append(obs)
-        # Speicher begrenzen: max. 500 TRV-Beobachtungen pro Zone (älteste fallen raus)
-        if len(self._trv_observations[zone_id]) > 500:
-            self._trv_observations[zone_id] = self._trv_observations[zone_id][-500:]
+        # Speicher begrenzen: max. 1500 TRV-Beobachtungen pro Zone
+        if len(self._trv_observations[zone_id]) > 1500:
+            self._trv_observations[zone_id] = self._trv_observations[zone_id][-1500:]
 
         if sum(len(v) for v in self._trv_observations.values()) % 20 == 0:
             await self.async_save()
@@ -414,9 +414,9 @@ class LearningEngine:
                 obs[map_key] = val
 
         self._window_cooling_obs[zone_id].append(obs)
-        # Speicher begrenzen: max. 200 Fenster-Beobachtungen pro Zone
-        if len(self._window_cooling_obs[zone_id]) > 200:
-            self._window_cooling_obs[zone_id] = self._window_cooling_obs[zone_id][-200:]
+        # Speicher begrenzen: max. 365 Fenster-Beobachtungen pro Zone (1 Jahr)
+        if len(self._window_cooling_obs[zone_id]) > 365:
+            self._window_cooling_obs[zone_id] = self._window_cooling_obs[zone_id][-365:]
         _LOGGER.info(
             "LearningEngine [%s]: Fenster-Abkühlrate %.3f°C/min gelernt "
             "(%.1f°C in %.0f min, Outdoor: %s°C)",

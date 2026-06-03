@@ -33,6 +33,8 @@ async def async_setup_entry(
         ThermoSmartHeatLossSensor(coordinator, entry),
         ThermoSmartHeatingPowerSensor(coordinator, entry),
         ThermoSmartSunIntensitySensor(coordinator, entry),
+        ThermoSmartWindowCoolingRateSensor(coordinator, entry),
+        ThermoSmartTRVObservationsSensor(coordinator, entry),
     ])
 
 
@@ -381,4 +383,64 @@ class ThermoSmartSunIntensitySensor(_Base):
         return {
             "solar_w_m2": weather.get("solar_radiation"),
             "außentemperatur": weather.get("temperature"),
+        }
+
+
+class ThermoSmartWindowCoolingRateSensor(_Base):
+    """Gelernte Fenster-Abkühlrate – wie schnell kühlt der Raum bei geöffnetem Fenster."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "window_cooling_rate")
+        self._attr_unique_id = f"{entry.entry_id}_window_cooling_rate"
+        self._attr_name = "Fenster Abkühlrate"
+        self._attr_native_unit_of_measurement = "K/min"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:window-open"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return None
+        data = self.coordinator.data or {}
+        weather = data.get("weather", {})
+        return le.get_window_cooling_rate(self.coordinator.zone_id, weather)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        stats = le.get_trv_stats(self.coordinator.zone_id)
+        return {"fenster_beobachtungen": stats.get("window_observations", 0)}
+
+
+class ThermoSmartTRVObservationsSensor(_Base):
+    """Anzahl gelernter TRV-Setpoint-Beobachtungen aus dem Beobachtungsmodus."""
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "trv_observations")
+        self._attr_unique_id = f"{entry.entry_id}_trv_observations"
+        self._attr_name = "TRV Beobachtungen"
+        self._attr_native_unit_of_measurement = None
+        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_icon = "mdi:database-eye"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return 0
+        return le.get_trv_stats(self.coordinator.zone_id).get("trv_observations", 0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        stats = le.get_trv_stats(self.coordinator.zone_id)
+        return {
+            "setpoint_effizienz": stats.get("avg_setpoint_efficiency"),
+            "fenster_abkühlrate": stats.get("avg_window_cooling_rate"),
+            "lernmodus": "Beobachtungsmodus" if not self.coordinator._active_control else "Aktiv",
         }

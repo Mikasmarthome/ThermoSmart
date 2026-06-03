@@ -159,8 +159,11 @@ class LearningEngine:
         self._enabled = enabled
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._observations: dict[str, list[dict]] = defaultdict(list)
+        self._trv_observations: dict[str, list[dict]] = defaultdict(list)
+        self._window_cooling_obs: dict[str, list[dict]] = defaultdict(list)
         self._last_temp: dict[str, tuple[datetime, float]] = {}
         self._last_idle_temp: dict[str, tuple[datetime, float]] = {}
+        self._last_trv_snapshot: dict[str, dict] = {}
         self._confidence: dict[str, float] = {}
         self._boost_factors: dict[str, float] = {}
 
@@ -171,17 +174,24 @@ class LearningEngine:
         if stored and isinstance(stored, dict):
             for zone_id, obs_list in stored.get("observations", {}).items():
                 self._observations[zone_id] = obs_list
+            for zone_id, obs_list in stored.get("trv_observations", {}).items():
+                self._trv_observations[zone_id] = obs_list
+            for zone_id, obs_list in stored.get("window_cooling_obs", {}).items():
+                self._window_cooling_obs[zone_id] = obs_list
             self._boost_factors = stored.get("boost_factors", {})
             total = sum(len(v) for v in self._observations.values())
+            trv_total = sum(len(v) for v in self._trv_observations.values())
             _LOGGER.info(
-                "LearningEngine: %d Zonen, %d Beobachtungen geladen",
-                len(self._observations), total,
+                "LearningEngine: %d Zonen, %d Temp-Beobachtungen, %d TRV-Beobachtungen geladen",
+                len(self._observations), total, trv_total,
             )
         self._rebuild_confidence()
 
     async def async_save(self) -> None:
         await self._store.async_save({
             "observations": dict(self._observations),
+            "trv_observations": dict(self._trv_observations),
+            "window_cooling_obs": dict(self._window_cooling_obs),
             "boost_factors": self._boost_factors,
         })
 
@@ -266,6 +276,202 @@ class LearningEngine:
         # Alle 50 Beobachtungen speichern
         if sum(len(v) for v in self._observations.values()) % 50 == 0:
             await self.async_save()
+
+    async def async_observe_trv_setpoint(
+        self,
+        zone_id: str,
+        trv_setpoint: float,
+        indoor_temp: float,
+        target: float,
+        weather_data: dict,
+        heat_rate: float | None,
+    ) -> None:
+        """Beobachtet welchen TRV-Setpoint ein externer Regler (z.B. BT) verwendet
+        und welche Heizrate dabei resultiert.
+
+        Lernt: setpoint_efficiency = heat_rate / (trv_setpoint - indoor_temp)
+        Ermöglicht: beim Übernehmen direkt den richtigen Setpoint zu verwenden.
+        """
+        if not self._enabled:
+            return
+        if heat_rate is None or heat_rate <= 0:
+            return
+        excess = trv_setpoint - indoor_temp
+        if excess <= 0.3:
+            return
+
+        now = dt_util.now()
+        obs: dict = {
+            "ts": now.isoformat(),
+            "trv_setpoint": round(trv_setpoint, 1),
+            "indoor_temp": round(indoor_temp, 1),
+            "target": round(target, 1),
+            "delta": round(target - indoor_temp, 2),
+            "setpoint_excess": round(excess, 2),
+            "heat_rate": round(heat_rate, 5),
+            "efficiency": round(heat_rate / excess, 6),
+        }
+        for key, map_key in (
+            ("temperature", "outdoor_temp"),
+            ("wind_speed", "wind_speed"),
+            ("solar_radiation", "solar_radiation"),
+        ):
+            val = weather_data.get(key)
+            if val is not None:
+                obs[map_key] = val
+
+        self._trv_observations[zone_id].append(obs)
+
+        if sum(len(v) for v in self._trv_observations.values()) % 20 == 0:
+            await self.async_save()
+
+    async def async_observe_window_cooling(
+        self,
+        zone_id: str,
+        duration_min: float,
+        temp_at_open: float,
+        temp_at_close: float,
+        weather_data: dict,
+    ) -> None:
+        """Beobachtet wie stark der Raum bei geöffnetem Fenster abkühlt.
+
+        Lernt: Abkühlrate (°C/min) in Abhängigkeit von Außenbedingungen.
+        """
+        if duration_min < 1.0:
+            return
+        temp_drop = temp_at_open - temp_at_close
+        if temp_drop <= 0:
+            return
+
+        now = dt_util.now()
+        obs: dict = {
+            "ts": now.isoformat(),
+            "duration_min": round(duration_min, 1),
+            "temp_drop": round(temp_drop, 2),
+            "cooling_rate_per_min": round(temp_drop / duration_min, 4),
+            "indoor_start_temp": round(temp_at_open, 1),
+        }
+        for key, map_key in (
+            ("temperature", "outdoor_temp"),
+            ("wind_speed", "wind_speed"),
+        ):
+            val = weather_data.get(key)
+            if val is not None:
+                obs[map_key] = val
+
+        self._window_cooling_obs[zone_id].append(obs)
+        _LOGGER.info(
+            "LearningEngine [%s]: Fenster-Abkühlrate %.3f°C/min gelernt "
+            "(%.1f°C in %.0f min, Outdoor: %s°C)",
+            zone_id, obs["cooling_rate_per_min"], temp_drop, duration_min,
+            obs.get("outdoor_temp", "?"),
+        )
+        await self.async_save()
+
+    def get_learned_setpoint(
+        self,
+        zone_id: str,
+        target: float,
+        indoor_temp: float,
+        weather_data: dict,
+    ) -> float | None:
+        """Berechnet optimalen TRV-Setpoint aus gelernten Beobachtungen.
+
+        Nutzt gewichteten Mittelwert der beobachteten Effizienz (°C/min pro °C Excess).
+        Gibt None zurück wenn zu wenig Daten vorhanden.
+        """
+        obs_list = self._trv_observations.get(zone_id, [])
+        if len(obs_list) < LEARNING_MIN_SAMPLES:
+            return None
+
+        delta = target - indoor_temp
+        if delta <= 0:
+            return None
+
+        now = dt_util.now()
+        conditions = {
+            "outdoor_temp": weather_data.get("temperature") or 10.0,
+            "wind_speed": weather_data.get("wind_speed"),
+            "solar_radiation": weather_data.get("solar_radiation"),
+        }
+
+        efficiencies = []
+        weights = []
+        for obs in obs_list:
+            if not obs.get("efficiency") or obs["efficiency"] <= 0:
+                continue
+            w = _thermal_weight(obs, conditions, now)
+            if w < 0.01:
+                continue
+            efficiencies.append(obs["efficiency"])
+            weights.append(w)
+
+        if len(efficiencies) < LEARNING_MIN_SAMPLES:
+            return None
+
+        weighted_eff = sum(e * w for e, w in zip(efficiencies, weights)) / sum(weights)
+        if weighted_eff <= 0:
+            return None
+
+        # Erwünschte Heizrate: ~0.05°C/min als Ziel (angenehme Aufheizung)
+        # Setpoint = indoor_temp + desired_rate / efficiency
+        desired_rate = min(delta * 0.04, 0.08)
+        setpoint = indoor_temp + desired_rate / weighted_eff
+        setpoint = min(setpoint, target + 4.0, 28.0)
+        return round(setpoint, 1)
+
+    def get_window_cooling_rate(self, zone_id: str, weather_data: dict) -> float | None:
+        """Gibt gelernte Fenster-Abkühlrate (°C/min) für aktuelle Außenbedingungen zurück."""
+        obs_list = self._window_cooling_obs.get(zone_id, [])
+        if len(obs_list) < 2:
+            return None
+
+        now = dt_util.now()
+        outdoor = weather_data.get("temperature") or 10.0
+        wind = weather_data.get("wind_speed") or 0.0
+
+        rates = []
+        weights = []
+        for obs in obs_list:
+            obs_outdoor = obs.get("outdoor_temp") or outdoor
+            obs_wind = obs.get("wind_speed") or 0.0
+            temp_sim = math.exp(-((obs_outdoor - outdoor) / 5.0) ** 2)
+            wind_sim = math.exp(-((obs_wind - wind) / 3.0) ** 2)
+            try:
+                age_days = (now - datetime.fromisoformat(obs["ts"])).total_seconds() / 86400
+            except (ValueError, KeyError):
+                age_days = 0
+            recency = math.exp(-age_days / 180)
+            w = temp_sim * wind_sim * recency
+            if w < 0.05:
+                continue
+            rates.append(obs["cooling_rate_per_min"])
+            weights.append(w)
+
+        if not rates:
+            return None
+        return round(sum(r * w for r, w in zip(rates, weights)) / sum(weights), 4)
+
+    def get_trv_stats(self, zone_id: str) -> dict:
+        """Statistiken über TRV-Setpoint-Beobachtungen."""
+        trv_obs = self._trv_observations.get(zone_id, [])
+        win_obs = self._window_cooling_obs.get(zone_id, [])
+        avg_efficiency = None
+        if trv_obs:
+            effs = [o["efficiency"] for o in trv_obs if o.get("efficiency")]
+            if effs:
+                avg_efficiency = round(sum(effs) / len(effs), 6)
+        avg_window_cooling = None
+        if win_obs:
+            rates = [o["cooling_rate_per_min"] for o in win_obs if o.get("cooling_rate_per_min")]
+            if rates:
+                avg_window_cooling = round(sum(rates) / len(rates), 4)
+        return {
+            "trv_observations": len(trv_obs),
+            "window_observations": len(win_obs),
+            "avg_setpoint_efficiency": avg_efficiency,
+            "avg_window_cooling_rate": avg_window_cooling,
+        }
 
     async def async_get_base_target(
         self,

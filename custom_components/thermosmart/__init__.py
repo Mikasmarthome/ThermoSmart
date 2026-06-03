@@ -169,6 +169,7 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
         self._indoor_temp_slope: float = 0.0
         self._ema_1h: float | None = None
         self._last_written_setpoints: dict[str, float] = {}
+        self._window_open_temp: dict[str, float] = {}   # entity_id → Raumtemp beim Öffnen
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -261,9 +262,25 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                     if new.state == "on":
                         self._window_open_at[entity_id] = now
                         self._window_close_at.pop(entity_id, None)
+                        # Raumtemperatur beim Öffnen merken für Abkühl-Lernen
+                        current = self._read_avg_sensor(cfg.get("temp_sensors", []))
+                        if current is not None:
+                            self._window_open_temp[entity_id] = current
                     else:
                         if entity_id in self._window_open_at:
                             self._window_close_at[entity_id] = now
+                            # Fenster-Abkühlung lernen
+                            opened_at = self._window_open_at[entity_id]
+                            duration_min = (now - opened_at).total_seconds() / 60
+                            temp_at_open = self._window_open_temp.pop(entity_id, None)
+                            current = self._read_avg_sensor(cfg.get("temp_sensors", []))
+                            if temp_at_open is not None and current is not None and duration_min >= 1.0:
+                                self.hass.async_create_task(
+                                    self.learning_engine.async_observe_window_cooling(
+                                        self.zone_id, duration_min, temp_at_open, current,
+                                        {}  # Wetterdaten folgen im nächsten Zyklus
+                                    )
+                                )
                         self._window_open_at.pop(entity_id, None)
 
                 _LOGGER.info(
@@ -420,6 +437,10 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 )
                 recommendation["trv_setpoint"] = trv_setpoint
                 recommendation["boost_factor"] = round(boost_factor, 3)
+
+            # TRV-Setpoints beobachten (lernt was externer Regler wie BT verwendet)
+            if not self._active_control:
+                await self._async_observe_external_trv_setpoints(cfg, recommendation, weather_data)
 
             indoor_humidity = self._read_avg_sensor(cfg.get("humidity_sensors", []))
             await self.learning_engine.async_observe(
@@ -785,6 +806,17 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             reduction = (1.0 - fraction) * (RESIDUAL_HEAT_ZONE * 0.5)
             return round(target - reduction, 1)
 
+        # Gelernter Setpoint aus BT-Beobachtungen hat Vorrang vor Physics-Formel
+        learned = self.learning_engine.get_learned_setpoint(
+            self.zone_id, target, current_temp, weather_data
+        )
+        if learned is not None:
+            _LOGGER.debug(
+                "ThermoSmart '%s': Gelernter TRV-Setpoint %.1f°C (Ziel=%.1f°C, delta=%.1f°C)",
+                self.zone_name, learned, target, delta,
+            )
+            return learned
+
         outdoor = weather_data.get("temperature") or 15.0
         wind = weather_data.get("wind_speed") or 0.0
         humidity_out = weather_data.get("humidity") or 60.0
@@ -847,6 +879,51 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                         self.zone_name, current, prev_target,
                     )
                 self._boost_active.pop(self.zone_id)
+
+    # ── Externer Regler beobachten ────────────────────────────────────
+
+    async def _async_observe_external_trv_setpoints(
+        self, cfg: dict, recommendation: dict, weather_data: dict
+    ) -> None:
+        """Liest TRV-Setpoints die ein externer Regler (z.B. BT) setzt und lernt daraus.
+
+        Berechnet: welche Heizrate entstand bei welchem Setpoint unter welchen Bedingungen?
+        Ergebnis: ThermoSmart kennt beim Übernehmen den optimalen Setpoint direkt.
+        """
+        current_temp = recommendation.get("current_temp")
+        target = recommendation.get("adjusted_target")
+        if current_temp is None or target is None:
+            return
+        if target <= current_temp:
+            return
+
+        heat_rate = None
+        now = dt_util.now()
+        if self.zone_id in self.learning_engine._last_temp:
+            last_time, last_temp = self.learning_engine._last_temp[self.zone_id]
+            elapsed_min = (now - last_time).total_seconds() / 60
+            if 3 <= elapsed_min <= 15 and current_temp > last_temp:
+                heat_rate = round((current_temp - last_temp) / elapsed_min, 5)
+
+        for entity_id in cfg.get("climate_entities", []):
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in ("unavailable", "unknown", "off"):
+                continue
+            try:
+                trv_setpoint = float(state.attributes.get("temperature", 0))
+            except (TypeError, ValueError):
+                continue
+            if trv_setpoint < current_temp:
+                continue
+
+            await self.learning_engine.async_observe_trv_setpoint(
+                zone_id=self.zone_id,
+                trv_setpoint=trv_setpoint,
+                indoor_temp=current_temp,
+                target=target,
+                weather_data=weather_data,
+                heat_rate=heat_rate,
+            )
 
     # ── Thermostat schreiben ─────────────────────────────────────────
 

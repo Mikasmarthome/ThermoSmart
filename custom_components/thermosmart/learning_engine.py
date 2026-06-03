@@ -200,7 +200,7 @@ class LearningEngine:
 
     # ── Deduplizierung ───────────────────────────────────────────────────
 
-    def _find_similar_obs(
+    def _is_duplicate(
         self,
         obs_list: list[dict],
         now: datetime,
@@ -208,19 +208,17 @@ class LearningEngine:
         is_weekend: bool,
         outdoor_temp: float,
         delta: float,
-        window_h: int = 6,
-        temp_tol: float = 3.0,
-        delta_tol: float = 1.0,
-    ) -> int | None:
-        """Sucht eine ähnliche Beobachtung in den letzten window_h Stunden.
+        window_min: int = 30,
+        temp_tol: float = 2.0,
+        delta_tol: float = 0.8,
+    ) -> bool:
+        """Prüft ob eine ähnliche Beobachtung in den letzten window_min Minuten existiert.
 
-        Ähnlich = selbe Tageszeit (±1h), selber Tag-Typ (WD/WE),
-                  ähnliche Außentemp (±temp_tol°C), ähnliches Delta (±delta_tol°C).
-        Gibt den Index zurück wenn gefunden, sonst None.
+        Ähnlich = selbe Stunde, selber Tag-Typ, ähnliche Außentemp, ähnliches Delta.
+        Wenn ja → Duplikat überspringen, Originalwerte bleiben unverändert.
         """
-        cutoff = now - timedelta(hours=window_h)
-        for i in range(len(obs_list) - 1, max(len(obs_list) - 200, -1), -1):
-            obs = obs_list[i]
+        cutoff = now - timedelta(minutes=window_min)
+        for obs in reversed(obs_list[-20:]):   # Nur letzte 20 prüfen → schnell
             try:
                 if datetime.fromisoformat(obs["ts"]) < cutoff:
                     break
@@ -228,39 +226,14 @@ class LearningEngine:
                 continue
             if (obs.get("weekday", 0) >= 5) != is_weekend:
                 continue
-            if abs(obs.get("hour", -99) - hour) > 1:
+            if obs.get("hour", -99) != hour:
                 continue
             if abs((obs.get("outdoor_temp") or outdoor_temp) - outdoor_temp) > temp_tol:
                 continue
             if abs((obs.get("delta") or delta) - delta) > delta_tol:
                 continue
-            return i
-        return None
-
-    @staticmethod
-    def _merge_obs(existing: dict, new: dict, alpha: float = 0.35) -> dict:
-        """Fügt neue Messung in bestehende Beobachtung ein (EMA-Aktualisierung).
-
-        alpha: Gewicht der neuen Messung. Kleiner = stabiler, größer = reaktiver.
-        Numerische Felder werden gemittelt, Zeitstempel auf neue Messung gesetzt.
-        """
-        merged = dict(existing)
-        merged["ts"] = new["ts"]   # Zeitstempel aktualisieren
-
-        numeric = {
-            "target", "indoor_temp", "delta", "outdoor_temp", "outdoor_humidity",
-            "wind_speed", "solar_radiation", "indoor_humidity",
-            "heat_rate", "cool_rate", "trv_setpoint", "setpoint_excess", "efficiency",
-            "temp_drop", "cooling_rate_per_min", "duration_min",
-        }
-        for key in numeric:
-            if key in new:
-                old_val = existing.get(key)
-                if old_val is not None:
-                    merged[key] = round(alpha * new[key] + (1 - alpha) * old_val, 5)
-                else:
-                    merged[key] = new[key]
-        return merged
+            return True
+        return False
 
     async def async_observe(
         self,
@@ -334,16 +307,11 @@ class LearningEngine:
 
         outdoor = weather_data.get("temperature") or 10.0
         is_weekend = now.weekday() >= 5
-        idx = self._find_similar_obs(
+        if not self._is_duplicate(
             self._observations[zone_id], now,
             now.hour, is_weekend, outdoor, obs["delta"],
-            window_h=4, temp_tol=3.0, delta_tol=1.0,
-        )
-        if idx is not None:
-            self._observations[zone_id][idx] = self._merge_obs(
-                self._observations[zone_id][idx], obs
-            )
-        else:
+            window_min=30, temp_tol=2.0, delta_tol=0.8,
+        ):
             self._observations[zone_id].append(obs)
             if len(self._observations[zone_id]) > 2000:
                 self._observations[zone_id] = self._observations[zone_id][-2000:]
@@ -398,16 +366,11 @@ class LearningEngine:
 
         is_weekend = now.weekday() >= 5
         outdoor = weather_data.get("temperature") or 10.0
-        idx = self._find_similar_obs(
+        if not self._is_duplicate(
             self._trv_observations[zone_id], now,
             now.hour, is_weekend, outdoor, obs["delta"],
-            window_h=6, temp_tol=2.0, delta_tol=0.8,
-        )
-        if idx is not None:
-            self._trv_observations[zone_id][idx] = self._merge_obs(
-                self._trv_observations[zone_id][idx], obs, alpha=0.3
-            )
-        else:
+            window_min=60, temp_tol=2.0, delta_tol=0.8,
+        ):
             self._trv_observations[zone_id].append(obs)
         # Speicher begrenzen: max. 500 TRV-Beobachtungen pro Zone (älteste fallen raus)
         if len(self._trv_observations[zone_id]) > 500:

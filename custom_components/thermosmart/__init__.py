@@ -769,11 +769,16 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
 
         delta = target - current_temp
 
-        # Restwärme-Kompensation: Ventil schließt früher, Radiator-Restwärme übernimmt den Rest.
-        # Verhindert Überschwingen ohne auf Boost-Erfahrungswerte warten zu müssen.
+        # Restwärme-Kompensation: nur relevant wenn Raum sich von unten nähert.
+        # Bei delta < -RESIDUAL_HEAT_ZONE war der Heizkörper lange aus → kein Setpoint-Abzug.
+        if delta <= -RESIDUAL_HEAT_ZONE:
+            # Raum deutlich wärmer als Ziel → Ventil trotzdem zu, Setpoint = Target
+            return target
         if delta <= 0:
-            # Ziel erreicht oder überschritten → Setpoint unter Ziel um Ventil zu schließen
-            return round(max(target - RESIDUAL_HEAT_ZONE * 0.5, 5.0), 1)
+            # Raum knapp über Ziel → Restwärme vorhanden, Setpoint leicht unter Ziel
+            fraction = (delta + RESIDUAL_HEAT_ZONE) / RESIDUAL_HEAT_ZONE
+            reduction = (1.0 - fraction) * (RESIDUAL_HEAT_ZONE * 0.5)
+            return round(max(target - reduction, 5.0), 1)
         if delta < RESIDUAL_HEAT_ZONE:
             # Annäherungszone: Setpoint linear von target bis (target - zone/2) reduzieren
             fraction = delta / RESIDUAL_HEAT_ZONE

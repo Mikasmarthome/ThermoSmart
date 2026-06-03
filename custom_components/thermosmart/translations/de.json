@@ -12,8 +12,7 @@
           "window_sensors": "Fenstersensoren (binary_sensor)",
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
-          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)",
-          "no_off_fallback": "Bei geöffnetem Fenster: TRVs auf 5°C setzen (statt auf letztem Wert lassen)"
+          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)"
         }
       },
       "schedule": {

@@ -37,7 +37,6 @@ from .const import (
     AUTO_CALIBRATION_PATTERN,
     CONF_VACATION_TEMP,
     CONF_ECO_TEMP,
-    CONF_NO_OFF_FALLBACK,
     NOISE_FILTER_SPIKE_THRESHOLD,
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
@@ -1233,9 +1232,9 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
         target = recommendation.get("adjusted_target")
 
-        # Fenster offen → Frostschutz-Fallback (statt TRV auf letztem Wert lassen)
+        # Fenster offen → TRV auf 5°C setzen (automatisch, kein Schalter)
         if target is None:
-            if recommendation.get("window_open") and cfg.get(CONF_NO_OFF_FALLBACK, True):
+            if recommendation.get("window_open"):
                 frost_temp = FROST_FALLBACK_TEMP
                 tasks = []
                 for entity_id in cfg.get("climate_entities", []):

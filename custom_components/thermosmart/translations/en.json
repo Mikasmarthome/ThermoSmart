@@ -12,8 +12,7 @@
           "window_sensors": "Window sensors (binary_sensor)",
           "window_open_delay": "Heating off – delay after window opens",
           "window_close_delay": "Heating on – delay after window closes",
-          "valve_maintenance": "Enable valve maintenance (every Sunday at 03:00)",
-          "no_off_fallback": "When window open: set TRVs to 5°C instead of leaving at last value"
+          "valve_maintenance": "Enable valve maintenance (every Sunday at 03:00)"
         }
       },
       "schedule": {

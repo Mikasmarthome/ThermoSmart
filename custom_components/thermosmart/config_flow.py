@@ -22,7 +22,6 @@ from .const import (
     CONF_ECO_TEMP,
     CONF_VACATION_BOOLEAN,
     CONF_VALVE_MAINTENANCE,
-    CONF_NO_OFF_FALLBACK,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
     DEFAULT_LEARNING_ENABLED,
@@ -61,8 +60,6 @@ def _schema_devices(d: dict) -> vol.Schema:
                 min=0, max=30, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
             )),
         vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
-            selector.BooleanSelector(),
-        vol.Optional(CONF_NO_OFF_FALLBACK, default=d.get(CONF_NO_OFF_FALLBACK, True)):
             selector.BooleanSelector(),
     })
 

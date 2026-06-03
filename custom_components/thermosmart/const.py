@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.4.3b1"
+VERSION = "0.4.4b1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -33,7 +33,6 @@ AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
 CONF_ECO_TEMP          = "eco_temp"            # Eco-Preset Temperatur
-CONF_NO_OFF_FALLBACK   = "no_off_fallback"     # Bei Fensteroffen: 5°C statt nichts
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
 CONF_SCHED_WD_NIGHT    = "sched_wd_night"     # Werktag: Nacht      → night_temp
 CONF_SCHED_WE_MORNING  = "sched_we_morning"   # Wochenende: Aufwachen → comfort_temp

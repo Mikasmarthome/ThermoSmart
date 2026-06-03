@@ -152,9 +152,9 @@ class LearningEngine:
     }
     """
 
-    def __init__(self, hass: HomeAssistant, enabled: bool = True) -> None:
+    def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
-        self._enabled = enabled
+        self._zone_enabled: dict[str, bool] = {}  # zone_id → Lernmodus an/aus
         self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
         self._observations: dict[str, list[dict]] = defaultdict(list)
         self._trv_observations: dict[str, list[dict]] = defaultdict(list)
@@ -221,7 +221,15 @@ class LearningEngine:
     # ── API ─────────────────────────────────────────────────────────────
 
     def set_enabled(self, enabled: bool) -> None:
-        self._enabled = enabled
+        """Veraltet – set_zone_enabled verwenden."""
+        pass
+
+    def set_zone_enabled(self, zone_id: str, enabled: bool) -> None:
+        """Lernmodus für eine einzelne Zone setzen."""
+        self._zone_enabled[zone_id] = enabled
+
+    def _is_enabled(self, zone_id: str) -> bool:
+        return self._zone_enabled.get(zone_id, True)
 
     # ── Deduplizierung ───────────────────────────────────────────────────
 
@@ -268,7 +276,7 @@ class LearningEngine:
         indoor_humidity: float | None = None,
     ) -> None:
         """Beobachtung aufzeichnen – alle verfügbaren Bedingungen speichern."""
-        if not self._enabled:
+        if not self._is_enabled(zone_id):
             return
 
         current_temp = recommendation.get("current_temp")
@@ -359,7 +367,7 @@ class LearningEngine:
         Lernt: setpoint_efficiency = heat_rate / (trv_setpoint - indoor_temp)
         Ermöglicht: beim Übernehmen direkt den richtigen Setpoint zu verwenden.
         """
-        if not self._enabled:
+        if not self._is_enabled(zone_id):
             return
         if heat_rate is None or heat_rate <= 0:
             return
@@ -575,7 +583,7 @@ class LearningEngine:
             zone_id, comfort_temp, night_temp, away_temp, schedule_cfg
         )
 
-        if not self._enabled or self.get_confidence(zone_id) < 0.25:
+        if not self._is_enabled(zone_id) or self.get_confidence(zone_id) < 0.25:
             return schedule_temp
 
         now = dt_util.now()
@@ -653,7 +661,7 @@ class LearningEngine:
         Überschießen → Faktor reduzieren (Ventil war zu weit auf).
         Zu langsam    → Faktor erhöhen (Ventil öffnet zu wenig).
         """
-        if not self._enabled:
+        if not self._is_enabled(zone_id):
             return
         factor = self._boost_factors.get(zone_id, 1.0)
         if overshot:
@@ -775,7 +783,7 @@ class LearningEngine:
         return round(sum(recent) / len(recent), 5)
 
     def _get_heat_rate(self, zone_id: str, weather_data: dict) -> float:
-        if self._enabled and self.get_confidence(zone_id) >= 0.3:
+        if self._is_enabled(zone_id) and self.get_confidence(zone_id) >= 0.3:
             learned = self._learned_heat_rate_multifactor(zone_id, weather_data)
             if learned > 0:
                 return learned

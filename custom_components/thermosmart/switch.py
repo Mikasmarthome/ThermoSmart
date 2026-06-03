@@ -94,10 +94,9 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
         last = await self.async_get_last_state()
         if last is not None:
             self._is_on = last.state == "on"
-        # Engine-Status wiederherstellen (sonst immer enabled nach Neustart)
         engine = self._get_engine()
         if engine is not None:
-            engine.set_enabled(self._is_on)
+            engine.set_zone_enabled(self._entry.entry_id, self._is_on)
 
     @property
     def is_on(self) -> bool:
@@ -108,14 +107,14 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
         self.async_write_ha_state()
         engine = self._get_engine()
         if engine:
-            engine.set_enabled(True)
+            engine.set_zone_enabled(self._entry.entry_id, True)
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
         self.async_write_ha_state()
         engine = self._get_engine()
         if engine:
-            engine.set_enabled(False)
+            engine.set_zone_enabled(self._entry.entry_id, False)
 
     def _get_engine(self):
-        return self.hass.data.get(DOMAIN, {}).get(self._entry.entry_id, {}).get("learning_engine")
+        return self.hass.data.get(DOMAIN, {}).get("learning_engine")

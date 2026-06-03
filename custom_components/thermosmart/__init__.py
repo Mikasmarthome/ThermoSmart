@@ -84,9 +84,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         outdoor_rain_sensor=_sensor(CONF_OUTDOOR_RAIN_SENSOR),
     )
 
+    # Gemeinsame LearningEngine für alle Zonen – verhindert Speicher-Konflikte
+    # bei gleichzeitigem Speichern mehrerer Zonen.
+    # Erste Zone legt die Engine an und lädt die Daten,
+    # weitere Zonen nutzen dieselbe Instanz.
+    if "learning_engine" not in hass.data[DOMAIN]:
+        learning_engine = LearningEngine(hass)
+        await learning_engine.async_load()
+        hass.data[DOMAIN]["learning_engine"] = learning_engine
+        _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine erstellt")
+    else:
+        learning_engine = hass.data[DOMAIN]["learning_engine"]
+        _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine wiederverwendet")
+
+    # Lernmodus der Zone setzen
     learning_enabled = cfg.get(CONF_LEARNING_ENABLED, True)
-    learning_engine = LearningEngine(hass, learning_enabled)
-    await learning_engine.async_load()
+    learning_engine.set_zone_enabled(entry.entry_id, learning_enabled)
 
     coordinator = ThermoSmartCoordinator(
         hass, entry,
@@ -101,7 +114,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "coordinator": coordinator,
         "weather_engine": weather_engine,
-        "learning_engine": learning_engine,
     }
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
@@ -116,9 +128,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        data = hass.data[DOMAIN].pop(entry.entry_id, {})
-        if le := data.get("learning_engine"):
-            await le.async_save()
+        hass.data[DOMAIN].pop(entry.entry_id, {})
+        # Gemeinsame LearningEngine nur speichern + entfernen wenn
+        # keine weiteren Zonen mehr aktiv sind
+        remaining = [
+            k for k in hass.data[DOMAIN]
+            if k not in ("learning_engine",)
+        ]
+        if not remaining:
+            if le := hass.data[DOMAIN].pop("learning_engine", None):
+                await le.async_save()
+                _LOGGER.debug("ThermoSmart: LearningEngine gespeichert und entfernt")
+        else:
+            # Noch andere Zonen aktiv → nur speichern, nicht entfernen
+            if le := hass.data[DOMAIN].get("learning_engine"):
+                await le.async_save()
     return unload_ok
 
 

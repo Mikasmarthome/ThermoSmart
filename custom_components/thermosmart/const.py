@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.4.5b1"
+VERSION = "0.4.6b1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"

@@ -228,8 +228,11 @@ class LearningEngine:
         """Lernmodus für eine einzelne Zone setzen."""
         self._zone_enabled[zone_id] = enabled
 
-    def _is_enabled(self, zone_id: str) -> bool:
+    def is_zone_enabled(self, zone_id: str) -> bool:
         return self._zone_enabled.get(zone_id, True)
+
+    def _is_enabled(self, zone_id: str) -> bool:
+        return self.is_zone_enabled(zone_id)
 
     # ── Deduplizierung ───────────────────────────────────────────────────
 

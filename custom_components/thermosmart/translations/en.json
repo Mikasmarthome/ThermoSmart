@@ -162,7 +162,7 @@
       "adjusted_target": { "name": "Target temperature" },
       "trv_setpoint": { "name": "TRV setpoint" },
       "preheat_minutes": { "name": "Preheat time" },
-      "confidence": { "name": "Prediction confidence" },
+      "confidence": { "name": "Learning progress" },
       "weather_offset": { "name": "Weather correction" },
       "status": { "name": "Status" },
       "temp_slope": { "name": "Temperature slope" },

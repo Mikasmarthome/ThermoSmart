@@ -134,6 +134,8 @@ class ThermoSmartTRVSetpointSensor(_Base):
 
 
 class ThermoSmartPreheatSensor(_Base):
+    _attr_entity_registry_enabled_default = False
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "preheat_minutes")
         self._attr_unique_id = f"{entry.entry_id}_preheat_minutes"
@@ -151,7 +153,7 @@ class ThermoSmartConfidenceSensor(_Base):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "learning_confidence")
         self._attr_unique_id = f"{entry.entry_id}_confidence"
-        self._attr_name = "Vorhersage-Konfidenz"
+        self._attr_name = "Lernfortschritt"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_LEARNING
@@ -208,8 +210,17 @@ class ThermoSmartStatusSensor(_Base):
     @property
     def native_value(self) -> str:
         z = self._zone
-        if not self.coordinator._active_control:
+        active = self.coordinator._active_control
+        le = self.coordinator.learning_engine
+        learning = le.is_zone_enabled(self.coordinator.zone_id) if le else True
+
+        if not active and not learning:
+            return "Deaktiviert"
+        if not active:
             return "Beobachtungsmodus"
+        if not learning:
+            return "Steuert (Lernmodus aus)"
+        # Aktiv + Lernen an → detaillierter Status
         if z.get("is_summer"):
             return "Sommer – Heizung aus"
         if z.get("window_open"):

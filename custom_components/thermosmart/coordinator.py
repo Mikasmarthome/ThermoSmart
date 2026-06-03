@@ -394,8 +394,11 @@ class ThermoSmartCoordinator(
     # ── Präsenz ──────────────────────────────────────────────────────
 
     def _is_person_home(self, person_state: str, zone_entity: str) -> bool:
+        if person_state == "home":
+            return True
+
         if not zone_entity or zone_entity in ("zone.home", "home"):
-            return person_state == "home"
+            return False
 
         zone_slug = zone_entity.replace("zone.", "").lower()
         if person_state.lower() == zone_slug:

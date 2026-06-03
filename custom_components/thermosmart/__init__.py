@@ -908,10 +908,12 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                 heat_rate = round((current_temp - last_temp) / elapsed_min, 5)
 
         if self._active_control:
-            # TS steuert: gelernten/berechneten Setpoint aus der Recommendation verwenden
-            trv_setpoint = recommendation.get("trv_setpoint")
-            if trv_setpoint is None or trv_setpoint < current_temp:
+            # TS steuert: den tatsächlich gesendeten Setpoint der letzten Periode nutzen
+            # (_last_written_setpoints = was wirklich ans TRV ging → hat die aktuelle Heizrate verursacht)
+            written = [v for v in self._last_written_setpoints.values() if v >= current_temp]
+            if not written:
                 return
+            trv_setpoint = round(sum(written) / len(written), 1)  # Durchschnitt bei mehreren TRVs
             await self.learning_engine.async_observe_trv_setpoint(
                 zone_id=self.zone_id,
                 trv_setpoint=trv_setpoint,

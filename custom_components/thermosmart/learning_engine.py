@@ -629,7 +629,7 @@ class LearningEngine:
         cool_rate = self._get_avg_cool_rate(zone_id)
         effective_rate = max(rate - cool_rate, rate * 0.3)
 
-        minutes = int(min(delta / effective_rate * 60, PREHEAT_MAX_MINUTES))
+        minutes = int(min(delta / effective_rate, PREHEAT_MAX_MINUTES))
         _LOGGER.debug(
             "LearningEngine [%s] Vorheizzeit=%d min (Δ%.1f°C, Heiz=%.4f°C/min, Kühl=%.4f°C/min)",
             zone_id, minutes, delta, rate, cool_rate,

@@ -2,6 +2,17 @@
   "config": {
     "step": {
       "user": {
+        "title": "Set up ThermoSmart",
+        "menu_options": {
+          "add_system": "Set up global controls (Summer & Vacation mode)",
+          "add_zone": "Add heating zone"
+        }
+      },
+      "add_system": {
+        "title": "Global Controls",
+        "description": "Sets up the global Summer and Vacation mode switches. No thermostat required. The global switches control all zones simultaneously."
+      },
+      "add_zone": {
         "title": "Step 1 / 4 – Devices & Sensors",
         "description": "Select the TRVs and sensors for this heating zone. Calibration entities and quirk switches are detected automatically.",
         "data": {
@@ -22,7 +33,7 @@
           "comfort_temp": "Comfort temperature (when someone is home)",
           "night_temp": "Night temperature (setback during sleep)",
           "away_temp": "Away temperature (automatically when everyone is gone)",
-          "vacation_temp": "Vacation temperature (frost protection when home is empty for extended period)",
+          "vacation_temp": "Vacation temperature (frost protection)",
           "eco_temp": "Eco temperature (energy saving, between night and comfort)",
           "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
           "sched_wd_morning": "Weekday: Comfort from",
@@ -43,17 +54,15 @@
         "data": {
           "presence_persons": "Persons for presence detection",
           "home_zone": "Home zone (default: zone.home)",
-          "vacation_boolean": "Vacation switch (optional)",
           "learning_enabled": "Enable learning algorithm"
         },
         "data_description": {
-          "vacation_boolean": "Any entity that goes 'on' when vacation is active (input_boolean, binary_sensor, calendar …). Can be left empty.",
           "learning_enabled": "ThermoSmart learns heating rates, cooling rates and optimal temperatures for this zone."
         }
       },
       "weather": {
         "title": "Step 4 / 4 – Weather & Outdoor Sensors",
-        "description": "All fields optional – own sensors take priority over the weather entity.",
+        "description": "All fields optional – own sensors take priority over the weather entity. The system works without weather data too.",
         "data": {
           "weather_entity": "Weather entity (e.g. weather.home)",
           "outdoor_temp_sensor": "Outdoor temperature – own weather station (priority)",
@@ -74,7 +83,8 @@
       "required": "At least one thermostat / TRV is required."
     },
     "abort": {
-      "already_configured": "This zone is already configured."
+      "already_configured": "This zone is already configured.",
+      "system_already_configured": "The global ThermoSmart controls are already set up."
     }
   },
   "options": {
@@ -95,7 +105,7 @@
       },
       "schedule": {
         "title": "Step 2 / 4 – Temperatures & Schedule",
-        "description": "Daily flow: Night → Comfort → Night\n\nAway mode is handled automatically via presence detection.",
+        "description": "Daily flow: Night → Comfort → Night",
         "data": {
           "comfort_temp": "Comfort temperature",
           "night_temp": "Night temperature",
@@ -120,11 +130,7 @@
         "data": {
           "presence_persons": "Persons for presence detection",
           "home_zone": "Home zone",
-          "vacation_boolean": "Vacation switch (optional)",
           "learning_enabled": "Enable learning algorithm"
-        },
-        "data_description": {
-          "vacation_boolean": "Any entity that goes 'on' when vacation is active. Can be left empty."
         }
       },
       "weather": {
@@ -169,7 +175,7 @@
       "temp_ema_1h": { "name": "Temperature EMA 1h" },
       "heat_loss": { "name": "Heat loss" },
       "heating_power": { "name": "Heating power" },
-      "sun_intensity": { "name": "Sun intensity heatup" },
+      "sun_intensity": { "name": "Solar heat gain" },
       "window_cooling_rate": { "name": "Window cooling rate" },
       "trv_observations": { "name": "TRV observations" }
     }

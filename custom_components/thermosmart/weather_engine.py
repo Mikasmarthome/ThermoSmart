@@ -16,6 +16,8 @@ from .const import (
     SOLAR_GAIN_THRESHOLD_W,
     SOLAR_GAIN_MIN_OUTDOOR_C,
     SOLAR_GAIN_MAX_REDUCTION,
+    SOLAR_OFFSET_THRESHOLD_W,
+    SOLAR_OFFSET_MIN_OUTDOOR_C,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -165,8 +167,8 @@ class WeatherEngine:
 
         # Sonneneinstrahlung reduziert Heizbedarf
         solar = weather_data.get("solar_radiation")
-        if solar is not None and solar > 400 and outdoor > 5:
-            solar_reduction = min((solar - 400) / 600 * 0.5, 0.5)
+        if solar is not None and solar > SOLAR_OFFSET_THRESHOLD_W and outdoor > SOLAR_OFFSET_MIN_OUTDOOR_C:
+            solar_reduction = min((solar - SOLAR_OFFSET_THRESHOLD_W) / 600 * 0.5, 0.5)
             offset -= solar_reduction
             _LOGGER.debug(
                 "Solarbonus: %.0f W/m² → Offset −%.2f°C", solar, solar_reduction

@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "0.5.1b1"
+VERSION = "0.9.0b1"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -85,6 +85,10 @@ FORECAST_BIAS_MAX = 1.0          # Vollständiges Vertrauen (Standard / Cold-Sta
 FORECAST_BIAS_LEARNING_RATE = 0.06  # Anpassungsrate pro Auswertung
 FORECAST_DELTA_FULL_HEAT = 3.0   # °C unter Ziel → vollständig heizen, Prognose ignorieren
 FORECAST_DELTA_BLEND = 1.5       # °C unter Ziel → Übergang beginnt
+
+# Solar-Einfluss auf Temperatur-Offset (compute_temperature_offset)
+SOLAR_OFFSET_THRESHOLD_W = 400.0   # W/m² – Solar reduziert Heiz-Offset ab diesem Wert
+SOLAR_OFFSET_MIN_OUTDOOR_C = 5.0   # °C – Solar-Offset nur bei wärmerer Außentemp
 
 # Solar-Gain-Erkennung (SunIntensitySensor)
 SOLAR_GAIN_THRESHOLD_W = 300.0   # W/m² – unterhalb kein relevanter Solar-Wärmeeintrag

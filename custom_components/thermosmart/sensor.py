@@ -54,7 +54,7 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 
 class _Base(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
-    _attr_entity_registry_enabled_default = True  # Standard: sichtbar
+    _attr_entity_registry_enabled_default = False  # Standard: ausgeblendet; aktive Sensoren überschreiben
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry, key: str):
         super().__init__(coordinator)
@@ -73,6 +73,8 @@ class _Base(CoordinatorEntity, SensorEntity):
 
 
 class ThermoSmartTargetTempSensor(_Base):
+    _attr_entity_registry_enabled_default = True
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "adjusted_target")
         self._attr_unique_id = f"{entry.entry_id}_adjusted_target"
@@ -150,6 +152,8 @@ class ThermoSmartPreheatSensor(_Base):
 
 
 class ThermoSmartConfidenceSensor(_Base):
+    _attr_entity_registry_enabled_default = True
+
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "learning_confidence")
         self._attr_unique_id = f"{entry.entry_id}_confidence"
@@ -201,6 +205,7 @@ class ThermoSmartWeatherOffsetSensor(_Base):
 
 class ThermoSmartStatusSensor(_Base):
     """Übersichts-Sensor: aktueller Betriebsstatus der Zone."""
+    _attr_entity_registry_enabled_default = True
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "status")

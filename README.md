@@ -1,265 +1,394 @@
-# ThermoSmart
+<p align="center">
+  <img src="custom_components/thermosmart/brand/logo.png" alt="ThermoSmart" width="220"/>
+</p>
 
-**KI-gestützte, wetterbewusste Heizungssteuerung für Home Assistant**
+<h1 align="center">ThermoSmart</h1>
+<p align="center"><strong>AI-powered, weather-aware heating control for Home Assistant</strong></p>
 
-[![HACS Custom](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://hacs.xyz)
-[![Version](https://img.shields.io/badge/version-v0.2.8b-blue.svg)](https://github.com/Mikasmarthome/ThermoSmart/releases)
-[![HA min](https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg)](https://www.home-assistant.io)
-[![License](https://img.shields.io/github/license/Mikasmarthome/ThermoSmart)](LICENSE)
-
-ThermoSmart ist eine Custom Integration für Home Assistant die deine Heizkörperthermostate (TRVs) intelligent steuert. Statt starren Zeitplänen lernt ThermoSmart wie dein Haus heizt und kühlt, reagiert auf Außenbedingungen, Wetterprognoisen und Präsenz – und optimiert so Komfort und Energieverbrauch vollautomatisch.
-
-**Ein Config-Eintrag = Eine Heizzone.** Mehrere Zonen möglich, jede unabhängig konfigurierbar.
-
----
-
-## Funktionen im Überblick
-
-### Intelligente TRV-Steuerung
-
-**Ventil-Boost-Setpoint**
-ThermoSmart berechnet einen höheren Sollwert als die Zieltemperatur um das Ventil stärker zu öffnen und schneller zu heizen. Der Setpoint berücksichtigt:
-- Temperaturdifferenz (Ziel – Ist)
-- Außentemperatur (kälter = mehr Boost)
-- Windgeschwindigkeit (Wind erhöht Wärmeverlust)
-- Außenluftfeuchtigkeit (feuchte Kälte kühlt stärker)
-- Gelernter Boost-Faktor (passt sich automatisch an)
-
-**Restwärme-Kompensation**
-Heizkörper strahlen nach dem Schließen des Ventils noch Wärme ab. ThermoSmart beginnt den Setpoint bereits 1,5°C vor Erreichen der Zieltemperatur zu reduzieren – das Ventil schließt früher und die Restwärme deckt den Rest. Verhindert Überschwingen ohne auf schlechte Erfahrungen warten zu müssen.
-
-**Bidirektionaler Lernfaktor**
-- Überschießt die Temperatur → Boost-Faktor wird reduziert (×0,92, Minimum 0,5)
-- Heizt zu langsam (nach 30 min noch >1°C unter Ziel) → Boost-Faktor wird erhöht (×1,05, Maximum 2,0)
-
-**Parallele TRV-Steuerung**
-Alle TRVs einer Zone werden gleichzeitig angesteuert, nicht nacheinander.
-
-**Sofort-Korrektur bei manuellen Änderungen**
-Wird ein TRV manuell verstellt (z.B. direkt am Gerät), erkennt ThermoSmart das sofort und korrigiert den Setpoint ohne auf den nächsten 5-Minuten-Zyklus zu warten.
+<p align="center">
+  <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v0.9.0b1-blue.svg" alt="Version"/></a>
+  <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
+</p>
 
 ---
 
-### Lokale TRV-Kalibrierung
-
-TRVs messen oft die Heizkörper- statt die Raumtemperatur. ThermoSmart berechnet den Offset zwischen Raumsensor und TRV-Sensor und schreibt ihn automatisch in die `local_temperature_calibration`-Entity des TRVs.
-
-- **Auto-Erkennung** via Device Registry – keine manuelle Konfiguration nötig
-- **EMA-Glättung** (α=0,25) – verhindert Jitter durch kurzfristige Schwankungen
-- Kalibrierung wird übersprungen wenn der Heizkörper gerade stark heizt (Sensor verfälscht)
-- Plausibilitätsprüfung: Offsets >7°C werden ignoriert
+> ⚠️ **Custom Integration – Use at your own risk.**
+> ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices in your home. Always ensure a safe minimum temperature is configured. Test thoroughly before relying on it for critical heating.
 
 ---
 
-### Lernalgorithmus (Multi-Faktor)
+## What is ThermoSmart?
 
-ThermoSmart lernt das thermische Verhalten deines Hauses über einen langen Zeitraum.
+ThermoSmart is not a classic thermostat controller.
 
-**Was gelernt wird:**
-| Datenpunkt | Wozu |
+It **learns the thermal behaviour of your building** — how fast each room heats up and cools down, how much solar radiation or wind affects the heat demand, and what temperatures you actually want at which times of day. It uses this knowledge together with weather forecasts, presence detection, and multi-factor AI to **predict and optimise your heating before you need it**.
+
+**Key difference to Better Thermostat or Versatile Thermostat:**
+Those integrations control TRVs precisely. ThermoSmart learns *why* and *when* to heat — and gets smarter over time.
+
+**Works alongside any thermostat integration.** In Observation mode, ThermoSmart watches what your existing controller (BT, VT, or any other) does and learns from it — without touching your setup. Switch to Active mode when you're ready.
+
+**One config entry = one heating zone.** Multiple zones are fully independent.
+
+---
+
+## Supported Devices
+
+### Tested
+| Device | Protocol |
 |---|---|
-| Zieltemperatur nach Uhrzeit/Wochentag | Zeitplan-Anpassung |
-| Heizrate (°C/min) | Vorheizzeit-Berechnung |
-| Abkühlrate (°C/min) | Realistische Vorheizzeit (Haus kühlt während Vorheizen weiter) |
-| Alle Außenbedingungen (Temp, Wind, Solar, Feuchte) | Thermische Ähnlichkeit für Prädiktionen |
+| SONOFF TRVZB | Zigbee (via Zigbee2MQTT) |
 
-**Gewichtung:**
-- Neuere Beobachtungen zählen mehr (Zeitgewichtung, Halbwertszeit 180 Tage)
-- Ähnliche Außenbedingungen zählen mehr (Gauß-Ähnlichkeit pro Faktor)
-- Jahreszeitliche Gewichtung: Dezember-Daten zählen im Winter mehr als Sommer-Daten
+### Potentially Compatible
+Any Home Assistant `climate` entity that supports `set_temperature` — including:
+- Danfoss Ally TRVs
+- Eurotronic Spirit Z-Wave
+- Tuya TRVs
+- Generic Z-Wave / Zigbee TRVs exposed as climate entities
+- Virtual thermostats (Better Thermostat, Versatile Thermostat, Generic Thermostat)
 
-**Konfidenz:**
-Solange zu wenig Daten vorhanden sind, werden sichere Standardwerte verwendet. Die Konfidenz steigt mit Datenmenge und -vielfalt (0–100%).
+> If you test ThermoSmart with a device not listed here, please open an issue and let us know!
 
 ---
 
-### Wetterintegration
+## Features
 
-**Temperaturkorrektur (aktuell)**
-| Außentemperatur | Korrektur |
+### Intelligent Heating
+
+**Multi-Factor TRV Boost Setpoint**
+ThermoSmart sends a higher setpoint than the target to open the valve wider and heat faster. Considers: temperature delta, outdoor temperature, wind speed, outdoor humidity, and a learned boost factor.
+
+**Residual Heat Compensation**
+Radiators keep emitting heat after the valve closes. ThermoSmart reduces the setpoint 1.5°C before reaching the target so residual heat does the rest — preventing overshoot without trial and error.
+
+**Adaptive Boost Factor**
+- Room overshoots → boost factor reduced (×0.92, min 0.5)
+- Room heats too slowly (>1°C below target after 30 min) → boost factor increased (×1.05, max 2.0)
+
+**Parallel TRV Control**
+All TRVs in a zone are controlled simultaneously, not sequentially.
+
+**Instant Override Detection**
+When a TRV is manually adjusted (at the device or in another app), ThermoSmart detects it immediately and corrects within seconds — no waiting for the next 5-minute cycle.
+
+---
+
+### Automatic Preheating
+
+ThermoSmart learns how long your room takes to reach the comfort temperature under current weather conditions. It starts heating automatically **before** the scheduled comfort time so the room is warm exactly when you need it.
+
+- Status sensor shows **"Vorheizen"** / **"Preheating"** while active
+- No heating suppression during preheat — the target must be reached on time
+- Preheat time adapts to outdoor conditions (colder = earlier start)
+
+---
+
+### Weather-Aware Heating
+
+**Temperature Offset (current conditions)**
+| Outdoor temperature | Heating adjustment |
 |---|---|
-| < 0°C | +1,5°C |
-| 0–10°C | +0,5°C |
+| < 0°C | +1.5°C |
+| 0–10°C | +0.5°C |
 | 10–18°C | ±0°C |
-| > 18°C | −1,0°C |
-| Wind > 10 m/s + kalt | Zusätzlich +0,5°C |
-| Sonne > 400 W/m² | Bis −0,5°C Reduktion |
+| > 18°C | −1.0°C |
+| Wind > 10 m/s + cold | Additional +0.5°C |
+| Solar > 400 W/m² + outdoor > 5°C | Up to −0.5°C |
 
-**Prognose-Unterdrückung**
-Wird die vorhergesagte Tageshöchsttemperatur höher als die Zieltemperatur, heizt ThermoSmart weniger oder gar nicht – das Haus erwärmt sich ohnehin selbst.
+**Forecast-Based Suppression with Feedback Learning**
+When today's forecast high exceeds the target temperature, ThermoSmart reduces heating — the house will warm up naturally. This is protected by two safety mechanisms:
 
-**Sommer-Modus**
-Automatische Erkennung über 72-Stunden-Rollmittelwert der Außentemperatur:
-- Ø > 18°C → Sommer: Heizung auf Frostschutz (12°C)
-- Ø < 15°C → Winter: Heizung aktiv
+1. **Delta protection**: If the room is ≥3°C below target, heating is always applied regardless of the forecast. Blend zone 1.5–3°C.
+2. **Comfort floor**: Even with forecast suppression active, the TRV setpoint never drops below `current_temp − 0.5°C`. The room cannot actively cool.
+3. **Forecast bias learning**: After 5 hours, ThermoSmart checks if the forecast was correct. If the room didn't reach the target, the forecast trust factor decreases. Visible as **"Prognose-Vertrauen"** in the learning progress sensor.
 
-**Eigene Wetterstation**
-Eigene Sensoren (Temperatur, Feuchte, Wind, Solar, Regen) haben Vorrang vor der HA-Wetter-Entity und werden bevorzugt verwendet.
+**Summer Mode**
+Automatically detected via 72-hour rolling average of outdoor temperature:
+- Average > 18°C → Summer: TRVs set to frost protection (12°C)
+- Average < 15°C → Winter: heating active
 
----
+Override available via the global **Summer Mode** switch.
 
-### Präsenz & Modi
-
-**7 Heizmodi** – wählbar über die Climate-Entity, Select-Entity oder automatisch:
-
-| Modus | Temperatur | Aktivierung |
-|---|---|---|
-| **Auto** | Zeitplan + Lernalgorithmus | Standard |
-| **Boost** | Konfigurierbar (Standard 24°C) | Manuell – schnelles Aufheizen |
-| **Komfort** | Konfigurierbar (Standard 21°C) | Manuell |
-| **Eco** | Konfigurierbar (Standard 19°C) | Manuell – energiesparend |
-| **Nacht** | Konfigurierbar (Standard 18°C) | Automatisch nach Zeitplan |
-| **Abwesend** | Konfigurierbar (Standard 17°C) | Automatisch wenn alle Personen weg |
-| **Urlaub** | Konfigurierbar (Standard 12°C) | Manuell oder via Urlaubsschalter |
-
-**Zeitplan**
-Werktag und Wochenende getrennt konfigurierbar. ThermoSmart heizt automatisch früher vor damit die Komforttemperatur pünktlich erreicht ist.
-
-**Override mit Auto-Reset**
-Wird die Temperatur manuell überschrieben, gilt der Override bis der Zeitplan-Slot wechselt – dann kehrt ThermoSmart selbständig zur Automatik zurück.
-
-**Präsenzerkennung**
-Konfigurierbare Person-Entities; unterstützt benutzerdefinierte HA-Zonen als Heimzone.
+**All weather sensors are optional.** ThermoSmart works with just a weather entity, with just own sensors, or with no weather data at all (uses physical estimates).
 
 ---
 
-### Fenstererkennung
+### Learning Algorithm (Multi-Factor AI)
 
-- Konfigurierbare Verzögerung: Heizung schaltet erst nach X Minuten ab (kein Fehlalarm beim kurzen Lüften)
-- Bei geöffnetem Fenster: TRVs werden aktiv auf 5°C gesetzt statt auf dem letzten Sollwert zu bleiben
-- Konfigurierbare Schließ-Toleranz: Heizung startet erst Y Minuten nach Schließen (Raum hat sich erst abgekühlt)
-- Sofort-Reaktion: Keine Wartezeit bis zum nächsten Zyklus
+ThermoSmart continuously learns the thermal behaviour of each zone.
 
----
-
-### TRV-Quirk-Management
-
-Viele TRVs haben interne Logiken die mit ThermoSmart konkurrieren. ThermoSmart erkennt und deaktiviert diese automatisch:
-
-| Quirk-Pattern | Gerät | Problem |
-|---|---|---|
-| `*_window_detection` | Sonoff TRVZB, Danfoss | TRV erkennt Fenster selbst → Konflikt mit ThermoSmart-Sensoren |
-| `*_child_lock` | Viele | Sperrt externe Setpoint-Änderungen → ThermoSmart kann nichts setzen |
-| `*_frost_protection` | Verschiedene | Interner Frostschutz kollidiert mit ThermoSmart |
-
-Erkennung automatisch via Device Registry – zusätzlich manuelle Konfiguration weiterer Switches möglich.
-
----
-
-### Wartung & Zuverlässigkeit
-
-**Ventil-Wartung**
-Jeden Sonntag um 03:00 Uhr öffnet ThermoSmart alle Ventile kurz vollständig (28°C, 30 Sekunden) und schließt sie wieder. Verhindert Festklemmen nach dem Sommer durch Kalk oder Gummi.
-
-**TRV-Watchdog**
-Thermostate die ungewollt auf `off` schalten werden automatisch auf `heat` zurückgestellt.
-
-**TRV-Offline-Erkennung**
-Offline-TRVs werden erkannt und geloggt. Sobald sie wieder erreichbar sind, wird normal weitervorgegangen.
-
-**Sensor-Noise-Filter**
-EMA-Glättung (α=0,2) und Spike-Erkennung (>4°C Abweichung vom Mittelwert) für alle Temperatursensoren. Fehlerhafte Einzelmessungen werden ignoriert.
-
----
-
-## Installation über HACS
-
-1. **HACS öffnen** → Integrationen → drei Punkte oben rechts → **Benutzerdefinierte Repositories**
-2. URL eingeben: `https://github.com/Mikasmarthome/ThermoSmart`
-3. Kategorie: **Integration** → Hinzufügen
-4. ThermoSmart in der Liste suchen und **Installieren**
-5. Home Assistant neu starten
-6. **Einstellungen → Integrationen → Integration hinzufügen → ThermoSmart**
-
----
-
-## Einrichtung (4-Schritt-Wizard)
-
-### Schritt 1 – Geräte & Sensoren
-| Feld | Beschreibung |
+| What is learned | Used for |
 |---|---|
-| **Zonenname** | Frei wählbar, z.B. "Wohnzimmer" |
-| **Thermostate / TRVs** | Climate-Entities (Pflichtfeld) |
-| **Temperatursensoren** | Raumsensoren – Durchschnitt wird berechnet |
-| **Luftfeuchtigkeitssensoren** | Für Lernalgorithmus (optional) |
-| **Fenstersensoren** | Binary Sensors (optional) |
-| **Fenster: Heizung aus nach** | Verzögerung in Minuten (Standard: 5 min) |
-| **Fenster: Heizung an nach** | Verzögerung beim Schließen (Standard: 2 min) |
-| **Ventil-Wartung** | Wöchentliche Ventilübung ein/aus |
-| **Frostschutz bei geöffnetem Fenster** | TRVs auf 5°C setzen statt auf letztem Wert lassen |
+| Target temperatures by time & weekday | Schedule adaptation |
+| Heating rate (°C/min) | Preheat time calculation |
+| Cooling rate (°C/min) | Net effective preheat time |
+| TRV setpoint efficiency (from observation mode) | Optimal TRV setpoint selection |
+| Window cooling rate | Predicting temperature drop when venting |
+| Forecast accuracy bias | Adjusting how much to trust weather forecasts |
+| All outdoor conditions (temp, wind, solar, humidity) | Thermal similarity weighting |
 
-### Schritt 2 – Temperaturen & Zeitplan
-| Feld | Standard |
-|---|---|
-| Komforttemperatur | 21°C |
-| Nachttemperatur | 18°C |
-| Abwesenheitstemperatur | 17°C |
-| Urlaubstemperatur | 12°C |
-| Boost-Temperatur | 24°C |
-| Eco-Temperatur | 19°C |
-| Temperaturtoleranz | 0,5°C |
-| Werktag: Komfort ab | 06:00 |
-| Werktag: Nacht ab | 22:00 |
-| Wochenende: Komfort ab | 08:00 |
-| Wochenende: Nacht ab | 23:00 |
+**Weighting:**
+- Newer observations count more (180-day half-life)
+- Similar outdoor conditions count more (Gaussian similarity per factor)
+- Seasonal weighting: December data counts more in winter than July data
 
-### Schritt 3 – Präsenz & Automatik
-| Feld | Beschreibung |
-|---|---|
-| **Personen** | Person-Entities für automatischen Abwesenheitsmodus |
-| **Heimzone** | Welche Zone gilt als "zuhause" (Standard: zone.home) |
-| **Urlaubsschalter** | Beliebige Entity die auf `on` wechselt (input_boolean, binary_sensor, calendar …) |
-| **Lernalgorithmus** | Ein/aus |
+**Learning phases (visible in Learning Progress sensor):**
+1. Phase 0 (<5 observations): Physical fallback formulas
+2. Phase 1 (5–50): First patterns emerging
+3. Phase 2 (50–150): Learning algorithm dominates
+4. Phase 3 (150+): Fully personalised
 
-### Schritt 4 – Wetter & Außensensoren
-| Feld | Beschreibung |
-|---|---|
-| **Wetter-Entity** | HA Wetter-Entity für Prognosen (z.B. weather.home) |
-| **Außentemperatur** | Eigene Wetterstation – hat Vorrang vor Wetter-Entity |
-| **Außenluftfeuchtigkeit** | Für präzisere Wetterkorrektur |
-| **Windgeschwindigkeit** | m/s oder km/h |
-| **Sonneneinstrahlung** | W/m² – für Solar-Kompensation |
-| **Niederschlag** | Optional |
+**Works with any thermostat integration.** In Observation mode, ThermoSmart reads setpoints from your existing controller (Better Thermostat, Versatile Thermostat, etc.) and learns from them. When you switch to Active mode, it already knows your heating system.
 
 ---
 
-## Entities pro Zone
+### Presence & Heating Modes
 
-### Steuerung
-| Entity | Typ | Beschreibung |
-|---|---|---|
-| `climate.thermosmart_*` | Climate | Virtuelle Thermostat-Entity – Ziel/Ist-Temp, Modus, Presets |
-| `select.*_heizmodus` | Select | Auto / Boost / Komfort / Eco / Nacht / Abwesend / Urlaub |
-| `switch.*_aktive_steuerung` | Switch | ThermoSmart aktiv (AN) oder Beobachtungsmodus (AUS) |
-| `switch.*_lernmodus` | Switch | Lernalgorithmus ein/aus |
+**6 Heating Modes**
 
-### Temperatursensoren
-| Entity | Einheit | Beschreibung |
+| Mode | Temperature | Activation |
 |---|---|---|
-| `sensor.*_zieltemperatur` | °C | Berechnete Zieltemperatur (nach Zeitplan, Wetter, Override) |
-| `sensor.*_trv_setpoint` | °C | Tatsächlicher Wert der ans TRV gesendet wird (inkl. Boost) |
-| `sensor.*_temperatur_ema_1h` | °C | Geglättete Innentemperatur (60-Minuten-Trend) |
+| **Auto** | Schedule + learning algorithm | Default |
+| **Comfort** | Configurable (default 21°C) | Manual |
+| **Eco** | Configurable (default 19°C) | Manual – energy saving |
+| **Night** | Configurable (default 18°C) | Automatic per schedule |
+| **Away** | Configurable (default 17°C) | Automatic when all persons away |
+| **Vacation** | Configurable (default 12°C) | Via global Vacation switch |
 
-### Diagnose-Sensoren
-| Entity | Einheit | Beschreibung |
-|---|---|---|
-| `sensor.*_temperatur_slope` | K/min | Aktuelle Aufheiz-/Abkühlrate des Raums |
-| `sensor.*_heat_loss` | K/min | Durchschnittliche Wärmeverlust-Rate (gelernt) |
-| `sensor.*_heating_power` | K/min | Durchschnittliche Aufheizrate der Heizung (gelernt) |
-| `sensor.*_sun_intensity_heatup` | % | Solarer Wärmeeintrag – wie stark die Sonne den Heizbedarf gerade reduziert |
-| `sensor.*_vorheizzeit` | min | Errechnete Vorlaufzeit bis Zieltemperatur |
-| `sensor.*_vorhersage_konfidenz` | % | Lernfortschritt – Qualität der Vorhersagen |
-| `sensor.*_wetterkorrektur` | °C | Aktueller Temperatur-Offset durch Außenbedingungen |
-| `sensor.*_status` | – | Zusammenfassung: Heizt / Temperatur gehalten / Sommer / Urlaub / … |
+**Manual Override with Auto-Reset**
+Manually setting a temperature overrides the schedule until the next schedule slot begins — then ThermoSmart returns to automatic control.
+
+**Presence Detection**
+Configurable person entities; supports custom HA zones as home zone.
+
+**Global Switches (no zone required)**
+- 🌞 **ThermoSmart – Summer Mode**: sets all zones to frost protection simultaneously
+- ✈️ **ThermoSmart – Vacation Mode**: sets all zones to vacation temperature; restores previous mode on deactivation
 
 ---
 
-## Beispiel-Automationen
+### Window Detection
 
-### Boost nach dem Lüften
+- Open delay: heating turns off only after X minutes (prevents false alarms from brief ventilation)
+- **TRVs are actively set to 5°C** when a window is open (not left at the last setpoint)
+- Close delay: heating resumes Y minutes after closing (room has cooled — no overshoot)
+- Instant reaction on state change
+
+---
+
+### Automatic TRV Management
+
+**Quirk Auto-Detection**
+Many TRVs have internal logic that conflicts with external control. ThermoSmart detects and disables these automatically via the Device Registry:
+
+| Pattern | Device | Problem |
+|---|---|---|
+| `*_window_detection` | SONOFF TRVZB, Danfoss | Own window detection conflicts with ThermoSmart sensors |
+| `*_child_lock` | Many | Blocks external setpoint commands |
+| `*_frost_protection` | Various | Internal frost protection conflicts |
+
+**Automatic Calibration**
+TRVs often measure the radiator rather than the room temperature. ThermoSmart detects the offset between room sensor and TRV sensor and writes it automatically to `local_temperature_calibration` — via Device Registry, no manual setup needed. EMA-smoothed to prevent jitter.
+
+**TRV Watchdog**
+Thermostats that unexpectedly switch to `off` are automatically restored to `heat`.
+
+**TRV Offline Detection**
+Offline TRVs are detected and logged. Control resumes automatically when they reconnect.
+
+---
+
+### Reliability & Diagnostics
+
+**Sensor Noise Filter**
+EMA smoothing (α=0.2) + spike detection (>4°C deviation from running average) on all temperature sensors. Single faulty readings are ignored.
+
+**Multi-Sensor Averaging with Fallback**
+If one of several temperature sensors goes unavailable, ThermoSmart automatically averages the remaining ones. The zone continues working without interruption.
+
+**Valve Maintenance**
+Every Sunday at 03:00, ThermoSmart fully opens all valves (28°C, 30 seconds) then closes them again. Prevents jamming after summer inactivity.
+
+---
+
+## Installation (HACS)
+
+1. **Open HACS** → Integrations → three dots top right → **Custom Repositories**
+2. Enter URL: `https://github.com/Mikasmarthome/ThermoSmart`
+3. Category: **Integration** → Add
+4. Find ThermoSmart in the list and **Download**
+5. Restart Home Assistant
+6. **Settings → Integrations → Add Integration → ThermoSmart**
+
+---
+
+## Setup (Step-by-Step)
+
+### Recommended First Steps
+
+1. Add **ThermoSmart System** first (global Summer + Vacation switches, no TRV needed)
+2. Add one or more **heating zones**
+3. Start in **Observation mode** (Active Control OFF) — ThermoSmart learns from your existing setup
+4. After a few days/weeks, switch to **Active Control ON**
+
+---
+
+### Step 1 – Devices & Sensors
+| Field | Description |
+|---|---|
+| **Zone name** | e.g. "Living Room" |
+| **Thermostats / TRVs** | Climate entities (required) |
+| **Temperature sensors** | Room sensors — average is calculated. If one fails, others continue |
+| **Humidity sensors** | For learning algorithm (optional) |
+| **Window sensors** | Binary sensors (optional) |
+| **Window: heating off after** | Delay in minutes (default: 5 min) |
+| **Window: heating on after** | Delay after closing (default: 2 min) |
+| **Valve maintenance** | Weekly valve exercise on/off |
+
+### Step 2 – Temperatures & Schedule
+| Field | Default |
+|---|---|
+| Comfort temperature | 21°C |
+| Night temperature | 18°C |
+| Away temperature | 17°C |
+| Vacation temperature | 12°C |
+| Eco temperature | 19°C |
+| Temperature tolerance | 0.5°C |
+| Weekday: comfort from | 06:00 |
+| Weekday: night from | 22:00 |
+| Weekend: comfort from | 08:00 |
+| Weekend: night from | 23:00 |
+
+### Step 3 – Presence & Automation
+| Field | Description |
+|---|---|
+| **Persons** | Person entities for automatic away mode |
+| **Home zone** | Which zone counts as "home" (default: zone.home) |
+| **Learning algorithm** | On/off |
+
+> **Vacation mode** is handled by the global **ThermoSmart – Vacation Mode** switch (ThermoSmart System entry), not per-zone.
+
+### Step 4 – Weather & Outdoor Sensors (all optional)
+| Field | Description |
+|---|---|
+| **Weather entity** | HA weather entity for forecasts |
+| **Outdoor temperature** | Own weather station — overrides weather entity |
+| **Outdoor humidity** | For thermal similarity learning |
+| **Wind speed** | m/s or km/h |
+| **Solar radiation** | W/m² — for solar compensation |
+| **Precipitation** | Optional |
+
+> All weather fields are optional. ThermoSmart uses whatever data is available and falls back to physical estimates otherwise.
+
+---
+
+## Entities
+
+### Per Zone
+| Entity | Type | Description |
+|---|---|---|
+| `climate.thermosmart_*` | Climate | Virtual thermostat — target/current temp, mode, presets |
+| `select.*_heizmodus` | Select | Auto / Comfort / Eco / Night / Away / Vacation |
+| `switch.*_aktive_steuerung` | Switch | Active control (ON) or Observation mode (OFF) |
+| `switch.*_lernmodus` | Switch | Learning algorithm on/off |
+| `sensor.*_zieltemperatur` | Sensor | Calculated target temperature |
+| `sensor.*_status` | Sensor | Operating status (Heating / Idle / Preheating / Summer / etc.) |
+| `sensor.*_lernfortschritt` | Sensor | Learning progress 0–100% with breakdown |
+
+### Global (ThermoSmart System)
+| Entity | Type | Description |
+|---|---|---|
+| `switch.thermosmart_sommer_modus` | Switch | Summer mode for all zones |
+| `switch.thermosmart_urlaubsmodus` | Switch | Vacation mode for all zones |
+
+### Diagnostic Sensors (hidden by default, enable in entity settings)
+TRV Setpoint, Preheat time, Weather correction, Temperature slope, Temperature EMA 1h, Heat loss, Heating power, Solar heat gain, Window cooling rate, TRV observations
+
+---
+
+## Status Sensor Values
+
+| Status | Condition |
+|---|---|
+| **Beobachtungsmodus** | Active control OFF, learning ON |
+| **Deaktiviert** | Active control OFF, learning OFF |
+| **Steuert (Lernmodus aus)** | Active control ON, learning OFF |
+| **Vorheizen** | Preheating before comfort time |
+| **Heizt** | Actively heating toward target |
+| **Temperatur gehalten** | Target reached, maintaining |
+| **Fenster offen** | Window open, heating paused |
+| **Sommer – Heizung aus** | Summer mode active |
+| **Urlaub** | Vacation mode |
+| **Abwesend** | All persons away |
+
+---
+
+## How the Learning Algorithm Works
+
+```
+Every 5 minutes:
+  Observe: indoor temp, target, delta, outdoor conditions, humidity
+  Measure: heating rate (if warming), cooling rate (if cooling)
+  Learn: TRV setpoint efficiency (observation mode)
+
+Prediction:
+  1. Schedule provides base target temperature
+  2. Learning algorithm: "What was optimal under similar conditions?"
+     → Multi-factor similarity (Gaussian weighting per outdoor condition)
+  3. Preheating: "How many minutes does this room need today?"
+  4. Weather engine: current offset + forecast suppression (with comfort floor)
+  5. Forecast feedback: "Was the forecast accurate last time?"
+
+Self-correction:
+  • Room overshoots → boost factor −8%
+  • Room heats too slowly → boost factor +5%
+  • Forecast too optimistic → forecast trust −6%
+  • Forecast accurate → forecast trust +1%
+```
+
+---
+
+## FAQ
+
+**Can I use ThermoSmart without weather data?**
+Yes. Without a weather entity or sensors, ThermoSmart uses physical estimates based on standard German residential building parameters. Accuracy improves when weather data is provided.
+
+**Can ThermoSmart learn from Better Thermostat / Versatile Thermostat?**
+Yes. In Observation mode, ThermoSmart reads TRV setpoints from any climate entity and learns from them. Just add your BT or VT entities as the zone's climate entities and run in Observation mode for a few weeks before switching to Active mode.
+
+**What if a temperature sensor goes offline?**
+ThermoSmart automatically averages the remaining available sensors. The zone continues without interruption. Only if all sensors are offline does ThermoSmart pause temperature-based decisions for that zone.
+
+**How long until the learning algorithm is effective?**
+Phase 1 (limited learning) starts after ~5 observations (25 minutes). Full personalisation (Phase 3) requires 150+ observations, typically 1–2 weeks of normal operation. TRV setpoint learning from Observation mode accelerates this significantly.
+
+**Can ThermoSmart collect anonymous usage data to improve itself?**
+Not currently. ThermoSmart is a fully local integration — no data leaves your Home Assistant instance. Future opt-in telemetry is being considered but would require explicit user consent.
+
+**I want to share my learning data for debugging / development.**
+The learning data is stored locally at `/config/.storage/thermosmart_learning_data`. You can share this file to help diagnose issues or contribute to improving the algorithm.
+
+---
+
+## Languages
+
+| Language | Status |
+|---|---|
+| 🇬🇧 English | ✅ Complete |
+| 🇩🇪 German | ✅ Complete |
+
+More languages are welcome! Add a file in `custom_components/thermosmart/translations/` and open a Pull Request.
+
+---
+
+## Example Automations
+
+### Warm up after ventilation
 ```yaml
 automation:
-  - alias: "ThermoSmart – Boost nach Lüften"
+  - alias: "ThermoSmart – Komfort nach Lüften"
     trigger:
       - platform: state
         entity_id: binary_sensor.fenster_wohnzimmer
@@ -269,7 +398,7 @@ automation:
         target:
           entity_id: select.thermosmart_wohnzimmer_heizmodus
         data:
-          option: "Boost"
+          option: "Komfort"
       - delay: "00:30:00"
       - service: select.select_option
         target:
@@ -278,7 +407,7 @@ automation:
           option: "Auto"
 ```
 
-### Benachrichtigung bei langsamem Heizen
+### Notify on slow heating
 ```yaml
 automation:
   - alias: "ThermoSmart – Heizung zu langsam"
@@ -294,64 +423,41 @@ automation:
     action:
       - service: notify.mobile_app
         data:
-          message: "Wohnzimmer heizt langsam – Ventil prüfen?"
+          message: "Living room heating slow – check valve?"
 ```
 
 ---
 
-## Wie funktioniert der Lernalgorithmus?
+## Contributing
 
-```
-Beobachtung alle 5 Minuten:
-  - Innentemperatur, Zieltemperatur, Differenz
-  - Außentemperatur, Wind, Sonne, Feuchte
-  - Gemessene Heizrate (falls Raum sich erwärmt)
-  - Gemessene Abkühlrate (falls Raum sich abkühlt)
+Contributions are very welcome!
 
-Vorhersage:
-  1. Zeitplan gibt Basis-Zieltemperatur vor
-  2. Lernalgorithmus gleicht ab: "Was war bei ähnlichen Bedingungen optimal?"
-     → Multi-Faktor-Ähnlichkeit (Gauß-Gewichtung pro Außenbedingung)
-  3. Wetter-Engine korrigiert für aktuelle und prognostizierte Bedingungen
-  4. Ergebnis: angepasste Zieltemperatur → berechne TRV-Setpoint
+### Report Bugs
+→ [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues/new) with:
+- HA version and ThermoSmart version
+- What happened
+- Relevant log lines (`Settings → System → Logs → thermosmart`)
 
-Selbstkorrektur:
-  - Überschießen erkannt → Boost-Faktor −8%
-  - Zu langsames Heizen erkannt → Boost-Faktor +5%
-```
+### Suggest Features
+→ [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues/new) with label `enhancement`
 
----
+### Contribute Code
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/my-feature`
+3. Commit: `git commit -m "feat: my feature"`
+4. Push: `git push origin feature/my-feature`
+5. Open a **Pull Request**
 
-## Mithelfen & Contributing
+### Especially Needed
+- Testing with more TRV models (Danfoss, Eurotronic, Tuya, …)
+- Additional language translations
+- Device quirk patterns for more TRV models
 
-Beiträge sind herzlich willkommen!
-
-### Bugs melden
-→ [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues/new) mit:
-- HA-Version und ThermoSmart-Version
-- Was passiert ist
-- Relevante Zeilen aus dem HA-Log (`Einstellungen → System → Protokoll → thermosmart`)
-
-### Features vorschlagen
-→ [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues/new) mit Label `enhancement`
-
-### Code beitragen
-1. Repository **forken**
-2. Feature-Branch: `git checkout -b feature/mein-feature`
-3. Commit: `git commit -m "feat: mein feature"`
-4. Push: `git push origin feature/mein-feature`
-5. **Pull Request** öffnen
-
-#### Besonders gesucht
-- Tests mit echten TRV-Modellen (Sonoff, Danfoss, Eurotronic, Tuya, …)
-- Übersetzungen – einfach neue Datei in `custom_components/thermosmart/translations/` anlegen
-- Device-Quirks für weitere TRV-Modelle
-
-### Fragen & Diskussion
+### Discussions
 → [GitHub Discussions](https://github.com/Mikasmarthome/ThermoSmart/discussions)
 
 ---
 
-## Lizenz
+## License
 
-MIT License – siehe [LICENSE](LICENSE)
+MIT License – see [LICENSE](LICENSE)

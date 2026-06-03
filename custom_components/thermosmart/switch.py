@@ -18,18 +18,35 @@ _LOGGER = logging.getLogger(__name__)
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
+    cfg = {**entry.data, **entry.options}
+
+    # System-Entry: nur globale Schalter
+    if cfg.get("entry_type") == "system":
+        async_add_entities([
+            ThermoSmartGlobalSummerSwitch(hass, entry),
+            ThermoSmartGlobalVacationSwitch(hass, entry),
+        ])
+        return
+
+    # Zone-Entry: zone-spezifische Schalter
     coordinator: ThermoSmartCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     entities = [
         ThermoSmartActiveSwitch(coordinator, entry),
         ThermoSmartLearningSwitch(coordinator, entry),
     ]
-    # Globale Schalter nur einmal anlegen (beim ersten Zone-Setup)
-    if "global_switches_created" not in hass.data[DOMAIN]:
+
+    # Backward-Compat: globale Schalter an die erste Zone anhängen wenn kein System-Entry existiert
+    has_system = any(
+        e.data.get("entry_type") == "system"
+        for e in hass.config_entries.async_entries(DOMAIN)
+    )
+    if not has_system and "global_switches_created" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["global_switches_created"] = True
         entities.extend([
             ThermoSmartGlobalSummerSwitch(hass, entry),
             ThermoSmartGlobalVacationSwitch(hass, entry),
         ])
+
     async_add_entities(entities)
 
 
@@ -141,7 +158,7 @@ def _global_device_info() -> DeviceInfo:
 def _all_coordinators(hass: HomeAssistant):
     skip = {"learning_engine", "global_switches_created"}
     for key, data in hass.data.get(DOMAIN, {}).items():
-        if key not in skip and isinstance(data, dict):
+        if key not in skip and isinstance(data, dict) and data.get("type") != "system":
             if coord := data.get("coordinator"):
                 yield coord
 

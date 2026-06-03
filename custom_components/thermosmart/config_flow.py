@@ -1,4 +1,4 @@
-"""Config flow für ThermoSmart – 4 Schritte pro Zone."""
+"""Config flow für ThermoSmart."""
 from __future__ import annotations
 
 import voluptuous as vol
@@ -20,7 +20,6 @@ from .const import (
     CONF_HOME_ZONE,
     CONF_VACATION_TEMP,
     CONF_ECO_TEMP,
-    CONF_VACATION_BOOLEAN,
     CONF_VALVE_MAINTENANCE,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
@@ -32,7 +31,6 @@ from .const import (
 # ── Schema-Hilfsfunktionen (eine pro Schritt) ────────────────────────────────
 
 def _schema_devices(d: dict) -> vol.Schema:
-    """Schritt 1: Geräte & Sensoren."""
     return vol.Schema({
         vol.Required("name", default=d.get("name", "")):
             selector.TextSelector(selector.TextSelectorConfig(type=selector.TextSelectorType.TEXT)),
@@ -65,9 +63,7 @@ def _schema_devices(d: dict) -> vol.Schema:
 
 
 def _schema_schedule(d: dict) -> vol.Schema:
-    """Schritt 2: Temperaturen & Zeitplan."""
     return vol.Schema({
-        # ── Zieltemperaturen ───────────────────────────────────────────
         vol.Required("comfort_temp", default=d.get("comfort_temp", 21.0)):
             selector.NumberSelector(selector.NumberSelectorConfig(
                 min=5, max=30, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
@@ -92,15 +88,10 @@ def _schema_schedule(d: dict) -> vol.Schema:
             selector.NumberSelector(selector.NumberSelectorConfig(
                 min=0.1, max=2.0, step=0.1, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
             )),
-
-        # ── Werktag-Zeitplan ───────────────────────────────────────────
-        # ── Werktag-Zeitplan ───────────────────────────────────────────
         vol.Optional(CONF_SCHED_WD_MORNING, default=d.get(CONF_SCHED_WD_MORNING, "06:00")):
             selector.TimeSelector(),
         vol.Optional(CONF_SCHED_WD_NIGHT, default=d.get(CONF_SCHED_WD_NIGHT, "22:00")):
             selector.TimeSelector(),
-
-        # ── Wochenend-Zeitplan ─────────────────────────────────────────
         vol.Optional(CONF_SCHED_WE_MORNING, default=d.get(CONF_SCHED_WE_MORNING, "08:00")):
             selector.TimeSelector(),
         vol.Optional(CONF_SCHED_WE_NIGHT, default=d.get(CONF_SCHED_WE_NIGHT, "23:00")):
@@ -109,17 +100,6 @@ def _schema_schedule(d: dict) -> vol.Schema:
 
 
 def _schema_presence(d: dict) -> vol.Schema:
-    """Schritt 3: Präsenz & Automatik."""
-    # EntitySelector validiert leere Strings als ungültige Entity-ID.
-    # Lösung: default nur setzen wenn ein Wert existiert – dann sendet HA
-    # None statt "" wenn das Feld leer bleibt, und vol.Optional akzeptiert None.
-    vacation_existing = d.get(CONF_VACATION_BOOLEAN) or None
-    vacation_key = (
-        vol.Optional(CONF_VACATION_BOOLEAN, default=vacation_existing)
-        if vacation_existing
-        else vol.Optional(CONF_VACATION_BOOLEAN)
-    )
-
     return vol.Schema({
         vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True)),
@@ -127,20 +107,13 @@ def _schema_presence(d: dict) -> vol.Schema:
         vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="zone")),
 
-        # Wirklich optional – funktioniert mit input_boolean, binary_sensor,
-        # calendar, switch … jede Entity deren state == "on"
-        vacation_key:
-            selector.EntitySelector(selector.EntitySelectorConfig()),
-
         vol.Required(CONF_LEARNING_ENABLED, default=d.get(CONF_LEARNING_ENABLED, DEFAULT_LEARNING_ENABLED)):
             selector.BooleanSelector(),
     })
 
 
 def _schema_weather(d: dict) -> vol.Schema:
-    """Schritt 4: Wetter & Außensensoren (alles optional)."""
     return vol.Schema({
-        # Kein Standardwert – Nutzer wählt aktiv seine Wetter-Entity
         vol.Optional(CONF_WEATHER_ENTITY, default=d.get(CONF_WEATHER_ENTITY, "")):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
 
@@ -164,15 +137,32 @@ def _schema_weather(d: dict) -> vol.Schema:
 # ── Config Flow (Ersteinrichtung) ────────────────────────────────────────────
 
 class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """4-Schritt-Einrichtung: Ein Eintrag = Eine Heizzone."""
+    """Einrichtung: Entweder ThermoSmart System (globale Schalter) oder eine Heizzone."""
 
     VERSION = 1
 
     def __init__(self) -> None:
         self._data: dict = {}
 
-    # Schritt 1: Geräte & Sensoren
+    # Startmenü: System oder Zone
     async def async_step_user(self, user_input: dict | None = None):
+        return self.async_show_menu(
+            step_id="user",
+            menu_options=["add_system", "add_zone"],
+        )
+
+    # Option A: Globale Steuerung einrichten (kein TRV nötig)
+    async def async_step_add_system(self, user_input: dict | None = None):
+        for entry in self.hass.config_entries.async_entries(DOMAIN):
+            if entry.data.get("entry_type") == "system":
+                return self.async_abort(reason="system_already_configured")
+        return self.async_create_entry(
+            title="ThermoSmart System",
+            data={"entry_type": "system"},
+        )
+
+    # Option B: Heizzone hinzufügen (4-Schritt-Flow)
+    async def async_step_add_zone(self, user_input: dict | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
             if not user_input.get("name", "").strip():
@@ -184,12 +174,11 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_schedule()
 
         return self.async_show_form(
-            step_id="user",
+            step_id="add_zone",
             data_schema=_schema_devices(self._data),
             errors=errors,
         )
 
-    # Schritt 2: Temperaturen & Zeitplan
     async def async_step_schedule(self, user_input: dict | None = None):
         if user_input is not None:
             self._data.update(user_input)
@@ -200,7 +189,6 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_schema_schedule(self._data),
         )
 
-    # Schritt 3: Präsenz & Automatik
     async def async_step_presence(self, user_input: dict | None = None):
         if user_input is not None:
             self._data.update(user_input)
@@ -211,7 +199,6 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=_schema_presence(self._data),
         )
 
-    # Schritt 4: Wetter & Außensensoren
     async def async_step_weather(self, user_input: dict | None = None):
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -233,7 +220,6 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     def _defaults_from_existing(self) -> dict:
-        """Wetter-Entity und Außensensoren aus vorhandenem Eintrag vorbelegen."""
         for entry in self.hass.config_entries.async_entries(DOMAIN):
             data = {**entry.data, **entry.options}
             if data.get(CONF_WEATHER_ENTITY):
@@ -313,7 +299,6 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
                 errors[CONF_WEATHER_ENTITY] = "entity_not_found"
             else:
                 self._data.update(user_input)
-                # Alle gespeicherten Werte mit geänderten Feldern zusammenführen
                 return self.async_create_entry(title="", data={**current, **self._data})
 
         return self.async_show_form(

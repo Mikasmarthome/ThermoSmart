@@ -2,6 +2,17 @@
   "config": {
     "step": {
       "user": {
+        "title": "ThermoSmart einrichten",
+        "menu_options": {
+          "add_system": "Globale Steuerung einrichten (Sommer- & Urlaubsmodus)",
+          "add_zone": "Heizzone hinzufügen"
+        }
+      },
+      "add_system": {
+        "title": "Globale Steuerung",
+        "description": "Richtet den globalen Sommer- und Urlaubsmodus ein. Kein Thermostat erforderlich. Die globalen Schalter steuern alle Zonen gleichzeitig."
+      },
+      "add_zone": {
         "title": "Schritt 1 / 4 – Geräte & Sensoren",
         "description": "Wähle die TRVs und Sensoren für diese Heizzone. Kalibrierungs-Entities und Quirk-Switches erkennt ThermoSmart automatisch.",
         "data": {
@@ -22,7 +33,7 @@
           "comfort_temp": "Komforttemperatur (wenn jemand zuhause)",
           "night_temp": "Nachttemperatur (Absenkung beim Schlafen)",
           "away_temp": "Abwesenheitstemperatur (automatisch wenn alle weg sind)",
-          "vacation_temp": "Urlaubstemperatur (Frostschutz wenn Wohnung längere Zeit leer steht)",
+          "vacation_temp": "Urlaubstemperatur (Frostschutz)",
           "eco_temp": "Eco-Temperatur (energiesparend, zwischen Nacht und Komfort)",
           "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
           "sched_wd_morning": "Werktag: Komfort ab",
@@ -43,17 +54,15 @@
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone (Standard: zone.home)",
-          "vacation_boolean": "Urlaubsschalter (optional)",
           "learning_enabled": "Lernalgorithmus aktivieren"
         },
         "data_description": {
-          "vacation_boolean": "Beliebige Entity die auf 'on' wechselt wenn Urlaub aktiv ist (input_boolean, binary_sensor, calendar …). Kann leer bleiben.",
           "learning_enabled": "ThermoSmart lernt Heizraten, Abkühlraten und optimale Temperaturen für diese Zone."
         }
       },
       "weather": {
         "title": "Schritt 4 / 4 – Wetter & Außensensoren",
-        "description": "Alle Felder optional – eigene Sensoren haben Vorrang vor der Wetter-Entity.",
+        "description": "Alle Felder optional – eigene Sensoren haben Vorrang vor der Wetter-Entity. Das System arbeitet auch ohne Wetterdaten.",
         "data": {
           "weather_entity": "Wetter-Entity (z. B. weather.home)",
           "outdoor_temp_sensor": "Außentemperatur – eigene Wetterstation (Vorrang)",
@@ -74,7 +83,8 @@
       "required": "Mindestens ein Thermostat / TRV erforderlich."
     },
     "abort": {
-      "already_configured": "Diese Zone ist bereits konfiguriert."
+      "already_configured": "Diese Zone ist bereits konfiguriert.",
+      "system_already_configured": "Die globale ThermoSmart-Steuerung ist bereits eingerichtet."
     }
   },
   "options": {
@@ -95,7 +105,7 @@
       },
       "schedule": {
         "title": "Schritt 2 / 4 – Temperaturen & Zeitplan",
-        "description": "Tagesablauf: Nacht → Komfort → Nacht\n\nAbwesenheit wird automatisch über die Präsenzerkennung gesteuert.",
+        "description": "Tagesablauf: Nacht → Komfort → Nacht",
         "data": {
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
@@ -109,9 +119,9 @@
           "sched_we_night": "Wochenende: Nacht ab"
         },
         "data_description": {
-          "sched_wd_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
+          "sched_wd_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
-          "sched_we_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
+          "sched_we_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
         }
       },
@@ -120,11 +130,7 @@
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone",
-          "vacation_boolean": "Urlaubsschalter (optional)",
           "learning_enabled": "Lernalgorithmus aktivieren"
-        },
-        "data_description": {
-          "vacation_boolean": "Beliebige Entity die auf 'on' wechselt wenn Urlaub aktiv ist. Kann leer bleiben."
         }
       },
       "weather": {
@@ -167,9 +173,9 @@
       "status": { "name": "Status" },
       "temp_slope": { "name": "Temperatur Slope" },
       "temp_ema_1h": { "name": "Temperatur EMA 1h" },
-      "heat_loss": { "name": "Heat Loss" },
-      "heating_power": { "name": "Heating Power" },
-      "sun_intensity": { "name": "Sun Intensity Heatup" },
+      "heat_loss": { "name": "Wärmeverlust" },
+      "heating_power": { "name": "Heizleistung" },
+      "sun_intensity": { "name": "Solar-Wärmeeintrag" },
       "window_cooling_rate": { "name": "Fenster Abkühlrate" },
       "trv_observations": { "name": "TRV Beobachtungen" }
     }

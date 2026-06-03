@@ -36,14 +36,12 @@ from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERN,
     CONF_VACATION_TEMP,
-    CONF_BOOST_TEMP,
     CONF_ECO_TEMP,
     CONF_NO_OFF_FALLBACK,
     NOISE_FILTER_SPIKE_THRESHOLD,
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
     TEMP_FROST_PROTECTION,
-    TEMP_BOOST,
     TEMP_ECO,
     FROST_FALLBACK_TEMP,
     SUMMER_THRESHOLD,
@@ -60,7 +58,6 @@ from .const import (
     HEATING_MODE_VACATION,
     HEATING_MODE_COMFORT,
     HEATING_MODE_NIGHT,
-    HEATING_MODE_BOOST,
     HEATING_MODE_ECO,
 )
 from .weather_engine import WeatherEngine
@@ -275,10 +272,11 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
                             temp_at_open = self._window_open_temp.pop(entity_id, None)
                             current = self._read_avg_sensor(cfg.get("temp_sensors", []))
                             if temp_at_open is not None and current is not None and duration_min >= 1.0:
+                                last_weather = (self.data or {}).get("weather", {})
                                 self.hass.async_create_task(
                                     self.learning_engine.async_observe_window_cooling(
                                         self.zone_id, duration_min, temp_at_open, current,
-                                        {}  # Wetterdaten folgen im nächsten Zyklus
+                                        last_weather,
                                     )
                                 )
                         self._window_open_at.pop(entity_id, None)
@@ -617,7 +615,6 @@ class ThermoSmartCoordinator(DataUpdateCoordinator):
             night_temp=cfg.get("night_temp", 18.0),
             away_temp=cfg.get("away_temp", 17.0),
             vacation_temp=cfg.get(CONF_VACATION_TEMP, 12.0),
-            boost_temp=cfg.get(CONF_BOOST_TEMP, TEMP_BOOST),
             eco_temp=cfg.get(CONF_ECO_TEMP, TEMP_ECO),
             schedule_cfg=cfg,
         )

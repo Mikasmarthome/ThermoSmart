@@ -20,7 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from .const import (
     DOMAIN, VERSION,
     HEATING_MODE_AUTO, HEATING_MODE_COMFORT, HEATING_MODE_NIGHT,
-    HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_BOOST, HEATING_MODE_ECO,
+    HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_ECO,
     TEMP_FROST_PROTECTION,
 )
 from . import ThermoSmartCoordinator
@@ -30,7 +30,6 @@ _LOGGER = logging.getLogger(__name__)
 # Heizmodus → Preset-Name für die HA-UI
 MODE_TO_PRESET = {
     HEATING_MODE_AUTO:     "Auto",
-    HEATING_MODE_BOOST:    "Boost",
     HEATING_MODE_COMFORT:  "Komfort",
     HEATING_MODE_ECO:      "Eco",
     HEATING_MODE_NIGHT:    "Nacht",

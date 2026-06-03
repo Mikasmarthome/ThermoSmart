@@ -24,7 +24,6 @@
           "night_temp": "Nachttemperatur (Absenkung beim Schlafen)",
           "away_temp": "Abwesenheitstemperatur (automatisch wenn alle weg sind)",
           "vacation_temp": "Urlaubstemperatur (Frostschutz wenn Wohnung längere Zeit leer steht)",
-          "boost_temp": "Boost-Temperatur (schnelles Aufheizen, z. B. nach dem Lüften)",
           "eco_temp": "Eco-Temperatur (energiesparend, zwischen Nacht und Komfort)",
           "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
           "sched_wd_morning": "Werktag: Komfort ab",
@@ -103,7 +102,6 @@
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
           "vacation_temp": "Urlaubstemperatur",
-          "boost_temp": "Boost-Temperatur",
           "eco_temp": "Eco-Temperatur",
           "temp_tolerance": "Temperaturtoleranz",
           "sched_wd_morning": "Werktag: Komfort ab",
@@ -156,8 +154,8 @@
       "mode": {
         "name": "Heizmodus",
         "state": {
-          "Auto": "Auto", "Boost": "Boost", "Komfort": "Komfort",
-          "Eco": "Eco", "Nacht": "Nacht", "Abwesend": "Abwesend", "Urlaub": "Urlaub"
+          "Auto": "Auto", "Komfort": "Komfort", "Eco": "Eco",
+          "Nacht": "Nacht", "Abwesend": "Abwesend", "Urlaub": "Urlaub"
         }
       }
     },
@@ -172,7 +170,9 @@
       "temp_ema_1h": { "name": "Temperatur EMA 1h" },
       "heat_loss": { "name": "Heat Loss" },
       "heating_power": { "name": "Heating Power" },
-      "sun_intensity": { "name": "Sun Intensity Heatup" }
+      "sun_intensity": { "name": "Sun Intensity Heatup" },
+      "window_cooling_rate": { "name": "Fenster Abkühlrate" },
+      "trv_observations": { "name": "TRV Beobachtungen" }
     }
   }
 }

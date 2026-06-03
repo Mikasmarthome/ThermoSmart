@@ -32,7 +32,6 @@ AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
 
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
-CONF_BOOST_TEMP        = "boost_temp"          # Boost-Preset Temperatur
 CONF_ECO_TEMP          = "eco_temp"            # Eco-Preset Temperatur
 CONF_NO_OFF_FALLBACK   = "no_off_fallback"     # Bei Fensteroffen: 5°C statt nichts
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
@@ -55,7 +54,6 @@ TEMP_COMFORT = 21.0
 TEMP_NIGHT = 18.0
 TEMP_AWAY = 17.0
 TEMP_FROST_PROTECTION = 12.0
-TEMP_BOOST = 24.0
 TEMP_ECO = 19.0
 FROST_FALLBACK_TEMP = 5.0   # TRV-Setpoint wenn Fenster offen (statt hvac_mode off)
 
@@ -101,10 +99,8 @@ HEATING_MODE_ECO      = "eco"
 HEATING_MODE_NIGHT    = "night"
 HEATING_MODE_AWAY     = "away"
 HEATING_MODE_VACATION = "vacation"
-HEATING_MODE_BOOST    = "boost"
 HEATING_MODES = [
     HEATING_MODE_AUTO,
-    HEATING_MODE_BOOST,
     HEATING_MODE_COMFORT,
     HEATING_MODE_ECO,
     HEATING_MODE_NIGHT,

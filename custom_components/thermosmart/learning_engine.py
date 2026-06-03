@@ -36,9 +36,7 @@ from .const import (
     PREHEAT_MIN_DELTA,
     HEATING_MODE_AUTO,
     CONF_VACATION_TEMP,
-    CONF_BOOST_TEMP,
     CONF_ECO_TEMP,
-    TEMP_BOOST,
     TEMP_ECO,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
@@ -481,7 +479,6 @@ class LearningEngine:
         night_temp: float = 18.0,
         away_temp: float = 17.0,
         vacation_temp: float = 12.0,
-        boost_temp: float = TEMP_BOOST,
         eco_temp: float = TEMP_ECO,
         schedule_cfg: dict | None = None,
     ) -> float:
@@ -491,7 +488,6 @@ class LearningEngine:
             "night": night_temp,
             "away": away_temp,
             "vacation": vacation_temp,
-            "boost": boost_temp,
             "eco": eco_temp,
         }
         if mode != HEATING_MODE_AUTO:

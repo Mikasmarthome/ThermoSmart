@@ -12,7 +12,8 @@
           "window_sensors": "Window sensors (binary_sensor)",
           "window_open_delay": "Heating off – delay after window opens",
           "window_close_delay": "Heating on – delay after window closes",
-          "valve_maintenance": "Enable valve maintenance (every Sunday at 03:00)"
+          "valve_maintenance": "Enable valve maintenance (every Sunday at 03:00)",
+          "no_off_fallback": "When window open: set TRVs to 5°C instead of leaving at last value"
         }
       },
       "schedule": {
@@ -23,6 +24,7 @@
           "night_temp": "Night temperature (setback during sleep)",
           "away_temp": "Away temperature (automatically when everyone is gone)",
           "vacation_temp": "Vacation temperature (frost protection when home is empty for extended period)",
+          "eco_temp": "Eco temperature (energy saving, between night and comfort)",
           "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",
@@ -99,6 +101,8 @@
           "comfort_temp": "Comfort temperature",
           "night_temp": "Night temperature",
           "away_temp": "Away temperature",
+          "vacation_temp": "Vacation temperature",
+          "eco_temp": "Eco temperature",
           "temp_tolerance": "Temperature tolerance",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",
@@ -150,8 +154,8 @@
       "mode": {
         "name": "Heating mode",
         "state": {
-          "Auto": "Auto", "Komfort": "Comfort", "Nacht": "Night",
-          "Abwesend": "Away", "Urlaub": "Vacation"
+          "Auto": "Auto", "Komfort": "Comfort", "Eco": "Eco",
+          "Nacht": "Night", "Abwesend": "Away", "Urlaub": "Vacation"
         }
       }
     },
@@ -161,7 +165,14 @@
       "preheat_minutes": { "name": "Preheat time" },
       "confidence": { "name": "Prediction confidence" },
       "weather_offset": { "name": "Weather correction" },
-      "status": { "name": "Status" }
+      "status": { "name": "Status" },
+      "temp_slope": { "name": "Temperature slope" },
+      "temp_ema_1h": { "name": "Temperature EMA 1h" },
+      "heat_loss": { "name": "Heat loss" },
+      "heating_power": { "name": "Heating power" },
+      "sun_intensity": { "name": "Sun intensity heatup" },
+      "window_cooling_rate": { "name": "Window cooling rate" },
+      "trv_observations": { "name": "TRV observations" }
     }
   }
 }

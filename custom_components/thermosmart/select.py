@@ -12,7 +12,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from .const import (
     DOMAIN, VERSION,
     HEATING_MODE_AUTO, HEATING_MODE_COMFORT, HEATING_MODE_NIGHT,
-    HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_BOOST, HEATING_MODE_ECO,
+    HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_ECO,
 )
 from . import ThermoSmartCoordinator
 
@@ -20,7 +20,6 @@ _LOGGER = logging.getLogger(__name__)
 
 MODE_LABELS = {
     HEATING_MODE_AUTO:     "Auto",
-    HEATING_MODE_BOOST:    "Boost",
     HEATING_MODE_COMFORT:  "Komfort",
     HEATING_MODE_ECO:      "Eco",
     HEATING_MODE_NIGHT:    "Nacht",

@@ -435,6 +435,7 @@ class ThermoSmartCoordinator(
                 await self._apply_frost_protection(cfg)
 
             recommendation["heating_failure"] = self._heating_failure_notified
+            recommendation["indoor_humidity"] = indoor_humidity
 
             return {
                 "weather": weather_data,

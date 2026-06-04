@@ -97,6 +97,10 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         return self._zone.get("current_temp")
 
     @property
+    def current_humidity(self) -> float | None:
+        return self._zone.get("indoor_humidity")
+
+    @property
     def target_temperature(self) -> float | None:
         return self._zone.get("adjusted_target")
 

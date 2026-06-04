@@ -62,15 +62,15 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 
 
 class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
-    """Aktive Steuerung – Standard: AUS (Beobachtungsmodus)."""
+    """Active control switch – default OFF (observation mode)."""
     _attr_has_entity_name = True
+    _attr_translation_key = "active_control"
     _attr_icon = "mdi:thermostat-auto"
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_active_control"
-        self._attr_name = "Aktive Steuerung"
         self._attr_device_info = _device_info(entry)
         self._is_on = False
 
@@ -87,7 +87,7 @@ class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict:
         return {
-            "modus": "Aktive Steuerung" if self._is_on else "Beobachtungsmodus",
+            "mode": "active_control" if self._is_on else "observation",
         }
 
     async def async_turn_on(self, **kwargs) -> None:
@@ -104,15 +104,15 @@ class ThermoSmartActiveSwitch(SwitchEntity, RestoreEntity):
 
 
 class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
-    """Lernmodus – Standard: AN."""
+    """Learning mode switch – default ON."""
     _attr_has_entity_name = True
+    _attr_translation_key = "learning"
     _attr_icon = "mdi:brain"
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_learning"
-        self._attr_name = "Lernmodus"
         self._attr_device_info = _device_info(entry)
         self._is_on = True
 
@@ -168,9 +168,9 @@ def _all_coordinators(hass: HomeAssistant):
 
 
 class ThermoSmartGlobalSummerSwitch(SwitchEntity, RestoreEntity):
-    """Sommer-Modus für alle ThermoSmart-Zonen gleichzeitig."""
+    """Summer mode – applies to all ThermoSmart zones simultaneously."""
     _attr_has_entity_name = False
-    _attr_name = "ThermoSmart – Sommer-Modus"
+    _attr_name = "ThermoSmart – Summer Mode"
     _attr_icon = "mdi:weather-sunny"
     _attr_unique_id = DOMAIN_GLOBAL_SUMMER
 
@@ -194,7 +194,7 @@ class ThermoSmartGlobalSummerSwitch(SwitchEntity, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict:
         zones = sum(1 for _ in _all_coordinators(self._hass))
-        return {"aktive_zonen": zones, "modus": "Sommer erzwungen" if self._is_on else "Automatisch"}
+        return {"active_zones": zones, "mode": "forced" if self._is_on else "automatic"}
 
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True
@@ -212,9 +212,9 @@ class ThermoSmartGlobalSummerSwitch(SwitchEntity, RestoreEntity):
 
 
 class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
-    """Urlaubs-Modus für alle ThermoSmart-Zonen gleichzeitig."""
+    """Vacation mode – applies to all ThermoSmart zones simultaneously."""
     _attr_has_entity_name = False
-    _attr_name = "ThermoSmart – Urlaubsmodus"
+    _attr_name = "ThermoSmart – Vacation Mode"
     _attr_icon = "mdi:airplane"
     _attr_unique_id = DOMAIN_GLOBAL_VACATION
 
@@ -238,7 +238,7 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
     @property
     def extra_state_attributes(self) -> dict:
         zones = sum(1 for _ in _all_coordinators(self._hass))
-        return {"aktive_zonen": zones}
+        return {"active_zones": zones}
 
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True

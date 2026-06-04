@@ -176,13 +176,13 @@ class ThermoSmartConfidenceSensor(_Base):
         stats = le.get_stats(self.coordinator.zone_id)
         return {
             "learning_phase": phase,
-            "room_patterns_%": breakdown["raum_muster_%"],
-            "trv_efficiency_%": breakdown["trv_effizienz_%"],
-            "window_cooling_%": breakdown["fenster_abkühlung_%"],
-            "forecast_confidence_%": breakdown["prognose_vertrauen_%"],
-            "total_observations": breakdown["beobachtungen_gesamt"],
-            "trv_observations": breakdown["trv_beobachtungen"],
-            "window_events": breakdown["fenster_ereignisse"],
+            "room_patterns_%": breakdown["room_patterns_%"],
+            "trv_efficiency_%": breakdown["trv_efficiency_%"],
+            "window_cooling_%": breakdown["window_cooling_%"],
+            "forecast_confidence_%": breakdown["forecast_confidence_%"],
+            "total_observations": breakdown["total_observations"],
+            "trv_observations": breakdown["trv_observations"],
+            "window_events": breakdown["window_events"],
             "oldest_observation": stats.get("oldest"),
         }
 

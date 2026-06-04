@@ -916,14 +916,14 @@ class LearningEngine:
         win_conf  = round(min(win_n / 5, 1.0) * 100, 1)
 
         return {
-            "gesamt_%": round(self.get_confidence(zone_id) * 100, 1),
-            "raum_muster_%": base_conf,
-            "trv_effizienz_%": trv_conf,
-            "fenster_abkühlung_%": win_conf,
-            "beobachtungen_gesamt": len(obs),
-            "trv_beobachtungen": trv_n,
-            "fenster_ereignisse": win_n,
-            "prognose_vertrauen_%": round(self.get_forecast_bias(zone_id) * 100, 1),
+            "total_%": round(self.get_confidence(zone_id) * 100, 1),
+            "room_patterns_%": base_conf,
+            "trv_efficiency_%": trv_conf,
+            "window_cooling_%": win_conf,
+            "total_observations": len(obs),
+            "trv_observations": trv_n,
+            "window_events": win_n,
+            "forecast_confidence_%": round(self.get_forecast_bias(zone_id) * 100, 1),
         }
 
     def get_boost_factor(self, zone_id: str) -> float:
@@ -1336,12 +1336,12 @@ class LearningEngine:
         n = len(self._observations.get(zone_id, []))
         trv_n = len(self._trv_observations.get(zone_id, []))
         if n < 5:
-            return "Initialisierung – Physik-Formel aktiv"
+            return "Initializing – physics formula active"
         if n < 50:
-            return f"Phase 1 – Erste Muster ({n} Beob.)"
+            return f"Phase 1 – First patterns ({n} obs.)"
         if n < 150:
-            return f"Phase 2 – Lernend ({n} Beob., {trv_n} TRV-Beob.)"
-        return f"Phase 3 – Personalisiert ({n} Beob., {trv_n} TRV-Beob.)"
+            return f"Phase 2 – Learning ({n} obs., {trv_n} TRV obs.)"
+        return f"Phase 3 – Personalized ({n} obs., {trv_n} TRV obs.)"
 
     def _rebuild_confidence(self, zone_id: str | None = None) -> None:
         """Gesamtkonfidenz aus allen drei Lernspuren.

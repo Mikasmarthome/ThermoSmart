@@ -37,6 +37,7 @@ from .const import (
     CONF_VACATION_TEMP,
     CONF_ECO_TEMP,
     TEMP_ECO,
+    CONF_SCHEDULE_ENABLED,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
     FORECAST_EVAL_HOURS,
@@ -60,23 +61,6 @@ def _time_weight(obs_ts: str, now: datetime, halflife_days: float = 180) -> floa
         return 0.0
     return math.exp(-age_days / halflife_days)
 
-
-def _seasonal_weight(obs_ts: str, now: datetime) -> float:
-    """Saisonale Gewichtung für Jahreszeit-sensitive Berechnungen.
-    Letzter Dezember zählt mehr als der Juli dieses Jahres.
-    """
-    try:
-        obs_dt = datetime.fromisoformat(obs_ts)
-    except (ValueError, TypeError):
-        return 0.0
-    age_days = max((now - obs_dt).total_seconds() / 86400, 0)
-    obs_doy = obs_dt.timetuple().tm_yday
-    now_doy = now.timetuple().tm_yday
-    day_dist = abs(obs_doy - now_doy)
-    day_dist = min(day_dist, 365 - day_dist)
-    seasonal = math.exp(-(day_dist / 45.0) ** 2)
-    recency = math.exp(-age_days / 365 * 0.25)
-    return round(seasonal * recency, 6)
 
 
 def _thermal_weight(obs: dict, conditions: dict, now: datetime) -> float:
@@ -231,11 +215,15 @@ class LearningEngine:
             "outcome_log": dict(self._outcome_log),
         })
 
-    def _prune_old_observations(self, max_age_days: int = 1095) -> None:
+    def _prune_old_observations(
+        self, max_age_days: int = 1095, max_per_zone: int = 5000
+    ) -> None:
         """Entfernt Beobachtungen die älter als max_age_days sind (Standard: 3 Jahre).
 
         Beobachtungen älter als 3 Jahre haben durch Zeitgewichtung (HWZ 180 Tage)
         weniger als 0.3% Einfluss und können sicher entfernt werden.
+        Zusätzlich werden pro Zone und Spur max. max_per_zone Einträge behalten –
+        ein reines Sicherheitsnetz, das im Normalbetrieb nicht greift.
         Läuft nur beim Speichern – kein Performance-Einfluss auf den Update-Zyklus.
         """
         cutoff = dt_util.now() - timedelta(days=max_age_days)
@@ -248,11 +236,13 @@ class LearningEngine:
                     o for o in store[zone_id]
                     if o.get("ts", "") >= cutoff_iso
                 ]
+                if len(store[zone_id]) > max_per_zone:
+                    store[zone_id] = store[zone_id][-max_per_zone:]
                 removed = before - len(store[zone_id])
                 if removed > 0:
                     _LOGGER.debug(
-                        "LearningEngine [%s]: %d Beobachtungen älter als %d Tage entfernt",
-                        zone_id, removed, max_age_days,
+                        "LearningEngine [%s]: %d Beobachtungen entfernt (Alter>%d Tage oder Cap>%d)",
+                        zone_id, removed, max_age_days, max_per_zone,
                     )
 
     # ── Bereinigung ──────────────────────────────────────────────────────
@@ -859,9 +849,12 @@ class LearningEngine:
         if mode != HEATING_MODE_AUTO:
             return mode_temps.get(mode, night_temp)
 
-        schedule_temp = self._schedule_target(
-            zone_id, comfort_temp, night_temp, away_temp, schedule_cfg
-        )
+        if (schedule_cfg or {}).get(CONF_SCHEDULE_ENABLED, True):
+            schedule_temp = self._schedule_target(
+                zone_id, comfort_temp, night_temp, away_temp, schedule_cfg
+            )
+        else:
+            schedule_temp = comfort_temp
 
         if not self._is_enabled(zone_id) or self.get_confidence(zone_id) < 0.25:
             return schedule_temp
@@ -1367,11 +1360,14 @@ class LearningEngine:
             # ── Basis-Lernen (60%) ─────────────────────────────────────────
             obs = self._observations[zid]
             if obs:
-                weighted_n = sum(_time_weight(o["ts"], now) for o in obs)
-                has_wind      = any(o.get("wind_speed") is not None for o in obs)
-                has_solar     = any(o.get("solar_radiation") is not None for o in obs)
-                has_humidity  = any(o.get("indoor_humidity") is not None for o in obs)
-                has_heat_rate = any(o.get("heat_rate") is not None for o in obs)
+                # Letzte 500 Einträge reichen: ältere haben durch HWZ 180 Tage
+                # ohnehin < 0.5% Gewicht und würden das Ergebnis nicht ändern.
+                recent = obs[-500:]
+                weighted_n = sum(_time_weight(o["ts"], now) for o in recent)
+                has_wind      = any(o.get("wind_speed") is not None for o in recent)
+                has_solar     = any(o.get("solar_radiation") is not None for o in recent)
+                has_humidity  = any(o.get("indoor_humidity") is not None for o in recent)
+                has_heat_rate = any(o.get("heat_rate") is not None for o in recent)
                 diversity     = 1.0 + sum([has_wind, has_solar, has_humidity, has_heat_rate]) * 0.05
                 base_conf = min(weighted_n / 150 * diversity, 1.0)
             else:

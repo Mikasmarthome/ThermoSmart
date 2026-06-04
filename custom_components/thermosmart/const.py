@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.0.0-beta.2"
+VERSION = "1.0.0-beta.3"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -12,6 +12,7 @@ CONF_OUTDOOR_WIND_SENSOR = "outdoor_wind_sensor"
 CONF_OUTDOOR_SOLAR_SENSOR = "outdoor_solar_sensor"
 CONF_OUTDOOR_RAIN_SENSOR = "outdoor_rain_sensor"
 CONF_LEARNING_ENABLED = "learning_enabled"
+CONF_SCHEDULE_ENABLED = "schedule_enabled"
 CONF_HEATING_ZONE = "heating_zone"
 CONF_PRESENCE_PERSONS = "presence_persons"
 CONF_HOME_ZONE = "home_zone"           # Welche Zone gilt als "zuhause"?

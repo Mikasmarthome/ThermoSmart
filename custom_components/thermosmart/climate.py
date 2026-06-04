@@ -5,6 +5,10 @@ import logging
 from typing import Any
 
 from homeassistant.components.climate import (
+    PRESET_AWAY,
+    PRESET_COMFORT,
+    PRESET_ECO,
+    PRESET_SLEEP,
     ClimateEntity,
     ClimateEntityFeature,
     HVACAction,
@@ -27,14 +31,17 @@ from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
-# Heizmodus → Preset-Name für die HA-UI
+# Heizmodus → HA-Standard-Preset-Namen
+# PRESET_COMFORT/ECO/SLEEP/AWAY sind offizielle HA-Konstanten → Cards, Sprachassistenten,
+# Automationen funktionieren ohne zusätzliche Konfiguration.
+# "auto" und "vacation" haben keine HA-Entsprechung → bleiben als Custom-Strings.
 MODE_TO_PRESET = {
-    HEATING_MODE_AUTO:     "Auto",
-    HEATING_MODE_COMFORT:  "Komfort",
-    HEATING_MODE_ECO:      "Eco",
-    HEATING_MODE_NIGHT:    "Nacht",
-    HEATING_MODE_AWAY:     "Abwesend",
-    HEATING_MODE_VACATION: "Urlaub",
+    HEATING_MODE_AUTO:     "auto",
+    HEATING_MODE_COMFORT:  PRESET_COMFORT,   # "comfort"
+    HEATING_MODE_ECO:      PRESET_ECO,       # "eco"
+    HEATING_MODE_NIGHT:    PRESET_SLEEP,     # "sleep"
+    HEATING_MODE_AWAY:     PRESET_AWAY,      # "away"
+    HEATING_MODE_VACATION: "vacation",
 }
 PRESET_TO_MODE = {v: k for k, v in MODE_TO_PRESET.items()}
 

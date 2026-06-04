@@ -178,9 +178,9 @@
     },
     "sensor": {
       "adjusted_target": { "name": "Zieltemperatur" },
-      "trv_setpoint": { "name": "TRV Setpoint" },
+      "trv_setpoint": { "name": "TRV-Sollwert" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Outcome Score" },
+      "outcome_score": { "name": "Heizergebnis" },
       "preheat_minutes": { "name": "Vorheizzeit" },
       "confidence": { "name": "Lernfortschritt" },
       "weather_offset": { "name": "Wetterkorrektur" },

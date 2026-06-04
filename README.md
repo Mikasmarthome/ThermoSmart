@@ -471,7 +471,7 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.thermosmart_living_room_status
-        to: "Heizungsausfall!"
+        to: "Heating failure!"
     action:
       - service: notify.mobile_app
         data:

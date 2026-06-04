@@ -611,6 +611,8 @@ class LearningEngine:
             target=session["target"],
             start_temp=session["start_temp"],
             solar_radiation=session["weather"].get("solar_radiation") or 0.0,
+            outdoor_temp=session["weather"].get("outdoor_temp"),
+            wind_speed=session["weather"].get("wind_speed") or 0.0,
             reason=reason,
         )
 
@@ -656,17 +658,28 @@ class LearningEngine:
         target: float,
         start_temp: float,
         solar_radiation: float = 0.0,
+        outdoor_temp: float | None = None,
+        wind_speed: float = 0.0,
         reason: str = "reached",
     ) -> float:
         """Outcome-Score 0.0–1.0 für eine abgeschlossene Heizsitzung.
 
         Drei Komponenten:
           Reached  (40%): Wurde das Ziel überhaupt erreicht?
-          Speed    (35%): Wie schnell vs. Erwartung?
+          Speed    (35%): Wie schnell vs. Erwartung? (angepasst für Schwierigkeit)
           Accuracy (25%): Wie präzise – kein Überschießen?
 
-        Solar-Discount: Wenn Sonne stark half → Score weniger verlässlich → Gewicht 0.6×.
+        Umgebungs-Discount: Wenn externe Faktoren das Ergebnis beeinflussten,
+        wird der Score als Lernquelle abgewertet – nicht weggeworfen.
+
+          Solar (> 400 W/m²): Raum heizt sich teils durch Sonne → bis −40% Gewicht
+          Warm  (> 15°C out): Außenwärme hilft mit               → bis −30% Gewicht
+
+        Schwierigkeits-Korrektur beim Speed-Score:
+          Kälte (< -5°C): Heizung arbeitet schwerer → erwartete Zeit ×1.4 max.
+          Wind  (> 10 m/s): Wärmeverlust steigt    → erwartete Zeit ×1.25 max.
         """
+        outdoor = outdoor_temp if outdoor_temp is not None else 10.0
         delta_total = target - start_temp
 
         # ── Reached Score (40%) ──────────────────────────────────────
@@ -679,9 +692,18 @@ class LearningEngine:
         else:
             reached_score = 1.0
 
-        # ── Speed Score (35%) ────────────────────────────────────────
+        # ── Speed Score (35%) – Schwierigkeit berücksichtigt ─────────
         if expected_minutes > 5:
-            ratio = minutes_taken / expected_minutes
+            # Schwierigkeits-Multiplikator: Kälte und Wind erhöhen benötigte Zeit
+            difficulty = 1.0
+            if outdoor < -5:
+                difficulty += min((abs(outdoor) - 5) / 30, 0.4)   # max ×1.4 bei Extremkälte
+            if wind_speed > 10:
+                difficulty += min((wind_speed - 10) / 40, 0.25)   # max ×1.25 bei Sturm
+
+            adjusted_expected = expected_minutes * difficulty
+            ratio = minutes_taken / adjusted_expected
+
             if ratio <= 1.0:
                 speed_score = 1.0
             elif ratio <= 2.0:
@@ -695,14 +717,21 @@ class LearningEngine:
         overshoot = max(0.0, peak_temp - target)
         accuracy_score = max(0.0, 1.0 - overshoot / 2.0)  # 2°C Überschuss = 0 Punkte
 
-        # ── Solar-Discount ────────────────────────────────────────────
-        if solar_radiation > 400:
-            solar_factor = max(0.6, 1.0 - (solar_radiation - 400) / 2000)
-        else:
-            solar_factor = 1.0
+        # ── Umgebungs-Reliability-Discount ────────────────────────────
+        # Externe Faktoren helfen beim Heizen → Score als Lernquelle weniger verlässlich
+
+        # Solar: Sonne heizt Raum zusätzlich
+        solar_discount = max(0.60, 1.0 - max(0, solar_radiation - 400) / 2000) \
+            if solar_radiation > 400 else 1.0
+
+        # Warme Außentemperatur: Raum nimmt Wärme von draußen auf
+        warm_discount = max(0.70, 1.0 - max(0, outdoor - 15.0) / 25.0) \
+            if outdoor > 15.0 else 1.0
+
+        env_discount = solar_discount * warm_discount
 
         raw = reached_score * 0.40 + speed_score * 0.35 + accuracy_score * 0.25
-        return round(min(1.0, max(0.0, raw * solar_factor)), 3)
+        return round(min(1.0, max(0.0, raw * env_discount)), 3)
 
     def get_outcome_stats(self, zone_id: str) -> dict:
         """Statistiken über abgeschlossene Heizsitzungen."""

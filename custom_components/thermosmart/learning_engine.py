@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import logging
 import math
-import statistics
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any

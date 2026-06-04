@@ -69,6 +69,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "learning_engine" not in hass.data[DOMAIN]:
         learning_engine = LearningEngine(hass)
         await learning_engine.async_load()
+
+        # Veraltete Zonen bereinigen (nicht mehr in Config-Entries vorhanden)
+        active_zone_ids = {
+            e.entry_id
+            for e in hass.config_entries.async_entries(DOMAIN)
+            if e.data.get("entry_type") != "system"
+        }
+        learning_engine.prune_orphaned_zones(active_zone_ids)
+
         hass.data[DOMAIN]["learning_engine"] = learning_engine
         _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine erstellt")
 

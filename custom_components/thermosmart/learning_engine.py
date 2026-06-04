@@ -226,6 +226,39 @@ class LearningEngine:
                         zone_id, removed, max_age_days,
                     )
 
+    # ── Bereinigung ──────────────────────────────────────────────────────
+
+    def prune_orphaned_zones(self, active_zone_ids: set[str]) -> None:
+        """Entfernt Lerndaten für Zonen die nicht mehr in den Config-Entries existieren.
+
+        Wird beim Start einmalig aufgerufen – bereinigt alte Test-Zonen und
+        umbenannte Einträge automatisch und speichert die Datei sofort.
+        """
+        if not active_zone_ids:
+            return  # Sicherheit: nie alles löschen wenn keine aktiven Zonen
+
+        removed: list[str] = []
+        for store in (self._observations, self._trv_observations, self._window_cooling_obs):
+            for zid in list(store.keys()):
+                if zid not in active_zone_ids:
+                    del store[zid]
+                    removed.append(zid)
+
+        for d in (self._boost_factors, self._forecast_bias):
+            for zid in list(d.keys()):
+                if zid not in active_zone_ids:
+                    del d[zid]
+
+        if removed:
+            unique = sorted(set(removed))
+            _LOGGER.info(
+                "LearningEngine: %d veraltete Zone(n) bereinigt: %s",
+                len(unique), unique,
+            )
+            self._hass.async_create_task(self.async_save())
+        else:
+            _LOGGER.debug("LearningEngine: Keine veralteten Zonen gefunden")
+
     # ── API ─────────────────────────────────────────────────────────────
 
     def set_zone_enabled(self, zone_id: str, enabled: bool) -> None:

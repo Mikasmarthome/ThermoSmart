@@ -179,6 +179,8 @@
     "sensor": {
       "adjusted_target": { "name": "Måltemperatur" },
       "trv_setpoint": { "name": "TRV-börvärde" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Resultatpoäng" },
       "preheat_minutes": { "name": "Förvärmingstid" },
       "confidence": { "name": "Inlärningsframsteg" },
       "weather_offset": { "name": "Väderkorrigering" },

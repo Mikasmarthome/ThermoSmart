@@ -54,7 +54,7 @@ def _device_info(entry: ConfigEntry) -> DeviceInfo:
 
 class _Base(CoordinatorEntity, SensorEntity):
     _attr_has_entity_name = True
-    _attr_entity_registry_enabled_default = False  # Standard: ausgeblendet; aktive Sensoren überschreiben
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry, key: str):
         super().__init__(coordinator)
@@ -74,11 +74,11 @@ class _Base(CoordinatorEntity, SensorEntity):
 
 class ThermoSmartTargetTempSensor(_Base):
     _attr_entity_registry_enabled_default = True
+    _attr_translation_key = "adjusted_target"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "adjusted_target")
         self._attr_unique_id = f"{entry.entry_id}_adjusted_target"
-        self._attr_name = "Zieltemperatur"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -92,25 +92,25 @@ class ThermoSmartTargetTempSensor(_Base):
     def extra_state_attributes(self) -> dict[str, Any]:
         z = self._zone
         return {
-            "basis": z.get("base_target"),
-            "wetterkorrektur": z.get("weather_offset"),
-            "prognose_unterdrückung": f"{z.get('forecast_suppression', 0)}%",
-            "fenster_offen": z.get("window_open"),
-            "ist_temperatur": z.get("current_temp"),
-            "außentemperatur": z.get("outdoor_temp"),
-            "modus": z.get("mode"),
-            "ist_sommer": z.get("is_summer", False),
+            "base_target": z.get("base_target"),
+            "weather_correction": z.get("weather_offset"),
+            "forecast_suppression": f"{z.get('forecast_suppression', 0)}%",
+            "window_open": z.get("window_open"),
+            "current_temperature": z.get("current_temp"),
+            "outdoor_temperature": z.get("outdoor_temp"),
+            "mode": z.get("mode"),
+            "is_summer": z.get("is_summer", False),
         }
 
 
 class ThermoSmartTRVSetpointSensor(_Base):
-    """Zeigt den tatsächlichen Setpoint der ans TRV gesendet wird (inkl. Boost)."""
+    """Actual setpoint sent to the TRV (including boost)."""
     _attr_entity_registry_enabled_default = True
+    _attr_translation_key = "trv_setpoint"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "trv_setpoint")
         self._attr_unique_id = f"{entry.entry_id}_trv_setpoint"
-        self._attr_name = "TRV Setpoint"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_device_class = SensorDeviceClass.TEMPERATURE
         self._attr_state_class = SensorStateClass.MEASUREMENT
@@ -128,20 +128,20 @@ class ThermoSmartTRVSetpointSensor(_Base):
         target = z.get("adjusted_target")
         boost = round(trv - target, 1) if trv is not None and target is not None else 0.0
         return {
-            "zieltemperatur": target,
+            "target_temperature": target,
             "boost_delta": f"+{boost}°C" if boost > 0 else "0°C",
-            "boost_faktor": z.get("boost_factor", 1.0),
-            "boost_aktiv": boost > 0,
+            "boost_factor": z.get("boost_factor", 1.0),
+            "boost_active": boost > 0,
         }
 
 
 class ThermoSmartPreheatSensor(_Base):
     _attr_entity_registry_enabled_default = True
+    _attr_translation_key = "preheat_minutes"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "preheat_minutes")
         self._attr_unique_id = f"{entry.entry_id}_preheat_minutes"
-        self._attr_name = "Vorheizzeit"
         self._attr_native_unit_of_measurement = "min"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_PREHEAT
@@ -153,11 +153,11 @@ class ThermoSmartPreheatSensor(_Base):
 
 class ThermoSmartConfidenceSensor(_Base):
     _attr_entity_registry_enabled_default = True
+    _attr_translation_key = "confidence"
 
     def __init__(self, coordinator, entry):
-        super().__init__(coordinator, entry, "learning_confidence")
+        super().__init__(coordinator, entry, "confidence")
         self._attr_unique_id = f"{entry.entry_id}_confidence"
-        self._attr_name = "Lernfortschritt"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_LEARNING
@@ -175,25 +175,25 @@ class ThermoSmartConfidenceSensor(_Base):
         phase = le.get_cold_start_phase(self.coordinator.zone_id)
         stats = le.get_stats(self.coordinator.zone_id)
         return {
-            "lernphase": phase,
-            "raum_muster_%": breakdown["raum_muster_%"],
-            "trv_effizienz_%": breakdown["trv_effizienz_%"],
-            "fenster_abkühlung_%": breakdown["fenster_abkühlung_%"],
-            "prognose_vertrauen_%": breakdown["prognose_vertrauen_%"],
-            "beobachtungen_gesamt": breakdown["beobachtungen_gesamt"],
-            "trv_beobachtungen": breakdown["trv_beobachtungen"],
-            "fenster_ereignisse": breakdown["fenster_ereignisse"],
-            "älteste_beobachtung": stats.get("oldest"),
+            "learning_phase": phase,
+            "room_patterns_%": breakdown["raum_muster_%"],
+            "trv_efficiency_%": breakdown["trv_effizienz_%"],
+            "window_cooling_%": breakdown["fenster_abkühlung_%"],
+            "forecast_confidence_%": breakdown["prognose_vertrauen_%"],
+            "total_observations": breakdown["beobachtungen_gesamt"],
+            "trv_observations": breakdown["trv_beobachtungen"],
+            "window_events": breakdown["fenster_ereignisse"],
+            "oldest_observation": stats.get("oldest"),
         }
 
 
 class ThermoSmartWeatherOffsetSensor(_Base):
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "weather_offset"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "weather_offset")
         self._attr_unique_id = f"{entry.entry_id}_weather_offset"
-        self._attr_name = "Wetterkorrektur"
         self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = ICON_WEATHER_ADJUST
@@ -204,13 +204,13 @@ class ThermoSmartWeatherOffsetSensor(_Base):
 
 
 class ThermoSmartStatusSensor(_Base):
-    """Übersichts-Sensor: aktueller Betriebsstatus der Zone."""
+    """Current operating status of the zone."""
     _attr_entity_registry_enabled_default = True
+    _attr_translation_key = "status"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "status")
         self._attr_unique_id = f"{entry.entry_id}_status"
-        self._attr_name = "Status"
         self._attr_icon = "mdi:home-thermometer"
 
     @property
@@ -221,32 +221,31 @@ class ThermoSmartStatusSensor(_Base):
         learning = le.is_zone_enabled(self.coordinator.zone_id) if le else True
 
         if not active and not learning:
-            return "Deaktiviert"
+            return "Disabled"
         if not active:
-            return "Beobachtungsmodus"
+            return "Observation mode"
         if not learning:
-            return "Steuert (Lernmodus aus)"
-        # Aktiv + Lernen an → detaillierter Status
+            return "Controlling (learning off)"
         if z.get("heating_failure"):
-            return "Heizungsausfall!"
+            return "Heating failure!"
         if z.get("preheat_active"):
-            return "Vorheizen"
+            return "Preheating"
         if z.get("is_summer"):
-            return "Sommer – Heizung aus"
+            return "Summer – heating off"
         if z.get("window_open"):
-            return "Fenster offen"
+            return "Window open"
         mode = z.get("mode", "auto")
         if mode == "vacation":
-            return "Urlaub"
+            return "Vacation"
         if mode == "away":
-            return "Abwesend"
+            return "Away"
         curr = z.get("current_temp")
         target = z.get("adjusted_target")
         if curr is not None and target is not None:
             if curr < target - 0.5:
-                return "Heizt"
-            return "Temperatur gehalten"
-        return "Aktiv"
+                return "Heating"
+            return "Temperature maintained"
+        return "Active"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -254,30 +253,30 @@ class ThermoSmartStatusSensor(_Base):
         data = self.coordinator.data or {}
         presence = data.get("presence", {})
         return {
-            "ist_temperatur": z.get("current_temp"),
-            "zieltemperatur": z.get("adjusted_target"),
-            "außentemperatur": z.get("outdoor_temp"),
-            "prognose_hochtemp": z.get("forecast_high"),
-            "wetter": z.get("weather_condition"),
-            "personen_zuhause": len(presence.get("persons_home", [])),
-            "alle_weg": presence.get("all_away", False),
-            "urlaub": presence.get("vacation", False),
-            "sommer_modus": z.get("is_summer", False),
-            "heizungsausfall": z.get("heating_failure", False),
-            "slope_fenster_aktiv": getattr(self.coordinator, "_slope_window_active", False),
+            "current_temperature": z.get("current_temp"),
+            "target_temperature": z.get("adjusted_target"),
+            "outdoor_temperature": z.get("outdoor_temp"),
+            "forecast_high": z.get("forecast_high"),
+            "weather_condition": z.get("weather_condition"),
+            "persons_home": len(presence.get("persons_home", [])),
+            "all_away": presence.get("all_away", False),
+            "vacation": presence.get("vacation", False),
+            "summer_mode": z.get("is_summer", False),
+            "heating_failure": z.get("heating_failure", False),
+            "slope_window_active": getattr(self.coordinator, "_slope_window_active", False),
         }
 
 
-# ── Diagnose-Sensoren ─────────────────────────────────────────────────────────
+# ── Diagnostic sensors ────────────────────────────────────────────────────────
 
 class ThermoSmartTempSlopeSensor(_Base):
-    """Temperatur-Änderungsrate – positiv = Raum wärmer, negativ = kühler."""
+    """Temperature change rate – positive = warming, negative = cooling."""
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "temp_slope"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "temp_slope")
         self._attr_unique_id = f"{entry.entry_id}_temp_slope"
-        self._attr_name = "Temperatur Slope"
         self._attr_native_unit_of_measurement = "K/min"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:chart-line"
@@ -290,23 +289,22 @@ class ThermoSmartTempSlopeSensor(_Base):
     def extra_state_attributes(self) -> dict[str, Any]:
         slope = self._zone.get("temp_slope", 0.0)
         if slope > 0.01:
-            trend = "Aufheizend"
+            trend = "heating"
         elif slope < -0.01:
-            trend = "Abkühlend"
+            trend = "cooling"
         else:
-            trend = "Stabil"
+            trend = "stable"
         return {"trend": trend}
 
 
-
 class ThermoSmartHeatingPowerSensor(_Base):
-    """Durchschnittliche Aufheizrate (K/min) – aus gelernten Heizphasen."""
+    """Average heating rate (K/min) learned from heating phases."""
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "heating_power"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "heating_power")
         self._attr_unique_id = f"{entry.entry_id}_heating_power"
-        self._attr_name = "Heating Power"
         self._attr_native_unit_of_measurement = "K/min"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:thermometer-plus"
@@ -326,24 +324,23 @@ class ThermoSmartHeatingPowerSensor(_Base):
             return {}
         stats = le.get_stats(self.coordinator.zone_id)
         return {
-            "messungen": stats.get("with_heat_rate", 0),
-            "boost_faktor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
+            "measurements": stats.get("with_heat_rate", 0),
+            "boost_factor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
         }
 
 
 class ThermoSmartTpiSensor(_Base):
-    """TPI Duty-Cycle – wie weit das Ventil theoretisch geöffnet sein sollte (0–100%).
+    """TPI Duty-Cycle – how far the valve should theoretically open (0–100%).
 
-    Zeigt den berechneten Duty-Cycle und ob direkte Ventilsteuerung aktiv ist.
-    Bei TRVs mit valve_opening_degree: Wert wird direkt ans Ventil geschrieben.
-    Bei anderen TRVs: Wert wird in einen Boost-Setpoint umgerechnet.
+    With valve_opening_degree support: written directly to the valve.
+    Without: converted to a boost setpoint.
     """
     _attr_entity_registry_enabled_default = True
+    _attr_translation_key = "tpi_duty_cycle"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "tpi_duty_cycle")
         self._attr_unique_id = f"{entry.entry_id}_tpi_duty_cycle"
-        self._attr_name = "TPI Duty-Cycle"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:valve"
@@ -359,29 +356,26 @@ class ThermoSmartTpiSensor(_Base):
         coef_ext = z.get("tpi_coef_ext")
         valve_direct = z.get("tpi_valve_direct", False)
         return {
-            "koeffizient_intern": coef_int,
-            "koeffizient_extern": coef_ext,
-            "quelle_koeffizienten": (
-                "gelernt" if coef_int not in (None, 0.6) else "standard"
-            ),
-            "ventil_direkt": valve_direct,
-            "modus": "Direkte Ventilsteuerung" if valve_direct else "Setpoint-Konvertierung",
+            "coef_int": coef_int,
+            "coef_ext": coef_ext,
+            "coef_source": "learned" if coef_int not in (None, 0.6) else "default",
+            "valve_direct": valve_direct,
+            "mode": "direct_valve" if valve_direct else "setpoint_boost",
         }
 
 
 class ThermoSmartHeatLossRateSensor(_Base):
-    """Gelernte Wärmeverlustrate (°C/min) – wie schnell der Raum auskühlt.
+    """Learned heat loss rate (°C/min) – how fast the room cools down.
 
-    Entscheidend für die Vorheizzeit-Berechnung: Wenn die Heizung startet,
-    kühlt der Raum gleichzeitig noch ab. Effektive Aufheizrate =
-    Heizrate minus Wärmeverlustrate.
+    Used for preheat calculation: effective heating rate =
+    heating rate minus heat loss rate.
     """
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "heat_loss"
 
     def __init__(self, coordinator, entry):
-        super().__init__(coordinator, entry, "heat_loss_rate")
+        super().__init__(coordinator, entry, "heat_loss")
         self._attr_unique_id = f"{entry.entry_id}_heat_loss_rate"
-        self._attr_name = "Wärmeverlustrate"
         self._attr_native_unit_of_measurement = "K/min"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:thermometer-minus"
@@ -405,20 +399,20 @@ class ThermoSmartHeatLossRateSensor(_Base):
             1 for o in le._observations.get(zone_id, []) if o.get("cool_rate")
         )
         return {
-            "rate_pro_stunde_K": rate_per_h,
-            "ema_aktiv": zone_id in le._heat_loss_ema,
-            "messungen": obs_count,
+            "rate_per_hour_K": rate_per_h,
+            "ema_active": zone_id in le._heat_loss_ema,
+            "measurements": obs_count,
         }
 
 
 class ThermoSmartSunIntensitySensor(_Base):
-    """Solarer Wärmeeintrag – wie stark die Sonne gerade den Heizbedarf reduziert."""
+    """Solar heat gain – how much the sun is currently reducing heating demand."""
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "sun_intensity"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "sun_intensity")
         self._attr_unique_id = f"{entry.entry_id}_sun_intensity"
-        self._attr_name = "Sun Intensity Heatup"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:weather-sunny"
@@ -440,27 +434,25 @@ class ThermoSmartSunIntensitySensor(_Base):
         weather = data.get("weather", {})
         return {
             "solar_w_m2": weather.get("solar_radiation"),
-            "außentemperatur": weather.get("temperature"),
+            "outdoor_temperature": weather.get("temperature"),
         }
 
 
-
 class ThermoSmartOutcomeScoreSensor(_Base):
-    """Outcome-Score der letzten Heizsitzungen (0–100%).
+    """Outcome score of recent heating sessions (0–100%).
 
-    Bewertet wie gut eine Heizentscheidung war:
-    - Ziel schnell und stabil erreicht → hoher Score
-    - Ziel zu spät oder gar nicht erreicht → niedriger Score
-    - Starkes Überschießen → niedriger Score
-    Funktioniert sowohl für ThermoSmart (aktive Steuerung) als auch
-    für externe Regler im Beobachtungsmodus.
+    Rates how well a heating session performed:
+    - Target reached quickly and accurately → high score
+    - Target reached late or not at all → low score
+    - Strong overshoot → low score
+    Works for both active control and observation mode.
     """
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "outcome_score"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "outcome_score")
         self._attr_unique_id = f"{entry.entry_id}_outcome_score"
-        self._attr_name = "Outcome Score"
         self._attr_native_unit_of_measurement = "%"
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:target"
@@ -482,13 +474,13 @@ class ThermoSmartOutcomeScoreSensor(_Base):
 
 
 class ThermoSmartTRVObservationsSensor(_Base):
-    """Anzahl gelernter TRV-Setpoint-Beobachtungen aus dem Beobachtungsmodus."""
+    """Number of learned TRV setpoint observations from observation mode."""
     _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "trv_observations"
 
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "trv_observations")
         self._attr_unique_id = f"{entry.entry_id}_trv_observations"
-        self._attr_name = "TRV Beobachtungen"
         self._attr_native_unit_of_measurement = None
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
         self._attr_icon = "mdi:database-eye"
@@ -507,7 +499,7 @@ class ThermoSmartTRVObservationsSensor(_Base):
             return {}
         stats = le.get_trv_stats(self.coordinator.zone_id)
         return {
-            "setpoint_effizienz": stats.get("avg_setpoint_efficiency"),
-            "fenster_abkühlrate": stats.get("avg_window_cooling_rate"),
-            "lernmodus": "Beobachtungsmodus" if not self.coordinator._active_control else "Aktiv",
+            "setpoint_efficiency": stats.get("avg_setpoint_efficiency"),
+            "window_cooling_rate": stats.get("avg_window_cooling_rate"),
+            "mode": "observation" if not self.coordinator._active_control else "active",
         }

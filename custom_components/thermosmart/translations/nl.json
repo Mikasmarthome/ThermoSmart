@@ -179,6 +179,8 @@
     "sensor": {
       "adjusted_target": { "name": "Doeltemperatuur" },
       "trv_setpoint": { "name": "TRV-instelpunt" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Resultaatscore" },
       "preheat_minutes": { "name": "Voorverwarmingstijd" },
       "confidence": { "name": "Leervoortgang" },
       "weather_offset": { "name": "Weercorrectie" },

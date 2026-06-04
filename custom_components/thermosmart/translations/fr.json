@@ -179,6 +179,8 @@
     "sensor": {
       "adjusted_target": { "name": "Température cible" },
       "trv_setpoint": { "name": "Consigne TRV" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Score de résultat" },
       "preheat_minutes": { "name": "Temps de préchauffage" },
       "confidence": { "name": "Progression apprentissage" },
       "weather_offset": { "name": "Correction météo" },

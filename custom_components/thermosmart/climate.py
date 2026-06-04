@@ -143,15 +143,21 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         target = z.get("adjusted_target")
         boost_delta = round(trv - target, 1) if trv is not None and target is not None and trv > target else 0.0
         return {
-            "vorhersage_unterdrückung": f"{z.get('forecast_suppression', 0)}%",
-            "vorheizzeit": f"{z.get('preheat_minutes', 0)} min",
-            "vorhersage_konfidenz": f"{round((z.get('learning_confidence', 0) * 100), 1)}%",
-            "wetterkorrektur": z.get("weather_offset"),
-            "außentemperatur": z.get("outdoor_temp"),
-            "trv_setpoint": trv,
-            "boost_delta": f"+{boost_delta}°C" if boost_delta > 0 else "0°C",
-            "boost_faktor": z.get("boost_factor", 1.0),
-            "beobachtungsmodus": not self.coordinator._active_control,
+            "forecast_suppression": f"{z.get('forecast_suppression', 0)}%",
+            "preheat_time":         f"{z.get('preheat_minutes', 0)} min",
+            "learning_confidence":  f"{round((z.get('learning_confidence', 0) * 100), 1)}%",
+            "weather_correction":   z.get("weather_offset"),
+            "outdoor_temperature":  z.get("outdoor_temp"),
+            "trv_setpoint":         trv,
+            "boost_delta":          f"+{boost_delta}°C" if boost_delta > 0 else "0°C",
+            "boost_factor":         z.get("boost_factor", 1.0),
+            "observation_mode":     not self.coordinator._active_control,
+            "window_open":          bool(z.get("window_open", False)),
+            "summer_mode":          self.coordinator._is_summer,
+            "heating_failure":      self.coordinator._heating_failure_notified,
+            "override_active":      bool(z.get("override_active", False)),
+            "override_temp":        z.get("override_temp"),
+            "preheat_active":       bool(z.get("preheat_active", False)),
         }
 
     # ── Steuerung ────────────────────────────────────────────────────

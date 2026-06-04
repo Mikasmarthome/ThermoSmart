@@ -47,6 +47,20 @@ The learning algorithm improves with every heating session. Meaningful results e
 
 ---
 
+## Feature Highlights
+
+| Feature | ThermoSmart |
+|---|---|
+| Observation Mode (learn without taking control) | ✅ |
+| Outcome Scoring (grades every heating session) | ✅ |
+| Building Learning (heating rate, heat loss per zone) | ✅ |
+| Forecast Feedback Learning (adapts trust in weather forecast) | ✅ |
+| TPI with auto-calibrated coefficients | ✅ |
+| Direct valve control (duty-cycle → valve %) | ✅ |
+| Fully local | ✅ |
+
+---
+
 ## Supported Devices
 
 ### Tested

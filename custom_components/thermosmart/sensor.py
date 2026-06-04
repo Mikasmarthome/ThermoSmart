@@ -25,6 +25,7 @@ async def async_setup_entry(
 ) -> None:
     coordinator: ThermoSmartCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
     async_add_entities([
+        ThermoSmartCurrentTempSensor(coordinator, entry),
         ThermoSmartTargetTempSensor(coordinator, entry),
         ThermoSmartTRVSetpointSensor(coordinator, entry),
         ThermoSmartTpiSensor(coordinator, entry),
@@ -69,6 +70,23 @@ class _Base(CoordinatorEntity, SensorEntity):
     @property
     def available(self) -> bool:
         return self.coordinator.last_update_success
+
+
+class ThermoSmartCurrentTempSensor(_Base):
+    _attr_entity_registry_enabled_default = True
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "current_temp")
+        self._attr_unique_id = f"{entry.entry_id}_current_temp"
+        self._attr_name = "Raumtemperatur"
+        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:thermometer"
+
+    @property
+    def native_value(self):
+        return self._zone.get("current_temp")
 
 
 class ThermoSmartTargetTempSensor(_Base):

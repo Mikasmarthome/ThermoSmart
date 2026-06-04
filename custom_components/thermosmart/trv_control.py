@@ -232,7 +232,7 @@ class TRVControlMixin:
                     self.zone_name, entity_id,
                 )
                 tasks.append(self.hass.services.async_call(
-                    "switch", "turn_off", {"entity_id": entity_id}, blocking=True,
+                    "switch", "turn_off", {"entity_id": entity_id}, blocking=False,
                 ))
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)

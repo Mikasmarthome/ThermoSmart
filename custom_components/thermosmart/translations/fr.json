@@ -184,7 +184,23 @@
       "preheat_minutes": { "name": "Temps de préchauffage" },
       "confidence": { "name": "Progression apprentissage" },
       "weather_offset": { "name": "Correction météo" },
-      "status": { "name": "Statut" },
+      "status": {
+        "name": "Statut",
+        "state": {
+          "disabled":              "Désactivé",
+          "observation_mode":      "Mode observation",
+          "controlling_no_learning": "Contrôle actif (apprentissage désactivé)",
+          "heating_failure":       "Défaillance du chauffage !",
+          "preheating":            "Préchauffage",
+          "summer":                "Été – chauffage éteint",
+          "window_open":           "Fenêtre ouverte",
+          "vacation":              "Vacances",
+          "away":                  "Absent",
+          "heating":               "Chauffage en cours",
+          "idle":                  "Température maintenue",
+          "active":                "Actif"
+        }
+      },
       "temp_slope": { "name": "Pente de température" },
       "temp_ema_1h": { "name": "Température EMA 1h" },
       "heat_loss": { "name": "Perte de chaleur" },

@@ -184,7 +184,23 @@
       "preheat_minutes": { "name": "Preheat time" },
       "confidence": { "name": "Learning progress" },
       "weather_offset": { "name": "Weather correction" },
-      "status": { "name": "Status" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "disabled":              "Disabled",
+          "observation_mode":      "Observation mode",
+          "controlling_no_learning": "Controlling (learning off)",
+          "heating_failure":       "Heating failure!",
+          "preheating":            "Preheating",
+          "summer":                "Summer – heating off",
+          "window_open":           "Window open",
+          "vacation":              "Vacation",
+          "away":                  "Away",
+          "heating":               "Heating",
+          "idle":                  "Temperature maintained",
+          "active":                "Active"
+        }
+      },
       "temp_slope": { "name": "Temperature slope" },
       "temp_ema_1h": { "name": "Temperature EMA 1h" },
       "heat_loss": { "name": "Heat loss" },

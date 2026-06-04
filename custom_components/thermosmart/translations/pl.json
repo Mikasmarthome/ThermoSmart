@@ -184,7 +184,23 @@
       "preheat_minutes": { "name": "Czas podgrzewania wstępnego" },
       "confidence": { "name": "Postęp uczenia" },
       "weather_offset": { "name": "Korekta pogodowa" },
-      "status": { "name": "Status" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "disabled":              "Wyłączony",
+          "observation_mode":      "Tryb obserwacji",
+          "controlling_no_learning": "Aktywne sterowanie (uczenie wyłączone)",
+          "heating_failure":       "Awaria ogrzewania!",
+          "preheating":            "Podgrzewanie wstępne",
+          "summer":                "Lato – ogrzewanie wyłączone",
+          "window_open":           "Okno otwarte",
+          "vacation":              "Wakacje",
+          "away":                  "Nieobecny",
+          "heating":               "Ogrzewanie",
+          "idle":                  "Temperatura utrzymana",
+          "active":                "Aktywny"
+        }
+      },
       "temp_slope": { "name": "Nachylenie temperatury" },
       "temp_ema_1h": { "name": "Temperatura EMA 1h" },
       "heat_loss": { "name": "Straty ciepła" },

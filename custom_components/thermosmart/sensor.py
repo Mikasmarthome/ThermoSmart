@@ -221,31 +221,31 @@ class ThermoSmartStatusSensor(_Base):
         learning = le.is_zone_enabled(self.coordinator.zone_id) if le else True
 
         if not active and not learning:
-            return "Disabled"
+            return "disabled"
         if not active:
-            return "Observation mode"
+            return "observation_mode"
         if not learning:
-            return "Controlling (learning off)"
+            return "controlling_no_learning"
         if z.get("heating_failure"):
-            return "Heating failure!"
+            return "heating_failure"
         if z.get("preheat_active"):
-            return "Preheating"
+            return "preheating"
         if z.get("is_summer"):
-            return "Summer – heating off"
+            return "summer"
         if z.get("window_open"):
-            return "Window open"
+            return "window_open"
         mode = z.get("mode", "auto")
         if mode == "vacation":
-            return "Vacation"
+            return "vacation"
         if mode == "away":
-            return "Away"
+            return "away"
         curr = z.get("current_temp")
         target = z.get("adjusted_target")
         if curr is not None and target is not None:
             if curr < target - 0.5:
-                return "Heating"
-            return "Temperature maintained"
-        return "Active"
+                return "heating"
+            return "idle"
+        return "active"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

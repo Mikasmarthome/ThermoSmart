@@ -184,7 +184,23 @@
       "preheat_minutes": { "name": "Förvärmingstid" },
       "confidence": { "name": "Inlärningsframsteg" },
       "weather_offset": { "name": "Väderkorrigering" },
-      "status": { "name": "Status" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "disabled":              "Inaktiverad",
+          "observation_mode":      "Observationsläge",
+          "controlling_no_learning": "Aktiv styrning (inlärning av)",
+          "heating_failure":       "Uppvärmningsfel!",
+          "preheating":            "Förvärmer",
+          "summer":                "Sommar – uppvärmning av",
+          "window_open":           "Fönster öppet",
+          "vacation":              "Semester",
+          "away":                  "Borta",
+          "heating":               "Uppvärmning pågår",
+          "idle":                  "Temperatur upprätthållen",
+          "active":                "Aktiv"
+        }
+      },
       "temp_slope": { "name": "Temperaturlutning" },
       "temp_ema_1h": { "name": "Temperatur EMA 1h" },
       "heat_loss": { "name": "Värmeförlust" },

@@ -184,7 +184,23 @@
       "preheat_minutes": { "name": "Voorverwarmingstijd" },
       "confidence": { "name": "Leervoortgang" },
       "weather_offset": { "name": "Weercorrectie" },
-      "status": { "name": "Status" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "disabled":              "Uitgeschakeld",
+          "observation_mode":      "Observatiemodus",
+          "controlling_no_learning": "Actieve sturing (leren uit)",
+          "heating_failure":       "Verwarmingsstoring!",
+          "preheating":            "Voorverwarming",
+          "summer":                "Zomer – verwarming uit",
+          "window_open":           "Raam open",
+          "vacation":              "Vakantie",
+          "away":                  "Afwezig",
+          "heating":               "Verwarming actief",
+          "idle":                  "Temperatuur gehandhaafd",
+          "active":                "Actief"
+        }
+      },
       "temp_slope": { "name": "Temperatuurhelling" },
       "temp_ema_1h": { "name": "Temperatuur EMA 1u" },
       "heat_loss": { "name": "Warmteverlies" },

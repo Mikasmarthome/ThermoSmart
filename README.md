@@ -40,7 +40,7 @@ The learning algorithm improves with every heating session. Meaningful results e
 
 - **Learns your building** — heating rates, heat loss, and optimal preheat times are measured and remembered per zone, not estimated from generic tables
 - **TPI with auto-calibrated coefficients** — the controller derives its own parameters from your building's actual thermal data, no manual tuning required
-- **Safe to try: Observation mode** — ThermoSmart runs passively alongside any existing controller (including Better Thermostat), learning from what it does without changing anything; switch to Active Control when you're ready
+- **Safe to try: Observation mode** — ThermoSmart runs passively alongside any existing controller, learning from what it does without changing anything; switch to Active Control when you're ready
 - **Weather-aware, not just weather-reactive** — forecast-based suppression with a feedback loop that learns how trustworthy your local forecast actually is
 - **Grades every heating session** — an Outcome Score (0–100%) evaluates each session for speed, accuracy, and difficulty; TRV observations are weighted accordingly
 - **Fully local** — no cloud, no subscription, all data stays in Home Assistant

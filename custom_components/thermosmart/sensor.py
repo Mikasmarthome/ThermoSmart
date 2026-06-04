@@ -453,7 +453,7 @@ class ThermoSmartOutcomeScoreSensor(_Base):
     - Ziel zu spät oder gar nicht erreicht → niedriger Score
     - Starkes Überschießen → niedriger Score
     Funktioniert sowohl für ThermoSmart (aktive Steuerung) als auch
-    für Better Thermostat / andere Regler (Beobachtungsmodus).
+    für externe Regler im Beobachtungsmodus.
     """
     _attr_entity_registry_enabled_default = False
 

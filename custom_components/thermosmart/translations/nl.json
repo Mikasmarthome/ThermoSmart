@@ -1,0 +1,195 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ThermoSmart instellen",
+        "menu_options": {
+          "add_system": "Globale bediening instellen (Zomer- & Vakantiemodus)",
+          "add_zone": "Verwarmingszone toevoegen"
+        }
+      },
+      "add_system": {
+        "title": "Globale bediening",
+        "description": "Stelt de globale Zomer- en Vakantiemodus-schakelaars in. Geen thermostaat vereist. De globale schakelaars bedienen alle zones tegelijk."
+      },
+      "add_zone": {
+        "title": "Stap 1 / 4 – Apparaten & Sensoren",
+        "description": "Selecteer de TRV's en sensoren voor deze verwarmingszone. Kalibratie-entiteiten en quirk-schakelaars worden automatisch gedetecteerd.",
+        "data": {
+          "name": "Zonenaam (bijv. Woonkamer)",
+          "climate_entities": "Thermostaten / TRV's",
+          "temp_sensors": "Binnentemperatuursensoren (gemiddelde wordt berekend)",
+          "humidity_sensors": "Binnenluchtvochtigheidsensoren",
+          "window_sensors": "Raamsensoren (binary_sensor)",
+          "window_open_delay": "Verwarming uit – vertraging na openen raam",
+          "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
+          "valve_maintenance": "Klep-onderhoud inschakelen (elke zondag om 03:00)",
+          "calibration_invert": "Kalibratie-offset omkeren (voor TRV's zoals ME167 die het teken omkeren)"
+        }
+      },
+      "schedule": {
+        "title": "Stap 2 / 4 – Temperaturen & Schema",
+        "description": "Dagverloop: Nacht → Comfort → Nacht\n\nAls alle personen afwezig zijn, schakelt ThermoSmart automatisch naar de afwezigheidstemperatuur – ongeacht het schema.",
+        "data": {
+          "comfort_temp": "Comforttemperatuur (als iemand thuis is)",
+          "night_temp": "Nachttemperatuur (verlaging tijdens slaap)",
+          "away_temp": "Afwezigheidstemperatuur (automatisch als iedereen weg is)",
+          "vacation_temp": "Vakantietemperatuur (vorstbeveiliging)",
+          "eco_temp": "Eco-temperatuur (energiezuinig, tussen nacht en comfort)",
+          "temp_tolerance": "Temperatuurtolerantie – TRV pas aansturen bij deze afwijking",
+          "schedule_enabled": "Tijdschema inschakelen",
+          "sched_wd_morning": "Werkdag: Comfort vanaf",
+          "sched_wd_night": "Werkdag: Nacht vanaf",
+          "sched_we_morning": "Weekend: Comfort vanaf",
+          "sched_we_night": "Weekend: Nacht vanaf"
+        },
+        "data_description": {
+          "schedule_enabled": "Als uitgeschakeld, is de comforttemperatuur 24/7 actief – geen automatische dag/nacht-wisseling.",
+          "sched_wd_morning": "De comforttemperatuur moet op dit tijdstip bereikt zijn – ThermoSmart verwarmt automatisch eerder voor",
+          "sched_wd_night": "Vanaf dit tijdstip geldt de nachttemperatuur",
+          "sched_we_morning": "De comforttemperatuur moet op dit tijdstip bereikt zijn – ThermoSmart verwarmt automatisch eerder voor",
+          "sched_we_night": "Vanaf dit tijdstip geldt de nachttemperatuur"
+        }
+      },
+      "presence": {
+        "title": "Stap 3 / 4 – Aanwezigheid & Automatisering",
+        "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
+        "data": {
+          "presence_persons": "Personen voor aanwezigheidsdetectie",
+          "home_zone": "Thuiszone (standaard: zone.home)",
+          "learning_enabled": "Leeralgoritme inschakelen"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart leert verwarmings- en afkoelsnelheden en optimale temperaturen voor deze zone."
+        }
+      },
+      "weather": {
+        "title": "Stap 4 / 4 – Weer & Buitensensoren",
+        "description": "Alle velden optioneel – eigen sensoren hebben voorrang op de weer-entiteit. Het systeem werkt ook zonder weergegevens.",
+        "data": {
+          "weather_entity": "Weer-entiteit (bijv. weather.home)",
+          "outdoor_temp_sensor": "Buitentemperatuur – eigen weerstation (prioriteit)",
+          "outdoor_humidity_sensor": "Buitenluchtv ochtigheid",
+          "outdoor_wind_sensor": "Windsnelheid (m/s of km/h)",
+          "outdoor_solar_sensor": "Zonnestraling (W/m²)",
+          "outdoor_rain_sensor": "Neerslag"
+        },
+        "data_description": {
+          "weather_entity": "Gebruikt voor weersvoorspellingen en prognose-onderdrukking. Leeg laten als u alleen eigen sensoren gebruikt.",
+          "outdoor_temp_sensor": "Eigen sensoren zijn nauwkeuriger dan de weer-entiteit en krijgen voorrang."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Weer-entiteit niet gevonden. Selecteer een geldige entiteit of laat het veld leeg.",
+      "name_required": "Voer een zonenaam in.",
+      "required": "Minimaal één thermostaat / TRV is vereist.",
+      "night_temp_too_high": "Nachttemperatuur moet lager zijn dan de comforttemperatuur.",
+      "away_temp_too_high": "Afwezigheidstemperatuur mag niet hoger zijn dan de nachttemperatuur."
+    },
+    "abort": {
+      "already_configured": "Deze zone is al geconfigureerd.",
+      "system_already_configured": "De globale ThermoSmart-bediening is al ingesteld."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Stap 1 / 4 – Apparaten & Sensoren",
+        "description": "Kalibratie-entiteiten en quirk-schakelaars worden automatisch gedetecteerd.",
+        "data": {
+          "name": "Zonenaam",
+          "climate_entities": "Thermostaten / TRV's",
+          "temp_sensors": "Binnentemperatuursensoren",
+          "humidity_sensors": "Binnenluchtvochtigheidsensoren",
+          "window_sensors": "Raamsensoren",
+          "window_open_delay": "Verwarming uit – vertraging na openen raam",
+          "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
+          "valve_maintenance": "Klep-onderhoud inschakelen",
+          "calibration_invert": "Kalibratie-offset omkeren (ME167 en vergelijkbaar)"
+        }
+      },
+      "schedule": {
+        "title": "Stap 2 / 4 – Temperaturen & Schema",
+        "description": "Dagverloop: Nacht → Comfort → Nacht",
+        "data": {
+          "comfort_temp": "Comforttemperatuur",
+          "night_temp": "Nachttemperatuur",
+          "away_temp": "Afwezigheidstemperatuur",
+          "vacation_temp": "Vakantietemperatuur",
+          "eco_temp": "Eco-temperatuur",
+          "temp_tolerance": "Temperatuurtolerantie",
+          "schedule_enabled": "Tijdschema inschakelen",
+          "sched_wd_morning": "Werkdag: Comfort vanaf",
+          "sched_wd_night": "Werkdag: Nacht vanaf",
+          "sched_we_morning": "Weekend: Comfort vanaf",
+          "sched_we_night": "Weekend: Nacht vanaf"
+        },
+        "data_description": {
+          "schedule_enabled": "Als uitgeschakeld, is de comforttemperatuur 24/7 actief – geen automatische dag/nacht-wisseling.",
+          "sched_wd_morning": "De comforttemperatuur moet op dit tijdstip bereikt zijn – ThermoSmart verwarmt automatisch eerder voor",
+          "sched_wd_night": "Vanaf dit tijdstip geldt de nachttemperatuur",
+          "sched_we_morning": "De comforttemperatuur moet op dit tijdstip bereikt zijn – ThermoSmart verwarmt automatisch eerder voor",
+          "sched_we_night": "Vanaf dit tijdstip geldt de nachttemperatuur"
+        }
+      },
+      "presence": {
+        "title": "Stap 3 / 4 – Aanwezigheid & Automatisering",
+        "data": {
+          "presence_persons": "Personen voor aanwezigheidsdetectie",
+          "home_zone": "Thuiszone",
+          "learning_enabled": "Leeralgoritme inschakelen"
+        }
+      },
+      "weather": {
+        "title": "Stap 4 / 4 – Weer & Buitensensoren",
+        "description": "Alle velden optioneel. Eigen sensoren hebben voorrang op de weer-entiteit.",
+        "data": {
+          "weather_entity": "Weer-entiteit",
+          "outdoor_temp_sensor": "Buitentemperatuur (eigen station)",
+          "outdoor_humidity_sensor": "Buitenluchtv ochtigheid",
+          "outdoor_wind_sensor": "Windsnelheid",
+          "outdoor_solar_sensor": "Zonnestraling",
+          "outdoor_rain_sensor": "Neerslag"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "active_control": {
+        "name": "Actieve bediening",
+        "state": { "on": "Actief – ThermoSmart stuurt aan", "off": "Observatiemodus" }
+      },
+      "learning": { "name": "Leermodus" }
+    },
+    "select": {
+      "mode": {
+        "name": "Verwarmingsmodus",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Comfort",
+          "eco":      "Eco",
+          "night":    "Nacht",
+          "away":     "Afwezig",
+          "vacation": "Vakantie"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Doeltemperatuur" },
+      "trv_setpoint": { "name": "TRV-instelpunt" },
+      "preheat_minutes": { "name": "Voorverwarmingstijd" },
+      "confidence": { "name": "Leervoortgang" },
+      "weather_offset": { "name": "Weercorrectie" },
+      "status": { "name": "Status" },
+      "temp_slope": { "name": "Temperatuurhelling" },
+      "temp_ema_1h": { "name": "Temperatuur EMA 1u" },
+      "heat_loss": { "name": "Warmteverlies" },
+      "heating_power": { "name": "Verwarmingsvermogen" },
+      "sun_intensity": { "name": "Zonnewinst" },
+      "window_cooling_rate": { "name": "Afkoelsnelheid raam" },
+      "trv_observations": { "name": "TRV-observaties" }
+    }
+  }
+}

@@ -1,0 +1,195 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Konfigurera ThermoSmart",
+        "menu_options": {
+          "add_system": "Konfigurera globala kontroller (Sommar- och semesterläge)",
+          "add_zone": "Lägg till uppvärmningszon"
+        }
+      },
+      "add_system": {
+        "title": "Globala kontroller",
+        "description": "Konfigurerar de globala Sommar- och semesterläges-knapparna. Ingen termostat krävs. De globala knapparna styr alla zoner samtidigt."
+      },
+      "add_zone": {
+        "title": "Steg 1 / 4 – Enheter & Sensorer",
+        "description": "Välj TRV:er och sensorer för denna uppvärmningszon. Kalibreringsentiteter och quirk-brytare upptäcks automatiskt.",
+        "data": {
+          "name": "Zonnamn (t.ex. Vardagsrum)",
+          "climate_entities": "Termostater / TRV:er",
+          "temp_sensors": "Inomhustemperatursensorer (medelvärde beräknas)",
+          "humidity_sensors": "Inomhusluftfuktighetssensorer",
+          "window_sensors": "Fönstensensorer (binary_sensor)",
+          "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
+          "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
+          "valve_maintenance": "Aktivera ventilunderhåll (varje söndag kl. 03:00)",
+          "calibration_invert": "Invertera kalibrerings-offset (för TRV:er som ME167 som inverterar tecknet)"
+        }
+      },
+      "schedule": {
+        "title": "Steg 2 / 4 – Temperaturer & Schema",
+        "description": "Dagligt flöde: Natt → Komfort → Natt\n\nNär alla personer är borta växlar ThermoSmart automatiskt till borta-temperaturen – oavsett schemat.",
+        "data": {
+          "comfort_temp": "Komforttemperatur (när någon är hemma)",
+          "night_temp": "Natttemperatur (sänkning under sömn)",
+          "away_temp": "Borta-temperatur (automatiskt när alla har gett sig av)",
+          "vacation_temp": "Semestertemperatur (frostskydd)",
+          "eco_temp": "Eco-temperatur (energisparande, mellan natt och komfort)",
+          "temp_tolerance": "Temperaturtolerans – styr TRV:en först vid denna avvikelse",
+          "schedule_enabled": "Aktivera tidsschema",
+          "sched_wd_morning": "Vardag: Komfort från",
+          "sched_wd_night": "Vardag: Natt från",
+          "sched_we_morning": "Helg: Komfort från",
+          "sched_we_night": "Helg: Natt från"
+        },
+        "data_description": {
+          "schedule_enabled": "När inaktiverat är komforttemperaturen aktiv dygnet runt – ingen automatisk dag/natt-växling.",
+          "sched_wd_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
+          "sched_wd_night": "Natttemperaturen gäller från denna tid",
+          "sched_we_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
+          "sched_we_night": "Natttemperaturen gäller från denna tid"
+        }
+      },
+      "presence": {
+        "title": "Steg 3 / 4 – Närvaro & Automatisering",
+        "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
+        "data": {
+          "presence_persons": "Personer för närvarodetektering",
+          "home_zone": "Hemzon (standard: zone.home)",
+          "learning_enabled": "Aktivera inlärningsalgoritm"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart lär sig uppvärmnings- och kylhastigheter samt optimala temperaturer för denna zon."
+        }
+      },
+      "weather": {
+        "title": "Steg 4 / 4 – Väder & Utomhussensorer",
+        "description": "Alla fält valfria – egna sensorer har företräde framför väderentiteten. Systemet fungerar även utan väderdata.",
+        "data": {
+          "weather_entity": "Väderentitet (t.ex. weather.home)",
+          "outdoor_temp_sensor": "Utomhustemperatur – egen väderstation (prioritet)",
+          "outdoor_humidity_sensor": "Utomhusluftfuktighet",
+          "outdoor_wind_sensor": "Vindhastighet (m/s eller km/h)",
+          "outdoor_solar_sensor": "Solinstrålning (W/m²)",
+          "outdoor_rain_sensor": "Nederbörd"
+        },
+        "data_description": {
+          "weather_entity": "Används för väderprognoser och prognossuppression. Lämna tomt om du endast använder egna sensorer.",
+          "outdoor_temp_sensor": "Egna sensorer är mer exakta än väderentiteten och prioriteras."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Väderentiteten hittades inte. Välj en giltig entitet eller lämna fältet tomt.",
+      "name_required": "Ange ett zonnamn.",
+      "required": "Minst en termostat / TRV krävs.",
+      "night_temp_too_high": "Natttemperaturen måste vara lägre än komforttemperaturen.",
+      "away_temp_too_high": "Borta-temperaturen får inte vara högre än natttemperaturen."
+    },
+    "abort": {
+      "already_configured": "Den här zonen är redan konfigurerad.",
+      "system_already_configured": "De globala ThermoSmart-kontrollerna är redan konfigurerade."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Steg 1 / 4 – Enheter & Sensorer",
+        "description": "Kalibreringsentiteter och quirk-brytare upptäcks automatiskt.",
+        "data": {
+          "name": "Zonnamn",
+          "climate_entities": "Termostater / TRV:er",
+          "temp_sensors": "Inomhustemperatursensorer",
+          "humidity_sensors": "Inomhusluftfuktighetssensorer",
+          "window_sensors": "Fönstensensorer",
+          "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
+          "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
+          "valve_maintenance": "Aktivera ventilunderhåll",
+          "calibration_invert": "Invertera kalibrerings-offset (ME167 och liknande)"
+        }
+      },
+      "schedule": {
+        "title": "Steg 2 / 4 – Temperaturer & Schema",
+        "description": "Dagligt flöde: Natt → Komfort → Natt",
+        "data": {
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Natttemperatur",
+          "away_temp": "Borta-temperatur",
+          "vacation_temp": "Semestertemperatur",
+          "eco_temp": "Eco-temperatur",
+          "temp_tolerance": "Temperaturtolerans",
+          "schedule_enabled": "Aktivera tidsschema",
+          "sched_wd_morning": "Vardag: Komfort från",
+          "sched_wd_night": "Vardag: Natt från",
+          "sched_we_morning": "Helg: Komfort från",
+          "sched_we_night": "Helg: Natt från"
+        },
+        "data_description": {
+          "schedule_enabled": "När inaktiverat är komforttemperaturen aktiv dygnet runt – ingen automatisk dag/natt-växling.",
+          "sched_wd_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
+          "sched_wd_night": "Natttemperaturen gäller från denna tid",
+          "sched_we_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
+          "sched_we_night": "Natttemperaturen gäller från denna tid"
+        }
+      },
+      "presence": {
+        "title": "Steg 3 / 4 – Närvaro & Automatisering",
+        "data": {
+          "presence_persons": "Personer för närvarodetektering",
+          "home_zone": "Hemzon",
+          "learning_enabled": "Aktivera inlärningsalgoritm"
+        }
+      },
+      "weather": {
+        "title": "Steg 4 / 4 – Väder & Utomhussensorer",
+        "description": "Alla fält valfria. Egna sensorer har företräde framför väderentiteten.",
+        "data": {
+          "weather_entity": "Väderentitet",
+          "outdoor_temp_sensor": "Utomhustemperatur (egen station)",
+          "outdoor_humidity_sensor": "Utomhusluftfuktighet",
+          "outdoor_wind_sensor": "Vindhastighet",
+          "outdoor_solar_sensor": "Solinstrålning",
+          "outdoor_rain_sensor": "Nederbörd"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "active_control": {
+        "name": "Aktiv styrning",
+        "state": { "on": "Aktiv – ThermoSmart styr", "off": "Observationsläge" }
+      },
+      "learning": { "name": "Inlärningsläge" }
+    },
+    "select": {
+      "mode": {
+        "name": "Uppvärmningsläge",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Komfort",
+          "eco":      "Eco",
+          "night":    "Natt",
+          "away":     "Borta",
+          "vacation": "Semester"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Måltemperatur" },
+      "trv_setpoint": { "name": "TRV-börvärde" },
+      "preheat_minutes": { "name": "Förvärmingstid" },
+      "confidence": { "name": "Inlärningsframsteg" },
+      "weather_offset": { "name": "Väderkorrigering" },
+      "status": { "name": "Status" },
+      "temp_slope": { "name": "Temperaturlutning" },
+      "temp_ema_1h": { "name": "Temperatur EMA 1h" },
+      "heat_loss": { "name": "Värmeförlust" },
+      "heating_power": { "name": "Värmeeffekt" },
+      "sun_intensity": { "name": "Solvärmeinflöde" },
+      "window_cooling_rate": { "name": "Avkylningshastighet fönster" },
+      "trv_observations": { "name": "TRV-observationer" }
+    }
+  }
+}

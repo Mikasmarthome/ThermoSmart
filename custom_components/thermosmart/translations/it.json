@@ -1,0 +1,195 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configura ThermoSmart",
+        "menu_options": {
+          "add_system": "Configura i controlli globali (modalità Estate e Vacanza)",
+          "add_zone": "Aggiungi zona di riscaldamento"
+        }
+      },
+      "add_system": {
+        "title": "Controlli globali",
+        "description": "Configura gli interruttori globali della modalità Estate e Vacanza. Nessun termostato richiesto. Gli interruttori globali controllano tutte le zone simultaneamente."
+      },
+      "add_zone": {
+        "title": "Passo 1 / 4 – Dispositivi e sensori",
+        "description": "Seleziona le valvole TRV e i sensori per questa zona di riscaldamento. Le entità di calibrazione e gli interruttori quirk vengono rilevati automaticamente.",
+        "data": {
+          "name": "Nome della zona (es. Soggiorno)",
+          "climate_entities": "Termostati / valvole TRV",
+          "temp_sensors": "Sensori temperatura interna (viene calcolata la media)",
+          "humidity_sensors": "Sensori umidità interna",
+          "window_sensors": "Sensori finestre (binary_sensor)",
+          "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",
+          "window_close_delay": "Riscaldamento acceso – ritardo dopo chiusura finestra",
+          "valve_maintenance": "Abilita manutenzione valvole (ogni domenica alle 03:00)",
+          "calibration_invert": "Inverti offset di calibrazione (per valvole TRV come ME167 che invertono il segno)"
+        }
+      },
+      "schedule": {
+        "title": "Passo 2 / 4 – Temperature e pianificazione",
+        "description": "Flusso giornaliero: Notte → Comfort → Notte\n\nQuando tutte le persone sono assenti, ThermoSmart passa automaticamente alla temperatura di assenza – indipendentemente dalla pianificazione.",
+        "data": {
+          "comfort_temp": "Temperatura comfort (quando qualcuno è a casa)",
+          "night_temp": "Temperatura notturna (riduzione durante il sonno)",
+          "away_temp": "Temperatura assenza (automatica quando tutti sono fuori)",
+          "vacation_temp": "Temperatura vacanza (protezione dal gelo)",
+          "eco_temp": "Temperatura Eco (risparmio energetico, tra notte e comfort)",
+          "temp_tolerance": "Tolleranza temperatura – controlla la valvola TRV solo oltre questa deviazione",
+          "schedule_enabled": "Abilita pianificazione oraria",
+          "sched_wd_morning": "Feriali: Comfort dalle",
+          "sched_wd_night": "Feriali: Notte dalle",
+          "sched_we_morning": "Weekend: Comfort dalle",
+          "sched_we_night": "Weekend: Notte dalle"
+        },
+        "data_description": {
+          "schedule_enabled": "Se disabilitato, la temperatura comfort è attiva 24 ore su 24 – nessun cambio automatico giorno/notte.",
+          "sched_wd_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
+          "sched_wd_night": "La temperatura notturna si applica da quest'ora",
+          "sched_we_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
+          "sched_we_night": "La temperatura notturna si applica da quest'ora"
+        }
+      },
+      "presence": {
+        "title": "Passo 3 / 4 – Presenza e automazione",
+        "description": "Chi è a casa? ThermoSmart passa automaticamente alla modalità assenza quando tutti escono.",
+        "data": {
+          "presence_persons": "Persone per il rilevamento della presenza",
+          "home_zone": "Zona casa (predefinito: zone.home)",
+          "learning_enabled": "Abilita algoritmo di apprendimento"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart impara le velocità di riscaldamento, raffreddamento e le temperature ottimali per questa zona."
+        }
+      },
+      "weather": {
+        "title": "Passo 4 / 4 – Meteo e sensori esterni",
+        "description": "Tutti i campi sono opzionali – i sensori propri hanno la priorità sull'entità meteo. Il sistema funziona anche senza dati meteo.",
+        "data": {
+          "weather_entity": "Entità meteo (es. weather.home)",
+          "outdoor_temp_sensor": "Temperatura esterna – stazione meteo propria (priorità)",
+          "outdoor_humidity_sensor": "Umidità esterna",
+          "outdoor_wind_sensor": "Velocità del vento (m/s o km/h)",
+          "outdoor_solar_sensor": "Irraggiamento solare (W/m²)",
+          "outdoor_rain_sensor": "Precipitazioni"
+        },
+        "data_description": {
+          "weather_entity": "Utilizzato per le previsioni meteo e la soppressione delle previsioni. Lasciare vuoto se si utilizzano solo sensori propri.",
+          "outdoor_temp_sensor": "I sensori propri sono più accurati dell'entità meteo e vengono preferiti."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Entità meteo non trovata. Seleziona un'entità valida o lascia il campo vuoto.",
+      "name_required": "Inserisci un nome per la zona.",
+      "required": "È richiesto almeno un termostato / valvola TRV.",
+      "night_temp_too_high": "La temperatura notturna deve essere inferiore alla temperatura comfort.",
+      "away_temp_too_high": "La temperatura di assenza non deve essere superiore alla temperatura notturna."
+    },
+    "abort": {
+      "already_configured": "Questa zona è già configurata.",
+      "system_already_configured": "I controlli globali ThermoSmart sono già configurati."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Passo 1 / 4 – Dispositivi e sensori",
+        "description": "Le entità di calibrazione e gli interruttori quirk vengono rilevati automaticamente.",
+        "data": {
+          "name": "Nome della zona",
+          "climate_entities": "Termostati / valvole TRV",
+          "temp_sensors": "Sensori temperatura interna",
+          "humidity_sensors": "Sensori umidità interna",
+          "window_sensors": "Sensori finestre",
+          "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",
+          "window_close_delay": "Riscaldamento acceso – ritardo dopo chiusura finestra",
+          "valve_maintenance": "Abilita manutenzione valvole",
+          "calibration_invert": "Inverti offset di calibrazione (ME167 e simili)"
+        }
+      },
+      "schedule": {
+        "title": "Passo 2 / 4 – Temperature e pianificazione",
+        "description": "Flusso giornaliero: Notte → Comfort → Notte",
+        "data": {
+          "comfort_temp": "Temperatura comfort",
+          "night_temp": "Temperatura notturna",
+          "away_temp": "Temperatura assenza",
+          "vacation_temp": "Temperatura vacanza",
+          "eco_temp": "Temperatura Eco",
+          "temp_tolerance": "Tolleranza temperatura",
+          "schedule_enabled": "Abilita pianificazione oraria",
+          "sched_wd_morning": "Feriali: Comfort dalle",
+          "sched_wd_night": "Feriali: Notte dalle",
+          "sched_we_morning": "Weekend: Comfort dalle",
+          "sched_we_night": "Weekend: Notte dalle"
+        },
+        "data_description": {
+          "schedule_enabled": "Se disabilitato, la temperatura comfort è attiva 24 ore su 24 – nessun cambio automatico giorno/notte.",
+          "sched_wd_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
+          "sched_wd_night": "La temperatura notturna si applica da quest'ora",
+          "sched_we_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
+          "sched_we_night": "La temperatura notturna si applica da quest'ora"
+        }
+      },
+      "presence": {
+        "title": "Passo 3 / 4 – Presenza e automazione",
+        "data": {
+          "presence_persons": "Persone per il rilevamento della presenza",
+          "home_zone": "Zona casa",
+          "learning_enabled": "Abilita algoritmo di apprendimento"
+        }
+      },
+      "weather": {
+        "title": "Passo 4 / 4 – Meteo e sensori esterni",
+        "description": "Tutti i campi sono opzionali. I sensori propri hanno la priorità sull'entità meteo.",
+        "data": {
+          "weather_entity": "Entità meteo",
+          "outdoor_temp_sensor": "Temperatura esterna (stazione propria)",
+          "outdoor_humidity_sensor": "Umidità esterna",
+          "outdoor_wind_sensor": "Velocità del vento",
+          "outdoor_solar_sensor": "Irraggiamento solare",
+          "outdoor_rain_sensor": "Precipitazioni"
+        }
+      }
+    }
+  },
+  "entity": {
+    "switch": {
+      "active_control": {
+        "name": "Controllo attivo",
+        "state": { "on": "Attivo – ThermoSmart controlla", "off": "Modalità osservazione" }
+      },
+      "learning": { "name": "Modalità apprendimento" }
+    },
+    "select": {
+      "mode": {
+        "name": "Modalità riscaldamento",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Comfort",
+          "eco":      "Eco",
+          "night":    "Notte",
+          "away":     "Assente",
+          "vacation": "Vacanza"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Temperatura target" },
+      "trv_setpoint": { "name": "Setpoint TRV" },
+      "preheat_minutes": { "name": "Tempo preriscaldamento" },
+      "confidence": { "name": "Progresso apprendimento" },
+      "weather_offset": { "name": "Correzione meteo" },
+      "status": { "name": "Stato" },
+      "temp_slope": { "name": "Pendenza temperatura" },
+      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "heat_loss": { "name": "Dispersione termica" },
+      "heating_power": { "name": "Potenza di riscaldamento" },
+      "sun_intensity": { "name": "Guadagno solare" },
+      "window_cooling_rate": { "name": "Velocità raffreddamento finestra" },
+      "trv_observations": { "name": "Osservazioni TRV" }
+    }
+  }
+}

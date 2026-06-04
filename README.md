@@ -4,6 +4,7 @@
 
 <h1 align="center">ThermoSmart</h1>
 <p align="center"><strong>Weather-aware, self-learning heating control for Home Assistant</strong></p>
+<p align="center">Learns your building. Adapts to your habits. Works safely alongside your existing setup.</p>
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
@@ -19,7 +20,7 @@
 > ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices in your home. Always configure a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
 > 🧪 **Beta Release (v1.0.0-beta.7)**
-> ThermoSmart is in early testing. The learning algorithm needs at least one full heating season to collect enough data and reach its full potential. All core features are functional, but real-world results will vary. Please report issues and feedback on GitHub — it helps a lot.
+> All core features are functional. The learning algorithm improves with every heating session and reaches its full potential after a complete heating season — results get noticeably better over time. Please report issues and feedback on GitHub — it helps a lot.
 
 ---
 
@@ -29,11 +30,20 @@ ThermoSmart is not a classic thermostat controller.
 
 It **observes the thermal behaviour of your building** — how fast each room heats up and cools down, how outdoor conditions affect heat demand, and what temperatures you prefer at different times of day. Over time it uses this data together with weather forecasts and presence detection to **adapt heating schedules to your actual building and habits**.
 
-The learning algorithm improves with more observations. Meaningful results are expected after several weeks; full effectiveness after a complete heating season.
-
-**Works alongside your existing setup.** In Observation mode, ThermoSmart watches what your current controller does and learns from it — without touching anything. Switch to Active mode when you're ready.
+The learning algorithm improves with every heating session. Meaningful results emerge after several weeks; full personalisation after a complete heating season.
 
 **One config entry = one heating zone.** Multiple zones are fully independent.
+
+---
+
+## Why ThermoSmart?
+
+- **Learns your building** — heating rates, heat loss, and optimal preheat times are measured and remembered per zone, not estimated from generic tables
+- **TPI with auto-calibrated coefficients** — the controller derives its own parameters from your building's actual thermal data, no manual tuning required
+- **Safe to try: Observation mode** — ThermoSmart runs passively alongside any existing controller (including Better Thermostat), learning from what it does without changing anything; switch to Active Control when you're ready
+- **Weather-aware, not just weather-reactive** — forecast-based suppression with a feedback loop that learns how trustworthy your local forecast actually is
+- **Grades every heating session** — an Outcome Score (0–100%) evaluates each session for speed, accuracy, and difficulty; TRV observations are weighted accordingly
+- **Fully local** — no cloud, no subscription, all data stays in Home Assistant
 
 ---
 
@@ -61,7 +71,7 @@ Any Home Assistant `climate` entity that supports `set_temperature` — includin
 
 ### TPI Controller
 
-ThermoSmart uses a **TPI (Time Proportional Integrator)** algorithm to calculate the optimal valve position:
+ThermoSmart uses a **TPI (Time Proportional Integrator)** algorithm to calculate the optimal valve position. In simple terms: the further the room is from the target — and the colder it is outside — the more heat is applied, proportionally.
 
 ```
 duty_cycle = coef_int × (target − room) + coef_ext × (target − outdoor)
@@ -167,6 +177,7 @@ When today's forecast high exceeds the target, ThermoSmart reduces heating. Thre
 | Normalised heating rate (÷ outdoor delta) | Season-independent cross-comparison |
 | Heat loss rate °C/min (EMA) | Effective preheat, TPI coef_int |
 | TRV setpoint efficiency | Optimal setpoint selection |
+| Session Outcome Score (0–100%) | Rates each heating session for speed, accuracy & difficulty; weights TRV observations accordingly |
 | Window cooling rate | Predicting ventilation temperature drop |
 | Forecast accuracy bias | Forecast trust factor |
 | All outdoor conditions | Multi-factor thermal similarity weighting |
@@ -326,17 +337,17 @@ TRV Setpoint · TPI Duty-Cycle · Preheat time · Weather correction · Temperat
 
 | Status | Condition |
 |---|---|
-| **Beobachtungsmodus** | Active control OFF, learning ON |
-| **Deaktiviert** | Active control OFF, learning OFF |
-| **Steuert (Lernmodus aus)** | Active control ON, learning OFF |
-| **Heizungsausfall!** | TRV heating commanded but temperature falling 35+ min |
-| **Vorheizen** | Preheating before comfort time |
-| **Heizt** | Actively heating toward target |
-| **Temperatur gehalten** | Target reached, maintaining |
-| **Fenster offen** | Window open (sensor or slope detected), heating paused |
-| **Sommer – Heizung aus** | Summer mode active |
-| **Urlaub** | Vacation mode |
-| **Abwesend** | All persons away |
+| **Observation mode** | Active control OFF, learning ON |
+| **Disabled** | Active control OFF, learning OFF |
+| **Controlling (learning off)** | Active control ON, learning OFF |
+| **Heating failure!** | TRV heating commanded but temperature falling 35+ min |
+| **Preheating** | Preheating before comfort time |
+| **Heating** | Actively heating toward target |
+| **Temperature maintained** | Target reached, maintaining |
+| **Window open** | Window open (sensor or slope detected), heating paused |
+| **Summer – heating off** | Summer mode active |
+| **Vacation** | Vacation mode |
+| **Away** | All persons away |
 
 ---
 
@@ -405,6 +416,11 @@ No. ThermoSmart is fully local — no data leaves your Home Assistant instance.
 |---|---|
 | 🇬🇧 English | ✅ Complete |
 | 🇩🇪 German | ✅ Complete |
+| 🇫🇷 French | ✅ Complete |
+| 🇳🇱 Dutch | ✅ Complete |
+| 🇵🇱 Polish | ✅ Complete |
+| 🇸🇪 Swedish | ✅ Complete |
+| 🇮🇹 Italian | ✅ Complete |
 
 More languages are welcome! Add a file in `custom_components/thermosmart/translations/` and open a Pull Request.
 
@@ -425,13 +441,13 @@ automation:
         target:
           entity_id: select.thermosmart_living_room_heizmodus
         data:
-          option: "Komfort"
+          option: "comfort"
       - delay: "00:30:00"
       - service: select.select_option
         target:
           entity_id: select.thermosmart_living_room_heizmodus
         data:
-          option: "Auto"
+          option: "auto"
 ```
 
 ### Notify on heating failure

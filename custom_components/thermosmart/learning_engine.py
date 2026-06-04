@@ -563,6 +563,8 @@ class LearningEngine:
                         "outdoor_temp": weather_data.get("temperature"),
                         "wind_speed": weather_data.get("wind_speed"),
                         "solar_radiation": weather_data.get("solar_radiation"),
+                        "outdoor_humidity": weather_data.get("humidity"),
+                        "rain": weather_data.get("rain"),
                     },
                     "peak_temp": current_temp,
                     "expected_minutes": expected_minutes,
@@ -613,6 +615,8 @@ class LearningEngine:
             solar_radiation=session["weather"].get("solar_radiation") or 0.0,
             outdoor_temp=session["weather"].get("outdoor_temp"),
             wind_speed=session["weather"].get("wind_speed") or 0.0,
+            outdoor_humidity=session["weather"].get("outdoor_humidity") or 0.0,
+            rain=session["weather"].get("rain") or 0.0,
             reason=reason,
         )
 
@@ -660,24 +664,26 @@ class LearningEngine:
         solar_radiation: float = 0.0,
         outdoor_temp: float | None = None,
         wind_speed: float = 0.0,
+        outdoor_humidity: float = 0.0,
+        rain: float = 0.0,
         reason: str = "reached",
     ) -> float:
         """Outcome-Score 0.0–1.0 für eine abgeschlossene Heizsitzung.
 
         Drei Komponenten:
           Reached  (40%): Wurde das Ziel überhaupt erreicht?
-          Speed    (35%): Wie schnell vs. Erwartung? (angepasst für Schwierigkeit)
+          Speed    (35%): Wie schnell vs. Erwartung? (korrigiert für Schwierigkeit)
           Accuracy (25%): Wie präzise – kein Überschießen?
 
-        Umgebungs-Discount: Wenn externe Faktoren das Ergebnis beeinflussten,
-        wird der Score als Lernquelle abgewertet – nicht weggeworfen.
+        Schwierigkeits-Korrektoren (Speed-Score nachsichtiger):
+          Kälte       (< −5°C):   Heizung arbeitet schwerer    → erwartete Zeit ×1.4 max.
+          Wind        (> 10 m/s): Wärmeverlust steigt          → erwartete Zeit ×1.25 max.
+          Hohe Feuchte(> 80%):    Gefühlte Kälte steigt        → erwartete Zeit ×1.1 max.
+          Regen       (> 0):      Nasse Wände leiten Wärme ab  → erwartete Zeit ×1.1 max.
 
-          Solar (> 400 W/m²): Raum heizt sich teils durch Sonne → bis −40% Gewicht
-          Warm  (> 15°C out): Außenwärme hilft mit               → bis −30% Gewicht
-
-        Schwierigkeits-Korrektur beim Speed-Score:
-          Kälte (< -5°C): Heizung arbeitet schwerer → erwartete Zeit ×1.4 max.
-          Wind  (> 10 m/s): Wärmeverlust steigt    → erwartete Zeit ×1.25 max.
+        Umgebungs-Reliability-Discount (Score abwerten wenn externe Faktoren helfen):
+          Solar       (> 400 W/m²): Sonne heizt Raum mit       → bis −40% Gewicht
+          Warm        (> 15°C):     Außenwärme hilft mit        → bis −30% Gewicht
         """
         outdoor = outdoor_temp if outdoor_temp is not None else 10.0
         delta_total = target - start_temp
@@ -692,14 +698,17 @@ class LearningEngine:
         else:
             reached_score = 1.0
 
-        # ── Speed Score (35%) – Schwierigkeit berücksichtigt ─────────
+        # ── Speed Score (35%) – alle Schwierigkeitsfaktoren ──────────
         if expected_minutes > 5:
-            # Schwierigkeits-Multiplikator: Kälte und Wind erhöhen benötigte Zeit
             difficulty = 1.0
             if outdoor < -5:
-                difficulty += min((abs(outdoor) - 5) / 30, 0.4)   # max ×1.4 bei Extremkälte
+                difficulty += min((abs(outdoor) - 5) / 30, 0.40)   # max ×1.40 Extremkälte
             if wind_speed > 10:
-                difficulty += min((wind_speed - 10) / 40, 0.25)   # max ×1.25 bei Sturm
+                difficulty += min((wind_speed - 10) / 40, 0.25)    # max ×1.25 Sturm
+            if outdoor_humidity > 80 and outdoor < 10:
+                difficulty += min((outdoor_humidity - 80) / 200, 0.10)  # max ×1.10 feuchte Kälte
+            if rain > 0:
+                difficulty += min(rain / 10.0, 0.10)               # max ×1.10 Regen
 
             adjusted_expected = expected_minutes * difficulty
             ratio = minutes_taken / adjusted_expected
@@ -715,19 +724,14 @@ class LearningEngine:
 
         # ── Accuracy Score (25%) ─────────────────────────────────────
         overshoot = max(0.0, peak_temp - target)
-        accuracy_score = max(0.0, 1.0 - overshoot / 2.0)  # 2°C Überschuss = 0 Punkte
+        accuracy_score = max(0.0, 1.0 - overshoot / 2.0)
 
         # ── Umgebungs-Reliability-Discount ────────────────────────────
         # Externe Faktoren helfen beim Heizen → Score als Lernquelle weniger verlässlich
-
-        # Solar: Sonne heizt Raum zusätzlich
         solar_discount = max(0.60, 1.0 - max(0, solar_radiation - 400) / 2000) \
             if solar_radiation > 400 else 1.0
-
-        # Warme Außentemperatur: Raum nimmt Wärme von draußen auf
         warm_discount = max(0.70, 1.0 - max(0, outdoor - 15.0) / 25.0) \
             if outdoor > 15.0 else 1.0
-
         env_discount = solar_discount * warm_discount
 
         raw = reached_score * 0.40 + speed_score * 0.35 + accuracy_score * 0.25

@@ -13,21 +13,11 @@ from .const import (
     DOMAIN, VERSION,
     HEATING_MODE_AUTO, HEATING_MODE_COMFORT, HEATING_MODE_NIGHT,
     HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_ECO,
+    HEATING_MODES,
 )
 from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
-
-MODE_LABELS = {
-    HEATING_MODE_AUTO:     "Auto",
-    HEATING_MODE_COMFORT:  "Komfort",
-    HEATING_MODE_ECO:      "Eco",
-    HEATING_MODE_NIGHT:    "Nacht",
-    HEATING_MODE_AWAY:     "Abwesend",
-    HEATING_MODE_VACATION: "Urlaub",
-}
-LABEL_TO_MODE = {v: k for k, v in MODE_LABELS.items()}
-
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -38,14 +28,14 @@ async def async_setup_entry(
 
 class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
     _attr_has_entity_name = True
+    _attr_translation_key = "mode"
     _attr_icon = "mdi:home-thermometer-outline"
+    _attr_options = HEATING_MODES  # ["auto", "comfort", "eco", "night", "away", "vacation"]
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
         self._coordinator = coordinator
         self._entry = entry
         self._attr_unique_id = f"{entry.entry_id}_mode"
-        self._attr_name = "Heizmodus"
-        self._attr_options = list(MODE_LABELS.values())
         self._attr_device_info = DeviceInfo(
             identifiers={(DOMAIN, entry.entry_id)},
             name=f"ThermoSmart – {entry.data.get('name', 'Zone')}",
@@ -59,8 +49,8 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
-        if last and last.state in self._attr_options:
-            self._mode = LABEL_TO_MODE.get(last.state, HEATING_MODE_AUTO)
+        if last and last.state in HEATING_MODES:
+            self._mode = last.state
             # Nur zum Coordinator syncen wenn der noch im Default-Modus ist –
             # Globaler Urlaubsschalter (läuft vor select) hat sonst Vorrang.
             if self._coordinator._mode == HEATING_MODE_AUTO:
@@ -68,10 +58,12 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
 
     @property
     def current_option(self) -> str:
-        return MODE_LABELS[self._mode]
+        return self._mode
 
     async def async_select_option(self, option: str) -> None:
-        self._mode = LABEL_TO_MODE.get(option, HEATING_MODE_AUTO)
+        if option not in HEATING_MODES:
+            return
+        self._mode = option
         self.async_write_ha_state()
         self._coordinator.set_mode(self._mode)
         await self._coordinator.async_request_refresh()

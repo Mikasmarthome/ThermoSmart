@@ -37,12 +37,14 @@
           "vacation_temp": "Urlaubstemperatur (Frostschutz)",
           "eco_temp": "Eco-Temperatur (energiesparend, zwischen Nacht und Komfort)",
           "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
+          "schedule_enabled": "Zeitplan aktivieren",
           "sched_wd_morning": "Werktag: Komfort ab",
           "sched_wd_night": "Werktag: Nacht ab",
           "sched_we_morning": "Wochenende: Komfort ab",
           "sched_we_night": "Wochenende: Nacht ab"
         },
         "data_description": {
+          "schedule_enabled": "Wenn deaktiviert, gilt die Komforttemperatur rund um die Uhr – kein automatischer Tag/Nacht-Wechsel.",
           "sched_wd_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "sched_we_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
@@ -117,12 +119,14 @@
           "vacation_temp": "Urlaubstemperatur",
           "eco_temp": "Eco-Temperatur",
           "temp_tolerance": "Temperaturtoleranz",
+          "schedule_enabled": "Zeitplan aktivieren",
           "sched_wd_morning": "Werktag: Komfort ab",
           "sched_wd_night": "Werktag: Nacht ab",
           "sched_we_morning": "Wochenende: Komfort ab",
           "sched_we_night": "Wochenende: Nacht ab"
         },
         "data_description": {
+          "schedule_enabled": "Wenn deaktiviert, gilt die Komforttemperatur rund um die Uhr – kein automatischer Tag/Nacht-Wechsel.",
           "sched_wd_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "sched_we_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
@@ -163,8 +167,12 @@
       "mode": {
         "name": "Heizmodus",
         "state": {
-          "Auto": "Auto", "Komfort": "Komfort", "Eco": "Eco",
-          "Nacht": "Nacht", "Abwesend": "Abwesend", "Urlaub": "Urlaub"
+          "auto":     "Auto",
+          "comfort":  "Komfort",
+          "eco":      "Eco",
+          "night":    "Nacht",
+          "away":     "Abwesend",
+          "vacation": "Urlaub"
         }
       }
     },

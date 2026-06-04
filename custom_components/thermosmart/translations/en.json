@@ -37,12 +37,14 @@
           "vacation_temp": "Vacation temperature (frost protection)",
           "eco_temp": "Eco temperature (energy saving, between night and comfort)",
           "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
+          "schedule_enabled": "Enable time schedule",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",
           "sched_we_morning": "Weekend: Comfort from",
           "sched_we_night": "Weekend: Night from"
         },
         "data_description": {
+          "schedule_enabled": "When disabled, comfort temperature is active around the clock – no automatic day/night switching.",
           "sched_wd_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_wd_night": "Night temperature applies from this time",
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
@@ -117,12 +119,14 @@
           "vacation_temp": "Vacation temperature",
           "eco_temp": "Eco temperature",
           "temp_tolerance": "Temperature tolerance",
+          "schedule_enabled": "Enable time schedule",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",
           "sched_we_morning": "Weekend: Comfort from",
           "sched_we_night": "Weekend: Night from"
         },
         "data_description": {
+          "schedule_enabled": "When disabled, comfort temperature is active around the clock – no automatic day/night switching.",
           "sched_wd_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_wd_night": "Night temperature applies from this time",
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
@@ -163,8 +167,12 @@
       "mode": {
         "name": "Heating mode",
         "state": {
-          "Auto": "Auto", "Komfort": "Comfort", "Eco": "Eco",
-          "Nacht": "Night", "Abwesend": "Away", "Urlaub": "Vacation"
+          "auto":     "Auto",
+          "comfort":  "Comfort",
+          "eco":      "Eco",
+          "night":    "Night",
+          "away":     "Away",
+          "vacation": "Vacation"
         }
       }
     },

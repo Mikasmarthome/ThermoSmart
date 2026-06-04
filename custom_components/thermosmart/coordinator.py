@@ -247,7 +247,7 @@ class ThermoSmartCoordinator(
             return None
         if cur < morning:
             return morning - cur
-        return None
+        return (24 * 60 - cur) + morning
 
     # ── Event-Listener ───────────────────────────────────────────────
 

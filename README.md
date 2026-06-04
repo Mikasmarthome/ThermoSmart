@@ -55,7 +55,7 @@ Any Home Assistant `climate` entity that supports `set_temperature` — includin
 
 ## Features
 
-### TPI Controller (v1.2.0)
+### TPI Controller
 
 ThermoSmart uses a **TPI (Time Proportional Integrator)** algorithm to calculate the optimal valve position:
 

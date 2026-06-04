@@ -3,11 +3,12 @@
 </p>
 
 <h1 align="center">ThermoSmart</h1>
-<p align="center"><strong>AI-powered, weather-aware heating control for Home Assistant</strong></p>
+<p align="center"><strong>Weather-aware, self-learning heating control for Home Assistant</strong></p>
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0-blue.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--beta.1-orange.svg" alt="Version"/></a>
+  <img src="https://img.shields.io/badge/status-beta-red.svg" alt="Beta"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
 </p>
@@ -17,15 +18,18 @@
 > ⚠️ **Use at your own risk.**
 > ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices in your home. Always configure a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
+> 🧪 **Beta Release (v1.0.0-beta.1)**
+> ThermoSmart is in early testing. The learning algorithm needs at least one full heating season to collect enough data and reach its full potential. All core features are functional, but real-world results will vary. Please report issues and feedback on GitHub — it helps a lot.
+
 ---
 
 ## What is ThermoSmart?
 
 ThermoSmart is not a classic thermostat controller.
 
-It **learns the thermal behaviour of your building** — how fast each room heats up and cools down, how much solar radiation or wind affects the heat demand, and what temperatures you actually want at which times of day. It uses this knowledge together with weather forecasts, presence detection, and multi-factor AI to **predict and optimise your heating before you need it**.
+It **observes the thermal behaviour of your building** — how fast each room heats up and cools down, how outdoor conditions affect heat demand, and what temperatures you prefer at different times of day. Over time it uses this data together with weather forecasts and presence detection to **adapt heating schedules to your actual building and habits**.
 
-ThermoSmart learns *why* and *when* to heat — and gets smarter over time.
+The learning algorithm improves with more observations. Meaningful results are expected after several weeks; full effectiveness after a complete heating season.
 
 **Works alongside your existing setup.** In Observation mode, ThermoSmart watches what your current controller does and learns from it — without touching anything. Switch to Active mode when you're ready.
 
@@ -154,7 +158,7 @@ When today's forecast high exceeds the target, ThermoSmart reduces heating. Thre
 
 ---
 
-### Learning Algorithm (Multi-Factor AI)
+### Learning Algorithm
 
 | What is learned | Used for |
 |---|---|
@@ -172,7 +176,7 @@ When today's forecast high exceeds the target, ThermoSmart reduces heating. Thre
 - Similar outdoor conditions count more (Gaussian similarity per factor)
 - Normalised heating rate enables reliable cross-seasonal comparison
 
-**Learning phases:**
+**Learning phases (expected — not yet validated at scale):**
 1. Phase 0 (<5 observations): Physical fallback formulas
 2. Phase 1 (5–50): First patterns emerging
 3. Phase 2 (50–150): Learning algorithm dominates
@@ -382,7 +386,7 @@ In Observation mode (Active Control OFF), ThermoSmart reads TRV setpoints set by
 ThermoSmart automatically averages the remaining sensors. Only if all sensors are offline does ThermoSmart pause temperature-based decisions.
 
 **How long until the learning algorithm is effective?**
-Phase 1 starts after ~5 observations (25 min). Full personalisation (Phase 3) after 150+ observations — typically 1–2 weeks. TRV setpoint learning in Observation mode accelerates this significantly.
+Phase 1 starts after ~5 observations (25 min). Full personalisation (Phase 3) requires 150+ observations — expected after several weeks to a full heating season, depending on how often the heating runs. As a beta release, real-world timelines have not yet been validated at scale.
 
 **Why does ThermoSmart force 'heat' mode on my TRV?**
 TRVs like the SONOFF TRVZB have an internal weekly schedule (auto mode). When active, the device ignores all external setpoint commands — ThermoSmart's control would have no effect. ThermoSmart therefore actively enforces `heat` mode to maintain full control.

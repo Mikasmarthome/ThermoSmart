@@ -172,6 +172,9 @@ class LearningEngine:
         self._forecast_decisions: dict[str, list[dict]] = defaultdict(list)
         # EMA der Wärmeverlustrate (°C/min) pro Zone – schnellere Aktualisierung als simple avg
         self._heat_loss_ema: dict[str, float] = {}
+        # Outcome-Scoring: aktive Heizsitzungen + abgeschlossene Ergebnisse
+        self._heating_sessions: dict[str, dict] = {}
+        self._outcome_log: dict[str, list[dict]] = defaultdict(list)
 
     # ── Persistenz ──────────────────────────────────────────────────────
 
@@ -187,6 +190,8 @@ class LearningEngine:
             self._boost_factors = stored.get("boost_factors", {})
             self._forecast_bias = stored.get("forecast_bias", {})
             self._heat_loss_ema = stored.get("heat_loss_ema", {})
+            for zone_id, entries in stored.get("outcome_log", {}).items():
+                self._outcome_log[zone_id] = entries
             total = sum(len(v) for v in self._observations.values())
             trv_total = sum(len(v) for v in self._trv_observations.values())
             _LOGGER.info(
@@ -204,6 +209,7 @@ class LearningEngine:
             "boost_factors": self._boost_factors,
             "forecast_bias": self._forecast_bias,
             "heat_loss_ema": self._heat_loss_ema,
+            "outcome_log": dict(self._outcome_log),
         })
 
     def _prune_old_observations(self, max_age_days: int = 1095) -> None:
@@ -514,6 +520,212 @@ class LearningEngine:
         )
         await self.async_save()
 
+    # ── Outcome-Scoring ──────────────────────────────────────────────────
+
+    def update_heating_session(
+        self,
+        zone_id: str,
+        current_temp: float | None,
+        target: float | None,
+        is_active_control: bool,
+        weather_data: dict,
+        expected_minutes: int = 0,
+    ) -> None:
+        """Verfolgt Heizsitzungen und bewertet deren Ergebnis (Outcome-Score 0–1).
+
+        Wird jeden Update-Zyklus aufgerufen. Erkennt automatisch:
+          - Sitzungsstart: Ziel > Ist + 0.5°C
+          - Sitzungsende:  Ziel erreicht (Score berechnen) oder Timeout 90 min
+          - Unterbrechung: Fenster offen (target=None) oder Modus geändert
+        """
+        now = dt_util.now()
+        session = self._heating_sessions.get(zone_id)
+        controller = "ts" if is_active_control else "obs"
+
+        # Keine Temp → laufende Sitzung unterbrechen
+        if current_temp is None or target is None:
+            if session is not None:
+                self._finalize_session(zone_id, current_temp or session.get("start_temp", 0), "interrupted")
+            return
+
+        delta = target - current_temp
+        tolerance = 0.5
+
+        if delta > tolerance:
+            if session is None:
+                # Neue Sitzung starten
+                self._heating_sessions[zone_id] = {
+                    "start_time": now.isoformat(),
+                    "start_temp": current_temp,
+                    "target": target,
+                    "controller": controller,
+                    "weather": {
+                        "outdoor_temp": weather_data.get("temperature"),
+                        "wind_speed": weather_data.get("wind_speed"),
+                        "solar_radiation": weather_data.get("solar_radiation"),
+                    },
+                    "peak_temp": current_temp,
+                    "expected_minutes": expected_minutes,
+                }
+                _LOGGER.debug(
+                    "LearningEngine [%s]: Heizsitzung gestartet "
+                    "(%.1f°C → %.1f°C, Regler: %s, erwartet: %d min)",
+                    zone_id, current_temp, target, controller, expected_minutes,
+                )
+            else:
+                # Sitzung fortführen: Peak tracken, Timeout prüfen
+                session["peak_temp"] = max(session["peak_temp"], current_temp)
+                try:
+                    start = datetime.fromisoformat(session["start_time"])
+                    if (now - start).total_seconds() / 60 >= 90:
+                        self._finalize_session(zone_id, current_temp, "timeout")
+                except (ValueError, KeyError):
+                    pass
+        else:
+            # Ziel erreicht
+            if session is not None:
+                session["peak_temp"] = max(session["peak_temp"], current_temp)
+                self._finalize_session(zone_id, current_temp, "reached")
+
+    def _finalize_session(self, zone_id: str, current_temp: float, reason: str) -> None:
+        """Heizsitzung abschließen, Score berechnen und persistieren."""
+        session = self._heating_sessions.pop(zone_id, None)
+        if session is None:
+            return
+
+        now = dt_util.now()
+        try:
+            start = datetime.fromisoformat(session["start_time"])
+            elapsed_min = (now - start).total_seconds() / 60
+        except (ValueError, KeyError):
+            return
+
+        if elapsed_min < 3.0:
+            return  # Zu kurze Sitzung – nicht aussagekräftig
+
+        score = self._calc_outcome_score(
+            minutes_taken=elapsed_min,
+            expected_minutes=session.get("expected_minutes", 0),
+            peak_temp=session["peak_temp"],
+            current_temp=current_temp,
+            target=session["target"],
+            start_temp=session["start_temp"],
+            solar_radiation=session["weather"].get("solar_radiation") or 0.0,
+            reason=reason,
+        )
+
+        outcome: dict = {
+            "ts": now.isoformat(),
+            "start_temp": session["start_temp"],
+            "target": session["target"],
+            "peak_temp": round(session["peak_temp"], 1),
+            "end_temp": round(current_temp, 1),
+            "minutes_taken": round(elapsed_min, 1),
+            "expected_minutes": session.get("expected_minutes", 0),
+            "controller": session["controller"],
+            "reason": reason,
+            "outcome_score": score,
+        }
+        for k, v in session["weather"].items():
+            if v is not None:
+                outcome[k] = v
+
+        self._outcome_log[zone_id].append(outcome)
+        if len(self._outcome_log[zone_id]) > 200:
+            self._outcome_log[zone_id] = self._outcome_log[zone_id][-200:]
+
+        # Score in letzte TRV-Beobachtung einarbeiten damit sie korrekt gewichtet wird
+        trv_obs = self._trv_observations.get(zone_id, [])
+        if trv_obs:
+            trv_obs[-1]["outcome_score"] = score
+
+        _LOGGER.info(
+            "LearningEngine [%s]: Heizsitzung beendet "
+            "(%.1f→%.1f°C peak=%.1f°C, %.0f min, Regler=%s, Score=%.0f%%, Grund=%s)",
+            zone_id, session["start_temp"], current_temp, session["peak_temp"],
+            elapsed_min, session["controller"], score * 100, reason,
+        )
+        self._hass.async_create_task(self.async_save())
+
+    @staticmethod
+    def _calc_outcome_score(
+        minutes_taken: float,
+        expected_minutes: float,
+        peak_temp: float,
+        current_temp: float,
+        target: float,
+        start_temp: float,
+        solar_radiation: float = 0.0,
+        reason: str = "reached",
+    ) -> float:
+        """Outcome-Score 0.0–1.0 für eine abgeschlossene Heizsitzung.
+
+        Drei Komponenten:
+          Reached  (40%): Wurde das Ziel überhaupt erreicht?
+          Speed    (35%): Wie schnell vs. Erwartung?
+          Accuracy (25%): Wie präzise – kein Überschießen?
+
+        Solar-Discount: Wenn Sonne stark half → Score weniger verlässlich → Gewicht 0.6×.
+        """
+        delta_total = target - start_temp
+
+        # ── Reached Score (40%) ──────────────────────────────────────
+        if delta_total <= 0:
+            reached_score = 1.0
+        elif reason == "timeout":
+            reached_score = max(0.0, min(1.0, (current_temp - start_temp) / delta_total))
+        elif reason == "interrupted":
+            reached_score = max(0.0, min(1.0, (peak_temp - start_temp) / max(delta_total, 0.1)))
+        else:
+            reached_score = 1.0
+
+        # ── Speed Score (35%) ────────────────────────────────────────
+        if expected_minutes > 5:
+            ratio = minutes_taken / expected_minutes
+            if ratio <= 1.0:
+                speed_score = 1.0
+            elif ratio <= 2.0:
+                speed_score = 1.0 - (ratio - 1.0) * 0.7
+            else:
+                speed_score = max(0.05, 0.3 - (ratio - 2.0) * 0.1)
+        else:
+            speed_score = 0.6  # Kein Erwartungswert → neutral
+
+        # ── Accuracy Score (25%) ─────────────────────────────────────
+        overshoot = max(0.0, peak_temp - target)
+        accuracy_score = max(0.0, 1.0 - overshoot / 2.0)  # 2°C Überschuss = 0 Punkte
+
+        # ── Solar-Discount ────────────────────────────────────────────
+        if solar_radiation > 400:
+            solar_factor = max(0.6, 1.0 - (solar_radiation - 400) / 2000)
+        else:
+            solar_factor = 1.0
+
+        raw = reached_score * 0.40 + speed_score * 0.35 + accuracy_score * 0.25
+        return round(min(1.0, max(0.0, raw * solar_factor)), 3)
+
+    def get_outcome_stats(self, zone_id: str) -> dict:
+        """Statistiken über abgeschlossene Heizsitzungen."""
+        log = self._outcome_log.get(zone_id, [])
+        if not log:
+            return {"sessions": 0, "avg_score": None, "ts_avg": None, "obs_avg": None}
+
+        scores_ts  = [e["outcome_score"] for e in log if e.get("controller") == "ts"]
+        scores_obs = [e["outcome_score"] for e in log if e.get("controller") == "obs"]
+        all_scores = [e["outcome_score"] for e in log]
+
+        def _avg(lst):
+            return round(sum(lst) / len(lst) * 100, 1) if lst else None
+
+        return {
+            "sessions": len(log),
+            "avg_score_%": _avg(all_scores),
+            "ts_avg_%": _avg(scores_ts),
+            "obs_avg_%": _avg(scores_obs),
+            "last_score_%": round(log[-1]["outcome_score"] * 100, 1) if log else None,
+            "last_controller": log[-1].get("controller") if log else None,
+        }
+
     def get_learned_setpoint(
         self,
         zone_id: str,
@@ -549,6 +761,9 @@ class LearningEngine:
             w = _thermal_weight(obs, conditions, now)
             if w < 0.01:
                 continue
+            # Outcome-Score: gute Entscheidungen höher gewichten (0.5 = neutral)
+            outcome = obs.get("outcome_score", 0.5)
+            w *= (0.4 + 0.6 * outcome)
             efficiencies.append(obs["efficiency"])
             weights.append(w)
 

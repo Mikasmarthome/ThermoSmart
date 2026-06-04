@@ -36,6 +36,7 @@ async def async_setup_entry(
         ThermoSmartHeatingPowerSensor(coordinator, entry),
         ThermoSmartHeatLossRateSensor(coordinator, entry),
         ThermoSmartSunIntensitySensor(coordinator, entry),
+        ThermoSmartOutcomeScoreSensor(coordinator, entry),
         ThermoSmartTRVObservationsSensor(coordinator, entry),
     ])
 
@@ -442,6 +443,42 @@ class ThermoSmartSunIntensitySensor(_Base):
             "außentemperatur": weather.get("temperature"),
         }
 
+
+
+class ThermoSmartOutcomeScoreSensor(_Base):
+    """Outcome-Score der letzten Heizsitzungen (0–100%).
+
+    Bewertet wie gut eine Heizentscheidung war:
+    - Ziel schnell und stabil erreicht → hoher Score
+    - Ziel zu spät oder gar nicht erreicht → niedriger Score
+    - Starkes Überschießen → niedriger Score
+    Funktioniert sowohl für ThermoSmart (aktive Steuerung) als auch
+    für Better Thermostat / andere Regler (Beobachtungsmodus).
+    """
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "outcome_score")
+        self._attr_unique_id = f"{entry.entry_id}_outcome_score"
+        self._attr_name = "Outcome Score"
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:target"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return None
+        stats = le.get_outcome_stats(self.coordinator.zone_id)
+        return stats.get("avg_score_%")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        return le.get_outcome_stats(self.coordinator.zone_id)
 
 
 class ThermoSmartTRVObservationsSensor(_Base):

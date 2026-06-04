@@ -407,6 +407,17 @@ class ThermoSmartCoordinator(
 
             await self._async_observe_trv_setpoints(cfg, recommendation, weather_data)
 
+            # Outcome-Scoring: Heizsitzung tracken und bewerten
+            if not self._is_summer:
+                self.learning_engine.update_heating_session(
+                    zone_id=self.zone_id,
+                    current_temp=current_temp,
+                    target=target,
+                    is_active_control=self._active_control,
+                    weather_data=weather_data,
+                    expected_minutes=recommendation.get("preheat_minutes", 0),
+                )
+
             indoor_humidity = self._read_avg_sensor(cfg.get("humidity_sensors", []))
             await self.learning_engine.async_observe(
                 zone_id=self.zone_id,

@@ -17,7 +17,8 @@ from __future__ import annotations
 import logging
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.const import EVENT_HOMEASSISTANT_STOP
+from homeassistant.core import HomeAssistant, Event
 
 from .const import (
     DOMAIN,
@@ -70,6 +71,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await learning_engine.async_load()
         hass.data[DOMAIN]["learning_engine"] = learning_engine
         _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine erstellt")
+
+        async def _save_on_stop(event: Event) -> None:
+            """Lerndaten vor HA-Shutdown sicher auf Disk schreiben."""
+            if le := hass.data.get(DOMAIN, {}).get("learning_engine"):
+                await le.async_save()
+                _LOGGER.info("ThermoSmart: Lerndaten vor Shutdown gespeichert")
+
+        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _save_on_stop)
     else:
         learning_engine = hass.data[DOMAIN]["learning_engine"]
         _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine wiederverwendet")

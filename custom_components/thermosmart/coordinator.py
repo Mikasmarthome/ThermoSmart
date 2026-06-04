@@ -30,6 +30,9 @@ from .const import (
     HEATING_MODE_AUTO,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
+    HEATING_FAILURE_DELAY_MIN,
+    HEATING_FAILURE_SLOPE_THRESH,
+    HEATING_FAILURE_CMD_DELTA,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -97,6 +100,7 @@ class ThermoSmartCoordinator(
         self._calibration_offsets: dict[str, float] = {}
         self._auto_quirk_entities: list[str] = []
         self._auto_calibration_map: dict[str, str] = {}
+        self._auto_ext_temp_map: dict[str, str] = {}
         self._trv_offline: set[str] = set()
 
         # Sommer (genutzt von SeasonMixin)
@@ -117,6 +121,15 @@ class ThermoSmartCoordinator(
         self._indoor_temp_prev: tuple[datetime, float] | None = None
         self._indoor_temp_slope: float = 0.0
         self._ema_1h: float | None = None
+
+        # Slope-basierte Fenstererkennung (genutzt von WindowMixin._check_window_slope)
+        self._slope_win_ema: float | None = None
+        self._slope_win_consec: int = 0
+        self._slope_window_active: bool = False
+
+        # Heizungsausfall-Erkennung
+        self._heating_failure_since: datetime | None = None
+        self._heating_failure_notified: bool = False
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -362,6 +375,9 @@ class ThermoSmartCoordinator(
                 recommendation["trv_setpoint"] = trv_setpoint
                 recommendation["boost_factor"] = round(boost_factor, 3)
 
+            # Nach trv_setpoint-Berechnung: Heizungsausfall-Erkennung
+            self._check_heating_failure(recommendation)
+
             await self._async_observe_trv_setpoints(cfg, recommendation, weather_data)
 
             indoor_humidity = self._read_avg_sensor(cfg.get("humidity_sensors", []))
@@ -372,6 +388,10 @@ class ThermoSmartCoordinator(
                 indoor_humidity=indoor_humidity,
             )
 
+            # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
+            # – verbessert die TRV-interne Regelung unabhängig von der aktiven Steuerung
+            await self._async_write_external_temp(cfg, recommendation)
+
             if self._active_control and not self._is_summer:
                 await self._async_apply_quirks(cfg)
                 await self._watchdog_hvac(cfg, recommendation)
@@ -381,6 +401,8 @@ class ThermoSmartCoordinator(
             elif self._active_control and self._is_summer:
                 await self._async_apply_quirks(cfg)
                 await self._apply_frost_protection(cfg)
+
+            recommendation["heating_failure"] = self._heating_failure_notified
 
             return {
                 "weather": weather_data,
@@ -463,7 +485,7 @@ class ThermoSmartCoordinator(
                     EMA_1H_ALPHA * current_temp + (1 - EMA_1H_ALPHA) * self._ema_1h, 2
                 )
 
-        window_open = self._check_window_open(cfg)
+        window_open = self._check_window_open(cfg, current_temp=current_temp)
 
         comfort_temp = cfg.get("comfort_temp", 21.0)
         night_temp_cfg = cfg.get("night_temp", TEMP_NIGHT)
@@ -714,6 +736,82 @@ class ThermoSmartCoordinator(
                         self.zone_name, current, prev_target,
                     )
                 self._boost_active.pop(self.zone_id)
+
+    # ── Heizungsausfall-Erkennung ─────────────────────────────────────
+
+    def _check_heating_failure(self, recommendation: dict) -> None:
+        """Erkennt Heizungsausfall: TRV soll heizen, aber Raumtemperatur fällt.
+
+        Bedingungen für Alarm:
+          - Aktive Steuerung an (Beobachtungsmodus → kein Alarm, da BT steuert)
+          - TRV-Setpoint > aktuelle Temp + HEATING_FAILURE_CMD_DELTA (echter Heizbefehl)
+          - Temperatur-Slope < –HEATING_FAILURE_SLOPE_THRESH (°C/min) für HEATING_FAILURE_DELAY_MIN
+          - Kein offenes Fenster (das wäre erklärter Temperaturabfall)
+
+        Alarm: HA Persistent Notification + Log-Warning.
+        Alarm wird automatisch quittiert wenn Zieltemperatur erreicht ist.
+        """
+        if not self._active_control:
+            self._heating_failure_since = None
+            return
+
+        trv_setpoint = recommendation.get("trv_setpoint")
+        current_temp = recommendation.get("current_temp")
+        target = recommendation.get("adjusted_target")
+        window_open = recommendation.get("window_open", False)
+
+        if window_open or trv_setpoint is None or current_temp is None or target is None:
+            self._heating_failure_since = None
+            return
+
+        is_heating_commanded = (trv_setpoint - current_temp) >= HEATING_FAILURE_CMD_DELTA
+        slope = self._indoor_temp_slope
+
+        if is_heating_commanded and slope < HEATING_FAILURE_SLOPE_THRESH:
+            if self._heating_failure_since is None:
+                self._heating_failure_since = dt_util.now()
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Möglicher Heizungsausfall – "
+                    "Temp fällt trotz Heizbefehl (SP=%.1f°C, Ist=%.1f°C, Slope=%.4f°C/min)",
+                    self.zone_name, trv_setpoint, current_temp, slope,
+                )
+
+            elapsed_min = (dt_util.now() - self._heating_failure_since).total_seconds() / 60
+            if elapsed_min >= HEATING_FAILURE_DELAY_MIN and not self._heating_failure_notified:
+                self._heating_failure_notified = True
+                _LOGGER.warning(
+                    "ThermoSmart '%s': HEIZUNGSAUSFALL – SP=%.1f°C, Ist=%.1f°C, "
+                    "Slope=%.4f°C/min, seit %.0f min. TRV oder Wärmequelle prüfen!",
+                    self.zone_name, trv_setpoint, current_temp, slope, elapsed_min,
+                )
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification", "create",
+                        {
+                            "title": f"ThermoSmart: Heizungsausfall – {self.zone_name}",
+                            "message": (
+                                f"**{self.zone_name}**: TRV soll auf **{trv_setpoint:.1f}°C** heizen, "
+                                f"aber die Raumtemperatur fällt seit **{elapsed_min:.0f} Minuten** "
+                                f"(aktuell **{current_temp:.1f}°C**, Ziel **{target:.1f}°C**).\n\n"
+                                f"Bitte TRV, Heizkörper und Wärmequelle prüfen."
+                            ),
+                            "notification_id": f"thermosmart_heating_failure_{self.zone_id}",
+                        },
+                        blocking=False,
+                    )
+                )
+        else:
+            self._heating_failure_since = None
+            # Alarm quittieren sobald Zieltemperatur erreicht
+            if self._heating_failure_notified and current_temp >= target - 0.5:
+                self._heating_failure_notified = False
+                self.hass.async_create_task(
+                    self.hass.services.async_call(
+                        "persistent_notification", "dismiss",
+                        {"notification_id": f"thermosmart_heating_failure_{self.zone_id}"},
+                        blocking=False,
+                    )
+                )
 
     # ── TRV-Setpoint-Beobachtung ──────────────────────────────────────
 

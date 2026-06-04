@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -29,6 +29,9 @@ AUTO_QUIRK_PATTERNS = [
 
 # Muster für automatisch erkannte Kalibrierungs-Entities
 AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
+
+# Muster für automatisch erkannte External-Temperature-Input-Entities (TRVZB)
+AUTO_EXT_TEMP_PATTERNS = ["external_temperature_input", "external_temperature"]
 
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
@@ -125,6 +128,17 @@ RESIDUAL_HEAT_ZONE = 1.5   # °C – Annäherungszone zum Ziel, ab der Setpoint 
 
 # EMA-Zeitkonstante für 1h-Trend-Sensor (α ≈ 1-e^(-5min/60min))
 EMA_1H_ALPHA = 0.08
+
+# Slope-basierte Fenstererkennung (ohne Sensor)
+# Aktiviert wenn KEINE window_sensors konfiguriert sind
+WINDOW_SLOPE_THRESHOLD = 0.06   # °C/min – Abfallrate die auf offenes Fenster hindeutet (= 3.6°C/h)
+WINDOW_SLOPE_EMA_ALPHA = 0.5    # EMA-Glättung der Slope (träger = weniger Fehlalarme)
+WINDOW_SLOPE_MIN_POINTS = 2     # Mindest-Messpunkte unter Schwellwert bevor Alarm
+
+# Heizungsausfall-Erkennung
+HEATING_FAILURE_DELAY_MIN = 35      # Minuten fallender Temp trotz Heizbefehl bis zur Warnung
+HEATING_FAILURE_SLOPE_THRESH = -0.01  # °C/min – negativer Trend trotz aktivem Heizbefehl
+HEATING_FAILURE_CMD_DELTA = 2.0     # °C – Mindest-Delta Setpoint > Ist für "Heizbefehl aktiv"
 
 
 # Storage keys

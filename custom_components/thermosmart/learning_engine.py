@@ -170,6 +170,8 @@ class LearningEngine:
         self._boost_factors: dict[str, float] = {}
         self._forecast_bias: dict[str, float] = {}
         self._forecast_decisions: dict[str, list[dict]] = defaultdict(list)
+        # EMA der Wärmeverlustrate (°C/min) pro Zone – schnellere Aktualisierung als simple avg
+        self._heat_loss_ema: dict[str, float] = {}
 
     # ── Persistenz ──────────────────────────────────────────────────────
 
@@ -184,6 +186,7 @@ class LearningEngine:
                 self._window_cooling_obs[zone_id] = obs_list
             self._boost_factors = stored.get("boost_factors", {})
             self._forecast_bias = stored.get("forecast_bias", {})
+            self._heat_loss_ema = stored.get("heat_loss_ema", {})
             total = sum(len(v) for v in self._observations.values())
             trv_total = sum(len(v) for v in self._trv_observations.values())
             _LOGGER.info(
@@ -200,6 +203,7 @@ class LearningEngine:
             "window_cooling_obs": dict(self._window_cooling_obs),
             "boost_factors": self._boost_factors,
             "forecast_bias": self._forecast_bias,
+            "heat_loss_ema": self._heat_loss_ema,
         })
 
     def _prune_old_observations(self, max_age_days: int = 1095) -> None:
@@ -336,7 +340,7 @@ class LearningEngine:
         self._last_temp[zone_id] = (now, current_temp)
 
         # Abkühlrate messen wenn Raum unter Ziel liegt und sich abkühlt
-        # → passiert wenn Heizung ausgefallen ist oder Sommer-Nacht
+        # → Wärmeverlustrate des Gebäudes (°C/min)
         cool_rate: float | None = None
         is_cooling = current_temp < adjusted_target - 0.5
         if is_cooling and zone_id in self._last_idle_temp:
@@ -344,6 +348,9 @@ class LearningEngine:
             elapsed_min = (now - idle_time).total_seconds() / 60
             if 10 <= elapsed_min <= 60 and current_temp < idle_temp:
                 cool_rate = round((idle_temp - current_temp) / elapsed_min, 5)
+                # EMA der Wärmeverlustrate aktualisieren (α=0.15 – träge, stabil)
+                prev_ema = self._heat_loss_ema.get(zone_id, cool_rate)
+                self._heat_loss_ema[zone_id] = round(0.15 * cool_rate + 0.85 * prev_ema, 6)
         if is_cooling:
             self._last_idle_temp[zone_id] = (now, current_temp)
         else:
@@ -360,6 +367,7 @@ class LearningEngine:
         }
 
         # Alle verfügbaren Außenbedingungen speichern
+        outdoor_temp_val: float | None = None
         for key in ("temperature", "humidity", "wind_speed", "solar_radiation"):
             val = weather_data.get(key)
             if val is not None:
@@ -370,11 +378,19 @@ class LearningEngine:
                     "solar_radiation": "solar_radiation",
                 }[key]
                 obs[map_key] = val
+                if key == "temperature":
+                    outdoor_temp_val = val
 
         if indoor_humidity is not None:
             obs["indoor_humidity"] = indoor_humidity
         if heat_rate is not None:
             obs["heat_rate"] = heat_rate
+            # Normalisierte Heizrate: heat_rate / (target - outdoor)
+            # Macht Heizraten bei verschiedenen Außentemperaturen direkt vergleichbar.
+            # Beschreibt die "thermische Effizienz" des Heizkörpers unabhängig von
+            # Außenbedingungen → bessere saisonübergreifende Vorhersage.
+            outdoor_delta = max(adjusted_target - (outdoor_temp_val or 10.0), 1.0)
+            obs["norm_heat_rate"] = round(heat_rate / outdoor_delta, 6)
         if cool_rate is not None:
             obs["cool_rate"] = cool_rate
         if recommendation.get("forecast_high") is not None:
@@ -654,7 +670,7 @@ class LearningEngine:
         if delta < PREHEAT_MIN_DELTA:
             return 0
 
-        rate = self._get_heat_rate(zone_id, weather_data)
+        rate = self._get_heat_rate(zone_id, weather_data, target=target)
         if rate <= 0:
             return 0
 
@@ -932,32 +948,76 @@ class LearningEngine:
         return sorted_w[-1][0]
 
     def _get_avg_cool_rate(self, zone_id: str) -> float:
-        """Durchschnittliche Abkühlrate aus gespeicherten Beobachtungen."""
+        """Wärmeverlustrate aus EMA oder Beobachtungs-Durchschnitt."""
+        # EMA bevorzugen – wird nach jedem Messzyklus aktualisiert
+        if zone_id in self._heat_loss_ema:
+            return self._heat_loss_ema[zone_id]
+        # Fallback: einfacher Mittelwert der letzten 50 Messungen
         samples = [o["cool_rate"] for o in self._observations[zone_id] if o.get("cool_rate")]
         if not samples:
             return 0.0
-        # Letzte 50 Messungen – aktuellere Saison gewichtet
         recent = samples[-50:]
         return round(sum(recent) / len(recent), 5)
 
-    def _get_heat_rate(self, zone_id: str, weather_data: dict) -> float:
+    def get_heat_loss_rate(self, zone_id: str) -> float | None:
+        """Gibt die gelernte Wärmeverlustrate (°C/min) zurück – None wenn keine Daten."""
+        rate = self._heat_loss_ema.get(zone_id)
+        if rate:
+            return rate
+        samples = [o["cool_rate"] for o in self._observations.get(zone_id, []) if o.get("cool_rate")]
+        if not samples:
+            return None
+        return round(sum(samples[-50:]) / len(samples[-50:]), 5)
+
+    def _get_heat_rate(self, zone_id: str, weather_data: dict, target: float | None = None) -> float:
         if self._is_enabled(zone_id) and self.get_confidence(zone_id) >= 0.3:
-            learned = self._learned_heat_rate_multifactor(zone_id, weather_data)
+            learned = self._learned_heat_rate_multifactor(zone_id, weather_data, target=target)
             if learned > 0:
                 return learned
         return self._estimate_heat_rate(weather_data)
 
     def _learned_heat_rate_multifactor(
-        self, zone_id: str, weather_data: dict
+        self, zone_id: str, weather_data: dict, target: float | None = None
     ) -> float:
         """Multi-Faktor Heizrate: lernt aus allen Außenbedingungen.
 
-        Oktober bei 8°C + Wind 5m/s = Januar bei 8°C + Wind 5m/s.
-        Sommer bei 8°C + Sonne 600W/m² hebt sich heraus → niedrigere Rate.
+        Zwei Lernansätze – der bessere wird bevorzugt:
+
+        1. Normalisierte Heizrate (bevorzugt wenn genug Daten):
+           norm_rate = heat_rate / (target - outdoor)
+           → saisonunabhängig, benötigt keine Wetterähnlichkeit
+           → wenige Beobachtungen reichen für gute Vorhersagen
+
+        2. Multi-Faktor gewichtete Rate (Fallback):
+           Ähnlichkeit nach Außentemp, Wind, Solar, Feuchte
+           → Oktober bei 8°C + Wind ≈ Januar bei 8°C + Wind
         """
         now = dt_util.now()
+        curr_outdoor = weather_data.get("temperature") or 10.0
+
+        # ── Ansatz 1: Normalisierte Heizrate ──────────────────────────
+        if target is not None:
+            curr_delta = max(target - curr_outdoor, 1.0)
+            norm_obs = [
+                (obs["norm_heat_rate"], _time_weight(obs["ts"], now))
+                for obs in self._observations[zone_id]
+                if obs.get("norm_heat_rate", 0) > 0
+            ]
+            norm_obs = [(r, w) for r, w in norm_obs if w >= 0.01]
+            if len(norm_obs) >= LEARNING_MIN_SAMPLES:
+                total_w = sum(w for _, w in norm_obs)
+                avg_norm = sum(r * w for r, w in norm_obs) / total_w
+                predicted = round(avg_norm * curr_delta, 5)
+                _LOGGER.debug(
+                    "LearningEngine [%s]: Normalisierte Heizrate %.5f°C/min "
+                    "(norm=%.6f × Δ%.1f°C, %d Beob.)",
+                    zone_id, predicted, avg_norm, curr_delta, len(norm_obs),
+                )
+                return predicted
+
+        # ── Ansatz 2: Multi-Faktor gewichtete Rate (Fallback) ─────────
         conditions = {
-            "outdoor_temp": weather_data.get("temperature") or 10.0,
+            "outdoor_temp": curr_outdoor,
             "wind_speed": weather_data.get("wind_speed"),
             "solar_radiation": weather_data.get("solar_radiation"),
             "outdoor_humidity": weather_data.get("humidity"),

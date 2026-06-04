@@ -10,6 +10,7 @@ from homeassistant.util import dt as dt_util
 from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERN,
+    AUTO_EXT_TEMP_PATTERNS,
     CONF_CALIBRATION_ENTITIES,
     CONF_QUIRK_ENTITIES,
     WINDOW_OPEN_SETPOINT,
@@ -65,8 +66,29 @@ class TRVControlMixin:
         if cal_map:
             _LOGGER.info("ThermoSmart '%s': Kalibrierungs-Autodetect: %s", self.zone_name, cal_map)
 
+        # External Temperature Input Entities (TRVZB: Raumtemp direkt ins TRV schreiben)
+        ext_temp_map: dict[str, str] = {}
+        for device_id, climate_id in device_to_climate.items():
+            for entry in er.async_entries_for_device(ent_reg, device_id):
+                if entry.entity_id.split(".")[0] != "number":
+                    continue
+                eid_lower = entry.entity_id.lower()
+                tk = getattr(entry, "translation_key", None) or ""
+                name = (getattr(entry, "original_name", None) or "").lower()
+                for pattern in AUTO_EXT_TEMP_PATTERNS:
+                    if pattern in eid_lower or pattern in tk.lower() or pattern in name:
+                        ext_temp_map[climate_id] = entry.entity_id
+                        break
+
+        if ext_temp_map:
+            _LOGGER.info(
+                "ThermoSmart '%s': External-Temp-Input-Autodetect: %s",
+                self.zone_name, ext_temp_map,
+            )
+
         self._auto_quirk_entities = quirks
         self._auto_calibration_map = cal_map
+        self._auto_ext_temp_map = ext_temp_map
 
     # ── TRV-Offline-Tracking ─────────────────────────────────────────
 
@@ -302,3 +324,55 @@ class TRVControlMixin:
             else:
                 self._boost_active[self.zone_id]["target"] = target
                 self._boost_active[self.zone_id]["setpoint"] = trv_setpoint
+
+    # ── External Temperature Input (TRVZB) ───────────────────────────
+
+    async def _async_write_external_temp(self, cfg: dict, recommendation: dict) -> None:
+        """Schreibt die Raumtemperatur direkt in die external_temperature_input-Entity des TRV.
+
+        Beim Sonoff TRVZB (und ähnlichen TRVs) gibt es eine number-Entity
+        'external_temperature_input'. Wird dort die echte Raumtemperatur eingetragen,
+        nutzt die TRV-Firmware diesen Wert statt des internen (oft ungenauen) Sensors.
+        Das macht die TRV-eigene Regelung deutlich präziser und vermeidet
+        Konflikte zwischen TRV-interner Logik und ThermoSmart-Kalibrierung.
+
+        Schreibt nur wenn Wert sich um mehr als 0.5°C geändert hat.
+        Klemmt auf 0–99.9°C (TRVZB-Wertebereich).
+        """
+        room_temp = recommendation.get("current_temp")
+        if room_temp is None:
+            return
+
+        ext_map = getattr(self, "_auto_ext_temp_map", {})
+        if not ext_map:
+            return
+
+        for climate_id in cfg.get("climate_entities", []):
+            ext_entity = ext_map.get(climate_id)
+            if not ext_entity:
+                continue
+
+            state = self.hass.states.get(ext_entity)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+
+            try:
+                current_val = float(state.state)
+            except (TypeError, ValueError):
+                current_val = None
+
+            if current_val is not None and abs(current_val - room_temp) < 0.5:
+                continue
+
+            clamped = round(max(0.0, min(99.9, room_temp)), 1)
+            _LOGGER.debug(
+                "ThermoSmart '%s': TRVZB external_temperature_input → %.1f°C (%s)",
+                self.zone_name, clamped, ext_entity,
+            )
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": ext_entity, "value": clamped},
+                    blocking=False,
+                )
+            )

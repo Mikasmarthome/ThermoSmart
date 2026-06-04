@@ -33,6 +33,7 @@ async def async_setup_entry(
         ThermoSmartStatusSensor(coordinator, entry),
         ThermoSmartTempSlopeSensor(coordinator, entry),
         ThermoSmartHeatingPowerSensor(coordinator, entry),
+        ThermoSmartHeatLossRateSensor(coordinator, entry),
         ThermoSmartSunIntensitySensor(coordinator, entry),
         ThermoSmartTRVObservationsSensor(coordinator, entry),
     ])
@@ -224,6 +225,8 @@ class ThermoSmartStatusSensor(_Base):
         if not learning:
             return "Steuert (Lernmodus aus)"
         # Aktiv + Lernen an → detaillierter Status
+        if z.get("heating_failure"):
+            return "Heizungsausfall!"
         if z.get("preheat_active"):
             return "Vorheizen"
         if z.get("is_summer"):
@@ -258,6 +261,8 @@ class ThermoSmartStatusSensor(_Base):
             "alle_weg": presence.get("all_away", False),
             "urlaub": presence.get("vacation", False),
             "sommer_modus": z.get("is_summer", False),
+            "heizungsausfall": z.get("heating_failure", False),
+            "slope_fenster_aktiv": getattr(self.coordinator, "_slope_window_active", False),
         }
 
 
@@ -321,6 +326,48 @@ class ThermoSmartHeatingPowerSensor(_Base):
         return {
             "messungen": stats.get("with_heat_rate", 0),
             "boost_faktor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
+        }
+
+
+class ThermoSmartHeatLossRateSensor(_Base):
+    """Gelernte Wärmeverlustrate (°C/min) – wie schnell der Raum auskühlt.
+
+    Entscheidend für die Vorheizzeit-Berechnung: Wenn die Heizung startet,
+    kühlt der Raum gleichzeitig noch ab. Effektive Aufheizrate =
+    Heizrate minus Wärmeverlustrate.
+    """
+    _attr_entity_registry_enabled_default = False
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "heat_loss_rate")
+        self._attr_unique_id = f"{entry.entry_id}_heat_loss_rate"
+        self._attr_name = "Wärmeverlustrate"
+        self._attr_native_unit_of_measurement = "K/min"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:thermometer-minus"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return None
+        return le.get_heat_loss_rate(self.coordinator.zone_id)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        zone_id = self.coordinator.zone_id
+        rate = le.get_heat_loss_rate(zone_id)
+        rate_per_h = round(rate * 60, 3) if rate else None
+        obs_count = sum(
+            1 for o in le._observations.get(zone_id, []) if o.get("cool_rate")
+        )
+        return {
+            "rate_pro_stunde_K": rate_per_h,
+            "ema_aktiv": zone_id in le._heat_loss_ema,
+            "messungen": obs_count,
         }
 
 

@@ -23,7 +23,8 @@
           "window_sensors": "Fenstersensoren (binary_sensor)",
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
-          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)"
+          "valve_maintenance": "Ventil-Wartung aktivieren (jeden Sonntag 03:00 Uhr)",
+          "calibration_invert": "Kalibrierungs-Offset invertieren (für TRVs wie ME167)"
         }
       },
       "schedule": {
@@ -102,7 +103,8 @@
           "window_sensors": "Fenstersensoren",
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
-          "valve_maintenance": "Ventil-Wartung aktivieren"
+          "valve_maintenance": "Ventil-Wartung aktivieren",
+          "calibration_invert": "Kalibrierungs-Offset invertieren (ME167 und ähnliche)"
         }
       },
       "schedule": {

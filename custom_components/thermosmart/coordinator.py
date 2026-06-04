@@ -11,6 +11,7 @@ from homeassistant.helpers.event import async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .tpi import compute_tpi, duty_to_setpoint
 from .const import (
     DOMAIN,
     DEFAULT_SCAN_INTERVAL,
@@ -33,6 +34,7 @@ from .const import (
     HEATING_FAILURE_DELAY_MIN,
     HEATING_FAILURE_SLOPE_THRESH,
     HEATING_FAILURE_CMD_DELTA,
+    TPI_MAX_BOOST_CELSIUS,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -101,6 +103,7 @@ class ThermoSmartCoordinator(
         self._auto_quirk_entities: list[str] = []
         self._auto_calibration_map: dict[str, str] = {}
         self._auto_ext_temp_map: dict[str, str] = {}
+        self._auto_valve_map: dict[str, str] = {}
         self._trv_offline: set[str] = set()
 
         # Sommer (genutzt von SeasonMixin)
@@ -364,16 +367,40 @@ class ThermoSmartCoordinator(
             )
 
             target = recommendation.get("adjusted_target")
+            current_temp = recommendation.get("current_temp")
             if target is not None:
-                boost_factor = self.learning_engine.get_boost_factor(self.zone_id)
-                trv_setpoint = self._compute_trv_setpoint(
-                    target,
-                    recommendation.get("current_temp"),
-                    weather_data,
-                    boost_factor,
+                # TPI-Koeffizienten aus Lerndaten ableiten
+                coef_int, coef_ext = self.learning_engine.get_tpi_coefficients(
+                    self.zone_id, weather_data
                 )
+                if current_temp is not None:
+                    duty_cycle = compute_tpi(
+                        target, current_temp,
+                        weather_data.get("temperature"),
+                        coef_int, coef_ext,
+                    )
+                else:
+                    duty_cycle = 0.0
+
+                has_valve = any(
+                    self._auto_valve_map.get(eid)
+                    for eid in cfg.get("climate_entities", [])
+                )
+
+                if has_valve:
+                    # TRV mit Ventilsteuerung: Setpoint = Ziel (kein Boost nötig)
+                    trv_setpoint = target
+                else:
+                    # TRV ohne Ventilsteuerung: Duty-Cycle → Boost-Setpoint
+                    trv_setpoint = duty_to_setpoint(target, duty_cycle, TPI_MAX_BOOST_CELSIUS)
+
+                boost_factor = self.learning_engine.get_boost_factor(self.zone_id)
                 recommendation["trv_setpoint"] = trv_setpoint
                 recommendation["boost_factor"] = round(boost_factor, 3)
+                recommendation["tpi_duty_cycle"] = round(duty_cycle, 1)
+                recommendation["tpi_coef_int"] = round(coef_int, 3)
+                recommendation["tpi_coef_ext"] = round(coef_ext, 4)
+                recommendation["tpi_valve_direct"] = has_valve
 
             # Nach trv_setpoint-Berechnung: Heizungsausfall-Erkennung
             self._check_heating_failure(recommendation)
@@ -397,6 +424,11 @@ class ThermoSmartCoordinator(
                 await self._watchdog_hvac(cfg, recommendation)
                 await self._async_calibrate_trvs(cfg, recommendation)
                 await self._apply_temperature(cfg, recommendation)
+                # Direkte Ventilsteuerung nach Setpoint-Schreiben
+                duty = recommendation.get("tpi_duty_cycle", 0.0)
+                if recommendation.get("window_open"):
+                    duty = 0.0
+                await self._async_set_valve_percent(cfg, duty)
                 await self._async_valve_maintenance(cfg, recommendation)
             elif self._active_control and self._is_summer:
                 await self._async_apply_quirks(cfg)

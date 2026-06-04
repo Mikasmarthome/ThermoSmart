@@ -27,6 +27,7 @@ async def async_setup_entry(
     async_add_entities([
         ThermoSmartTargetTempSensor(coordinator, entry),
         ThermoSmartTRVSetpointSensor(coordinator, entry),
+        ThermoSmartTpiSensor(coordinator, entry),
         ThermoSmartPreheatSensor(coordinator, entry),
         ThermoSmartConfidenceSensor(coordinator, entry),
         ThermoSmartWeatherOffsetSensor(coordinator, entry),
@@ -326,6 +327,44 @@ class ThermoSmartHeatingPowerSensor(_Base):
         return {
             "messungen": stats.get("with_heat_rate", 0),
             "boost_faktor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
+        }
+
+
+class ThermoSmartTpiSensor(_Base):
+    """TPI Duty-Cycle – wie weit das Ventil theoretisch geöffnet sein sollte (0–100%).
+
+    Zeigt den berechneten Duty-Cycle und ob direkte Ventilsteuerung aktiv ist.
+    Bei TRVs mit valve_opening_degree: Wert wird direkt ans Ventil geschrieben.
+    Bei anderen TRVs: Wert wird in einen Boost-Setpoint umgerechnet.
+    """
+    _attr_entity_registry_enabled_default = True
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "tpi_duty_cycle")
+        self._attr_unique_id = f"{entry.entry_id}_tpi_duty_cycle"
+        self._attr_name = "TPI Duty-Cycle"
+        self._attr_native_unit_of_measurement = "%"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:valve"
+
+    @property
+    def native_value(self):
+        return self._zone.get("tpi_duty_cycle", 0.0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        z = self._zone
+        coef_int = z.get("tpi_coef_int")
+        coef_ext = z.get("tpi_coef_ext")
+        valve_direct = z.get("tpi_valve_direct", False)
+        return {
+            "koeffizient_intern": coef_int,
+            "koeffizient_extern": coef_ext,
+            "quelle_koeffizienten": (
+                "gelernt" if coef_int not in (None, 0.6) else "standard"
+            ),
+            "ventil_direkt": valve_direct,
+            "modus": "Direkte Ventilsteuerung" if valve_direct else "Setpoint-Konvertierung",
         }
 
 

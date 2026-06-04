@@ -11,9 +11,13 @@ from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERN,
     AUTO_EXT_TEMP_PATTERNS,
+    AUTO_VALVE_PATTERNS,
     CONF_CALIBRATION_ENTITIES,
+    CONF_CALIBRATION_INVERT,
     CONF_QUIRK_ENTITIES,
     WINDOW_OPEN_SETPOINT,
+    TPI_VALVE_BUMP_PCT,
+    TPI_VALVE_BUMP_DELAY,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -86,9 +90,32 @@ class TRVControlMixin:
                 self.zone_name, ext_temp_map,
             )
 
+        # Direkte Ventilsteuerung (valve_opening_degree, pi_heating_demand etc.)
+        valve_map: dict[str, str] = {}
+        for device_id, climate_id in device_to_climate.items():
+            for entry in er.async_entries_for_device(ent_reg, device_id):
+                if entry.entity_id.split(".")[0] != "number":
+                    continue
+                eid_lower = entry.entity_id.lower()
+                tk = (getattr(entry, "translation_key", None) or "").lower()
+                name = (getattr(entry, "original_name", None) or "").lower()
+                for pattern in AUTO_VALVE_PATTERNS:
+                    if pattern in eid_lower or pattern in tk or pattern in name:
+                        # Nicht mit ext_temp_map überschneiden
+                        if entry.entity_id not in ext_temp_map.values():
+                            valve_map[climate_id] = entry.entity_id
+                        break
+
+        if valve_map:
+            _LOGGER.info(
+                "ThermoSmart '%s': Ventil-Autodetect (direkte %-Steuerung): %s",
+                self.zone_name, valve_map,
+            )
+
         self._auto_quirk_entities = quirks
         self._auto_calibration_map = cal_map
         self._auto_ext_temp_map = ext_temp_map
+        self._auto_valve_map = valve_map
 
     # ── TRV-Offline-Tracking ─────────────────────────────────────────
 
@@ -114,7 +141,12 @@ class TRVControlMixin:
     # ── Watchdog ─────────────────────────────────────────────────────
 
     async def _watchdog_hvac(self, cfg: dict, recommendation: dict) -> None:
-        """TRVs die ungewollt auf 'off' gefallen sind auf 'heat' zurücksetzen."""
+        """TRVs die ungewollt auf 'off' gefallen sind auf 'heat' zurücksetzen.
+
+        Sonderfall no-off-Mode: Einige TRVs (z.B. bestimmte Tuya-Modelle) kennen
+        keinen HVAC-OFF-Modus. In diesem Fall wird statt set_hvac_mode eine sehr
+        niedrige Zieltemperatur gesetzt (Frost-Setpoint), die effektiv 'aus' entspricht.
+        """
         if recommendation.get("window_open"):
             return
         if recommendation.get("forecast_suppression", 0) >= 100:
@@ -125,15 +157,23 @@ class TRVControlMixin:
             if state is None:
                 continue
             if state.state == "off":
-                _LOGGER.info(
-                    "ThermoSmart Watchdog '%s': %s ist 'off' → stelle auf 'heat' zurück",
-                    self.zone_name, entity_id,
-                )
-                await self.hass.services.async_call(
-                    "climate", "set_hvac_mode",
-                    {"entity_id": entity_id, "hvac_mode": "heat"},
-                    blocking=False,
-                )
+                # Prüfen ob TRV den 'off'-Modus tatsächlich unterstützt
+                hvac_modes = state.attributes.get("hvac_modes", [])
+                if "heat" in hvac_modes:
+                    _LOGGER.info(
+                        "ThermoSmart Watchdog '%s': %s ist 'off' → 'heat'",
+                        self.zone_name, entity_id,
+                    )
+                    await self.hass.services.async_call(
+                        "climate", "set_hvac_mode",
+                        {"entity_id": entity_id, "hvac_mode": "heat"},
+                        blocking=False,
+                    )
+                else:
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': %s hat keinen 'off'-Mode – Watchdog übersprungen",
+                        self.zone_name, entity_id,
+                    )
 
     # ── Kalibrierung ─────────────────────────────────────────────────
 
@@ -179,6 +219,10 @@ class TRVControlMixin:
                 continue
 
             raw_offset = room_temp - trv_temp
+
+            # Kalibrierungs-Inversion (z.B. ME167 invertiert das Offset-Vorzeichen)
+            if cfg.get(CONF_CALIBRATION_INVERT, False):
+                raw_offset = -raw_offset
 
             if abs(raw_offset) > 7.0:
                 _LOGGER.warning(
@@ -324,6 +368,78 @@ class TRVControlMixin:
             else:
                 self._boost_active[self.zone_id]["target"] = target
                 self._boost_active[self.zone_id]["setpoint"] = trv_setpoint
+
+    # ── Direkte Ventilsteuerung (TPI) ────────────────────────────────
+
+    async def _async_set_valve_percent(self, cfg: dict, duty_cycle: float) -> bool:
+        """Schreibt TPI Duty-Cycle direkt als Ventilprozent (0–100%) auf unterstützte TRVs.
+
+        Unterstützte Entities: valve_opening_degree, pi_heating_demand, valve_position.
+
+        Valve-Bump-Workaround (TRVZB-Motor):
+        Beim Schließen (neuer Wert < letzter Wert) kurz weiter öffnen und dann
+        auf Zielwert setzen – verhindert steckende Motoren bei kleinen Schließbewegungen.
+
+        Returns True wenn mindestens ein Ventil geschrieben wurde.
+        """
+        valve_map = getattr(self, "_auto_valve_map", {})
+        if not valve_map:
+            return False
+
+        target_pct = max(0, min(100, round(duty_cycle)))
+        wrote_any = False
+
+        for climate_id in cfg.get("climate_entities", []):
+            valve_entity = valve_map.get(climate_id)
+            if not valve_entity:
+                continue
+
+            state = self.hass.states.get(valve_entity)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+
+            try:
+                current_pct = round(float(state.state))
+            except (TypeError, ValueError):
+                current_pct = None
+
+            # Valve-Bump: beim Schließen kurz öffnen dann schließen
+            # Verhindert TRVZB-Motor-Sticking bei kleinen Schließbewegungen
+            if (
+                current_pct is not None
+                and target_pct < current_pct
+                and (current_pct - target_pct) >= 5
+            ):
+                bump_pct = min(100, current_pct + TPI_VALVE_BUMP_PCT)
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Valve-Bump %s → %d%% → %d%%",
+                    self.zone_name, valve_entity, bump_pct, target_pct,
+                )
+                await self.hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": valve_entity, "value": bump_pct},
+                    blocking=False,
+                )
+                await asyncio.sleep(TPI_VALVE_BUMP_DELAY)
+
+            if current_pct == target_pct:
+                wrote_any = True
+                continue
+
+            _LOGGER.debug(
+                "ThermoSmart '%s': Ventil %s → %d%%",
+                self.zone_name, valve_entity, target_pct,
+            )
+            self.hass.async_create_task(
+                self.hass.services.async_call(
+                    "number", "set_value",
+                    {"entity_id": valve_entity, "value": target_pct},
+                    blocking=False,
+                )
+            )
+            wrote_any = True
+
+        return wrote_any
 
     # ── External Temperature Input (TRVZB) ───────────────────────────
 

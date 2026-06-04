@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -32,6 +32,24 @@ AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
 
 # Muster für automatisch erkannte External-Temperature-Input-Entities (TRVZB)
 AUTO_EXT_TEMP_PATTERNS = ["external_temperature_input", "external_temperature"]
+
+# Muster für direkte Ventilsteuerung (valve_opening_degree, pi_heating_demand etc.)
+AUTO_VALVE_PATTERNS = [
+    "valve_opening_degree",   # Sonoff TRVZB, Danfoss
+    "valve_position",         # Eurotronic Spirit (SPZB0001)
+    "pi_heating_demand",      # Tuya TS0601_3/5, einige Danfoss
+    "heating_demand",         # alternative Benennung
+]
+
+# Kalibrierungs-Inversion (z.B. ME167 invertiert Offset-Vorzeichen)
+CONF_CALIBRATION_INVERT = "calibration_invert"
+
+# TPI-Regler Konstanten
+TPI_COEF_INT_DEFAULT  = 0.6    # Duty-Cycle-Anteil pro °C Raumfehler (0→100%)
+TPI_COEF_EXT_DEFAULT  = 0.01   # Duty-Cycle-Anteil pro °C Außentemperatur-Delta
+TPI_MAX_BOOST_CELSIUS = 8.0    # max. °C über Zieltemp für Setpoint-Konvertierung
+TPI_VALVE_BUMP_PCT    = 10     # % extra beim Schließen (TRVZB motor-workaround)
+TPI_VALVE_BUMP_DELAY  = 5.0    # Sekunden zwischen Bump-Open und Zielwert
 
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)

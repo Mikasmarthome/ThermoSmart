@@ -963,6 +963,23 @@ class LearningEngine:
         recent = samples[-50:]
         return round(sum(recent) / len(recent), 5)
 
+    def get_tpi_coefficients(
+        self, zone_id: str, weather_data: dict
+    ) -> tuple[float, float]:
+        """Gibt TPI-Koeffizienten (coef_int, coef_ext) für diese Zone zurück.
+
+        Nutzt gelernte Heizrate und Wärmeverlustrate um die Koeffizienten
+        physikalisch abzuleiten – kein manuelles Tuning nötig.
+        Fällt auf Standardwerte zurück wenn zu wenig Daten vorhanden.
+        """
+        from .tpi import estimate_coefficients
+        heat_rate = self._get_heat_rate(zone_id, weather_data)
+        heat_loss = self.get_heat_loss_rate(zone_id)
+        return estimate_coefficients(
+            heat_rate if heat_rate > 0 else None,
+            heat_loss,
+        )
+
     def get_heat_loss_rate(self, zone_id: str) -> float | None:
         """Gibt die gelernte Wärmeverlustrate (°C/min) zurück – None wenn keine Daten."""
         rate = self._heat_loss_ema.get(zone_id)

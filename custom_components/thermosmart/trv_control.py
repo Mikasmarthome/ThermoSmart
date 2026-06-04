@@ -140,12 +140,25 @@ class TRVControlMixin:
 
     # ── Watchdog ─────────────────────────────────────────────────────
 
-    async def _watchdog_hvac(self, cfg: dict, recommendation: dict) -> None:
-        """TRVs die ungewollt auf 'off' gefallen sind auf 'heat' zurücksetzen.
+    # HVAC-Modi die ThermoSmart niemals beim TRV haben möchte:
+    # - "auto"      → TRV nutzt eigenen internen Zeitplan, ignoriert externe Setpoints
+    # - "heat_cool" → Automatisches Heizen/Kühlen ohne externe Kontrolle
+    # - "cool"      → Kühlmodus, nicht gewünscht für Heizzonen
+    # - "off"       → Watchdog setzt zurück auf heat
+    _UNWANTED_MODES = {"auto", "heat_cool", "cool", "dry", "fan_only", "off"}
 
-        Sonderfall no-off-Mode: Einige TRVs (z.B. bestimmte Tuya-Modelle) kennen
-        keinen HVAC-OFF-Modus. In diesem Fall wird statt set_hvac_mode eine sehr
-        niedrige Zieltemperatur gesetzt (Frost-Setpoint), die effektiv 'aus' entspricht.
+    async def _watchdog_hvac(self, cfg: dict, recommendation: dict) -> None:
+        """TRVs in unerwünschten Modi auf 'heat' zurücksetzen.
+
+        Fängt alle Modi die ThermoSmart's Steuerung untergraben würden:
+        - 'off':       TRV heizt gar nicht mehr
+        - 'auto':      TRV nutzt eigenen internen Zeitplan (TRVZB-Hauptproblem!)
+                       Im Auto-Mode ignoriert der TRVZB externe set_temperature-Befehle
+                       vollständig und folgt nur noch seinem eigenen Wochenprogramm.
+        - 'heat_cool': Automatischer Modus ohne externe Kontrolle
+        - andere:      Kühlen, Fan etc.
+
+        Sonderfall no-off-Mode: TRVs ohne 'heat'-Unterstützung werden übersprungen.
         """
         if recommendation.get("window_open"):
             return
@@ -156,24 +169,27 @@ class TRVControlMixin:
             state = self._get_trv_state(entity_id)
             if state is None:
                 continue
-            if state.state == "off":
-                # Prüfen ob TRV den 'off'-Modus tatsächlich unterstützt
-                hvac_modes = state.attributes.get("hvac_modes", [])
-                if "heat" in hvac_modes:
-                    _LOGGER.info(
-                        "ThermoSmart Watchdog '%s': %s ist 'off' → 'heat'",
-                        self.zone_name, entity_id,
-                    )
-                    await self.hass.services.async_call(
-                        "climate", "set_hvac_mode",
-                        {"entity_id": entity_id, "hvac_mode": "heat"},
-                        blocking=False,
-                    )
-                else:
-                    _LOGGER.debug(
-                        "ThermoSmart '%s': %s hat keinen 'off'-Mode – Watchdog übersprungen",
-                        self.zone_name, entity_id,
-                    )
+
+            if state.state not in self._UNWANTED_MODES:
+                continue  # TRV ist in 'heat' – alles gut
+
+            hvac_modes = state.attributes.get("hvac_modes", [])
+            if "heat" not in hvac_modes:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': %s hat keinen 'heat'-Mode – Watchdog übersprungen",
+                    self.zone_name, entity_id,
+                )
+                continue
+
+            _LOGGER.info(
+                "ThermoSmart Watchdog '%s': %s ist im Modus '%s' → erzwinge 'heat'",
+                self.zone_name, entity_id, state.state,
+            )
+            await self.hass.services.async_call(
+                "climate", "set_hvac_mode",
+                {"entity_id": entity_id, "hvac_mode": "heat"},
+                blocking=False,
+            )
 
     # ── Kalibrierung ─────────────────────────────────────────────────
 

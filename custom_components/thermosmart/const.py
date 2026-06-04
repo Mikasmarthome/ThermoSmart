@@ -25,6 +25,7 @@ AUTO_QUIRK_PATTERNS = [
     "window_detection",   # Sonoff TRVZB, Danfoss – eigene Fenstererkennung
     "child_lock",         # Sperrt externe Befehle → ThermoSmart kann nichts setzen
     "frost_protection",   # Interner Frostschutz – kollidiert mit ThermoSmart
+    "schedule",           # Internes Wochenprogramm – überschreibt externe Setpoints
 ]
 
 # Muster für automatisch erkannte Kalibrierungs-Entities

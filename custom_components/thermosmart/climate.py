@@ -106,12 +106,14 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def hvac_mode(self) -> HVACMode:
+        if not self.coordinator._active_control:
+            return HVACMode.OFF
         return HVACMode.HEAT
 
     @property
     def hvac_action(self) -> HVACAction:
         if not self.coordinator._active_control:
-            return HVACAction.IDLE
+            return HVACAction.OFF
         curr = self._zone.get("current_temp")
         target = self._zone.get("adjusted_target")
         if curr is None or target is None:

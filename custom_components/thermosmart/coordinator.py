@@ -306,7 +306,7 @@ class ThermoSmartCoordinator(
             )
             self._event_unsub.append(cancel)
 
-        if climate_entities and self._active_control:
+        if climate_entities:
             @callback
             def _handle_trv_change(event) -> None:
                 if not self._active_control:

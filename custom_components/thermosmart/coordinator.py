@@ -692,65 +692,6 @@ class ThermoSmartCoordinator(
         self._sensor_ema[sensor_id] = NOISE_FILTER_EMA_ALPHA * raw + (1 - NOISE_FILTER_EMA_ALPHA) * ema
         return round(self._sensor_ema[sensor_id], 1)
 
-    # ── TRV-Setpoint-Berechnung ──────────────────────────────────────
-
-    def _compute_trv_setpoint(
-        self,
-        target: float,
-        current_temp: float | None,
-        weather_data: dict,
-        boost_factor: float,
-    ) -> float:
-        """Multi-Faktor Boost-Setpoint: öffnet Ventil stärker für schnelleres Heizen."""
-        if current_temp is None:
-            return target
-
-        delta = target - current_temp
-
-        # Restwärme-Kompensation: Setpoint reduzieren wenn Ziel sich nähert
-        from .const import RESIDUAL_HEAT_ZONE
-        if delta <= -RESIDUAL_HEAT_ZONE:
-            return target
-        if delta <= 0:
-            fraction = (delta + RESIDUAL_HEAT_ZONE) / RESIDUAL_HEAT_ZONE
-            reduction = (1.0 - fraction) * (RESIDUAL_HEAT_ZONE * 0.5)
-            return round(max(target - reduction, 5.0), 1)
-        if delta < RESIDUAL_HEAT_ZONE:
-            fraction = delta / RESIDUAL_HEAT_ZONE
-            reduction = (1.0 - fraction) * (RESIDUAL_HEAT_ZONE * 0.5)
-            return round(target - reduction, 1)
-
-        # Gelernter Setpoint hat Vorrang vor Physics-Formel
-        learned = self.learning_engine.get_learned_setpoint(
-            self.zone_id, target, current_temp, weather_data
-        )
-        if learned is not None:
-            _LOGGER.debug(
-                "ThermoSmart '%s': Gelernter TRV-Setpoint %.1f°C (Ziel=%.1f°C, delta=%.1f°C)",
-                self.zone_name, learned, target, delta,
-            )
-            return learned
-
-        outdoor = weather_data.get("temperature") or 15.0
-        wind = weather_data.get("wind_speed") or 0.0
-        humidity_out = weather_data.get("humidity") or 60.0
-
-        cold_factor = max(0.1, min(1.0, (18.0 - outdoor) / 18.0))
-        wind_factor = 1.0 + min(wind / 20.0, 0.3)
-        humidity_factor = 1.0 + max(0.0, (humidity_out - 70.0) / 300.0)
-        combined = cold_factor * wind_factor * humidity_factor * boost_factor
-
-        max_setpoint = 28.0
-        valve_fraction = min(delta * 0.7 * combined / (max_setpoint - current_temp), 1.0)
-        trv_setpoint = current_temp + (max_setpoint - current_temp) * valve_fraction
-        trv_setpoint = min(trv_setpoint, target + 3.0, 28.0)
-
-        if delta < 2.0:
-            blend = delta - 1.0
-            trv_setpoint = target + (trv_setpoint - target) * blend
-
-        return round(trv_setpoint, 1)
-
     # ── Boost-Tracking ───────────────────────────────────────────────
 
     def _check_boost_outcome(self, cfg: dict) -> None:

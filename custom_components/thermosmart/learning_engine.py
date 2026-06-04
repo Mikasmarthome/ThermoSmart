@@ -135,6 +135,26 @@ def _thermal_weight(obs: dict, conditions: dict, now: datetime) -> float:
     return round(weight, 6)
 
 
+# ── Persistenz mit Migrationspfad ───────────────────────────────────────────
+
+class ThermoSmartStore(Store):
+    """Store mit Migrationspfad für die Lerndaten.
+
+    Die Lerndaten sind über eine ganze Heizsaison gewachsen und dürfen bei einer
+    Formatänderung nicht verloren gehen. Wird STORAGE_VERSION erhöht, ruft HA
+    diese Funktion mit den alten Daten auf – hier wird Schritt für Schritt auf
+    das aktuelle Format migriert statt die Datei zu verwerfen.
+    """
+
+    async def _async_migrate_func(
+        self, old_major_version: int, old_minor_version: int, old_data: dict
+    ) -> dict:
+        # Version 1 → 2: künftige Migration hier ergänzen, z.B.
+        #   if old_major_version < 2:
+        #       old_data = _migrate_v1_to_v2(old_data)
+        return old_data
+
+
 # ── Hauptklasse ─────────────────────────────────────────────────────────────
 
 class LearningEngine:
@@ -159,7 +179,7 @@ class LearningEngine:
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
         self._zone_enabled: dict[str, bool] = {}  # zone_id → Lernmodus an/aus
-        self._store: Store = Store(hass, STORAGE_VERSION, STORAGE_KEY)
+        self._store: Store = ThermoSmartStore(hass, STORAGE_VERSION, STORAGE_KEY)
         self._observations: dict[str, list[dict]] = defaultdict(list)
         self._trv_observations: dict[str, list[dict]] = defaultdict(list)
         self._window_cooling_obs: dict[str, list[dict]] = defaultdict(list)
@@ -248,13 +268,19 @@ class LearningEngine:
             return  # Sicherheit: nie alles löschen wenn keine aktiven Zonen
 
         removed: list[str] = []
-        for store in (self._observations, self._trv_observations, self._window_cooling_obs):
+        for store in (
+            self._observations,
+            self._trv_observations,
+            self._window_cooling_obs,
+            self._outcome_log,
+            self._forecast_decisions,
+        ):
             for zid in list(store.keys()):
                 if zid not in active_zone_ids:
                     del store[zid]
                     removed.append(zid)
 
-        for d in (self._boost_factors, self._forecast_bias):
+        for d in (self._boost_factors, self._forecast_bias, self._heat_loss_ema):
             for zid in list(d.keys()):
                 if zid not in active_zone_ids:
                     del d[zid]
@@ -758,61 +784,6 @@ class LearningEngine:
             "last_score_%": round(log[-1]["outcome_score"] * 100, 1) if log else None,
             "last_controller": log[-1].get("controller") if log else None,
         }
-
-    def get_learned_setpoint(
-        self,
-        zone_id: str,
-        target: float,
-        indoor_temp: float,
-        weather_data: dict,
-    ) -> float | None:
-        """Berechnet optimalen TRV-Setpoint aus gelernten Beobachtungen.
-
-        Nutzt gewichteten Mittelwert der beobachteten Effizienz (°C/min pro °C Excess).
-        Gibt None zurück wenn zu wenig Daten vorhanden.
-        """
-        obs_list = self._trv_observations.get(zone_id, [])
-        if len(obs_list) < LEARNING_MIN_SAMPLES:
-            return None
-
-        delta = target - indoor_temp
-        if delta <= 0:
-            return None
-
-        now = dt_util.now()
-        conditions = {
-            "outdoor_temp": weather_data.get("temperature") or 10.0,
-            "wind_speed": weather_data.get("wind_speed"),
-            "solar_radiation": weather_data.get("solar_radiation"),
-        }
-
-        efficiencies = []
-        weights = []
-        for obs in obs_list:
-            if not obs.get("efficiency") or obs["efficiency"] <= 0:
-                continue
-            w = _thermal_weight(obs, conditions, now)
-            if w < 0.01:
-                continue
-            # Outcome-Score: gute Entscheidungen höher gewichten (0.5 = neutral)
-            outcome = obs.get("outcome_score", 0.5)
-            w *= (0.4 + 0.6 * outcome)
-            efficiencies.append(obs["efficiency"])
-            weights.append(w)
-
-        if len(efficiencies) < LEARNING_MIN_SAMPLES:
-            return None
-
-        weighted_eff = sum(e * w for e, w in zip(efficiencies, weights)) / sum(weights)
-        if weighted_eff <= 0:
-            return None
-
-        # Erwünschte Heizrate: ~0.05°C/min als Ziel (angenehme Aufheizung)
-        # Setpoint = indoor_temp + desired_rate / efficiency
-        desired_rate = min(delta * 0.04, 0.08)
-        setpoint = indoor_temp + desired_rate / weighted_eff
-        setpoint = min(setpoint, target + 4.0, 28.0)
-        return round(setpoint, 1)
 
     def get_window_cooling_rate(self, zone_id: str, weather_data: dict) -> float | None:
         """Gibt gelernte Fenster-Abkühlrate (°C/min) für aktuelle Außenbedingungen zurück."""

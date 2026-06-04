@@ -142,9 +142,6 @@ HEATING_MODES = [
     HEATING_MODE_VACATION,
 ]
 
-# Restwärme-Kompensation
-RESIDUAL_HEAT_ZONE = 1.5   # °C – Annäherungszone zum Ziel, ab der Setpoint reduziert wird
-
 # EMA-Zeitkonstante für 1h-Trend-Sensor (α ≈ 1-e^(-5min/60min))
 EMA_1H_ALPHA = 0.08
 

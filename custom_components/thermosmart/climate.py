@@ -134,7 +134,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def preset_mode(self) -> str:
-        return MODE_TO_PRESET.get(self.coordinator._mode, "Auto")
+        return MODE_TO_PRESET.get(self.coordinator._mode, "auto")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

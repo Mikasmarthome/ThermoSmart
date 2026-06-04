@@ -28,6 +28,25 @@ from .const import (
 )
 
 
+# ── Validierung ─────────────────────────────────────────────────────────────
+
+def _validate_temps(data: dict) -> dict[str, str]:
+    """Prüft ob Temperaturen logisch sinnvoll sind.
+
+    Komfort > Nacht ≥ Abwesenheit – alles andere würde zu invertiertem Verhalten führen.
+    """
+    errors: dict[str, str] = {}
+    comfort = float(data.get("comfort_temp", 21.0))
+    night   = float(data.get("night_temp",   18.0))
+    away    = float(data.get("away_temp",     17.0))
+
+    if night >= comfort:
+        errors["night_temp"] = "night_temp_too_high"
+    if away > night:
+        errors["away_temp"] = "away_temp_too_high"
+    return errors
+
+
 # ── Schema-Hilfsfunktionen (eine pro Schritt) ────────────────────────────────
 
 def _schema_devices(d: dict) -> vol.Schema:
@@ -180,13 +199,17 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_schedule(self, user_input: dict | None = None):
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_presence()
+            errors = _validate_temps(user_input)
+            if not errors:
+                self._data.update(user_input)
+                return await self.async_step_presence()
 
         return self.async_show_form(
             step_id="schedule",
             data_schema=_schema_schedule(self._data),
+            errors=errors,
         )
 
     async def async_step_presence(self, user_input: dict | None = None):
@@ -270,13 +293,17 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
 
     async def async_step_schedule(self, user_input: dict | None = None):
         current = self._current()
+        errors: dict[str, str] = {}
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_presence()
+            errors = _validate_temps(user_input)
+            if not errors:
+                self._data.update(user_input)
+                return await self.async_step_presence()
 
         return self.async_show_form(
             step_id="schedule",
             data_schema=_schema_schedule(current),
+            errors=errors,
         )
 
     async def async_step_presence(self, user_input: dict | None = None):

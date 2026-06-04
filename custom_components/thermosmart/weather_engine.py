@@ -1,6 +1,7 @@
 """WeatherEngine – Außenbedingungen aus Sensoren und/oder Wetter-Entity."""
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from homeassistant.core import HomeAssistant
@@ -94,17 +95,35 @@ class WeatherEngine:
                     except (TypeError, ValueError):
                         pass
 
-        # ── Forecast über neue HA-API (ab 2024.3) ────────────────────
-        # Alte Methode (attrs.get("forecast")) ist deprecated und entfernt.
-        # Neue Methode: weather.get_forecasts Service-Call.
-        try:
-            result = await self._hass.services.async_call(
-                "weather",
-                "get_forecasts",
-                {"entity_id": self._weather_entity, "type": "daily"},
-                blocking=True,
-                return_response=True,
+            # Letzter Fallback: Legacy-Forecast aus Entity-Attributen
+            # (für Integrationen die den neuen Service nicht unterstützen)
+            legacy_forecast = attrs.get("forecast")
+            if isinstance(legacy_forecast, list) and legacy_forecast:
+                try:
+                    data["forecast_high"] = float(legacy_forecast[0].get("temperature") or 0)
+                    data["forecast_low"] = float(
+                        legacy_forecast[0].get("templow") or data["forecast_high"] or 0
+                    )
+                except (TypeError, ValueError, AttributeError):
+                    pass
+        elif self._weather_entity:
+            _LOGGER.debug(
+                "WeatherEngine: Wetter-Entity '%s' nicht verfügbar – nur Sensordaten",
+                self._weather_entity,
             )
+
+        # ── Forecast über neue HA-API (ab 2024.3) ────────────────────
+        # Neue Methode hat Vorrang vor Legacy-Attributen.
+        # Timeout 10s verhindert, dass ein hängender Service den Update-Loop blockiert.
+        try:
+            async with asyncio.timeout(10):
+                result = await self._hass.services.async_call(
+                    "weather",
+                    "get_forecasts",
+                    {"entity_id": self._weather_entity, "type": "daily"},
+                    blocking=True,
+                    return_response=True,
+                )
             if result:
                 forecast_list = result.get(self._weather_entity, {}).get("forecast", [])
                 if forecast_list:
@@ -119,8 +138,12 @@ class WeatherEngine:
                         )
                     except (TypeError, ValueError):
                         pass
+        except TimeoutError:
+            _LOGGER.warning(
+                "WeatherEngine: Forecast-Abruf Timeout (>10s) – nutze Legacy-Daten falls verfügbar"
+            )
         except Exception:
-            # Service nicht verfügbar oder Entity nicht unterstützt → kein Forecast
+            # Service nicht verfügbar oder Entity unterstützt keinen Forecast → kein Problem
             pass
 
         # ── Dedizierte Sensoren überschreiben Wetter-Entity-Werte ─────

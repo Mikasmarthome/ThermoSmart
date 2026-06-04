@@ -80,7 +80,9 @@
     "error": {
       "entity_not_found": "Wetter-Entity nicht gefunden. Bitte eine gültige Entity auswählen oder das Feld leer lassen.",
       "name_required": "Bitte einen Zonennamen eingeben.",
-      "required": "Mindestens ein Thermostat / TRV erforderlich."
+      "required": "Mindestens ein Thermostat / TRV erforderlich.",
+      "night_temp_too_high": "Nachttemperatur muss niedriger als die Komforttemperatur sein.",
+      "away_temp_too_high": "Abwesenheitstemperatur darf nicht höher als die Nachttemperatur sein."
     },
     "abort": {
       "already_configured": "Diese Zone ist bereits konfiguriert.",

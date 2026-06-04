@@ -347,10 +347,14 @@ class LearningEngine:
             idle_time, idle_temp = self._last_idle_temp[zone_id]
             elapsed_min = (now - idle_time).total_seconds() / 60
             if 10 <= elapsed_min <= 60 and current_temp < idle_temp:
-                cool_rate = round((idle_temp - current_temp) / elapsed_min, 5)
-                # EMA der Wärmeverlustrate aktualisieren (α=0.15 – träge, stabil)
-                prev_ema = self._heat_loss_ema.get(zone_id, cool_rate)
-                self._heat_loss_ema[zone_id] = round(0.15 * cool_rate + 0.85 * prev_ema, 6)
+                raw_cool = (idle_temp - current_temp) / elapsed_min
+                # Plausibilitäts-Guard: max. 0.5°C/min Abkühlung (= 30°C/h) ist physikalisch
+                # unrealistisch für ein Gebäude; Ausreißer durch Sensor-Fehler abfangen
+                if raw_cool <= 0.5:
+                    cool_rate = round(raw_cool, 5)
+                    # EMA der Wärmeverlustrate aktualisieren (α=0.15 – träge, stabil)
+                    prev_ema = self._heat_loss_ema.get(zone_id, cool_rate)
+                    self._heat_loss_ema[zone_id] = round(0.15 * cool_rate + 0.85 * prev_ema, 6)
         if is_cooling:
             self._last_idle_temp[zone_id] = (now, current_temp)
         else:
@@ -995,27 +999,10 @@ class LearningEngine:
         now = dt_util.now()
         curr_outdoor = weather_data.get("temperature") or 10.0
 
-        # ── Ansatz 1: Normalisierte Heizrate ──────────────────────────
-        if target is not None:
-            curr_delta = max(target - curr_outdoor, 1.0)
-            norm_obs = [
-                (obs["norm_heat_rate"], _time_weight(obs["ts"], now))
-                for obs in self._observations[zone_id]
-                if obs.get("norm_heat_rate", 0) > 0
-            ]
-            norm_obs = [(r, w) for r, w in norm_obs if w >= 0.01]
-            if len(norm_obs) >= LEARNING_MIN_SAMPLES:
-                total_w = sum(w for _, w in norm_obs)
-                avg_norm = sum(r * w for r, w in norm_obs) / total_w
-                predicted = round(avg_norm * curr_delta, 5)
-                _LOGGER.debug(
-                    "LearningEngine [%s]: Normalisierte Heizrate %.5f°C/min "
-                    "(norm=%.6f × Δ%.1f°C, %d Beob.)",
-                    zone_id, predicted, avg_norm, curr_delta, len(norm_obs),
-                )
-                return predicted
+        # Nur die letzten 500 Beobachtungen auswerten – ältere haben durch
+        # Zeitgewichtung (HWZ 180 Tage) ohnehin < 2% Einfluss, sparen aber CPU
+        recent_obs = self._observations[zone_id][-500:]
 
-        # ── Ansatz 2: Multi-Faktor gewichtete Rate (Fallback) ─────────
         conditions = {
             "outdoor_temp": curr_outdoor,
             "wind_speed": weather_data.get("wind_speed"),
@@ -1023,9 +1010,37 @@ class LearningEngine:
             "outdoor_humidity": weather_data.get("humidity"),
         }
 
+        # ── Ansatz 1: Normalisierte Heizrate (bevorzugt) ──────────────
+        # Kombiniert Zeit- UND Bedingungs-Gewichtung für maximale Genauigkeit
+        if target is not None:
+            curr_delta = max(target - curr_outdoor, 1.0)
+            norm_obs_weighted: list[tuple[float, float]] = []
+            for obs in recent_obs:
+                if not obs.get("norm_heat_rate") or obs["norm_heat_rate"] <= 0:
+                    continue
+                # Zeitgewichtung × thermische Ähnlichkeit
+                w_time = _time_weight(obs["ts"], now)
+                w_therm = _thermal_weight(obs, conditions, now)
+                w = w_time * (0.5 + 0.5 * w_therm)  # Normalisierung bevorzugt Zeit
+                if w < 0.005:
+                    continue
+                norm_obs_weighted.append((obs["norm_heat_rate"], w))
+
+            if len(norm_obs_weighted) >= LEARNING_MIN_SAMPLES:
+                total_w = sum(w for _, w in norm_obs_weighted)
+                avg_norm = sum(r * w for r, w in norm_obs_weighted) / total_w
+                predicted = round(avg_norm * curr_delta, 5)
+                _LOGGER.debug(
+                    "LearningEngine [%s]: Normalisierte Heizrate %.5f°C/min "
+                    "(norm=%.6f × Δ%.1f°C, %d Beob.)",
+                    zone_id, predicted, avg_norm, curr_delta, len(norm_obs_weighted),
+                )
+                return predicted
+
+        # ── Ansatz 2: Multi-Faktor gewichtete Rate (Fallback) ─────────
         rates = []
         weights = []
-        for obs in self._observations[zone_id]:
+        for obs in recent_obs:
             if not obs.get("heat_rate") or obs["heat_rate"] <= 0:
                 continue
             w = _thermal_weight(obs, conditions, now)
@@ -1053,7 +1068,11 @@ class LearningEngine:
 
         # Basis-Rate nach Außentemperatur
         # Kalibiert auf typisches deutsches Wohngebäude (Mehrfamilienhaus, mittlere Dämmung)
-        if outdoor < -5:
+        if outdoor < -20:
+            base = 0.018   # Extremkälte: Heizkörper kommt kaum hinterher, Rate sehr niedrig
+        elif outdoor < -10:
+            base = 0.026   # Starker Frost
+        elif outdoor < -5:
             base = 0.035   # Sehr kalt: TRV arbeitet hart, Haus kühlt schnell
         elif outdoor < 0:
             base = 0.042

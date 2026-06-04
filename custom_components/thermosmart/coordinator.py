@@ -612,9 +612,11 @@ class ThermoSmartCoordinator(
     def _read_avg_sensor(self, sensor_ids: list[str]) -> float | None:
         """Durchschnitt über alle verfügbaren Sensoren – ignoriert Ausfälle automatisch."""
         values = []
+        seen: set[str] = set()
         for sid in sensor_ids:
-            if not sid:
+            if not sid or sid in seen:
                 continue
+            seen.add(sid)
             state = self.hass.states.get(sid)
             if state and state.state not in ("unknown", "unavailable", "None"):
                 try:

@@ -120,6 +120,10 @@ class ThermoSmartCoordinator(
         self._sensor_ema: dict[str, float] = {}
         self._sensor_noise_count: dict[str, int] = {}
 
+        # Live-Cache für sofortige Card-Aktualisierung (unabhängig vom 5-min-Zyklus)
+        self._live_temp: float | None = None
+        self._live_humidity: float | None = None
+
         # Temperatur-Trend
         self._indoor_temp_prev: tuple[datetime, float] | None = None
         self._indoor_temp_slope: float = 0.0
@@ -335,6 +339,31 @@ class ThermoSmartCoordinator(
             )
             self._event_unsub.append(cancel_trv)
 
+        # Temp- und Feuchtigkeitssensoren: Live-Cache für sofortige Card-Aktualisierung
+        temp_sensors: set[str] = set(s for s in cfg.get("temp_sensors", []) if s)
+        humidity_sensors: set[str] = set(s for s in cfg.get("humidity_sensors", []) if s)
+        all_indoor_sensors = temp_sensors | humidity_sensors
+        if all_indoor_sensors:
+            @callback
+            def _handle_sensor_change(event) -> None:
+                new = event.data.get("new_state")
+                if new is None or new.state in ("unknown", "unavailable"):
+                    return
+                if temp_sensors:
+                    val = self._read_avg_sensor(list(temp_sensors))
+                    if val is not None:
+                        self._live_temp = val
+                if humidity_sensors:
+                    val = self._read_avg_sensor(list(humidity_sensors))
+                    if val is not None:
+                        self._live_humidity = val
+                self.async_update_listeners()
+
+            cancel_sensors = async_track_state_change_event(
+                self.hass, list(all_indoor_sensors), _handle_sensor_change
+            )
+            self._event_unsub.append(cancel_sensors)
+
         _LOGGER.debug(
             "ThermoSmart '%s': Event-Listener registriert (%d Präsenz/Fenster, %d TRVs)",
             self.zone_name, len(all_tracked), len(climate_entities),
@@ -447,6 +476,12 @@ class ThermoSmartCoordinator(
 
             recommendation["heating_failure"] = self._heating_failure_notified
             recommendation["indoor_humidity"] = indoor_humidity
+
+            # Live-Cache aktuell halten (wird auch von Sensor-Listener aktualisiert)
+            if recommendation.get("current_temp") is not None:
+                self._live_temp = recommendation["current_temp"]
+            if indoor_humidity is not None:
+                self._live_humidity = indoor_humidity
 
             return {
                 "weather": weather_data,

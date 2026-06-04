@@ -101,11 +101,13 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
 
     @property
     def current_temperature(self) -> float | None:
-        return self._zone.get("current_temp")
+        live = self.coordinator._live_temp
+        return live if live is not None else self._zone.get("current_temp")
 
     @property
     def current_humidity(self) -> float | None:
-        return self._zone.get("indoor_humidity")
+        live = self.coordinator._live_humidity
+        return live if live is not None else self._zone.get("indoor_humidity")
 
     @property
     def target_temperature(self) -> float | None:

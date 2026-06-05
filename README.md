@@ -95,7 +95,7 @@ Add **ThermoSmart System** first (global Summer + Vacation switches), then add e
 
 | Step | Fields |
 |---|---|
-| **1 – Devices** | Zone name · TRVs · Temperature sensors · Humidity sensors · Window sensors · Window delays · Valve maintenance · Calibration invert |
+| **1 – Devices** | Zone name · TRVs · Temperature sensors · Humidity sensors · Window / door sensors · Window delays · Valve maintenance · Calibration invert |
 | **2 – Temperatures** | Comfort (21°C) · Night (18°C) · Away (17°C) · Vacation (12°C) · Eco (19°C) · Tolerance (0.5°C) · Weekday/weekend schedule times |
 | **3 – Presence** | Person entities · Home zone · Learning on/off |
 | **4 – Weather** | Weather entity · Outdoor temp/humidity · Wind speed · Solar radiation · Precipitation |
@@ -113,7 +113,7 @@ Add **ThermoSmart System** first (global Summer + Vacation switches), then add e
 | `switch.*_lernmodus` | Learning algorithm on/off |
 | `sensor.*_status` | Zone status |
 | `sensor.*_lernfortschritt` | Learning confidence 0–100% |
-| `sensor.*_zieltemperatur` | Adjusted target temperature (incl. weather correction) |
+| `sensor.*_zieltemperatur` | Configured target temperature (schedule or mode — no offsets) |
 | `sensor.*_vorheizzeit` | Calculated preheat time in minutes |
 
 Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cycle · Weather offset · Temperature slope · Heat loss · Heating power · Solar gain · TRV observations · Window cooling rate · EMA temperature

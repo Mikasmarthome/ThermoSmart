@@ -395,7 +395,9 @@ class ThermoSmartCoordinator(
                 weather_data.get("temperature"),
             )
 
-            target = recommendation.get("adjusted_target")
+            # Use effective_target (weather-adjusted) for TPI/TRV calculations.
+            # adjusted_target is only the display value.
+            target = recommendation.get("effective_target")
             current_temp = recommendation.get("current_temp")
             if target is not None:
                 # TPI-Koeffizienten aus Lerndaten ableiten
@@ -441,7 +443,7 @@ class ThermoSmartCoordinator(
                 self.learning_engine.update_heating_session(
                     zone_id=self.zone_id,
                     current_temp=current_temp,
-                    target=target,
+                    target=target,   # effective_target – actual heating goal
                     is_active_control=self._active_control,
                     weather_data=weather_data,
                     expected_minutes=recommendation.get("preheat_minutes", 0),
@@ -614,7 +616,17 @@ class ThermoSmartCoordinator(
         override = self.get_override()
         biased_suppression = 1.0
 
+        # ── Effective target (internal) ────────────────────────────────────────
+        # Incorporates weather offset + forecast suppression.
+        # Used for TPI calculation and TRV setpoint – NOT shown to the user.
+        #
+        # ── Adjusted target (display) ──────────────────────────────────────────
+        # Always the configured schedule / mode temperature, or the manual override.
+        # This is what the climate entity and all UI elements show – no hidden offsets.
+
         if override is not None and not window_open:
+            # Manual override: user set an explicit temp → show AND use it as-is
+            effective_target = override
             adjusted_target = override
             override_active = True
         elif not window_open:
@@ -623,12 +635,12 @@ class ThermoSmartCoordinator(
                 if preheat_active:
                     # Pre-heat window: always heat to full comfort target
                     biased_suppression = 1.0
-                    adjusted_target = raw_target
+                    effective_target = raw_target
                 elif base_target >= comfort_temp:
                     # Active comfort window: always heat to configured comfort temperature.
                     # Forecast may influence WHEN we pre-heat, but not the comfort target itself.
                     biased_suppression = 1.0
-                    adjusted_target = raw_target
+                    effective_target = raw_target
                     _LOGGER.debug(
                         "ThermoSmart '%s': Komfortzeit – Prognose-Unterdrückung deaktiviert "
                         "(Ziel: %.1f°C)",
@@ -650,29 +662,32 @@ class ThermoSmartCoordinator(
                             blend = (delta - FORECAST_DELTA_BLEND) / (FORECAST_DELTA_FULL_HEAT - FORECAST_DELTA_BLEND)
                             biased_suppression = min(1.0, biased_suppression + blend * (1.0 - biased_suppression))
 
-                    adjusted_target = round(
+                    effective_target = round(
                         night_temp_cfg + biased_suppression * (raw_target - night_temp_cfg), 1
                     )
 
                     if current_temp is not None and biased_suppression < 0.95:
                         comfort_floor = round(current_temp - 0.5, 1)
-                        if adjusted_target < comfort_floor:
+                        if effective_target < comfort_floor:
                             _LOGGER.debug(
                                 "ThermoSmart '%s': Komfort-Boden greift (%.1f°C → %.1f°C)",
-                                self.zone_name, adjusted_target, comfort_floor,
+                                self.zone_name, effective_target, comfort_floor,
                             )
-                            adjusted_target = comfort_floor
+                            effective_target = comfort_floor
 
                     forecast_high = weather_data.get("forecast_high")
                     if biased_suppression < 0.95 and forecast_high is not None and current_temp is not None:
                         self.learning_engine.record_forecast_decision(
-                            self.zone_id, adjusted_target, raw_target, forecast_high,
+                            self.zone_id, effective_target, raw_target, forecast_high,
                             current_temp, biased_suppression, weather_data.get("temperature"),
                         )
             else:
-                adjusted_target = raw_target
+                effective_target = raw_target
+            # Display: always show the configured base temperature (no offsets)
+            adjusted_target = base_target
             override_active = False
         else:
+            effective_target = None
             adjusted_target = None
             override_active = False
 
@@ -688,7 +703,8 @@ class ThermoSmartCoordinator(
             "window_open": window_open,
             "base_target": base_target,
             "weather_offset": weather_offset,
-            "adjusted_target": adjusted_target,
+            "adjusted_target": adjusted_target,    # display value – no offsets
+            "effective_target": effective_target,  # internal value – weather + suppression
             "override_active": override_active,
             "override_temp": override,
             "preheat_minutes": preheat_minutes,
@@ -795,7 +811,7 @@ class ThermoSmartCoordinator(
 
         trv_setpoint = recommendation.get("trv_setpoint")
         current_temp = recommendation.get("current_temp")
-        target = recommendation.get("adjusted_target")
+        target = recommendation.get("effective_target")   # use actual heating goal
         window_open = recommendation.get("window_open", False)
 
         if window_open or trv_setpoint is None or current_temp is None or target is None:
@@ -858,7 +874,8 @@ class ThermoSmartCoordinator(
     ) -> None:
         """TRV-Setpoints im Beobachtungsmodus oder der aktiven Steuerung erfassen und lernen."""
         current_temp = recommendation.get("current_temp")
-        target = recommendation.get("adjusted_target")
+        # Use effective_target (weather-adjusted) as the actual heating goal for observations
+        target = recommendation.get("effective_target")
         if current_temp is None or target is None:
             return
 

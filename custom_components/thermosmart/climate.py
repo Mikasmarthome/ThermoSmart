@@ -133,7 +133,8 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity, RestoreEntity):
         if not self.coordinator._active_control:
             return HVACAction.OFF
         curr = self._zone.get("current_temp")
-        target = self._zone.get("adjusted_target")
+        # Use effective_target (weather-adjusted) for heating/idle determination
+        target = self._zone.get("effective_target") or self._zone.get("adjusted_target")
         if curr is None or target is None:
             return HVACAction.IDLE
         tolerance = self.coordinator.zone_cfg.get("temp_tolerance", 0.5)

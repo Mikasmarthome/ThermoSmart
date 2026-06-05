@@ -345,7 +345,12 @@ class LearningEngine:
             return
 
         current_temp = recommendation.get("current_temp")
-        adjusted_target = recommendation.get("adjusted_target")
+        # Record effective_target (weather-adjusted) – the actual temperature we aimed for.
+        # Fall back to adjusted_target for backward compatibility.
+        adjusted_target = (
+            recommendation.get("effective_target")
+            or recommendation.get("adjusted_target")
+        )
         if current_temp is None or adjusted_target is None:
             return
 

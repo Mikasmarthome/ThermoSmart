@@ -94,7 +94,7 @@ class ThermoSmartTargetTempSensor(_Base):
     def extra_state_attributes(self) -> dict[str, Any]:
         z = self._zone
         return {
-            "base_target": z.get("base_target"),
+            "effective_target": z.get("effective_target"),   # actual TRV goal (with offset)
             "weather_correction": z.get("weather_offset"),
             "forecast_suppression": f"{z.get('forecast_suppression', 0)}%",
             "window_open": z.get("window_open"),
@@ -242,7 +242,8 @@ class ThermoSmartStatusSensor(_Base):
         if mode == "away":
             return "away"
         curr = z.get("current_temp")
-        target = z.get("adjusted_target")
+        # Use effective_target (weather-adjusted) for accurate heating/idle status
+        target = z.get("effective_target") or z.get("adjusted_target")
         if curr is not None and target is not None:
             if curr < target - 0.5:
                 return "heating"

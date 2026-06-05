@@ -617,9 +617,21 @@ class ThermoSmartCoordinator(
             raw_target = round(base_target + weather_offset, 1)
             if mode == HEATING_MODE_AUTO:
                 if preheat_active:
+                    # Pre-heat window: always heat to full comfort target
                     biased_suppression = 1.0
                     adjusted_target = raw_target
+                elif base_target >= comfort_temp:
+                    # Active comfort window: always heat to configured comfort temperature.
+                    # Forecast may influence WHEN we pre-heat, but not the comfort target itself.
+                    biased_suppression = 1.0
+                    adjusted_target = raw_target
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': Komfortzeit – Prognose-Unterdrückung deaktiviert "
+                        "(Ziel: %.1f°C)",
+                        self.zone_name, raw_target,
+                    )
                 else:
+                    # Night/transition window: forecast suppression applies
                     raw_suppression = self.weather_engine.compute_forecast_suppression(
                         weather_data, raw_target, night_temp_cfg
                     )

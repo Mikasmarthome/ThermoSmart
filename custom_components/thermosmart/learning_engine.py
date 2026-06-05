@@ -452,10 +452,14 @@ class LearningEngine:
         """
         if not self._is_enabled(zone_id):
             return
-        if heat_rate is None or heat_rate <= 0:
-            return
         excess = trv_setpoint - indoor_temp
         if excess <= 0.3:
+            return
+        # Require a positive heat_rate only when heat_rate is actually available.
+        # heat_rate is None on the very first call (no previous temp reading yet).
+        # Without heat_rate we still record the observation for the count sensor,
+        # but omit the efficiency field (which needs actual heating data).
+        if heat_rate is not None and heat_rate <= 0:
             return
 
         now = dt_util.now()
@@ -466,9 +470,10 @@ class LearningEngine:
             "target": round(target, 1),
             "delta": round(target - indoor_temp, 2),
             "setpoint_excess": round(excess, 2),
-            "heat_rate": round(heat_rate, 5),
-            "efficiency": round(heat_rate / excess, 6),
         }
+        if heat_rate is not None and heat_rate > 0:
+            obs["heat_rate"] = round(heat_rate, 5)
+            obs["efficiency"] = round(heat_rate / excess, 6)
         for key, map_key in (
             ("temperature", "outdoor_temp"),
             ("wind_speed", "wind_speed"),

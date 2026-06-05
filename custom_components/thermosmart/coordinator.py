@@ -845,7 +845,12 @@ class ThermoSmartCoordinator(
         target = recommendation.get("adjusted_target")
         if current_temp is None or target is None:
             return
-        if target <= current_temp:
+
+        # In active control: only observe when ThermoSmart itself needs to heat.
+        # In observation mode: do NOT filter on our own target – the external controller
+        # may heat to a different (higher) target. The actual TRV setpoint check below
+        # (trv_setpoint < current_temp → skip) is sufficient as the quality gate.
+        if self._active_control and target <= current_temp:
             return
 
         heat_rate = None

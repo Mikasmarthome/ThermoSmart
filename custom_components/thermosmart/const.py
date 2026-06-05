@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.0.0-beta.13"
+VERSION = "1.0.0-beta.14"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -30,7 +30,12 @@ AUTO_QUIRK_PATTERNS = [
 ]
 
 # Muster für automatisch erkannte Kalibrierungs-Entities
-AUTO_CALIBRATION_PATTERN = "local_temperature_calibration"
+# Als Liste damit mehrere Protokoll-Konventionen erkannt werden
+AUTO_CALIBRATION_PATTERNS = [
+    "local_temperature_calibration",   # Zigbee2MQTT (TRVZB, Danfoss, Tuya, ...)
+    "temperature_offset",              # Homematic IP (hahomematic), some ZHA devices
+    "temperature_calibration",         # some ZHA device quirks
+]
 
 # Muster für automatisch erkannte External-Temperature-Input-Entities (TRVZB)
 AUTO_EXT_TEMP_PATTERNS = ["external_temperature_input", "external_temperature"]
@@ -41,6 +46,7 @@ AUTO_VALVE_PATTERNS = [
     "valve_position",         # Eurotronic Spirit (SPZB0001)
     "pi_heating_demand",      # Tuya TS0601_3/5, einige Danfoss
     "heating_demand",         # alternative Benennung
+    "level",                  # Homematic IP via hahomematic (0.0–1.0 → skaliert auf %)
 ]
 
 # Kalibrierungs-Inversion (z.B. ME167 invertiert Offset-Vorzeichen)

@@ -9,7 +9,7 @@ from homeassistant.util import dt as dt_util
 
 from .const import (
     AUTO_QUIRK_PATTERNS,
-    AUTO_CALIBRATION_PATTERN,
+    AUTO_CALIBRATION_PATTERNS,
     AUTO_EXT_TEMP_PATTERNS,
     AUTO_VALVE_PATTERNS,
     CONF_CALIBRATION_ENTITIES,
@@ -60,7 +60,7 @@ class TRVControlMixin:
                             break
 
                 elif domain == "number":
-                    if AUTO_CALIBRATION_PATTERN in entry.entity_id:
+                    if any(p in entry.entity_id for p in AUTO_CALIBRATION_PATTERNS):
                         cal_map[climate_id] = entry.entity_id
 
         manual_quirks = set(cfg.get(CONF_QUIRK_ENTITIES, []))
@@ -414,8 +414,13 @@ class TRVControlMixin:
             if state is None or state.state in ("unavailable", "unknown"):
                 continue
 
+            # Homematic IP (hahomematic) uses 0.0–1.0 scale instead of 0–100.
+            # Detect by checking if current state value is <= 1.0 and entity contains "level".
+            is_fractional = "level" in valve_entity.lower()
+
             try:
-                current_pct = round(float(state.state))
+                raw = float(state.state)
+                current_pct = round(raw * 100 if is_fractional else raw)
             except (TypeError, ValueError):
                 current_pct = None
 
@@ -427,13 +432,14 @@ class TRVControlMixin:
                 and (current_pct - target_pct) >= 5
             ):
                 bump_pct = min(100, current_pct + TPI_VALVE_BUMP_PCT)
+                bump_val = round(bump_pct / 100, 2) if is_fractional else bump_pct
                 _LOGGER.debug(
                     "ThermoSmart '%s': Valve-Bump %s → %d%% → %d%%",
                     self.zone_name, valve_entity, bump_pct, target_pct,
                 )
                 await self.hass.services.async_call(
                     "number", "set_value",
-                    {"entity_id": valve_entity, "value": bump_pct},
+                    {"entity_id": valve_entity, "value": bump_val},
                     blocking=False,
                 )
                 await asyncio.sleep(TPI_VALVE_BUMP_DELAY)
@@ -442,6 +448,7 @@ class TRVControlMixin:
                 wrote_any = True
                 continue
 
+            write_val = round(target_pct / 100, 2) if is_fractional else target_pct
             _LOGGER.debug(
                 "ThermoSmart '%s': Ventil %s → %d%%",
                 self.zone_name, valve_entity, target_pct,
@@ -449,7 +456,7 @@ class TRVControlMixin:
             self.hass.async_create_task(
                 self.hass.services.async_call(
                     "number", "set_value",
-                    {"entity_id": valve_entity, "value": target_pct},
+                    {"entity_id": valve_entity, "value": write_val},
                     blocking=False,
                 )
             )

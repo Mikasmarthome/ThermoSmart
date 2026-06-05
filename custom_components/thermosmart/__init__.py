@@ -186,6 +186,30 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Lerndaten der entfernten Zone sofort bereinigen.
+
+    Wird von HA aufgerufen NACHDEM die Zone vollständig aus config_entries entfernt
+    wurde – zu diesem Zeitpunkt ist die zone_id bereits aus dem Entry-Register verschwunden,
+    sodass prune_orphaned_zones sie korrekt als verwaist erkennt.
+    """
+    if entry.data.get("entry_type") == "system":
+        return
+    le = hass.data.get(DOMAIN, {}).get("learning_engine")
+    if le is None:
+        return
+    active_zone_ids = {
+        e.entry_id
+        for e in hass.config_entries.async_entries(DOMAIN)
+        if e.data.get("entry_type") != "system"
+    }
+    le.prune_orphaned_zones(active_zone_ids)
+    _LOGGER.info(
+        "ThermoSmart: Zone '%s' entfernt – Lerndaten sofort bereinigt",
+        entry.data.get("name", entry.entry_id),
+    )
+
+
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if {**entry.data, **entry.options}.get("entry_type") != "system":
         await hass.config_entries.async_reload(entry.entry_id)

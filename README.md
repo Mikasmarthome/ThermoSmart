@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--beta.13-orange.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--beta.14-orange.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-beta-red.svg" alt="Beta"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
@@ -19,7 +19,7 @@
 > ⚠️ **Use at your own risk.**
 > ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices in your home. Always configure a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
-> 🧪 **Beta Release (v1.0.0-beta.13)**
+> 🧪 **Beta Release (v1.0.0-beta.14)**
 > All core features are functional. The learning algorithm improves with every heating session and reaches its full potential after a complete heating season — results get noticeably better over time. Please report issues and feedback on GitHub — it helps a lot.
 
 ---
@@ -75,9 +75,34 @@ Any Home Assistant `climate` entity that supports `set_temperature` — includin
 - Tuya TRVs (TS0601 and variants)
 - Generic Z-Wave / Zigbee TRVs exposed as climate entities
 
-**Direct valve control** (TPI Duty-Cycle written directly to the valve) is supported for any TRV that exposes a writable `number` entity for `valve_opening_degree`, `pi_heating_demand`, or `valve_position`. Auto-detected via Device Registry — no configuration needed.
+**Direct valve control** (TPI Duty-Cycle written directly to the valve) is supported for any TRV that exposes a writable `number` entity for `valve_opening_degree`, `pi_heating_demand`, `valve_position`, or `level`. Auto-detected via Device Registry — no configuration needed.
 
 > If you test ThermoSmart with a device not listed here, please open an issue and let us know!
+
+---
+
+## Compatibility Overview
+
+ThermoSmart works with any HA `climate` entity at the core level. Advanced features (direct valve control, calibration) depend on what the device exposes.
+
+| Integration / Protocol | Obs. Mode | Active Control | Direct Valve | Auto-Calibration | Notes |
+|---|---|---|---|---|---|
+| **Zigbee2MQTT** | ✅ | ✅ Full | ✅ Auto-detected | ✅ Auto-detected | Best supported |
+| **ZHA** | ✅ | ✅ Setpoint boost | ⚠️ Device-dependent | ⚠️ Device-dependent | Depends on ZHA device quirks |
+| **Z-Wave JS** | ✅ | ✅ Setpoint boost | ❌ | ⚠️ Rarely exposed | — |
+| **Matter** | ✅ | ✅ Setpoint boost | ❌ | ❌ | Standard climate entity only |
+| **Homematic IP** (hahomematic) | ✅ | ✅ Setpoint boost | ✅ `level` auto-detected | ⚠️ `temperature_offset` auto-detected | Local CCU required |
+| **Homematic IP** (cloud) | ✅ | ✅ Setpoint boost | ❌ | ❌ | Fewer entities exposed via cloud |
+| **Fritz!DECT** | ✅ | ✅ Setpoint boost | ❌ | ❌ | 0.5°C step rounding |
+| **Bosch Smart Home** | ✅ | ✅ Setpoint boost | ❌ | ❌ | — |
+| **Tado / Netatmo** | ⚠️ | ⚠️ | ❌ | ❌ | Cloud AI conflicts — see note below |
+| **generic_thermostat** | ✅ | ✅ Setpoint boost | ❌ | ❌ | — |
+| **MQTT HVAC** | ✅ | ✅ Setpoint boost | ❌ | ❌ | — |
+
+**Setpoint boost mode:** When no direct valve control entity is found, ThermoSmart converts the TPI duty-cycle to a temperature boost (`setpoint = target + duty% × 8°C`) and writes it via `climate.set_temperature`. This works with all devices but is less precise than direct valve control.
+
+> **Note on Tado / Netatmo and other cloud-controlled thermostats:**
+> These devices have their own cloud AI (geofencing, presence, schedules) that will periodically override ThermoSmart's setpoints. In Observation mode, ThermoSmart would learn the cloud AI's decisions rather than your building's actual thermal behaviour. ThermoSmart is designed for **locally controlled TRVs** — cloud thermostats are not recommended.
 
 ---
 
@@ -471,7 +496,7 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.thermosmart_living_room_status
-        to: "Heating failure!"
+        to: "heating_failure"
     action:
       - service: notify.mobile_app
         data:

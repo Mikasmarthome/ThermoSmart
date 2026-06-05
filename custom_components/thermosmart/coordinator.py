@@ -469,10 +469,14 @@ class ThermoSmartCoordinator(
                 if recommendation.get("window_open"):
                     duty = 0.0
                 await self._async_set_valve_percent(cfg, duty)
-                await self._async_valve_maintenance(cfg, recommendation)
             elif self._active_control and self._is_summer:
                 await self._async_apply_quirks(cfg)
                 await self._apply_frost_protection(cfg)
+
+            # Valve maintenance runs in summer mode or observation mode.
+            # Must be called outside the active-control blocks — the function
+            # self-guards via valve_likely_idle = is_summer or not active_control.
+            await self._async_valve_maintenance(cfg, recommendation)
 
             recommendation["heating_failure"] = self._heating_failure_notified
             recommendation["indoor_humidity"] = indoor_humidity

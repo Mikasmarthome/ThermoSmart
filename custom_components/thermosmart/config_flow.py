@@ -33,20 +33,8 @@ from .const import (
 # ── Validierung ─────────────────────────────────────────────────────────────
 
 def _validate_temps(data: dict) -> dict[str, str]:
-    """Prüft ob Temperaturen logisch sinnvoll sind.
-
-    Komfort > Nacht ≥ Abwesenheit – alles andere würde zu invertiertem Verhalten führen.
-    """
-    errors: dict[str, str] = {}
-    comfort = float(data.get("comfort_temp", 21.0))
-    night   = float(data.get("night_temp",   18.0))
-    away    = float(data.get("away_temp",     17.0))
-
-    if night >= comfort:
-        errors["night_temp"] = "night_temp_too_high"
-    if away > night:
-        errors["away_temp"] = "away_temp_too_high"
-    return errors
+    """Temperature validation – all values are freely configurable."""
+    return {}
 
 
 # ── Schema-Hilfsfunktionen (eine pro Schritt) ────────────────────────────────
@@ -94,11 +82,11 @@ def _schema_schedule(d: dict) -> vol.Schema:
             )),
         vol.Required("night_temp", default=d.get("night_temp", 18.0)):
             selector.NumberSelector(selector.NumberSelectorConfig(
-                min=5, max=25, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+                min=5, max=30, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
             )),
         vol.Required("away_temp", default=d.get("away_temp", 17.0)):
             selector.NumberSelector(selector.NumberSelectorConfig(
-                min=5, max=25, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+                min=5, max=30, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
             )),
         vol.Required(CONF_VACATION_TEMP, default=d.get(CONF_VACATION_TEMP, 12.0)):
             selector.NumberSelector(selector.NumberSelectorConfig(

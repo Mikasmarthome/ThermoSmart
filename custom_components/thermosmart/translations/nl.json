@@ -69,7 +69,7 @@
         "data": {
           "weather_entity": "Weer-entiteit (bijv. weather.home)",
           "outdoor_temp_sensor": "Buitentemperatuur – eigen weerstation (prioriteit)",
-          "outdoor_humidity_sensor": "Buitenluchtv ochtigheid",
+          "outdoor_humidity_sensor": "Buitenluchtvochtigheid",
           "outdoor_wind_sensor": "Windsnelheid (m/s of km/h)",
           "outdoor_solar_sensor": "Zonnestraling (W/m²)",
           "outdoor_rain_sensor": "Neerslag"
@@ -147,7 +147,7 @@
         "data": {
           "weather_entity": "Weer-entiteit",
           "outdoor_temp_sensor": "Buitentemperatuur (eigen station)",
-          "outdoor_humidity_sensor": "Buitenluchtv ochtigheid",
+          "outdoor_humidity_sensor": "Buitenluchtvochtigheid",
           "outdoor_wind_sensor": "Windsnelheid",
           "outdoor_solar_sensor": "Zonnestraling",
           "outdoor_rain_sensor": "Neerslag"

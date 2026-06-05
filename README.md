@@ -180,6 +180,14 @@ DE · EN · FR · NL · PL · SV · IT — all complete. Additional languages we
 
 ---
 
+## About the Project
+
+ThermoSmart started as a personal project to better understand and optimize heating behavior in a real-world Home Assistant installation.
+
+The project is actively developed and community feedback is highly appreciated.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE)

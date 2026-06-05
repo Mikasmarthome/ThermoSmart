@@ -484,7 +484,7 @@ class ThermoSmartTRVObservationsSensor(_Base):
         super().__init__(coordinator, entry, "trv_observations")
         self._attr_unique_id = f"{entry.entry_id}_trv_observations"
         self._attr_native_unit_of_measurement = None
-        self._attr_state_class = SensorStateClass.TOTAL_INCREASING
+        self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_icon = "mdi:database-eye"
 
     @property

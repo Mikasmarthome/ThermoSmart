@@ -17,7 +17,7 @@
 
 > ⚠️ **Use at your own risk.** ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices. Always set a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
-> 🧪 **Beta (v1.0.1-beta.3)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
+> 🧪 **Beta (v1.0.1-beta.4)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
 
 ---
 

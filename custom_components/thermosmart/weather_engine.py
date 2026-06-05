@@ -197,7 +197,10 @@ class WeatherEngine:
                 "Solarbonus: %.0f W/m² → Offset −%.2f°C", solar, solar_reduction
             )
 
-        return round(offset, 2)
+        # Round to nearest 0.5 °C – matches the config-step for all temperatures.
+        # Prevents sub-0.5 °C micro-adjustments (e.g. -0.1 °C from solar reduction)
+        # from showing a confusing "14.9 °C" when the user configured exactly 15.0 °C.
+        return round(offset * 2) / 2
 
     def compute_forecast_suppression(
         self, weather_data: dict, target_temp: float, night_temp: float

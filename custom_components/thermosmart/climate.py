@@ -19,6 +19,7 @@ from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import (
@@ -55,7 +56,7 @@ async def async_setup_entry(
     async_add_entities([ThermoSmartClimate(coordinator, entry)])
 
 
-class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
+class ThermoSmartClimate(CoordinatorEntity, ClimateEntity, RestoreEntity):
     """Virtuelle Climate-Entität für eine ThermoSmart-Zone.
 
     Zeigt: Ist-Temperatur, Zieltemperatur, Modus.
@@ -64,6 +65,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
 
     _attr_has_entity_name = True
     _attr_name = None  # Primärentität des Geräts → name = Gerätename
+    _attr_translation_key = "zone"
     _attr_temperature_unit = UnitOfTemperature.CELSIUS
     _attr_hvac_modes = [HVACMode.HEAT, HVACMode.OFF]
     _attr_preset_modes = list(MODE_TO_PRESET.values())
@@ -90,6 +92,13 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
             sw_version=VERSION,
             entry_type="service",  # type: ignore[arg-type]
         )
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last and (preset := last.attributes.get("preset_mode")):
+            mode = PRESET_TO_MODE.get(preset, HEATING_MODE_AUTO)
+            self.coordinator.set_mode(mode)
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -192,6 +201,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         if temp is None:
             return
         self.coordinator.set_override(float(temp))
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 
     async def async_set_hvac_mode(self, hvac_mode: HVACMode) -> None:
@@ -211,5 +221,6 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         """Heizmodus wechseln (Auto, Komfort, Nacht, Abwesend, Urlaub)."""
         mode = PRESET_TO_MODE.get(preset_mode, HEATING_MODE_AUTO)
         self.coordinator.set_mode(mode)
+        self.async_write_ha_state()
         await self.coordinator.async_request_refresh()
 

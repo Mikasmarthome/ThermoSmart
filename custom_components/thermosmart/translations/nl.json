@@ -157,6 +157,18 @@
     }
   },
   "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Auto",
+              "vacation": "Vakantie"
+            }
+          }
+        }
+      }
+    },
     "switch": {
       "active_control": {
         "name": "Actieve bediening",

@@ -57,7 +57,7 @@ def _schema_devices(d: dict) -> vol.Schema:
             )),
         vol.Optional("window_sensors", default=d.get("window_sensors", [])):
             selector.EntitySelector(selector.EntitySelectorConfig(
-                domain="binary_sensor", device_class=["window", "opening"], multiple=True
+                domain="binary_sensor", device_class=["window", "opening", "door"], multiple=True
             )),
 
         vol.Required("window_open_delay", default=d.get("window_open_delay", 5)):

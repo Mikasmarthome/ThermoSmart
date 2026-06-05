@@ -4,7 +4,7 @@ import logging
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -44,26 +44,36 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
             sw_version=VERSION,
             entry_type="service",  # type: ignore[arg-type]
         )
-        self._mode = HEATING_MODE_AUTO
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last and last.state in HEATING_MODES:
-            self._mode = last.state
             # Nur zum Coordinator syncen wenn der noch im Default-Modus ist –
             # Globaler Urlaubsschalter (läuft vor select) hat sonst Vorrang.
             if self._coordinator._mode == HEATING_MODE_AUTO:
-                self._coordinator.set_mode(self._mode)
+                self._coordinator.set_mode(last.state)
+
+        # Als Coordinator-Listener registrieren → Entity aktualisiert sich
+        # wenn das Climate-Entity oder ein anderer Pfad den Modus ändert.
+        self._coordinator.async_add_listener(self._handle_coordinator_update)
+
+    async def async_will_remove_from_hass(self) -> None:
+        self._coordinator.async_remove_listener(self._handle_coordinator_update)
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Coordinator hat Daten aktualisiert → State neu schreiben."""
+        self.async_write_ha_state()
 
     @property
     def current_option(self) -> str:
-        return self._mode
+        """Liest immer direkt vom Coordinator – bleibt in sync mit Climate-Entity."""
+        return self._coordinator._mode
 
     async def async_select_option(self, option: str) -> None:
         if option not in HEATING_MODES:
             return
-        self._mode = option
+        self._coordinator.set_mode(option)
         self.async_write_ha_state()
-        self._coordinator.set_mode(self._mode)
         await self._coordinator.async_request_refresh()

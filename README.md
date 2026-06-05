@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.1--beta.2-orange.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.1--beta.3-orange.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-beta-red.svg" alt="Beta"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
@@ -17,7 +17,7 @@
 
 > ⚠️ **Use at your own risk.** ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices. Always set a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
-> 🧪 **Beta (v1.0.1-beta.2)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
+> 🧪 **Beta (v1.0.1-beta.3)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
 
 ---
 

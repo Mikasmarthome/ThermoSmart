@@ -13,6 +13,7 @@ from .const import (
     VALVE_MAINTENANCE_BOOST_TEMP,
     VALVE_MAINTENANCE_DURATION_SEC,
     VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
+    HEATING_MODE_VACATION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -27,14 +28,16 @@ class MaintenanceMixin:
         Wird NUR ausgeführt wenn Ventile wahrscheinlich längere Zeit stillstanden:
           - Sommer-Modus: Heizung komplett aus, Ventile wochenlang nicht bewegt
           - Beobachtungsmodus: TS steuert nicht
-        Im Winter mit aktiver Steuerung bewegen sich Ventile ohnehin regelmäßig.
+          - Urlaubsmodus: Zieltemp ~12°C, Ventile kaum bewegt
+        Im Winter mit aktiver Steuerung (nicht Urlaub) bewegen sich Ventile regelmäßig.
         """
         if not cfg.get(CONF_VALVE_MAINTENANCE, True):
             return
         if self._maintenance_running:
             return
 
-        valve_likely_idle = self._is_summer or not self._active_control
+        in_vacation = recommendation.get("mode") == HEATING_MODE_VACATION
+        valve_likely_idle = self._is_summer or not self._active_control or in_vacation
         if not valve_likely_idle:
             return
 
@@ -50,9 +53,13 @@ class MaintenanceMixin:
         self._last_maintenance = now
         self._maintenance_running = True
         duration = VALVE_MAINTENANCE_DURATION_SUMMER_SEC if self._is_summer else VALVE_MAINTENANCE_DURATION_SEC
+
+        # Rückkehrtemperatur nach Wartung: aktuelle Zieltemp bevorzugt,
+        # Fallback abhängig vom Modus (nicht hardcoded comfort_temp im Urlaub).
+        low_temp_mode = self._is_summer or in_vacation
         target_after = recommendation.get("adjusted_target") or cfg.get(
-            "vacation_temp" if self._is_summer else "comfort_temp",
-            12.0 if self._is_summer else 21.0,
+            "vacation_temp" if low_temp_mode else "comfort_temp",
+            12.0 if low_temp_mode else 21.0,
         )
         climate_entities = cfg.get("climate_entities", [])
 

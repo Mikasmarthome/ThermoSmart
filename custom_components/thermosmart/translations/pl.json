@@ -23,7 +23,7 @@
           "window_sensors": "Czujniki okien (binary_sensor)",
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",
           "window_close_delay": "Ogrzewanie włączone – opóźnienie po zamknięciu okna",
-          "valve_maintenance": "Włącz konserwację zaworów (każda niedziela o 03:00)",
+          "valve_maintenance": "Włącz konserwację zaworów (niedziela 03:00 – tylko w trybie Lato lub Obserwacji)",
           "calibration_invert": "Odwróć offset kalibracji (dla zaworów TRV jak ME167, które odwracają znak)"
         }
       },
@@ -105,7 +105,7 @@
           "window_sensors": "Czujniki okien",
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",
           "window_close_delay": "Ogrzewanie włączone – opóźnienie po zamknięciu okna",
-          "valve_maintenance": "Włącz konserwację zaworów",
+          "valve_maintenance": "Włącz konserwację zaworów (tylko tryb Lato / Obserwacja)",
           "calibration_invert": "Odwróć offset kalibracji (ME167 i podobne)"
         }
       },

@@ -23,7 +23,7 @@
           "window_sensors": "Capteurs de fenêtre (binary_sensor)",
           "window_open_delay": "Chauffage arrêté – délai après ouverture de fenêtre",
           "window_close_delay": "Chauffage allumé – délai après fermeture de fenêtre",
-          "valve_maintenance": "Activer la maintenance des vannes (chaque dimanche à 03h00)",
+          "valve_maintenance": "Activer la maintenance des vannes (dimanche 03h00 – mode Été ou Observation uniquement)",
           "calibration_invert": "Inverser le décalage de calibration (pour les TRV comme ME167 qui inversent le signe)"
         }
       },
@@ -105,7 +105,7 @@
           "window_sensors": "Capteurs de fenêtre",
           "window_open_delay": "Chauffage arrêté – délai après ouverture de fenêtre",
           "window_close_delay": "Chauffage allumé – délai après fermeture de fenêtre",
-          "valve_maintenance": "Activer la maintenance des vannes",
+          "valve_maintenance": "Activer la maintenance des vannes (mode Été / Observation uniquement)",
           "calibration_invert": "Inverser le décalage de calibration (ME167 et similaires)"
         }
       },

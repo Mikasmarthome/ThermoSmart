@@ -27,9 +27,9 @@ class MaintenanceMixin:
 
         Wird NUR ausgeführt wenn Ventile wahrscheinlich längere Zeit stillstanden:
           - Sommer-Modus: Heizung komplett aus, Ventile wochenlang nicht bewegt
-          - Beobachtungsmodus: TS steuert nicht
           - Urlaubsmodus: Zieltemp ~12°C, Ventile kaum bewegt
-        Im Winter mit aktiver Steuerung (nicht Urlaub) bewegen sich Ventile regelmäßig.
+        Beobachtungsmodus: externer Regler bewegt Ventile – keine Wartung nötig.
+        Im Winter mit aktiver Steuerung bewegen sich Ventile ohnehin regelmäßig.
         """
         if not cfg.get(CONF_VALVE_MAINTENANCE, True):
             return
@@ -37,7 +37,7 @@ class MaintenanceMixin:
             return
 
         in_vacation = recommendation.get("mode") == HEATING_MODE_VACATION
-        valve_likely_idle = self._is_summer or not self._active_control or in_vacation
+        valve_likely_idle = self._is_summer or in_vacation
         if not valve_likely_idle:
             return
 

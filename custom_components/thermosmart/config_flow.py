@@ -254,7 +254,16 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
+        if config_entry.data.get("entry_type") == "system":
+            return ThermoSmartSystemOptionsFlow()
         return ThermoSmartOptionsFlow()
+
+
+# ── Options Flow (System-Entry: keine konfigurierbaren Optionen) ─────────────
+
+class ThermoSmartSystemOptionsFlow(config_entries.OptionsFlow):
+    async def async_step_init(self, user_input=None):
+        return self.async_abort(reason="system_no_options")
 
 
 # ── Options Flow (Zone bearbeiten) ───────────────────────────────────────────

@@ -89,7 +89,8 @@
     },
     "abort": {
       "already_configured": "Ta strefa jest już skonfigurowana.",
-      "system_already_configured": "Globalne sterowanie ThermoSmart jest już skonfigurowane."
+      "system_already_configured": "Globalne sterowanie ThermoSmart jest już skonfigurowane.",
+      "system_no_options": "System ThermoSmart nie ma konfigurowalnych opcji. Użyj globalnych przełączników do trybów Lato i Urlop."
     }
   },
   "options": {

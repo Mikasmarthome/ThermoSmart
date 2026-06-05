@@ -89,7 +89,8 @@
     },
     "abort": {
       "already_configured": "Cette zone est déjà configurée.",
-      "system_already_configured": "Les commandes globales ThermoSmart sont déjà configurées."
+      "system_already_configured": "Les commandes globales ThermoSmart sont déjà configurées.",
+      "system_no_options": "ThermoSmart System n'a pas d'options configurables. Utilisez les interrupteurs globaux pour les modes Été et Vacances."
     }
   },
   "options": {

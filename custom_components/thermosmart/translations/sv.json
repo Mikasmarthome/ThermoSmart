@@ -89,7 +89,8 @@
     },
     "abort": {
       "already_configured": "Den här zonen är redan konfigurerad.",
-      "system_already_configured": "De globala ThermoSmart-kontrollerna är redan konfigurerade."
+      "system_already_configured": "De globala ThermoSmart-kontrollerna är redan konfigurerade.",
+      "system_no_options": "ThermoSmart System har inga konfigurerbara alternativ. Använd de globala omkopplarna för Sommar- och Semesterläge."
     }
   },
   "options": {

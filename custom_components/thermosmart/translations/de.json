@@ -89,7 +89,8 @@
     },
     "abort": {
       "already_configured": "Diese Zone ist bereits konfiguriert.",
-      "system_already_configured": "Die globale ThermoSmart-Steuerung ist bereits eingerichtet."
+      "system_already_configured": "Die globale ThermoSmart-Steuerung ist bereits eingerichtet.",
+      "system_no_options": "ThermoSmart System hat keine konfigurierbaren Optionen. Verwende die globalen Schalter für Sommer- und Urlaubsmodus."
     }
   },
   "options": {

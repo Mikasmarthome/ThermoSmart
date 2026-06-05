@@ -89,7 +89,8 @@
     },
     "abort": {
       "already_configured": "Deze zone is al geconfigureerd.",
-      "system_already_configured": "De globale ThermoSmart-bediening is al ingesteld."
+      "system_already_configured": "De globale ThermoSmart-bediening is al ingesteld.",
+      "system_no_options": "ThermoSmart Systeem heeft geen configureerbare opties. Gebruik de globale schakelaars voor Zomer- en Vakantiemodus."
     }
   },
   "options": {

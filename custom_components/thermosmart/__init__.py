@@ -1,4 +1,4 @@
-"""ThermoSmart – AI-powered, weather-aware heating control for Home Assistant.
+"""ThermoSmart – Self-learning, weather-aware heating control for Home Assistant.
 
 Architektur:
   - Ein "system" Config-Eintrag: Globale Schalter (Sommer, Urlaub) – kein TRV nötig

@@ -86,7 +86,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
             identifiers={(DOMAIN, entry.entry_id)},
             name=f"ThermoSmart – {zone_name}",
             manufacturer="ThermoSmart",
-            model="AI Heating Controller",
+            model="Self-learning Heating Controller",
             sw_version=VERSION,
             entry_type="service",  # type: ignore[arg-type]
         )

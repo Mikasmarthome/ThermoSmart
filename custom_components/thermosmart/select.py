@@ -40,7 +40,7 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
             identifiers={(DOMAIN, entry.entry_id)},
             name=f"ThermoSmart – {entry.data.get('name', 'Zone')}",
             manufacturer="ThermoSmart",
-            model="AI Heating Controller",
+            model="Self-learning Heating Controller",
             sw_version=VERSION,
             entry_type="service",  # type: ignore[arg-type]
         )

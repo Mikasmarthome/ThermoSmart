@@ -870,6 +870,21 @@ class LearningEngine:
             return schedule_temp
 
         learned = self._weighted_median(weighted_temps)
+
+        # Safety clamp: the learned target may never deviate more than 2°C from the
+        # currently configured schedule temperature.
+        # Without this, changing comfort_temp in the config flow has no effect once the
+        # learning engine has enough confidence – it would keep returning stale learned
+        # values from the old configuration indefinitely.
+        MAX_DEVIATION = 2.0
+        if abs(learned - schedule_temp) > MAX_DEVIATION:
+            _LOGGER.info(
+                "LearningEngine [%s]: learned target %.1f°C deviates %.1f°C from "
+                "configured %.1f°C (max %.1f°C) – clamping to configured value",
+                zone_id, learned, abs(learned - schedule_temp), schedule_temp, MAX_DEVIATION,
+            )
+            learned = max(schedule_temp - MAX_DEVIATION, min(schedule_temp + MAX_DEVIATION, learned))
+
         _LOGGER.debug(
             "LearningEngine [%s] Zieltemp=%.1f°C (Zeitplan=%.1f°C, n=%d)",
             zone_id, learned, schedule_temp, len(weighted_temps),

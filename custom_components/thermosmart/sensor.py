@@ -358,7 +358,7 @@ class ThermoSmartTpiSensor(_Base):
         return {
             "coef_int": coef_int,
             "coef_ext": coef_ext,
-            "coef_source": "learned" if coef_int not in (None, 0.6) else "default",
+            "coef_source": "default" if coef_int is None or coef_int == 0.6 and coef_ext == 0.01 else "learned",
             "valve_direct": valve_direct,
             "mode": "direct_valve" if valve_direct else "setpoint_boost",
         }

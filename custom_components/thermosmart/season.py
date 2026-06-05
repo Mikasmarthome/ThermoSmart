@@ -10,10 +10,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class SeasonMixin:
-    """Sommer-Erkennung (72h-Rollmittel) und Frostschutz im Sommer."""
+    """Sommer-Erkennung (rollierender Puffer bis zu 72h) und Frostschutz im Sommer."""
 
     def _update_summer_mode(self, weather_data: dict) -> None:
-        """Sommer-Erkennung: automatisch (72h-Ø) oder via globalem Sommer-Schalter."""
+        """Sommer-Erkennung: rollierender Temperatur-Puffer oder globaler Sommer-Schalter."""
         # Globaler Override aktiv → bereits in set_summer_override() gesetzt
         if self._summer_override is not None:
             return

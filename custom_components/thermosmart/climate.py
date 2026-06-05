@@ -127,7 +127,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         target = self._zone.get("adjusted_target")
         if curr is None or target is None:
             return HVACAction.IDLE
-        tolerance = self.coordinator.zone_cfg.get("temp_tolerance", 0.4)
+        tolerance = self.coordinator.zone_cfg.get("temp_tolerance", 0.5)
         if curr < target - tolerance:
             return HVACAction.HEATING
         return HVACAction.IDLE

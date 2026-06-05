@@ -6,7 +6,7 @@ Außentemperatur-Delta.  Universell einsetzbar:
   • TRVs mit direkter Ventilsteuerung  → Duty-Cycle direkt auf Ventil schreiben
   • TRVs ohne Ventilsteuerung (TRVZB)  → Duty-Cycle in Boost-Setpoint umrechnen
 
-Formel (aus VT / BT etabliert):
+Formel (etablierter TPI-Ansatz):
   duty = coef_int × (target − room) + coef_ext × (target − outdoor)
   duty_pct = clamp(duty × 100, 0, 100)
 
@@ -14,7 +14,7 @@ Koeffizienten werden automatisch aus gelernten Gebäudedaten abgeleitet:
   coef_int ≈ heat_loss_rate / heat_rate
   coef_ext ≈ coef_int / 50
 
-Das macht TS's TPI einzigartig gegenüber BT/VT: keine manuell gesetzten
+Das macht TS's TPI besonders: keine manuell gesetzten
 Koeffizienten nötig – alles läuft aus den eigenen Lerndaten.
 """
 from __future__ import annotations

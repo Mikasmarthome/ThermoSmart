@@ -765,7 +765,7 @@ class ThermoSmartCoordinator(
         """Erkennt Heizungsausfall: TRV soll heizen, aber Raumtemperatur fällt.
 
         Bedingungen für Alarm:
-          - Aktive Steuerung an (Beobachtungsmodus → kein Alarm, da BT steuert)
+          - Aktive Steuerung an (Beobachtungsmodus → kein Alarm, da ein externer Regler steuert)
           - TRV-Setpoint > aktuelle Temp + HEATING_FAILURE_CMD_DELTA (echter Heizbefehl)
           - Temperatur-Slope < –HEATING_FAILURE_SLOPE_THRESH (°C/min) für HEATING_FAILURE_DELAY_MIN
           - Kein offenes Fenster (das wäre erklärter Temperaturabfall)

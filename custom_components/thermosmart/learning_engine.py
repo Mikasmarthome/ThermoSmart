@@ -902,11 +902,12 @@ class LearningEngine:
         """Aufschlüsselung der Konfidenz nach Lernspuren."""
         now = dt_util.now()
         obs = self._observations.get(zone_id, [])
+        heating_obs = [o for o in obs if o.get("heat_rate") is not None]
         trv_n = len(self._trv_observations.get(zone_id, []))
         win_n = len(self._window_cooling_obs.get(zone_id, []))
 
-        weighted_n = sum(_time_weight(o["ts"], now) for o in obs) if obs else 0
-        base_conf = round(min(weighted_n / 150, 1.0) * 100, 1)
+        weighted_n = sum(_time_weight(o["ts"], now) for o in heating_obs) if heating_obs else 0
+        base_conf = round(min(weighted_n / 50, 1.0) * 100, 1)
         trv_conf  = round(min(trv_n / 30, 1.0) * 100, 1)
         win_conf  = round(min(win_n / 5, 1.0) * 100, 1)
 
@@ -916,6 +917,7 @@ class LearningEngine:
             "trv_efficiency_%": trv_conf,
             "window_cooling_%": win_conf,
             "total_observations": len(obs),
+            "heating_observations": len(heating_obs),
             "trv_observations": trv_n,
             "window_events": win_n,
             "forecast_confidence_%": round(self.get_forecast_bias(zone_id) * 100, 1),
@@ -1353,18 +1355,21 @@ class LearningEngine:
 
         for zid in zones:
             # ── Basis-Lernen (60%) ─────────────────────────────────────────
+            # Nur Beobachtungen MIT heat_rate zählen – diese entstehen ausschließlich
+            # bei echten Heizereignissen. Reine Temperaturlesungen ohne Heizen
+            # liefern keine verwertbaren Daten für Heizraten oder TPI-Koeffizienten
+            # und würden die Konfidenz sonst unrealistisch schnell ansteigen lassen.
             obs = self._observations[zid]
             if obs:
-                # Letzte 500 Einträge reichen: ältere haben durch HWZ 180 Tage
-                # ohnehin < 0.5% Gewicht und würden das Ergebnis nicht ändern.
                 recent = obs[-500:]
-                weighted_n = sum(_time_weight(o["ts"], now) for o in recent)
-                has_wind      = any(o.get("wind_speed") is not None for o in recent)
-                has_solar     = any(o.get("solar_radiation") is not None for o in recent)
-                has_humidity  = any(o.get("indoor_humidity") is not None for o in recent)
-                has_heat_rate = any(o.get("heat_rate") is not None for o in recent)
-                diversity     = 1.0 + sum([has_wind, has_solar, has_humidity, has_heat_rate]) * 0.05
-                base_conf = min(weighted_n / 150 * diversity, 1.0)
+                heating_obs = [o for o in recent if o.get("heat_rate") is not None]
+                weighted_n    = sum(_time_weight(o["ts"], now) for o in heating_obs)
+                has_wind      = any(o.get("wind_speed") is not None for o in heating_obs)
+                has_solar     = any(o.get("solar_radiation") is not None for o in heating_obs)
+                has_humidity  = any(o.get("indoor_humidity") is not None for o in heating_obs)
+                diversity     = 1.0 + sum([has_wind, has_solar, has_humidity]) * 0.05
+                # 50 Heizbeobachtungen = volle Base-Konfidenz (≈ mehrere Wochen Heizbetrieb)
+                base_conf = min(weighted_n / 50 * diversity, 1.0)
             else:
                 base_conf = 0.0
 

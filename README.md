@@ -68,12 +68,14 @@ The learning algorithm improves with every heating session. Meaningful results e
 |---|---|---|
 | SONOFF TRVZB | Zigbee (via Zigbee2MQTT) | ✅ `valve_opening_degree` |
 
-### Compatible
+### Should work (untested)
 Any Home Assistant `climate` entity that supports `set_temperature` — including:
 - Danfoss Ally TRVs
 - Eurotronic Spirit Zigbee / Z-Wave
 - Tuya TRVs (TS0601 and variants)
 - Generic Z-Wave / Zigbee TRVs exposed as climate entities
+
+> These devices have not been tested with ThermoSmart. Core setpoint control should work; direct valve control and auto-calibration depend on what each device exposes. Please open an issue if you test one of these.
 
 **Direct valve control** (TPI Duty-Cycle written directly to the valve) is supported for any TRV that exposes a writable `number` entity for `valve_opening_degree`, `pi_heating_demand`, `valve_position`, or `level`. Auto-detected via Device Registry — no configuration needed.
 
@@ -226,10 +228,11 @@ When today's forecast high exceeds the target, ThermoSmart reduces heating. Thre
 - Normalised heating rate enables reliable cross-seasonal comparison
 
 **Learning phases (expected — not yet validated at scale):**
-1. Phase 0 (<5 observations): Physical fallback formulas
-2. Phase 1 (5–50): First patterns emerging
-3. Phase 2 (50–150): Learning algorithm dominates
-4. Phase 3 (150+): Fully personalised + TPI auto-calibrated
+1. Phase 1 (<5 heating observations): Physical fallback formulas only
+2. Phase 2 (5–50 heating observations): First patterns emerging, mixed operation
+3. Phase 3 (50+ heating observations): Learning algorithm dominates, TPI auto-calibrated
+
+> Confidence builds from **heating observations** (temperature rising with active heat) — not from passive temperature readings. In Observation mode without heating, base confidence stays near zero until the heating season begins.
 
 ---
 

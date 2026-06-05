@@ -74,8 +74,8 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
         | ClimateEntityFeature.TURN_OFF
     )
     _attr_target_temperature_step = 0.5
-    _attr_min_temp = 5.0
-    _attr_max_temp = 30.0
+    _attr_min_temp = 4.0
+    _attr_max_temp = 35.0
 
     def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry) -> None:
         super().__init__(coordinator)
@@ -136,6 +136,29 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
     def preset_mode(self) -> str:
         return MODE_TO_PRESET.get(self.coordinator._mode, "auto")
 
+    def _get_device_batteries(self) -> dict[str, int]:
+        """Liest Batteriestände aller Geräte in der Zone (TRVs + Temp-/Feuchtigkeitssensoren)."""
+        cfg = self.coordinator.zone_cfg
+        devices: list[str] = []
+        devices.extend(cfg.get("climate_entities", []))
+        devices.extend(s for s in cfg.get("temp_sensors", []) if s)
+        devices.extend(s for s in cfg.get("humidity_sensors", []) if s)
+
+        batteries: dict[str, int] = {}
+        for entity_id in devices:
+            state = self.coordinator.hass.states.get(entity_id)
+            if state is None or state.state in ("unavailable", "unknown"):
+                continue
+            for attr_name in ("battery_level", "battery", "bat_percent", "battery_percent"):
+                val = state.attributes.get(attr_name)
+                if val is not None:
+                    try:
+                        batteries[entity_id] = int(float(val))
+                        break
+                    except (TypeError, ValueError):
+                        pass
+        return batteries
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         z = self._zone
@@ -158,6 +181,7 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity):
             "override_active":      bool(z.get("override_active", False)),
             "override_temp":        z.get("override_temp"),
             "preheat_active":       bool(z.get("preheat_active", False)),
+            "device_batteries":     self._get_device_batteries(),
         }
 
     # ── Steuerung ────────────────────────────────────────────────────

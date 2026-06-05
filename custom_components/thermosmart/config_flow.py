@@ -56,7 +56,9 @@ def _schema_devices(d: dict) -> vol.Schema:
                 domain="sensor", device_class="humidity", multiple=True
             )),
         vol.Optional("window_sensors", default=d.get("window_sensors", [])):
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="binary_sensor", multiple=True)),
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="binary_sensor", device_class=["window", "opening"], multiple=True
+            )),
 
         vol.Required("window_open_delay", default=d.get("window_open_delay", 5)):
             selector.NumberSelector(selector.NumberSelectorConfig(
@@ -140,11 +142,17 @@ def _schema_weather(d: dict) -> vol.Schema:
                 domain="sensor", device_class="humidity"
             )),
         vol.Optional(CONF_OUTDOOR_WIND_SENSOR, default=d.get(CONF_OUTDOOR_WIND_SENSOR, "")):
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class="wind_speed"
+            )),
         vol.Optional(CONF_OUTDOOR_SOLAR_SENSOR, default=d.get(CONF_OUTDOOR_SOLAR_SENSOR, "")):
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class="irradiance"
+            )),
         vol.Optional(CONF_OUTDOOR_RAIN_SENSOR, default=d.get(CONF_OUTDOOR_RAIN_SENSOR, "")):
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="sensor")),
+            selector.EntitySelector(selector.EntitySelectorConfig(
+                domain="sensor", device_class=["precipitation", "precipitation_intensity"]
+            )),
     })
 
 

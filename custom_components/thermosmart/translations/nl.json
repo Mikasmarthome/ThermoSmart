@@ -23,7 +23,7 @@
           "window_sensors": "Raamsensoren (binary_sensor)",
           "window_open_delay": "Verwarming uit – vertraging na openen raam",
           "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
-          "valve_maintenance": "Klep-onderhoud inschakelen (zondag 03:00 – alleen in Zomer- of Observatiemodus)",
+          "valve_maintenance": "Klep-onderhoud inschakelen (zondag 03:00 – alleen in Zomer- of Vakantiemodus)",
           "calibration_invert": "Kalibratie-offset omkeren (voor TRV's zoals ME167 die het teken omkeren)"
         }
       },
@@ -105,7 +105,7 @@
           "window_sensors": "Raamsensoren",
           "window_open_delay": "Verwarming uit – vertraging na openen raam",
           "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
-          "valve_maintenance": "Klep-onderhoud inschakelen (alleen Zomer- / Observatiemodus)",
+          "valve_maintenance": "Klep-onderhoud inschakelen (alleen Zomer- / Vakantiemodus)",
           "calibration_invert": "Kalibratie-offset omkeren (ME167 en vergelijkbaar)"
         }
       },

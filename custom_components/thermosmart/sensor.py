@@ -33,11 +33,13 @@ async def async_setup_entry(
         ThermoSmartWeatherOffsetSensor(coordinator, entry),
         ThermoSmartStatusSensor(coordinator, entry),
         ThermoSmartTempSlopeSensor(coordinator, entry),
+        ThermoSmartTempEma1hSensor(coordinator, entry),
         ThermoSmartHeatingPowerSensor(coordinator, entry),
         ThermoSmartHeatLossRateSensor(coordinator, entry),
         ThermoSmartSunIntensitySensor(coordinator, entry),
         ThermoSmartOutcomeScoreSensor(coordinator, entry),
         ThermoSmartTRVObservationsSensor(coordinator, entry),
+        ThermoSmartWindowCoolingRateSensor(coordinator, entry),
     ])
 
 
@@ -503,3 +505,60 @@ class ThermoSmartTRVObservationsSensor(_Base):
             "window_cooling_rate": stats.get("avg_window_cooling_rate"),
             "mode": "observation" if not self.coordinator._active_control else "active",
         }
+
+
+class ThermoSmartTempEma1hSensor(_Base):
+    """1-hour exponential moving average of indoor temperature.
+
+    Smoothed trend indicator – slower than temp_slope, filters short spikes.
+    Useful for detecting whether the room is genuinely warming or cooling over time.
+    """
+    _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "temp_ema_1h"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "temp_ema_1h")
+        self._attr_unique_id = f"{entry.entry_id}_temp_ema_1h"
+        self._attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+        self._attr_device_class = SensorDeviceClass.TEMPERATURE
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:chart-bell-curve"
+
+    @property
+    def native_value(self):
+        return self._zone.get("temp_ema_1h")
+
+
+class ThermoSmartWindowCoolingRateSensor(_Base):
+    """Learned cooling rate when a window is open (K/min).
+
+    Estimated from past window-open events weighted by similarity to current
+    outdoor conditions (temperature, wind speed).
+    Returns None until at least 2 window events have been recorded.
+    """
+    _attr_entity_registry_enabled_default = False
+    _attr_translation_key = "window_cooling_rate"
+
+    def __init__(self, coordinator, entry):
+        super().__init__(coordinator, entry, "window_cooling_rate")
+        self._attr_unique_id = f"{entry.entry_id}_window_cooling_rate"
+        self._attr_native_unit_of_measurement = "K/min"
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_icon = "mdi:window-open"
+
+    @property
+    def native_value(self):
+        le = self.coordinator.learning_engine
+        if le is None:
+            return None
+        data = self.coordinator.data or {}
+        weather = data.get("weather", {})
+        return le.get_window_cooling_rate(self.coordinator.zone_id, weather)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        le = self.coordinator.learning_engine
+        if le is None:
+            return {}
+        stats = le.get_trv_stats(self.coordinator.zone_id)
+        return {"window_events": stats.get("window_observations", 0)}

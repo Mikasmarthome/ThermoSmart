@@ -23,7 +23,7 @@
           "window_sensors": "Window sensors (binary_sensor)",
           "window_open_delay": "Heating off – delay after window opens",
           "window_close_delay": "Heating on – delay after window closes",
-          "valve_maintenance": "Enable valve maintenance (Sunday 03:00 – only in Summer or Observation mode)",
+          "valve_maintenance": "Enable valve maintenance (Sunday 03:00 – Summer & Vacation mode only)",
           "calibration_invert": "Invert calibration offset (for TRVs like ME167 that reverse the sign)"
         }
       },
@@ -105,7 +105,7 @@
           "window_sensors": "Window sensors",
           "window_open_delay": "Heating off – delay after window opens",
           "window_close_delay": "Heating on – delay after window closes",
-          "valve_maintenance": "Enable valve maintenance (Summer / Observation mode only)",
+          "valve_maintenance": "Enable valve maintenance (Summer & Vacation mode only)",
           "calibration_invert": "Invert calibration offset (ME167 and similar)"
         }
       },

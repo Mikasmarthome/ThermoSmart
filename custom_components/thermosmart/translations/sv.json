@@ -23,7 +23,7 @@
           "window_sensors": "Fönstensensorer (binary_sensor)",
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
           "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
-          "valve_maintenance": "Aktivera ventilunderhåll (söndag 03:00 – endast i Sommar- eller Observationsläge)",
+          "valve_maintenance": "Aktivera ventilunderhåll (söndag 03:00 – endast i Sommar- eller Semesterläge)",
           "calibration_invert": "Invertera kalibrerings-offset (för TRV:er som ME167 som inverterar tecknet)"
         }
       },
@@ -105,7 +105,7 @@
           "window_sensors": "Fönstensensorer",
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
           "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
-          "valve_maintenance": "Aktivera ventilunderhåll (endast Sommar- / Observationsläge)",
+          "valve_maintenance": "Aktivera ventilunderhåll (endast Sommar- / Semesterläge)",
           "calibration_invert": "Invertera kalibrerings-offset (ME167 och liknande)"
         }
       },

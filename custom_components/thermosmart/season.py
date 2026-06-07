@@ -75,7 +75,9 @@ class SeasonMixin:
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
         for entity_id, result in zip(task_ids, results):
-            if isinstance(result, BaseException):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            if isinstance(result, Exception):
                 _LOGGER.warning(
                     "ThermoSmart '%s': Frostschutz für %s fehlgeschlagen: %s",
                     self.zone_name, entity_id, result,

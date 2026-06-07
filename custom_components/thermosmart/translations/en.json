@@ -10,7 +10,7 @@
       },
       "add_system": {
         "title": "Global Controls",
-        "description": "Sets up the global Summer and Vacation mode switches. No thermostat required. The global switches control all zones simultaneously."
+        "description": "Sets up the global Summer mode select (Automatic / On / Off) and Vacation switch. No thermostat required. Both controls apply to all zones simultaneously."
       },
       "add_zone": {
         "title": "Step 1 / 4 – Devices & Sensors",
@@ -90,7 +90,7 @@
     "abort": {
       "already_configured": "This zone is already configured.",
       "system_already_configured": "The global ThermoSmart controls are already set up.",
-      "system_no_options": "ThermoSmart System has no configurable options. Use the global switches to control Summer and Vacation mode."
+      "system_no_options": "ThermoSmart System has no configurable options. Use the Summer mode select and the Vacation switch to control all zones."
     }
   },
   "options": {

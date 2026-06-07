@@ -87,7 +87,7 @@ Any HA `climate` entity supporting `set_temperature` — Danfoss Ally, Eurotroni
 
 ## Setup
 
-Add **ThermoSmart System** first (global Summer + Vacation switches), then add each heating zone.
+Add **ThermoSmart System** first (Summer mode select + Vacation switch), then add each heating zone.
 
 **Recommended:** Start with Active Control **OFF** (Observation mode). ThermoSmart learns from your existing setup without changing anything. Switch to Active Control after a few weeks.
 
@@ -121,7 +121,7 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 ### Global (ThermoSmart System)
 | Entity | Description |
 |---|---|
-| `switch.thermosmart_sommer_modus` | Summer mode — all zones → frost protection |
+| `select.thermosmart_summer_mode` | Summer mode — `Automatic` (72 h avg) / `On` (forced) / `Off` (forced) |
 | `switch.thermosmart_urlaubsmodus` | Vacation mode — all zones → vacation temperature |
 
 ---

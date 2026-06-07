@@ -30,6 +30,7 @@ from .const import (
     CONF_OUTDOOR_SOLAR_SENSOR,
     CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
+    DOMAIN_GLOBAL_SUMMER,
 )
 from .coordinator import ThermoSmartCoordinator
 from .weather_engine import WeatherEngine
@@ -37,8 +38,28 @@ from .learning_engine import LearningEngine
 
 _LOGGER = logging.getLogger(__name__)
 
-ZONE_PLATFORMS = PLATFORMS          # ["climate", "sensor", "switch", "select"]
-SYSTEM_PLATFORMS = ["switch"]       # System-Entry: nur globale Schalter
+ZONE_PLATFORMS = PLATFORMS               # ["climate", "sensor", "switch", "select"]
+SYSTEM_PLATFORMS = ["switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
+
+
+def _migrate_old_summer_switch(hass: HomeAssistant) -> None:
+    """Entfernt veraltete Summer-Switch-Entity aus der HA Entity-Registry (Migration beta.23).
+
+    In beta.23 wurde der globale Summer-Schalter (switch) durch einen dreistufigen
+    Select (Automatic / On / Off) ersetzt. Die alte Switch-Entity mit unique_id
+    DOMAIN_GLOBAL_SUMMER wird einmalig pro Session automatisch aus der Registry entfernt,
+    damit keine verwaiste "unavailable"-Entity zurückbleibt.
+    """
+    from homeassistant.helpers import entity_registry as er  # lokaler Import – vermeidet Zyklen
+    entity_reg = er.async_get(hass)
+    old_entity_id = entity_reg.async_get_entity_id("switch", DOMAIN, DOMAIN_GLOBAL_SUMMER)
+    if old_entity_id:
+        entity_reg.async_remove(old_entity_id)
+        _LOGGER.info(
+            "ThermoSmart: Migration beta.23 – "
+            "Alte Summer-Switch-Entity '%s' aus der Registry entfernt",
+            old_entity_id,
+        )
 
 
 def _validate_sensors(hass: HomeAssistant, cfg: dict) -> None:
@@ -83,6 +104,11 @@ def _validate_sensors(hass: HomeAssistant, cfg: dict) -> None:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data.setdefault(DOMAIN, {})
     cfg = {**entry.data, **entry.options}
+
+    # Einmalige Migration pro HA-Session: alte Summer-Switch-Entity entfernen (beta.23)
+    if "summer_switch_migrated" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["summer_switch_migrated"] = True
+        _migrate_old_summer_switch(hass)
 
     # ── System-Entry: nur globale Schalter, kein Coordinator ────────
     if cfg.get("entry_type") == "system":
@@ -172,7 +198,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if cfg.get("entry_type") != "system":
             remaining = [
                 k for k in hass.data[DOMAIN]
-                if k not in ("learning_engine", "global_switches_created")
+                if k not in ("learning_engine", "global_switches_created",
+                             "global_summer_select_created", "summer_switch_migrated")
                 and not (isinstance(hass.data[DOMAIN].get(k), dict)
                          and hass.data[DOMAIN][k].get("type") == "system")
             ]

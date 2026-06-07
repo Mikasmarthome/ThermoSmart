@@ -180,13 +180,23 @@ class ThermoSmartCoordinator(
         )
 
     def set_summer_override(self, value: bool | None) -> None:
-        """Globaler Sommer-Override vom domain-weiten Schalter."""
+        """Globaler Sommer-Override vom domain-weiten Select.
+
+        value=True  → Sommer erzwungen  (_is_summer = True)
+        value=False → Winter erzwungen   (_is_summer = False)
+        value=None  → Automatik          (_is_summer wird durch _update_summer_mode neu berechnet)
+        """
         self._summer_override = value
         if value is True:
             self._is_summer = True
+        elif value is False:
+            self._is_summer = False
+        # value is None: _is_summer unverändert, nächster _update_summer_mode-Zyklus übernimmt
         _LOGGER.info(
             "ThermoSmart '%s': Sommer-Override %s",
-            self.zone_name, "AN" if value else "AUS – automatische Erkennung aktiv",
+            self.zone_name,
+            "EIN (erzwungen)" if value is True
+            else ("AUS (erzwungen)" if value is False else "Automatik – 72h-Erkennung aktiv"),
         )
 
     def set_override(self, value: float) -> None:
@@ -284,8 +294,15 @@ class ThermoSmartCoordinator(
                             self._window_open_temp[entity_id] = current
                     else:
                         if entity_id in self._window_open_at:
-                            self._window_close_at[entity_id] = now
                             opened_at = self._window_open_at[entity_id]
+                            open_delay_td = timedelta(minutes=cfg.get("window_open_delay", 5))
+
+                            # Close-Timer nur setzen wenn open_delay tatsächlich abgelaufen war.
+                            # Schließt das Fenster VOR Ablauf des open_delay, darf weder
+                            # eine Heizpause noch ein close_delay ausgelöst werden.
+                            if (now - opened_at) >= open_delay_td:
+                                self._window_close_at[entity_id] = now
+
                             duration_min = (now - opened_at).total_seconds() / 60
                             temp_at_open = self._window_open_temp.pop(entity_id, None)
                             current = self._read_avg_sensor(cfg.get("temp_sensors", []))

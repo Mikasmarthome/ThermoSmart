@@ -14,16 +14,60 @@ from .const import (
     HEATING_MODE_AUTO, HEATING_MODE_COMFORT, HEATING_MODE_NIGHT,
     HEATING_MODE_AWAY, HEATING_MODE_VACATION, HEATING_MODE_ECO,
     HEATING_MODES,
+    DOMAIN_GLOBAL_SUMMER,
 )
 from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
 
+# Optionen für den globalen Sommer-Select
+SUMMER_OPT_AUTOMATIC = "Automatic"   # 72h-Durchschnitt entscheidet
+SUMMER_OPT_ON        = "On"          # Sommer erzwungen
+SUMMER_OPT_OFF       = "Off"         # Winter erzwungen
+
+_SUMMER_OPTS = [SUMMER_OPT_AUTOMATIC, SUMMER_OPT_ON, SUMMER_OPT_OFF]
+
+# Override-Wert je Option
+_SUMMER_OVERRIDE_MAP: dict[str, bool | None] = {
+    SUMMER_OPT_AUTOMATIC: None,
+    SUMMER_OPT_ON:        True,
+    SUMMER_OPT_OFF:       False,
+}
+
+
+def _all_coordinators(hass: HomeAssistant):
+    """Alle Zone-Coordinatoren liefern (globale Keys und System-Entries überspringen)."""
+    skip = {"learning_engine", "global_switches_created", "global_summer_select_created"}
+    for key, data in hass.data.get(DOMAIN, {}).items():
+        if key not in skip and isinstance(data, dict) and data.get("type") != "system":
+            if coord := data.get("coordinator"):
+                yield coord
+
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
+    cfg = {**entry.data, **entry.options}
+
+    # System-Entry: globaler Sommer-Select
+    if cfg.get("entry_type") == "system":
+        async_add_entities([ThermoSmartGlobalSummerSelect(hass, entry)])
+        return
+
+    # Zone-Entry: Modus-Select
     coordinator: ThermoSmartCoordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
-    async_add_entities([ThermoSmartModeSelect(coordinator, entry)])
+    entities: list = [ThermoSmartModeSelect(coordinator, entry)]
+
+    # Backward-Compat: globaler Sommer-Select an erste Zone anhängen wenn kein System-Entry
+    has_system = any(
+        e.data.get("entry_type") == "system"
+        for e in hass.config_entries.async_entries(DOMAIN)
+    )
+    if not has_system and "global_summer_select_created" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["global_summer_select_created"] = True
+        entities.append(ThermoSmartGlobalSummerSelect(hass, entry))
+
+    async_add_entities(entities)
 
 
 class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
@@ -77,3 +121,98 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
         self._coordinator.set_mode(option)
         self.async_write_ha_state()
         await self._coordinator.async_request_refresh()
+
+
+# ── Globaler Sommer-Select (domain-weit, steuert alle Zonen) ─────────────────
+
+class ThermoSmartGlobalSummerSelect(SelectEntity, RestoreEntity):
+    """Dreistufiger Sommer-Override: Automatic / On / Off.
+
+    Automatic → 72h-Außentemperaturdurchschnitt entscheidet (≥18°C → Sommer)
+    On        → Sommermodus dauerhaft erzwungen (Heizung deaktiviert, Frostschutz aktiv)
+    Off       → Wintermodus dauerhaft erzwungen (normale Heizregelung)
+
+    current_option zeigt den Override-Modus (nicht den aktuell erkannten Wert).
+    Das Attribut effective_summer spiegelt den echten _is_summer-Zustand jeder Zone.
+    """
+    _attr_has_entity_name = False
+    _attr_name = "ThermoSmart – Summer Mode"
+    _attr_icon = "mdi:weather-sunny"
+    _attr_unique_id = DOMAIN_GLOBAL_SUMMER
+    _attr_options = _SUMMER_OPTS
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self._hass = hass
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, "global")},
+            name="ThermoSmart System",
+            manufacturer="ThermoSmart",
+            model="Global Control",
+        )
+        self._current_option: str = SUMMER_OPT_AUTOMATIC
+        self._unsub_listeners: list = []
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+
+        # Zustand aus letzter HA-Session wiederherstellen
+        last = await self.async_get_last_state()
+        if last and last.state in _SUMMER_OPTS:
+            self._current_option = last.state
+        else:
+            self._current_option = SUMMER_OPT_AUTOMATIC
+
+        # Override sofort auf alle bereits geladenen Coordinatoren anwenden
+        override_val = _SUMMER_OVERRIDE_MAP[self._current_option]
+        for coord in _all_coordinators(self._hass):
+            coord.set_summer_override(override_val)
+
+        # Als Listener auf alle Coordinatoren registrieren
+        # → async_write_ha_state() aktualisiert extra_state_attributes (effective_summer)
+        for coord in _all_coordinators(self._hass):
+            unsub = coord.async_add_listener(self._handle_coordinator_update)
+            self._unsub_listeners.append(unsub)
+
+        _LOGGER.debug(
+            "ThermoSmart GlobalSummerSelect: wiederhergestellt als '%s'",
+            self._current_option,
+        )
+
+    async def async_will_remove_from_hass(self) -> None:
+        for unsub in self._unsub_listeners:
+            unsub()
+        self._unsub_listeners.clear()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Coordinator-Update → extra_state_attributes (effective_summer) aktualisieren."""
+        self.async_write_ha_state()
+
+    @property
+    def current_option(self) -> str:
+        """Zeigt den aktiven Override-Modus, nicht den auto-erkannten Zustand."""
+        return self._current_option
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        coords = list(_all_coordinators(self._hass))
+        is_summer = any(c._is_summer for c in coords)
+        return {
+            "effective_summer": is_summer,
+            "override": self._current_option,
+            "active_zones": len(coords),
+        }
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in _SUMMER_OPTS:
+            return
+        self._current_option = option
+        override_val = _SUMMER_OVERRIDE_MAP[option]
+        for coord in _all_coordinators(self._hass):
+            coord.set_summer_override(override_val)
+            await coord.async_request_refresh()
+        self.async_write_ha_state()
+        _LOGGER.info(
+            "ThermoSmart GlobalSummerSelect: '%s' gesetzt (override=%s)",
+            option, override_val,
+        )

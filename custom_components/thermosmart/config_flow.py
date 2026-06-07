@@ -33,8 +33,31 @@ from .const import (
 # ── Validierung ─────────────────────────────────────────────────────────────
 
 def _validate_temps(data: dict) -> dict[str, str]:
-    """Temperature validation – all values are freely configurable."""
-    return {}
+    """Cross-field temperature sanity check.
+
+    Rules:
+      - night_temp  must be strictly less than comfort_temp
+        (night >= comfort would invert the day/night schedule)
+      - away_temp   must not exceed night_temp
+        (away > night makes no operational sense)
+
+    Error keys map to existing translations in strings.json / de.json:
+      night_temp_too_high  →  shown on the night_temp field
+      away_temp_too_high   →  shown on the away_temp field
+    """
+    errors: dict[str, str] = {}
+    try:
+        comfort = float(data.get("comfort_temp", 21.0))
+        night   = float(data.get("night_temp",   18.0))
+        away    = float(data.get("away_temp",    17.0))
+    except (TypeError, ValueError):
+        return errors   # Schema-Validierung ist bereits vorab passiert
+
+    if night >= comfort:
+        errors["night_temp"] = "night_temp_too_high"
+    if away > night:
+        errors["away_temp"] = "away_temp_too_high"
+    return errors
 
 
 # ── Schema-Hilfsfunktionen (eine pro Schritt) ────────────────────────────────

@@ -44,8 +44,16 @@ class SeasonMixin:
             )
 
     async def _apply_frost_protection(self, cfg: dict) -> None:
-        """Im Sommer: TRVs auf Frostschutztemperatur (12°C) setzen."""
-        tasks = []
+        """Im Sommer: TRVs auf Frostschutztemperatur (12°C) setzen.
+
+        Fehler eines einzelnen TRVs (z. B. ZigBee-Dropout nach dem
+        Verfügbarkeits-Check) brechen den Frostschutz der übrigen TRVs
+        nicht ab. Jede Exception wird mit der zugehörigen Entity-ID
+        geloggt; der Coordinator bleibt weiterhin funktionsfähig.
+        """
+        tasks: list = []
+        task_ids: list[str] = []
+
         for entity_id in cfg.get("climate_entities", []):
             state = self.hass.states.get(entity_id)
             if not state or state.state in ("unavailable", "unknown"):
@@ -60,5 +68,15 @@ class SeasonMixin:
                 {"entity_id": entity_id, "temperature": TEMP_FROST_PROTECTION},
                 blocking=True,
             ))
-        if tasks:
-            await asyncio.gather(*tasks)
+            task_ids.append(entity_id)
+
+        if not tasks:
+            return
+
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        for entity_id, result in zip(task_ids, results):
+            if isinstance(result, BaseException):
+                _LOGGER.warning(
+                    "ThermoSmart '%s': Frostschutz für %s fehlgeschlagen: %s",
+                    self.zone_name, entity_id, result,
+                )

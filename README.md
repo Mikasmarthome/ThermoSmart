@@ -10,25 +10,29 @@
   <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--beta.23-orange.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-beta-red.svg" alt="Beta"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
-  <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
 </p>
 
 ---
 
 > ⚠️ **Use at your own risk.** ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices. Always set a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
-> 🧪 **Beta (v1.0.0-beta.23)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
+> 🧪 **Beta (v1.0.0-beta.23)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub.
+
+> 🔄 **Migration notice:** The accidentally published `v1.0.1-beta.x` releases have been removed. The current release is `v1.0.0-beta.23`. If you installed a `v1.0.1-beta.x` version, HACS may not offer an automatic update — go to HACS → ThermoSmart → **⋮** → **Redownload** and select `v1.0.0-beta.23`. *(This notice will be removed with the first stable release.)*
 
 ---
 
-ThermoSmart observes how your building heats and cools, then uses that data — together with weather forecasts and presence detection — to control your TRVs precisely. **One config entry = one heating zone.**
+ThermoSmart observes how your building heats and cools, then uses that data — together with weather forecasts and presence detection — to control your TRVs. **One config entry = one heating zone.**
 
-- **Observation mode** — runs passively alongside any existing controller, learns without changing anything
-- **TPI control** with coefficients auto-derived from your building's actual thermal data
-- **Automatic pre-heating** based on learned heating rate and outdoor conditions
-- **Weather-aware** — outdoor temp, wind, solar radiation and forecast all feed into the target
-- **Outcome Scoring** — grades every heating session; slow or overshooting sessions are down-weighted in learning
+## Why ThermoSmart?
+
+- **Learns your building** — heating rate, heat loss and weather sensitivity derived from real observations in your home, not factory defaults
+- **Adapts to conditions** — outdoor temperature, wind, solar radiation and forecasts feed into every decision
+- **Starts passively** — Observation mode collects data without touching your existing setup
 - **Fully local** — no cloud, no subscription
+
+**Features:** automatic pre-heating · TPI control with learned coefficients · weather-aware setpoints · slope-based window detection · outcome scoring to improve learning quality
 
 ---
 
@@ -36,52 +40,25 @@ ThermoSmart observes how your building heats and cools, then uses that data — 
 
 A dedicated Lovelace card is available: **[thermosmart-card](https://github.com/Mikasmarthome/thermosmart-card)**
 
-Temperature ring, drag-to-set, mode buttons, 3-hour history sparkline, learning confidence bar and diagnostic chips — all in one card. Install separately via HACS (Frontend).
-
----
-
-## Supported Devices
-
-### Tested
-| Device | Protocol | Direct Valve Control |
-|---|---|---|
-| SONOFF TRVZB | Zigbee (via Zigbee2MQTT) | ✅ `valve_opening_degree` |
-
-### Should work (untested)
-Any HA `climate` entity supporting `set_temperature` — Danfoss Ally, Eurotronic Spirit, Tuya TS0601, generic Z-Wave / Zigbee TRVs.
-
-> Core setpoint control should work on all of these. Direct valve control and auto-calibration depend on what each device exposes. [Open an issue](https://github.com/Mikasmarthome/ThermoSmart/issues/new) if you test one.
-
-**Direct valve control** is auto-detected for TRVs exposing a writable `number` entity matching: `valve_opening_degree`, `pi_heating_demand`, `valve_position`, or `level`.
-
----
-
-## Compatibility
-
-| Protocol | Obs. Mode | Active Control | Direct Valve | Auto-Calibration |
-|---|---|---|---|---|
-| **Zigbee2MQTT** | ✅ | ✅ Full | ✅ Auto-detected | ✅ Auto-detected |
-| **ZHA** | ✅ | ✅ Setpoint boost | ⚠️ Device-dependent | ⚠️ Device-dependent |
-| **Z-Wave JS** | ✅ | ✅ Setpoint boost | ❌ | ⚠️ Rarely exposed |
-| **Matter** | ✅ | ✅ Setpoint boost | ❌ | ❌ |
-| **Homematic IP** (local) | ✅ | ✅ Setpoint boost | ✅ `level` auto-detected | ⚠️ `temperature_offset` |
-| **Fritz!DECT** | ✅ | ✅ Setpoint boost | ❌ | ❌ |
-| **Bosch Smart Home** | ✅ | ✅ Setpoint boost | ❌ | ❌ |
-| **Tado / Netatmo** | ⚠️ | ⚠️ | ❌ | ❌ |
-| **generic_thermostat / MQTT HVAC** | ✅ | ✅ Setpoint boost | ❌ | ❌ |
-
-**Setpoint boost mode:** TPI duty-cycle is converted to `setpoint = target + duty% × 8°C` and written via `climate.set_temperature`. Works on all devices; less precise than direct valve control.
-
-> **Tado / Netatmo:** Cloud AI periodically overrides setpoints. In Observation mode ThermoSmart would learn the cloud AI's behaviour rather than your building's. Not recommended.
+Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar — install separately via HACS (Frontend).
 
 ---
 
 ## Installation
 
-1. **HACS** → Integrations → ⋮ → **Custom Repositories**
-2. URL: `https://github.com/Mikasmarthome/ThermoSmart` → Integration → Add
-3. Download **ThermoSmart** and restart Home Assistant
-4. **Settings → Integrations → Add Integration → ThermoSmart**
+### 1 — Add Custom Repository
+
+HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://github.com/Mikasmarthome/ThermoSmart` → Category: **Integration** → Add
+
+### 2 — Enable Pre-Release Versions
+
+> ⚠️ Beta versions are only visible when Pre-Releases are enabled in HACS.
+
+HACS → Integrations → find **ThermoSmart** → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-beta.23` → Download
+
+### 3 — Restart and Add
+
+Restart Home Assistant, then: **Settings → Integrations → Add Integration → ThermoSmart**
 
 ---
 
@@ -89,14 +66,14 @@ Any HA `climate` entity supporting `set_temperature` — Danfoss Ally, Eurotroni
 
 Add **ThermoSmart System** first (Summer mode select + Vacation switch), then add each heating zone.
 
-**Recommended:** Start with Active Control **OFF** (Observation mode). ThermoSmart learns from your existing setup without changing anything. Switch to Active Control after a few weeks.
+**Start in Observation mode** — leave Active Control off for the first 2–3 weeks. ThermoSmart watches your existing TRVs and builds a thermal model without changing anything. Switch to Active Control once `sensor.*_confidence` reaches ~50 %.
 
 ### Zone Configuration (4 steps)
 
 | Step | Fields |
 |---|---|
 | **1 – Devices** | Zone name · TRVs · Temperature sensors · Humidity sensors · Window / door sensors · Window delays · Valve maintenance · Calibration invert |
-| **2 – Temperatures** | Comfort (21°C) · Night (18°C) · Away (17°C) · Vacation (12°C) · Eco (19°C) · Tolerance (0.5°C) · Weekday/weekend schedule times |
+| **2 – Temperatures** | Comfort · Night · Away · Vacation · Eco · Tolerance · Weekday/weekend schedule times |
 | **3 – Presence** | Person entities · Home zone · Learning on/off |
 | **4 – Weather** | Weather entity · Outdoor temp/humidity · Wind speed · Solar radiation · Precipitation |
 
@@ -108,21 +85,75 @@ Add **ThermoSmart System** first (Summer mode select + Vacation switch), then ad
 | Entity | Description |
 |---|---|
 | `climate.thermosmart_*` | Virtual thermostat — target/current temp, HVAC mode, presets |
-| `select.*_heizmodus` | Heating mode: Auto / Comfort / Eco / Night / Away / Vacation |
-| `switch.*_aktive_steuerung` | Active Control on/off |
-| `switch.*_lernmodus` | Learning algorithm on/off |
+| `select.*_mode` | Heating mode: Auto / Comfort / Eco / Night / Away / Vacation |
+| `switch.*_active_control` | Active Control on/off |
+| `switch.*_learning` | Learning algorithm on/off |
 | `sensor.*_status` | Zone status |
-| `sensor.*_lernfortschritt` | Learning confidence 0–100% |
-| `sensor.*_zieltemperatur` | Configured target temperature (schedule or mode — no offsets) |
-| `sensor.*_vorheizzeit` | Calculated preheat time in minutes |
+| `sensor.*_confidence` | Learning progress 0–100 % |
+| `sensor.*_adjusted_target` | Configured target temperature (schedule or mode) |
+| `sensor.*_preheat_minutes` | Calculated preheat lead time in minutes |
 
 Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cycle · Weather offset · Temperature slope · Heat loss · Heating power · Solar gain · TRV observations · Window cooling rate · EMA temperature
 
 ### Global (ThermoSmart System)
 | Entity | Description |
 |---|---|
-| `select.thermosmart_summer_mode` | Summer mode — `Automatic` (72 h avg) / `On` (forced) / `Off` (forced) |
-| `switch.thermosmart_urlaubsmodus` | Vacation mode — all zones → vacation temperature |
+| `select.thermosmart_summer_mode` | Summer mode — `Automatic` / `On` / `Off` |
+| `switch.thermosmart_vacation_mode` | Vacation mode — all zones → vacation temperature |
+
+---
+
+## Supported Devices
+
+### Developer-tested
+| Device | Protocol | Notes |
+|---|---|---|
+| SONOFF TRVZB | Zigbee via Zigbee2MQTT | TPI setpoint and direct valve control. `valve_opening_degree` entity is auto-detected and written. Physical proportional behaviour depends on firmware version. A motor-protection workaround is applied on close. |
+
+### Untested — setpoint boost expected to work
+Any `climate` entity supporting `set_temperature`: Danfoss Ally, Eurotronic Spirit, Tuya TS0601, generic ZHA / Z-Wave / Matter TRVs.
+ThermoSmart falls back to setpoint boost on devices without a recognised valve entity.
+
+> [Open an issue](https://github.com/Mikasmarthome/ThermoSmart/issues/new) if you test a device — community results are very welcome.
+
+### Not recommended
+**Tado / Netatmo and other cloud-based thermostats:** cloud AI periodically overrides setpoints. ThermoSmart would learn the cloud's behaviour rather than your building's.
+
+### Protocol compatibility
+
+| Protocol | Obs. Mode | Active Control | Direct Valve | Auto-Calibration |
+|---|---|---|---|---|
+| **Zigbee2MQTT** | ✅ | ✅ | ✅ auto-detected¹ | ✅ auto-detected¹ |
+| **ZHA** | ✅ | ✅ setpoint boost | ⚠️ device-dependent | ⚠️ device-dependent |
+| **Z-Wave JS** | ✅ | ✅ setpoint boost | ❌ | ⚠️ rarely exposed |
+| **Matter** | ✅ | ✅ setpoint boost | ❌ | ❌ |
+| **Homematic IP** (local) | ✅ | ✅ setpoint boost | ⚠️ `level` pattern, untested | ⚠️ `temperature_offset` |
+| **Fritz!DECT / Bosch** | ✅ | ✅ setpoint boost | ❌ | ❌ |
+| **Tado / Netatmo** | ⚠️ | ⚠️ not recommended | ❌ | ❌ |
+
+¹ Auto-detection finds a matching entity and writes values to it — it does not guarantee physical function on every device.
+
+**Direct valve control** auto-detects writable `number` entities matching: `valve_opening_degree`, `pi_heating_demand`, `valve_position`, `heating_demand`, or `level`.
+
+**Setpoint boost** converts TPI duty-cycle to `setpoint = target + duty% × 8 °C` via `climate.set_temperature`. Works on all devices; less precise than direct valve control.
+
+---
+
+## Summer & Vacation Mode
+
+### Summer Mode (`select.thermosmart_summer_mode`)
+
+| Option | Behaviour |
+|---|---|
+| `Automatic` | Activates when the 72 h rolling outdoor average exceeds **18 °C**; deactivates below **15 °C** (3 °C hysteresis prevents rapid toggling) |
+| `On` | Forces summer mode — heating disabled, frost protection (12 °C) active |
+| `Off` | Forces winter mode — normal heating regardless of outdoor temperature |
+
+In summer mode all normal heating is suspended. TRVs are held at 12 °C to keep valves exercised.
+
+### Vacation Mode (`switch.thermosmart_vacation_mode`)
+
+Sets all zones to the configured vacation temperature (default 12 °C). Takes priority over schedule and presence detection. Independent of summer mode.
 
 ---
 
@@ -145,26 +176,42 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 
 ## FAQ
 
-**Do I need weather data?**
-No. ThermoSmart falls back to physical estimates. Accuracy improves with a weather entity configured.
+**Why does HACS not show ThermoSmart or show no version?**  
+Beta versions only appear when Pre-Releases are enabled. HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions**.
 
-**What is Observation mode?**
+**How do I switch to v1.0.0-beta.23 manually?**  
+HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-beta.23` → Download → restart HA.
+
+**What is Observation mode?**  
 Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.
 
-**How long until the learning algorithm is effective?**
-Confidence builds from **heating observations** (room temperature actively rising). Phase 1 (<5): physical fallback. Phase 2 (5–50): first patterns. Phase 3 (50+): learning dominates. Expect several weeks of regular heating. Exact timelines have not yet been validated at scale.
+**How long until the learning algorithm is effective?**  
+Learning builds from active heating observations. Phase 1 (<5 obs): physical fallback only. Phase 2 (5–50): first patterns. Phase 3 (50+): learning dominates. Expect several weeks of regular heating. Exact timelines have not yet been validated at scale.
 
-**A sensor goes offline — what happens?**
-ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors are unavailable.
+**A sensor goes offline — what happens?**  
+ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors in a zone are unavailable simultaneously.
 
-**Where is the learning data stored?**
+**Where is the learning data stored?**  
 `/config/.storage/thermosmart_learning_data` — safe to share for debugging.
+
+---
+
+## Breaking Changes
+
+### v1.0.0-beta.23 — Summer mode switch replaced by select
+
+| Removed entity | New entity |
+|---|---|
+| `switch.thermosmart_global_summer` | `select.thermosmart_summer_mode` |
+
+The old entity is automatically removed from the Entity Registry on upgrade. **Dashboards and automations referencing the old entity must be updated manually.**  
+New options: `Automatic` · `On` · `Off`
 
 ---
 
 ## Languages
 
-DE · EN · FR · NL · PL · SV · IT — all complete. Additional languages welcome via Pull Request (`custom_components/thermosmart/translations/`).
+DE · EN · FR · NL · PL · SV · IT — translation files available. Additional languages welcome via Pull Request (`custom_components/thermosmart/translations/`).
 
 ---
 
@@ -177,14 +224,6 @@ DE · EN · FR · NL · PL · SV · IT — all complete. Additional languages we
 **Especially welcome:** Testing with more TRV models · Additional translations · Device quirk patterns
 
 [Discussions →](https://github.com/Mikasmarthome/ThermoSmart/discussions)
-
----
-
-## About the Project
-
-ThermoSmart started as a personal project to better understand and optimize heating behavior in a real-world Home Assistant installation.
-
-The project is actively developed and community feedback is highly appreciated.
 
 ---
 

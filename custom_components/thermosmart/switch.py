@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_SUMMER, DOMAIN_GLOBAL_VACATION
+from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_VACATION
 from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,12 +20,10 @@ async def async_setup_entry(
 ) -> None:
     cfg = {**entry.data, **entry.options}
 
-    # System-Entry: nur globale Schalter
+    # System-Entry: nur globaler Urlaubsschalter
+    # (Sommer-Override: select.ThermoSmartGlobalSummerSelect)
     if cfg.get("entry_type") == "system":
-        async_add_entities([
-            ThermoSmartGlobalSummerSwitch(hass, entry),
-            ThermoSmartGlobalVacationSwitch(hass, entry),
-        ])
+        async_add_entities([ThermoSmartGlobalVacationSwitch(hass, entry)])
         return
 
     # Zone-Entry: zone-spezifische Schalter
@@ -35,17 +33,14 @@ async def async_setup_entry(
         ThermoSmartLearningSwitch(coordinator, entry),
     ]
 
-    # Backward-Compat: globale Schalter an die erste Zone anhängen wenn kein System-Entry existiert
+    # Backward-Compat: globaler Urlaubsschalter an die erste Zone anhängen wenn kein System-Entry
     has_system = any(
         e.data.get("entry_type") == "system"
         for e in hass.config_entries.async_entries(DOMAIN)
     )
     if not has_system and "global_switches_created" not in hass.data[DOMAIN]:
         hass.data[DOMAIN]["global_switches_created"] = True
-        entities.extend([
-            ThermoSmartGlobalSummerSwitch(hass, entry),
-            ThermoSmartGlobalVacationSwitch(hass, entry),
-        ])
+        entities.append(ThermoSmartGlobalVacationSwitch(hass, entry))
 
     async_add_entities(entities)
 
@@ -165,50 +160,6 @@ def _all_coordinators(hass: HomeAssistant):
         if key not in skip and isinstance(data, dict) and data.get("type") != "system":
             if coord := data.get("coordinator"):
                 yield coord
-
-
-class ThermoSmartGlobalSummerSwitch(SwitchEntity, RestoreEntity):
-    """Summer mode – applies to all ThermoSmart zones simultaneously."""
-    _attr_has_entity_name = False
-    _attr_name = "ThermoSmart – Summer Mode"
-    _attr_icon = "mdi:weather-sunny"
-    _attr_unique_id = DOMAIN_GLOBAL_SUMMER
-
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
-        self._hass = hass
-        self._attr_device_info = _global_device_info()
-        self._is_on = False
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        self._is_on = last is not None and last.state == "on"
-        if self._is_on:
-            for coord in _all_coordinators(self._hass):
-                coord.set_summer_override(True)
-
-    @property
-    def is_on(self) -> bool:
-        return self._is_on
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        zones = sum(1 for _ in _all_coordinators(self._hass))
-        return {"active_zones": zones, "mode": "forced" if self._is_on else "automatic"}
-
-    async def async_turn_on(self, **kwargs) -> None:
-        self._is_on = True
-        self.async_write_ha_state()
-        for coord in _all_coordinators(self._hass):
-            coord.set_summer_override(True)
-            await coord.async_request_refresh()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        self._is_on = False
-        self.async_write_ha_state()
-        for coord in _all_coordinators(self._hass):
-            coord.set_summer_override(None)   # Zurück zur automatischen Erkennung
-            await coord.async_request_refresh()
 
 
 class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):

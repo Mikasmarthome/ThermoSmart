@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.1--beta.5-orange.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--beta.23-orange.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-beta-red.svg" alt="Beta"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/Mikasmarthome/ThermoSmart" alt="License"/></a>
@@ -17,7 +17,7 @@
 
 > ⚠️ **Use at your own risk.** ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices. Always set a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
-> 🧪 **Beta (v1.0.1-beta.5)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
+> 🧪 **Beta (v1.0.0-beta.23)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub — it helps a lot.
 
 ---
 
@@ -87,7 +87,7 @@ Any HA `climate` entity supporting `set_temperature` — Danfoss Ally, Eurotroni
 
 ## Setup
 
-Add **ThermoSmart System** first (global Summer + Vacation switches), then add each heating zone.
+Add **ThermoSmart System** first (Summer mode select + Vacation switch), then add each heating zone.
 
 **Recommended:** Start with Active Control **OFF** (Observation mode). ThermoSmart learns from your existing setup without changing anything. Switch to Active Control after a few weeks.
 
@@ -121,7 +121,7 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 ### Global (ThermoSmart System)
 | Entity | Description |
 |---|---|
-| `switch.thermosmart_sommer_modus` | Summer mode — all zones → frost protection |
+| `select.thermosmart_summer_mode` | Summer mode — `Automatic` (72 h avg) / `On` (forced) / `Off` (forced) |
 | `switch.thermosmart_urlaubsmodus` | Vacation mode — all zones → vacation temperature |
 
 ---

@@ -87,6 +87,7 @@ TEMP_NIGHT = 18.0
 TEMP_AWAY = 17.0
 TEMP_FROST_PROTECTION = 12.0
 TEMP_ECO = 19.0
+INDOOR_SAFETY_TEMP = 16.0  # °C – below this, automatic summer mode is bypassed for one cycle
 WINDOW_OPEN_SETPOINT = 5.0  # TRV-Setpoint bei geöffnetem Fenster
 
 # Weather-based adjustments

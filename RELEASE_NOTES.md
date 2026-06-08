@@ -1,5 +1,25 @@
 # ThermoSmart – Release Notes
 
+## v1.0.0-rc.2
+
+**Changes since v1.0.0-rc.1**
+
+### Fixes
+
+- **Manual override cleared on Away**: Manual temperature overrides are now automatically cleared when all tracked persons leave the home (Away mode).
+- **Presence restore**: Presence changes correctly restore automatic schedule behavior after returning home.
+
+### Improvements
+
+- **Status sensor translations**: Status sensor translations now work correctly in all supported languages via `SensorDeviceClass.ENUM` and explicit state options.
+- **Branding and README**: Branding assets updated; README now uses a dedicated high-resolution logo separate from the HACS integration icon.
+
+### Stability
+
+- Additional RC validation and stability improvements before v1.0.0 Stable.
+
+---
+
 ## v1.0.0-rc.1
 
 **Changes since v1.0.0-beta.23**

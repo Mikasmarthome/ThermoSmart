@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nastaviť ThermoSmart",
+        "menu_options": {
+          "add_system": "Nastaviť globálne ovládanie (letný režim a dovolenka)",
+          "add_zone": "Pridať vykurovaciu zónu"
+        }
+      },
+      "add_system": {
+        "title": "Globálne ovládanie",
+        "description": "Nastaví globálny selektor letného režimu (Automaticky / Zapnuté / Vypnuté) a prepínač dovolenky. Termostat nie je potrebný. Obe ovládacie prvky sa vzťahujú na všetky zóny súčasne."
+      },
+      "add_zone": {
+        "title": "Krok 1 / 4 – Zariadenia a senzory",
+        "description": "Vyberte TRV a senzory pre túto vykurovaciu zónu. Kalibračné entity a prepínače quirk sa rozpoznajú automaticky.",
+        "data": {
+          "name": "Názov zóny (napr. Obývačka)",
+          "climate_entities": "Termostaty / TRV",
+          "temp_sensors": "Senzory vnútornej teploty (vypočíta sa priemer)",
+          "humidity_sensors": "Senzory vnútornej vlhkosti",
+          "window_sensors": "Senzory okien (binary_sensor)",
+          "window_open_delay": "Vykurovanie vyp. – oneskorenie po otvorení okna",
+          "window_close_delay": "Vykurovanie zap. – oneskorenie po zatvorení okna",
+          "valve_maintenance": "Aktivovať údržbu ventilov (nedeľa 03:00 – len letný alebo dovolenkový režim)",
+          "calibration_invert": "Invertovať kalibračný offset (pre TRV ako ME167, ktoré invertujú znamienko)"
+        }
+      },
+      "schedule": {
+        "title": "Krok 2 / 4 – Teploty a plán",
+        "description": "Denný priebeh: Noc → Komfort → Noc\n\nKeď sú všetky osoby preč, ThermoSmart automaticky prepne na teplotu neprítomnosti – bez ohľadu na plán.",
+        "data": {
+          "comfort_temp": "Komfortná teplota (keď je niekto doma)",
+          "night_temp": "Nočná teplota (zníženie počas spánku)",
+          "away_temp": "Teplota neprítomnosti (automaticky keď všetci odišli)",
+          "vacation_temp": "Dovolenkový teplota (ochrana pred mrazom)",
+          "eco_temp": "Eco teplota (úspora energie, medzi nočnou a komfortnou)",
+          "temp_tolerance": "Teplotná tolerancia – ovládajte TRV až po tejto odchýlke",
+          "schedule_enabled": "Aktivovať časový plán",
+          "sched_wd_morning": "Pracovný deň: Komfort od",
+          "sched_wd_night": "Pracovný deň: Noc od",
+          "sched_we_morning": "Víkend: Komfort od",
+          "sched_we_night": "Víkend: Noc od"
+        },
+        "data_description": {
+          "schedule_enabled": "Keď je deaktivovaný, komfortná teplota je aktívna celých 24 hodín – bez automatického prepínania deň/noc.",
+          "sched_wd_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
+          "sched_wd_night": "Nočná teplota platí od tohto času",
+          "sched_we_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
+          "sched_we_night": "Nočná teplota platí od tohto času"
+        }
+      },
+      "presence": {
+        "title": "Krok 3 / 4 – Prítomnosť a automatizácia",
+        "description": "Kto je doma? ThermoSmart automaticky prepne do režimu neprítomnosti, keď všetci odídu.",
+        "data": {
+          "presence_persons": "Osoby na detekciu prítomnosti",
+          "home_zone": "Domovská zóna (predvolená: zone.home)",
+          "learning_enabled": "Aktivovať algoritmus učenia"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart sa učí rýchlosti vykurovania, chladenia a optimálne teploty pre túto zónu."
+        }
+      },
+      "weather": {
+        "title": "Krok 4 / 4 – Počasie a vonkajšie senzory",
+        "description": "Všetky polia sú voliteľné – vlastné senzory majú prednosť pred entitou počasia. Systém funguje aj bez údajov o počasí.",
+        "data": {
+          "weather_entity": "Entita počasia (napr. weather.home)",
+          "outdoor_temp_sensor": "Vonkajšia teplota – vlastná stanica (prednosť)",
+          "outdoor_humidity_sensor": "Vonkajšia vlhkosť",
+          "outdoor_wind_sensor": "Rýchlosť vetra (m/s alebo km/h)",
+          "outdoor_solar_sensor": "Solárne žiarenie (W/m²)",
+          "outdoor_rain_sensor": "Zrážky"
+        },
+        "data_description": {
+          "weather_entity": "Používa sa na predpovede a potlačenie predpovedí. Nechajte prázdne, ak používate iba vlastné senzory.",
+          "outdoor_temp_sensor": "Vlastné senzory sú presnejšie ako entita počasia a majú prednosť."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Entita počasia sa nenašla. Vyberte platnú entitu alebo nechajte pole prázdne.",
+      "name_required": "Zadajte názov zóny.",
+      "required": "Vyžaduje sa aspoň jeden termostat / TRV.",
+      "night_temp_too_high": "Nočná teplota musí byť nižšia ako komfortná teplota.",
+      "away_temp_too_high": "Teplota neprítomnosti nesmie byť vyššia ako nočná teplota."
+    },
+    "abort": {
+      "already_configured": "Táto zóna je už nakonfigurovaná.",
+      "system_already_configured": "Globálne ovládanie ThermoSmart je už nastavené.",
+      "system_no_options": "ThermoSmart System nemá konfigurovateľné možnosti. Použite selektor letného režimu a prepínač dovolenky na ovládanie všetkých zón."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Krok 1 / 4 – Zariadenia a senzory",
+        "description": "Kalibračné entity a prepínače quirk sa rozpoznajú automaticky.",
+        "data": {
+          "name": "Názov zóny",
+          "climate_entities": "Termostaty / TRV",
+          "temp_sensors": "Senzory vnútornej teploty",
+          "humidity_sensors": "Senzory vnútornej vlhkosti",
+          "window_sensors": "Senzory okien",
+          "window_open_delay": "Vykurovanie vyp. – oneskorenie po otvorení okna",
+          "window_close_delay": "Vykurovanie zap. – oneskorenie po zatvorení okna",
+          "valve_maintenance": "Aktivovať údržbu ventilov (len letný / dovolenkový režim)",
+          "calibration_invert": "Invertovať kalibračný offset (ME167 a podobné)"
+        }
+      },
+      "schedule": {
+        "title": "Krok 2 / 4 – Teploty a plán",
+        "description": "Denný priebeh: Noc → Komfort → Noc",
+        "data": {
+          "comfort_temp": "Komfortná teplota",
+          "night_temp": "Nočná teplota",
+          "away_temp": "Teplota neprítomnosti",
+          "vacation_temp": "Dovolenkový teplota",
+          "eco_temp": "Eco teplota",
+          "temp_tolerance": "Teplotná tolerancia",
+          "schedule_enabled": "Aktivovať časový plán",
+          "sched_wd_morning": "Pracovný deň: Komfort od",
+          "sched_wd_night": "Pracovný deň: Noc od",
+          "sched_we_morning": "Víkend: Komfort od",
+          "sched_we_night": "Víkend: Noc od"
+        },
+        "data_description": {
+          "schedule_enabled": "Keď je deaktivovaný, komfortná teplota je aktívna celých 24 hodín – bez automatického prepínania deň/noc.",
+          "sched_wd_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
+          "sched_wd_night": "Nočná teplota platí od tohto času",
+          "sched_we_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
+          "sched_we_night": "Nočná teplota platí od tohto času"
+        }
+      },
+      "presence": {
+        "title": "Krok 3 / 4 – Prítomnosť a automatizácia",
+        "data": {
+          "presence_persons": "Osoby na detekciu prítomnosti",
+          "home_zone": "Domovská zóna",
+          "learning_enabled": "Aktivovať algoritmus učenia"
+        }
+      },
+      "weather": {
+        "title": "Krok 4 / 4 – Počasie a vonkajšie senzory",
+        "description": "Všetky polia sú voliteľné. Vlastné senzory majú prednosť pred entitou počasia.",
+        "data": {
+          "weather_entity": "Entita počasia",
+          "outdoor_temp_sensor": "Vonkajšia teplota (vlastná stanica)",
+          "outdoor_humidity_sensor": "Vonkajšia vlhkosť",
+          "outdoor_wind_sensor": "Rýchlosť vetra",
+          "outdoor_solar_sensor": "Solárne žiarenie",
+          "outdoor_rain_sensor": "Zrážky"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Auto",
+              "vacation": "Dovolenka",
+              "sleep":    "Noc"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Aktívne ovládanie",
+        "state": { "on": "Aktívne – ThermoSmart ovláda", "off": "Pozorovací režim" }
+      },
+      "learning": { "name": "Režim učenia" },
+      "vacation_mode": { "name": "Dovolenkový režim" }
+    },
+    "select": {
+      "mode": {
+        "name": "Režim vykurovania",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Komfort",
+          "eco":      "Eco",
+          "night":    "Noc",
+          "away":     "Neprítomný",
+          "vacation": "Dovolenka"
+        }
+      },
+      "summer_mode": {
+        "name": "Letný režim",
+        "state": {
+          "automatic": "Automaticky",
+          "on":        "Zapnuté",
+          "off":       "Vypnuté"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Cieľová teplota" },
+      "trv_setpoint": { "name": "Nastavená hodnota TRV" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Skóre výsledku" },
+      "preheat_minutes": { "name": "Čas predohrevu" },
+      "confidence": { "name": "Pokrok učenia" },
+      "weather_offset": { "name": "Korekcia počasia" },
+      "status": {
+        "name": "Stav",
+        "state": {
+          "disabled":              "Deaktivované",
+          "observation_mode":      "Pozorovací režim",
+          "controlling_no_learning": "Aktívne ovládanie (učenie vyp.)",
+          "heating_failure":       "Porucha vykurovania!",
+          "preheating":            "Predohrievanie",
+          "summer":                "Leto – vykurovanie vyp.",
+          "window_open":           "Okno otvorené",
+          "vacation":              "Dovolenka",
+          "away":                  "Neprítomný",
+          "heating":               "Vykurovanie",
+          "idle":                  "Teplota udržiavaná",
+          "active":                "Aktívne"
+        }
+      },
+      "temp_slope": { "name": "Sklon teploty" },
+      "temp_ema_1h": { "name": "Teplota EMA 1h" },
+      "heat_loss": { "name": "Tepelné straty" },
+      "heating_power": { "name": "Výkon vykurovania" },
+      "sun_intensity": { "name": "Solárny tepelný zisk" },
+      "window_cooling_rate": { "name": "Rýchlosť ochladzovania cez okno" },
+      "trv_observations": { "name": "Pozorovania TRV" }
+    }
+  }
+}

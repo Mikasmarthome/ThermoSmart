@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Configurar ThermoSmart",
+        "menu_options": {
+          "add_system": "Configurar controls globals (mode Estiu i Vacances)",
+          "add_zone": "Afegir zona de calefacció"
+        }
+      },
+      "add_system": {
+        "title": "Controls globals",
+        "description": "Configura el selector de mode Estiu (Automàtic / Activat / Desactivat) i l'interruptor de Vacances. No cal termòstat. Tots dos controls s'apliquen a totes les zones simultàniament."
+      },
+      "add_zone": {
+        "title": "Pas 1 / 4 – Dispositius i sensors",
+        "description": "Seleccioneu les TRVs i sensors per a aquesta zona de calefacció. Les entitats de calibratge i els interruptors de quirk es detecten automàticament.",
+        "data": {
+          "name": "Nom de la zona (p. ex. Sala d'estar)",
+          "climate_entities": "Termòstats / TRVs",
+          "temp_sensors": "Sensors de temperatura interior (es calcula la mitjana)",
+          "humidity_sensors": "Sensors d'humitat interior",
+          "window_sensors": "Sensors de finestra (binary_sensor)",
+          "window_open_delay": "Calefacció apagada – retard després d'obrir la finestra",
+          "window_close_delay": "Calefacció encesa – retard després de tancar la finestra",
+          "valve_maintenance": "Activar manteniment de vàlvules (diumenge 03:00 – només mode Estiu o Vacances)",
+          "calibration_invert": "Invertir offset de calibratge (per a TRVs com ME167 que inverteixen el signe)"
+        }
+      },
+      "schedule": {
+        "title": "Pas 2 / 4 – Temperatures i horari",
+        "description": "Flux diari: Nit → Confort → Nit\n\nQuan totes les persones estan absents, ThermoSmart canvia automàticament a la temperatura d'absència, independentment de l'horari.",
+        "data": {
+          "comfort_temp": "Temperatura de confort (quan hi ha algú a casa)",
+          "night_temp": "Temperatura nocturna (reducció durant el son)",
+          "away_temp": "Temperatura d'absència (automàticament quan tothom ha marxat)",
+          "vacation_temp": "Temperatura de vacances (protecció antigelada)",
+          "eco_temp": "Temperatura eco (estalvi d'energia, entre nocturna i confort)",
+          "temp_tolerance": "Tolerància de temperatura – controlar la TRV només a partir d'aquesta desviació",
+          "schedule_enabled": "Activar horari",
+          "sched_wd_morning": "Dia feiner: Confort des de",
+          "sched_wd_night": "Dia feiner: Nit des de",
+          "sched_we_morning": "Cap de setmana: Confort des de",
+          "sched_we_night": "Cap de setmana: Nit des de"
+        },
+        "data_description": {
+          "schedule_enabled": "Quan està desactivat, la temperatura de confort és activa les 24 hores – sense canvi automàtic dia/nit.",
+          "sched_wd_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
+          "sched_wd_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
+          "sched_we_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
+          "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora"
+        }
+      },
+      "presence": {
+        "title": "Pas 3 / 4 – Presència i automatització",
+        "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
+        "data": {
+          "presence_persons": "Persones per a la detecció de presència",
+          "home_zone": "Zona de casa (per defecte: zone.home)",
+          "learning_enabled": "Activar algorisme d'aprenentatge"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart aprèn les velocitats de calefacció, refrigeració i les temperatures òptimes per a aquesta zona."
+        }
+      },
+      "weather": {
+        "title": "Pas 4 / 4 – Meteorologia i sensors exteriors",
+        "description": "Tots els camps són opcionals – els sensors propis tenen prioritat sobre l'entitat meteorològica. El sistema també funciona sense dades meteorològiques.",
+        "data": {
+          "weather_entity": "Entitat meteorològica (p. ex. weather.home)",
+          "outdoor_temp_sensor": "Temperatura exterior – estació pròpia (prioritat)",
+          "outdoor_humidity_sensor": "Humitat exterior",
+          "outdoor_wind_sensor": "Velocitat del vent (m/s o km/h)",
+          "outdoor_solar_sensor": "Radiació solar (W/m²)",
+          "outdoor_rain_sensor": "Precipitació"
+        },
+        "data_description": {
+          "weather_entity": "Utilitzat per a prediccions i supressió de prediccions. Deixeu-lo buit si useu només sensors propis.",
+          "outdoor_temp_sensor": "Els sensors propis són més precisos que l'entitat meteorològica i es prefereixen."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Entitat meteorològica no trobada. Seleccioneu una entitat vàlida o deixeu el camp buit.",
+      "name_required": "Introduïu un nom de zona.",
+      "required": "Es requereix almenys un termòstat / TRV.",
+      "night_temp_too_high": "La temperatura nocturna ha de ser inferior a la temperatura de confort.",
+      "away_temp_too_high": "La temperatura d'absència no ha de ser superior a la temperatura nocturna."
+    },
+    "abort": {
+      "already_configured": "Aquesta zona ja està configurada.",
+      "system_already_configured": "Els controls globals de ThermoSmart ja estan configurats.",
+      "system_no_options": "ThermoSmart System no té opcions configurables. Useu el selector de mode Estiu i l'interruptor de Vacances per controlar totes les zones."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pas 1 / 4 – Dispositius i sensors",
+        "description": "Les entitats de calibratge i els interruptors de quirk es detecten automàticament.",
+        "data": {
+          "name": "Nom de la zona",
+          "climate_entities": "Termòstats / TRVs",
+          "temp_sensors": "Sensors de temperatura interior",
+          "humidity_sensors": "Sensors d'humitat interior",
+          "window_sensors": "Sensors de finestra",
+          "window_open_delay": "Calefacció apagada – retard després d'obrir la finestra",
+          "window_close_delay": "Calefacció encesa – retard després de tancar la finestra",
+          "valve_maintenance": "Activar manteniment de vàlvules (només mode Estiu / Vacances)",
+          "calibration_invert": "Invertir offset de calibratge (ME167 i similars)"
+        }
+      },
+      "schedule": {
+        "title": "Pas 2 / 4 – Temperatures i horari",
+        "description": "Flux diari: Nit → Confort → Nit",
+        "data": {
+          "comfort_temp": "Temperatura de confort",
+          "night_temp": "Temperatura nocturna",
+          "away_temp": "Temperatura d'absència",
+          "vacation_temp": "Temperatura de vacances",
+          "eco_temp": "Temperatura eco",
+          "temp_tolerance": "Tolerància de temperatura",
+          "schedule_enabled": "Activar horari",
+          "sched_wd_morning": "Dia feiner: Confort des de",
+          "sched_wd_night": "Dia feiner: Nit des de",
+          "sched_we_morning": "Cap de setmana: Confort des de",
+          "sched_we_night": "Cap de setmana: Nit des de"
+        },
+        "data_description": {
+          "schedule_enabled": "Quan està desactivat, la temperatura de confort és activa les 24 hores – sense canvi automàtic dia/nit.",
+          "sched_wd_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
+          "sched_wd_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
+          "sched_we_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
+          "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora"
+        }
+      },
+      "presence": {
+        "title": "Pas 3 / 4 – Presència i automatització",
+        "data": {
+          "presence_persons": "Persones per a la detecció de presència",
+          "home_zone": "Zona de casa",
+          "learning_enabled": "Activar algorisme d'aprenentatge"
+        }
+      },
+      "weather": {
+        "title": "Pas 4 / 4 – Meteorologia i sensors exteriors",
+        "description": "Tots els camps són opcionals. Els sensors propis tenen prioritat sobre l'entitat meteorològica.",
+        "data": {
+          "weather_entity": "Entitat meteorològica",
+          "outdoor_temp_sensor": "Temperatura exterior (estació pròpia)",
+          "outdoor_humidity_sensor": "Humitat exterior",
+          "outdoor_wind_sensor": "Velocitat del vent",
+          "outdoor_solar_sensor": "Radiació solar",
+          "outdoor_rain_sensor": "Precipitació"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Auto",
+              "vacation": "Vacances",
+              "sleep":    "Nit"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Control actiu",
+        "state": { "on": "Actiu – ThermoSmart controla", "off": "Mode observació" }
+      },
+      "learning": { "name": "Mode aprenentatge" },
+      "vacation_mode": { "name": "Mode vacances" }
+    },
+    "select": {
+      "mode": {
+        "name": "Mode de calefacció",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Confort",
+          "eco":      "Eco",
+          "night":    "Nit",
+          "away":     "Absent",
+          "vacation": "Vacances"
+        }
+      },
+      "summer_mode": {
+        "name": "Mode estiu",
+        "state": {
+          "automatic": "Automàtic",
+          "on":        "Activat",
+          "off":       "Desactivat"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Temperatura objectiu" },
+      "trv_setpoint": { "name": "Consigna TRV" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Puntuació de resultat" },
+      "preheat_minutes": { "name": "Temps de preescalfament" },
+      "confidence": { "name": "Progrés d'aprenentatge" },
+      "weather_offset": { "name": "Correcció meteorològica" },
+      "status": {
+        "name": "Estat",
+        "state": {
+          "disabled":              "Desactivat",
+          "observation_mode":      "Mode observació",
+          "controlling_no_learning": "Control actiu (aprenentatge desactivat)",
+          "heating_failure":       "Error de calefacció!",
+          "preheating":            "Preescalfant",
+          "summer":                "Estiu – calefacció apagada",
+          "window_open":           "Finestra oberta",
+          "vacation":              "Vacances",
+          "away":                  "Absent",
+          "heating":               "Escalfant",
+          "idle":                  "Temperatura mantinguda",
+          "active":                "Actiu"
+        }
+      },
+      "temp_slope": { "name": "Pendent de temperatura" },
+      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "heat_loss": { "name": "Pèrdua de calor" },
+      "heating_power": { "name": "Potència de calefacció" },
+      "sun_intensity": { "name": "Guany solar" },
+      "window_cooling_rate": { "name": "Taxa de refredament per finestra" },
+      "trv_observations": { "name": "Observacions TRV" }
+    }
+  }
+}

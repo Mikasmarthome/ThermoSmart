@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "设置 ThermoSmart",
+        "menu_options": {
+          "add_system": "配置全局控制（夏季模式和假期）",
+          "add_zone": "添加供暖区域"
+        }
+      },
+      "add_system": {
+        "title": "全局控制",
+        "description": "配置全局夏季模式选择器（自动 / 开启 / 关闭）和假期开关。无需温控器。两个控制均同时适用于所有区域。"
+      },
+      "add_zone": {
+        "title": "第 1 步 / 4 – 设备和传感器",
+        "description": "为此供暖区域选择 TRV 和传感器。校准实体和 quirk 开关会自动检测。",
+        "data": {
+          "name": "区域名称（例如 客厅）",
+          "climate_entities": "温控器 / TRV",
+          "temp_sensors": "室内温度传感器（计算平均值）",
+          "humidity_sensors": "室内湿度传感器",
+          "window_sensors": "窗户传感器（binary_sensor）",
+          "window_open_delay": "供暖关闭 – 窗户打开后延迟",
+          "window_close_delay": "供暖开启 – 窗户关闭后延迟",
+          "valve_maintenance": "启用阀门维护（周日 03:00 – 仅夏季或假期模式）",
+          "calibration_invert": "反转校准偏移（适用于反转符号的 ME167 等 TRV）"
+        }
+      },
+      "schedule": {
+        "title": "第 2 步 / 4 – 温度和计划",
+        "description": "每日流程：夜间 → 舒适 → 夜间\n\n当所有人员离开时，ThermoSmart 会自动切换到离家温度——与计划无关。",
+        "data": {
+          "comfort_temp": "舒适温度（有人在家时）",
+          "night_temp": "夜间温度（睡眠期间降低）",
+          "away_temp": "离家温度（所有人离开后自动）",
+          "vacation_temp": "假期温度（防冻保护）",
+          "eco_temp": "节能温度（节能，介于夜间和舒适之间）",
+          "temp_tolerance": "温度容差 – 仅在此偏差后控制 TRV",
+          "schedule_enabled": "启用时间计划",
+          "sched_wd_morning": "工作日：舒适从",
+          "sched_wd_night": "工作日：夜间从",
+          "sched_we_morning": "周末：舒适从",
+          "sched_we_night": "周末：夜间从"
+        },
+        "data_description": {
+          "schedule_enabled": "禁用时，舒适温度全天候有效——无自动昼/夜切换。",
+          "sched_wd_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
+          "sched_wd_night": "夜间温度从此时间起生效",
+          "sched_we_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
+          "sched_we_night": "夜间温度从此时间起生效"
+        }
+      },
+      "presence": {
+        "title": "第 3 步 / 4 – 在家检测和自动化",
+        "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
+        "data": {
+          "presence_persons": "用于检测在家状态的人员",
+          "home_zone": "家庭区域（默认：zone.home）",
+          "learning_enabled": "启用学习算法"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart 学习此区域的加热、冷却速率和最佳温度。"
+        }
+      },
+      "weather": {
+        "title": "第 4 步 / 4 – 天气和室外传感器",
+        "description": "所有字段均为可选——自有传感器优先于天气实体。系统在没有天气数据的情况下也可运行。",
+        "data": {
+          "weather_entity": "天气实体（例如 weather.home）",
+          "outdoor_temp_sensor": "室外温度 – 自有气象站（优先）",
+          "outdoor_humidity_sensor": "室外湿度",
+          "outdoor_wind_sensor": "风速（m/s 或 km/h）",
+          "outdoor_solar_sensor": "太阳辐射（W/m²）",
+          "outdoor_rain_sensor": "降水量"
+        },
+        "data_description": {
+          "weather_entity": "用于预测和抑制预测。如果仅使用自有传感器，请留空。",
+          "outdoor_temp_sensor": "自有传感器比天气实体更精确，优先使用。"
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "未找到天气实体。请选择有效实体或将字段留空。",
+      "name_required": "请输入区域名称。",
+      "required": "至少需要一个温控器 / TRV。",
+      "night_temp_too_high": "夜间温度必须低于舒适温度。",
+      "away_temp_too_high": "离家温度不得高于夜间温度。"
+    },
+    "abort": {
+      "already_configured": "此区域已配置。",
+      "system_already_configured": "ThermoSmart 全局控制已设置。",
+      "system_no_options": "ThermoSmart System 没有可配置选项。请使用夏季模式选择器和假期开关来控制所有区域。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "第 1 步 / 4 – 设备和传感器",
+        "description": "校准实体和 quirk 开关会自动检测。",
+        "data": {
+          "name": "区域名称",
+          "climate_entities": "温控器 / TRV",
+          "temp_sensors": "室内温度传感器",
+          "humidity_sensors": "室内湿度传感器",
+          "window_sensors": "窗户传感器",
+          "window_open_delay": "供暖关闭 – 窗户打开后延迟",
+          "window_close_delay": "供暖开启 – 窗户关闭后延迟",
+          "valve_maintenance": "启用阀门维护（仅夏季 / 假期模式）",
+          "calibration_invert": "反转校准偏移（ME167 及类似设备）"
+        }
+      },
+      "schedule": {
+        "title": "第 2 步 / 4 – 温度和计划",
+        "description": "每日流程：夜间 → 舒适 → 夜间",
+        "data": {
+          "comfort_temp": "舒适温度",
+          "night_temp": "夜间温度",
+          "away_temp": "离家温度",
+          "vacation_temp": "假期温度",
+          "eco_temp": "节能温度",
+          "temp_tolerance": "温度容差",
+          "schedule_enabled": "启用时间计划",
+          "sched_wd_morning": "工作日：舒适从",
+          "sched_wd_night": "工作日：夜间从",
+          "sched_we_morning": "周末：舒适从",
+          "sched_we_night": "周末：夜间从"
+        },
+        "data_description": {
+          "schedule_enabled": "禁用时，舒适温度全天候有效——无自动昼/夜切换。",
+          "sched_wd_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
+          "sched_wd_night": "夜间温度从此时间起生效",
+          "sched_we_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
+          "sched_we_night": "夜间温度从此时间起生效"
+        }
+      },
+      "presence": {
+        "title": "第 3 步 / 4 – 在家检测和自动化",
+        "data": {
+          "presence_persons": "用于检测在家状态的人员",
+          "home_zone": "家庭区域",
+          "learning_enabled": "启用学习算法"
+        }
+      },
+      "weather": {
+        "title": "第 4 步 / 4 – 天气和室外传感器",
+        "description": "所有字段均为可选。自有传感器优先于天气实体。",
+        "data": {
+          "weather_entity": "天气实体",
+          "outdoor_temp_sensor": "室外温度（自有气象站）",
+          "outdoor_humidity_sensor": "室外湿度",
+          "outdoor_wind_sensor": "风速",
+          "outdoor_solar_sensor": "太阳辐射",
+          "outdoor_rain_sensor": "降水量"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "自动",
+              "vacation": "假期",
+              "sleep":    "夜间"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "主动控制",
+        "state": { "on": "活跃 – ThermoSmart 控制中", "off": "观察模式" }
+      },
+      "learning": { "name": "学习模式" },
+      "vacation_mode": { "name": "假期模式" }
+    },
+    "select": {
+      "mode": {
+        "name": "供暖模式",
+        "state": {
+          "auto":     "自动",
+          "comfort":  "舒适",
+          "eco":      "节能",
+          "night":    "夜间",
+          "away":     "离家",
+          "vacation": "假期"
+        }
+      },
+      "summer_mode": {
+        "name": "夏季模式",
+        "state": {
+          "automatic": "自动",
+          "on":        "开启",
+          "off":       "关闭"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "目标温度" },
+      "trv_setpoint": { "name": "TRV 设定值" },
+      "tpi_duty_cycle": { "name": "TPI 占空比" },
+      "outcome_score": { "name": "结果评分" },
+      "preheat_minutes": { "name": "预热时间" },
+      "confidence": { "name": "学习进度" },
+      "weather_offset": { "name": "天气修正" },
+      "status": {
+        "name": "状态",
+        "state": {
+          "disabled":              "已禁用",
+          "observation_mode":      "观察模式",
+          "controlling_no_learning": "主动控制（学习已关闭）",
+          "heating_failure":       "供暖故障！",
+          "preheating":            "预热中",
+          "summer":                "夏季 – 供暖已关闭",
+          "window_open":           "窗户已打开",
+          "vacation":              "假期",
+          "away":                  "离家",
+          "heating":               "供暖中",
+          "idle":                  "温度已维持",
+          "active":                "活跃"
+        }
+      },
+      "temp_slope": { "name": "温度斜率" },
+      "temp_ema_1h": { "name": "温度 EMA 1小时" },
+      "heat_loss": { "name": "热量损失" },
+      "heating_power": { "name": "供暖功率" },
+      "sun_intensity": { "name": "太阳热增益" },
+      "window_cooling_rate": { "name": "窗户冷却速率" },
+      "trv_observations": { "name": "TRV 观测值" }
+    }
+  }
+}

@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ThermoSmart beállítása",
+        "menu_options": {
+          "add_system": "Globális vezérlők beállítása (nyári mód és vakáció)",
+          "add_zone": "Fűtési zóna hozzáadása"
+        }
+      },
+      "add_system": {
+        "title": "Globális vezérlők",
+        "description": "Beállítja a globális nyári mód választót (Automatikus / Be / Ki) és a vakáció kapcsolót. Nem szükséges termosztát. Mindkét vezérlő egyszerre vonatkozik az összes zónára."
+      },
+      "add_zone": {
+        "title": "1. lépés / 4 – Eszközök és érzékelők",
+        "description": "Válassza ki a TRV-ket és érzékelőket ehhez a fűtési zónához. A kalibrációs entitások és a quirk kapcsolók automatikusan felismerhetők.",
+        "data": {
+          "name": "Zóna neve (pl. Nappali)",
+          "climate_entities": "Termosztátok / TRV-k",
+          "temp_sensors": "Beltéri hőmérséklet-érzékelők (átlag számítódik)",
+          "humidity_sensors": "Beltéri páratartalom-érzékelők",
+          "window_sensors": "Ablakérzékelők (binary_sensor)",
+          "window_open_delay": "Fűtés ki – késleltetés az ablak kinyitása után",
+          "window_close_delay": "Fűtés be – késleltetés az ablak becsukása után",
+          "valve_maintenance": "Szelepes karbantartás engedélyezése (vasárnap 03:00 – csak nyári vagy vakációs módban)",
+          "calibration_invert": "Kalibrációs eltolás invertálása (ME167-hez hasonló TRV-khez, amelyek invertálják az előjelet)"
+        }
+      },
+      "schedule": {
+        "title": "2. lépés / 4 – Hőmérsékletek és ütemterv",
+        "description": "Napi folyamat: Éjszaka → Komfort → Éjszaka\n\nHa minden személy távol van, a ThermoSmart automatikusan a távolléti hőmérsékletre vált – az ütemtervtől függetlenül.",
+        "data": {
+          "comfort_temp": "Kényelmi hőmérséklet (ha valaki otthon van)",
+          "night_temp": "Éjszakai hőmérséklet (csökkentés alvás közben)",
+          "away_temp": "Távolléti hőmérséklet (automatikusan, ha mindenki elment)",
+          "vacation_temp": "Vakációs hőmérséklet (fagyvédelem)",
+          "eco_temp": "Eco hőmérséklet (energiatakarékos, éjszakai és kényelmi között)",
+          "temp_tolerance": "Hőmérsékleti tűréshatár – csak ezen eltérés után irányítsa a TRV-t",
+          "schedule_enabled": "Időbeli ütemterv engedélyezése",
+          "sched_wd_morning": "Hétköznap: Komfort-tól",
+          "sched_wd_night": "Hétköznap: Éjszaka-tól",
+          "sched_we_morning": "Hétvége: Komfort-tól",
+          "sched_we_night": "Hétvége: Éjszaka-tól"
+        },
+        "data_description": {
+          "schedule_enabled": "Ha ki van kapcsolva, a kényelmi hőmérséklet egész nap aktív – nincs automatikus nappali/éjszakai váltás.",
+          "sched_wd_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
+          "sched_wd_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
+          "sched_we_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
+          "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes"
+        }
+      },
+      "presence": {
+        "title": "3. lépés / 4 – Jelenlét és automatizálás",
+        "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
+        "data": {
+          "presence_persons": "Személyek jelenléti észleléshez",
+          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)",
+          "learning_enabled": "Tanulási algoritmus engedélyezése"
+        },
+        "data_description": {
+          "learning_enabled": "A ThermoSmart megtanulja a fűtési és hűtési sebességeket, valamint az optimális hőmérsékleteket ehhez a zónához."
+        }
+      },
+      "weather": {
+        "title": "4. lépés / 4 – Időjárás és kültéri érzékelők",
+        "description": "Minden mező opcionális – a saját érzékelők elsőbbséget élveznek az időjárás entitással szemben. A rendszer időjárási adatok nélkül is működik.",
+        "data": {
+          "weather_entity": "Időjárás entitás (pl. weather.home)",
+          "outdoor_temp_sensor": "Kültéri hőmérséklet – saját időjárásállomás (elsőbbség)",
+          "outdoor_humidity_sensor": "Kültéri páratartalom",
+          "outdoor_wind_sensor": "Szélsebesség (m/s vagy km/h)",
+          "outdoor_solar_sensor": "Napsugárzás (W/m²)",
+          "outdoor_rain_sensor": "Csapadék"
+        },
+        "data_description": {
+          "weather_entity": "Előrejelzésekhez és előrejelzés-elnyomáshoz használatos. Hagyja üresen, ha csak saját érzékelőket használ.",
+          "outdoor_temp_sensor": "A saját érzékelők pontosabbak az időjárás entitásnál, és előnyt élveznek."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Az időjárás entitás nem található. Válasszon érvényes entitást, vagy hagyja üresen a mezőt.",
+      "name_required": "Adjon meg egy zónanevet.",
+      "required": "Legalább egy termosztát / TRV szükséges.",
+      "night_temp_too_high": "Az éjszakai hőmérsékletnek alacsonyabbnak kell lennie a kényelmi hőmérsékletnél.",
+      "away_temp_too_high": "A távolléti hőmérséklet nem lehet magasabb az éjszakai hőmérsékletnél."
+    },
+    "abort": {
+      "already_configured": "Ez a zóna már konfigurálva van.",
+      "system_already_configured": "A ThermoSmart globális vezérlői már be vannak állítva.",
+      "system_no_options": "A ThermoSmart System nem rendelkezik konfigurálható beállításokkal. Használja a nyári mód választót és a vakáció kapcsolót az összes zóna irányításához."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "1. lépés / 4 – Eszközök és érzékelők",
+        "description": "A kalibrációs entitások és a quirk kapcsolók automatikusan felismerhetők.",
+        "data": {
+          "name": "Zóna neve",
+          "climate_entities": "Termosztátok / TRV-k",
+          "temp_sensors": "Beltéri hőmérséklet-érzékelők",
+          "humidity_sensors": "Beltéri páratartalom-érzékelők",
+          "window_sensors": "Ablakérzékelők",
+          "window_open_delay": "Fűtés ki – késleltetés az ablak kinyitása után",
+          "window_close_delay": "Fűtés be – késleltetés az ablak becsukása után",
+          "valve_maintenance": "Szelepes karbantartás engedélyezése (csak nyári / vakációs módban)",
+          "calibration_invert": "Kalibrációs eltolás invertálása (ME167 és hasonlók)"
+        }
+      },
+      "schedule": {
+        "title": "2. lépés / 4 – Hőmérsékletek és ütemterv",
+        "description": "Napi folyamat: Éjszaka → Komfort → Éjszaka",
+        "data": {
+          "comfort_temp": "Kényelmi hőmérséklet",
+          "night_temp": "Éjszakai hőmérséklet",
+          "away_temp": "Távolléti hőmérséklet",
+          "vacation_temp": "Vakációs hőmérséklet",
+          "eco_temp": "Eco hőmérséklet",
+          "temp_tolerance": "Hőmérsékleti tűréshatár",
+          "schedule_enabled": "Időbeli ütemterv engedélyezése",
+          "sched_wd_morning": "Hétköznap: Komfort-tól",
+          "sched_wd_night": "Hétköznap: Éjszaka-tól",
+          "sched_we_morning": "Hétvége: Komfort-tól",
+          "sched_we_night": "Hétvége: Éjszaka-tól"
+        },
+        "data_description": {
+          "schedule_enabled": "Ha ki van kapcsolva, a kényelmi hőmérséklet egész nap aktív – nincs automatikus nappali/éjszakai váltás.",
+          "sched_wd_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
+          "sched_wd_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
+          "sched_we_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
+          "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes"
+        }
+      },
+      "presence": {
+        "title": "3. lépés / 4 – Jelenlét és automatizálás",
+        "data": {
+          "presence_persons": "Személyek jelenléti észleléshez",
+          "home_zone": "Otthoni zóna",
+          "learning_enabled": "Tanulási algoritmus engedélyezése"
+        }
+      },
+      "weather": {
+        "title": "4. lépés / 4 – Időjárás és kültéri érzékelők",
+        "description": "Minden mező opcionális. A saját érzékelők elsőbbséget élveznek az időjárás entitással szemben.",
+        "data": {
+          "weather_entity": "Időjárás entitás",
+          "outdoor_temp_sensor": "Kültéri hőmérséklet (saját állomás)",
+          "outdoor_humidity_sensor": "Kültéri páratartalom",
+          "outdoor_wind_sensor": "Szélsebesség",
+          "outdoor_solar_sensor": "Napsugárzás",
+          "outdoor_rain_sensor": "Csapadék"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Auto",
+              "vacation": "Vakáció",
+              "sleep":    "Éjszaka"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Aktív vezérlés",
+        "state": { "on": "Aktív – ThermoSmart vezérel", "off": "Megfigyelési mód" }
+      },
+      "learning": { "name": "Tanulási mód" },
+      "vacation_mode": { "name": "Vakációs mód" }
+    },
+    "select": {
+      "mode": {
+        "name": "Fűtési mód",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Kényelmi",
+          "eco":      "Eco",
+          "night":    "Éjszaka",
+          "away":     "Távol",
+          "vacation": "Vakáció"
+        }
+      },
+      "summer_mode": {
+        "name": "Nyári mód",
+        "state": {
+          "automatic": "Automatikus",
+          "on":        "Be",
+          "off":       "Ki"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Célhőmérséklet" },
+      "trv_setpoint": { "name": "TRV beállítási pont" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Eredménypontszám" },
+      "preheat_minutes": { "name": "Előmelegítési idő" },
+      "confidence": { "name": "Tanulási előrehaladás" },
+      "weather_offset": { "name": "Időjárás-korrekció" },
+      "status": {
+        "name": "Állapot",
+        "state": {
+          "disabled":              "Letiltva",
+          "observation_mode":      "Megfigyelési mód",
+          "controlling_no_learning": "Aktív vezérlés (tanulás ki)",
+          "heating_failure":       "Fűtési hiba!",
+          "preheating":            "Előmelegítés",
+          "summer":                "Nyár – fűtés ki",
+          "window_open":           "Ablak nyitva",
+          "vacation":              "Vakáció",
+          "away":                  "Távol",
+          "heating":               "Fűtés",
+          "idle":                  "Hőmérséklet fenntartva",
+          "active":                "Aktív"
+        }
+      },
+      "temp_slope": { "name": "Hőmérséklet meredeksége" },
+      "temp_ema_1h": { "name": "Hőmérséklet EMA 1h" },
+      "heat_loss": { "name": "Hőveszteség" },
+      "heating_power": { "name": "Fűtési teljesítmény" },
+      "sun_intensity": { "name": "Napenergia-nyereség" },
+      "window_cooling_rate": { "name": "Ablakon keresztüli hűtési sebesség" },
+      "trv_observations": { "name": "TRV-megfigyelések" }
+    }
+  }
+}

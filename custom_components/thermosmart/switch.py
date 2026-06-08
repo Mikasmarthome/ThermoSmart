@@ -196,6 +196,7 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True
+        self._hass.data[DOMAIN]["global_vacation_override"] = True
         self.async_write_ha_state()
         for coord in _all_coordinators(self._hass):
             coord.set_vacation_override(True)
@@ -203,6 +204,7 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
+        self._hass.data[DOMAIN]["global_vacation_override"] = False
         self.async_write_ha_state()
         for coord in _all_coordinators(self._hass):
             coord.set_vacation_override(False)

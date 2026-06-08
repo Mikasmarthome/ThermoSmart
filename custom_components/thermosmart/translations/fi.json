@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Määritä ThermoSmart",
+        "menu_options": {
+          "add_system": "Määritä globaalit säätimet (kesä- ja lomatila)",
+          "add_zone": "Lisää lämmitysvyöhyke"
+        }
+      },
+      "add_system": {
+        "title": "Globaalit säätimet",
+        "description": "Määrittää globaalin kesätila-valitsimen (Automaattinen / Päällä / Pois) ja lomakytkimen. Termostaattia ei tarvita. Molemmat säätimet koskevat kaikkia vyöhykkeitä samanaikaisesti."
+      },
+      "add_zone": {
+        "title": "Vaihe 1 / 4 – Laitteet ja anturit",
+        "description": "Valitse TRV:t ja anturit tälle lämmitysvyöhykkeelle. Kalibrointientiteetit ja quirk-kytkimet havaitaan automaattisesti.",
+        "data": {
+          "name": "Vyöhykkeen nimi (esim. Olohuone)",
+          "climate_entities": "Termostaatit / TRV:t",
+          "temp_sensors": "Sisälämpötila-anturit (keskiarvo lasketaan)",
+          "humidity_sensors": "Sisäilman kosteusanturit",
+          "window_sensors": "Ikkunanturit (binary_sensor)",
+          "window_open_delay": "Lämmitys pois – viive ikkunan avaamisen jälkeen",
+          "window_close_delay": "Lämmitys päälle – viive ikkunan sulkemisen jälkeen",
+          "valve_maintenance": "Ota venttiilin huolto käyttöön (sunnuntai 03:00 – vain kesä- tai lomatila)",
+          "calibration_invert": "Käännä kalibrointipoikkeama (TRV:ille kuten ME167, jotka kääntävät merkin)"
+        }
+      },
+      "schedule": {
+        "title": "Vaihe 2 / 4 – Lämpötilat ja aikataulu",
+        "description": "Päivittäinen kulku: Yö → Mukavuus → Yö\n\nKun kaikki henkilöt ovat poissa, ThermoSmart vaihtaa automaattisesti poissaololämpötilaan – aikataulusta riippumatta.",
+        "data": {
+          "comfort_temp": "Mukavuuslämpötila (kun joku on kotona)",
+          "night_temp": "Yölämpötila (alennus unen aikana)",
+          "away_temp": "Poissaololämpötila (automaattisesti kun kaikki ovat lähteneet)",
+          "vacation_temp": "Lomalämpötila (pakkassuoja)",
+          "eco_temp": "Eco-lämpötila (energiansäästö, yön ja mukavuuden välillä)",
+          "temp_tolerance": "Lämpötilansietokyky – ohjaa TRV:tä vasta tämän poikkeaman jälkeen",
+          "schedule_enabled": "Ota aikataulu käyttöön",
+          "sched_wd_morning": "Arkipäivä: Mukavuus alkaen",
+          "sched_wd_night": "Arkipäivä: Yö alkaen",
+          "sched_we_morning": "Viikonloppu: Mukavuus alkaen",
+          "sched_we_night": "Viikonloppu: Yö alkaen"
+        },
+        "data_description": {
+          "schedule_enabled": "Kun poistettu käytöstä, mukavuuslämpötila on aktiivinen ympäri vuorokauden – ei automaattista päivä/yö-vaihtoa.",
+          "sched_wd_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
+          "sched_wd_night": "Yölämpötila on voimassa tästä ajasta alkaen",
+          "sched_we_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
+          "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen"
+        }
+      },
+      "presence": {
+        "title": "Vaihe 3 / 4 – Läsnäolo ja automaatio",
+        "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
+        "data": {
+          "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
+          "home_zone": "Kotivyöhyke (oletus: zone.home)",
+          "learning_enabled": "Ota oppimisalgoritmi käyttöön"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart oppii lämmitys- ja jäähdytysnopeudet sekä optimaaliset lämpötilat tälle vyöhykkeelle."
+        }
+      },
+      "weather": {
+        "title": "Vaihe 4 / 4 – Sää ja ulkoanturit",
+        "description": "Kaikki kentät ovat valinnaisia – omat anturit ohittavat sääentiteetin. Järjestelmä toimii myös ilman säätietoja.",
+        "data": {
+          "weather_entity": "Sääentiteetti (esim. weather.home)",
+          "outdoor_temp_sensor": "Ulkolämpötila – oma sääasema (etusija)",
+          "outdoor_humidity_sensor": "Ulkoilman kosteus",
+          "outdoor_wind_sensor": "Tuulennopeus (m/s tai km/h)",
+          "outdoor_solar_sensor": "Auringonsäteily (W/m²)",
+          "outdoor_rain_sensor": "Sademäärä"
+        },
+        "data_description": {
+          "weather_entity": "Käytetään ennusteisiin ja ennusteiden tukahduttamiseen. Jätä tyhjäksi, jos käytät vain omia antureita.",
+          "outdoor_temp_sensor": "Omat anturit ovat tarkempia kuin sääentiteetti ja niitä suositaan."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Sääentiteettiä ei löydy. Valitse kelvollinen entiteetti tai jätä kenttä tyhjäksi.",
+      "name_required": "Anna vyöhykkeen nimi.",
+      "required": "Vaaditaan vähintään yksi termostaatti / TRV.",
+      "night_temp_too_high": "Yölämpötilan on oltava alhaisempi kuin mukavuuslämpötilan.",
+      "away_temp_too_high": "Poissaololämpötila ei saa olla korkeampi kuin yölämpötila."
+    },
+    "abort": {
+      "already_configured": "Tämä vyöhyke on jo määritetty.",
+      "system_already_configured": "ThermoSmartin globaalit säätimet on jo määritetty.",
+      "system_no_options": "ThermoSmart-järjestelmällä ei ole määritettäviä asetuksia. Käytä kesätila-valitsinta ja lomakytkintä kaikkien vyöhykkeiden ohjaamiseen."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Vaihe 1 / 4 – Laitteet ja anturit",
+        "description": "Kalibrointientiteetit ja quirk-kytkimet havaitaan automaattisesti.",
+        "data": {
+          "name": "Vyöhykkeen nimi",
+          "climate_entities": "Termostaatit / TRV:t",
+          "temp_sensors": "Sisälämpötila-anturit",
+          "humidity_sensors": "Sisäilman kosteusanturit",
+          "window_sensors": "Ikkunanturit",
+          "window_open_delay": "Lämmitys pois – viive ikkunan avaamisen jälkeen",
+          "window_close_delay": "Lämmitys päälle – viive ikkunan sulkemisen jälkeen",
+          "valve_maintenance": "Ota venttiilin huolto käyttöön (vain kesä- / lomatila)",
+          "calibration_invert": "Käännä kalibrointipoikkeama (ME167 ja vastaavat)"
+        }
+      },
+      "schedule": {
+        "title": "Vaihe 2 / 4 – Lämpötilat ja aikataulu",
+        "description": "Päivittäinen kulku: Yö → Mukavuus → Yö",
+        "data": {
+          "comfort_temp": "Mukavuuslämpötila",
+          "night_temp": "Yölämpötila",
+          "away_temp": "Poissaololämpötila",
+          "vacation_temp": "Lomalämpötila",
+          "eco_temp": "Eco-lämpötila",
+          "temp_tolerance": "Lämpötilansietokyky",
+          "schedule_enabled": "Ota aikataulu käyttöön",
+          "sched_wd_morning": "Arkipäivä: Mukavuus alkaen",
+          "sched_wd_night": "Arkipäivä: Yö alkaen",
+          "sched_we_morning": "Viikonloppu: Mukavuus alkaen",
+          "sched_we_night": "Viikonloppu: Yö alkaen"
+        },
+        "data_description": {
+          "schedule_enabled": "Kun poistettu käytöstä, mukavuuslämpötila on aktiivinen ympäri vuorokauden – ei automaattista päivä/yö-vaihtoa.",
+          "sched_wd_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
+          "sched_wd_night": "Yölämpötila on voimassa tästä ajasta alkaen",
+          "sched_we_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
+          "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen"
+        }
+      },
+      "presence": {
+        "title": "Vaihe 3 / 4 – Läsnäolo ja automaatio",
+        "data": {
+          "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
+          "home_zone": "Kotivyöhyke",
+          "learning_enabled": "Ota oppimisalgoritmi käyttöön"
+        }
+      },
+      "weather": {
+        "title": "Vaihe 4 / 4 – Sää ja ulkoanturit",
+        "description": "Kaikki kentät ovat valinnaisia. Omat anturit ohittavat sääentiteetin.",
+        "data": {
+          "weather_entity": "Sääentiteetti",
+          "outdoor_temp_sensor": "Ulkolämpötila (oma asema)",
+          "outdoor_humidity_sensor": "Ulkoilman kosteus",
+          "outdoor_wind_sensor": "Tuulennopeus",
+          "outdoor_solar_sensor": "Auringonsäteily",
+          "outdoor_rain_sensor": "Sademäärä"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Auto",
+              "vacation": "Loma",
+              "sleep":    "Yö"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Aktiivinen ohjaus",
+        "state": { "on": "Aktiivinen – ThermoSmart ohjaa", "off": "Havainnointitila" }
+      },
+      "learning": { "name": "Oppimistila" },
+      "vacation_mode": { "name": "Lomatila" }
+    },
+    "select": {
+      "mode": {
+        "name": "Lämmitystila",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Mukavuus",
+          "eco":      "Eco",
+          "night":    "Yö",
+          "away":     "Poissa",
+          "vacation": "Loma"
+        }
+      },
+      "summer_mode": {
+        "name": "Kesätila",
+        "state": {
+          "automatic": "Automaattinen",
+          "on":        "Päällä",
+          "off":       "Pois"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Kohdelämpötila" },
+      "trv_setpoint": { "name": "TRV-asetusarvo" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Tulospisteet" },
+      "preheat_minutes": { "name": "Esilämmitysaika" },
+      "confidence": { "name": "Oppimisedistyminen" },
+      "weather_offset": { "name": "Sääkorjaus" },
+      "status": {
+        "name": "Tila",
+        "state": {
+          "disabled":              "Poistettu käytöstä",
+          "observation_mode":      "Havainnointitila",
+          "controlling_no_learning": "Aktiivinen ohjaus (oppiminen pois)",
+          "heating_failure":       "Lämmitysvika!",
+          "preheating":            "Esilämmitetään",
+          "summer":                "Kesä – lämmitys pois",
+          "window_open":           "Ikkuna auki",
+          "vacation":              "Loma",
+          "away":                  "Poissa",
+          "heating":               "Lämmitetään",
+          "idle":                  "Lämpötila ylläpidetään",
+          "active":                "Aktiivinen"
+        }
+      },
+      "temp_slope": { "name": "Lämpötilan kaltevuus" },
+      "temp_ema_1h": { "name": "Lämpötila EMA 1h" },
+      "heat_loss": { "name": "Lämpöhäviö" },
+      "heating_power": { "name": "Lämmitysteho" },
+      "sun_intensity": { "name": "Aurinkolämpöhyöty" },
+      "window_cooling_rate": { "name": "Ikkunajäähdytysnopeus" },
+      "trv_observations": { "name": "TRV-havainnot" }
+    }
+  }
+}

@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "ThermoSmart Kurulumu",
+        "menu_options": {
+          "add_system": "Global kontrolleri ayarla (yaz modu ve tatil)",
+          "add_zone": "Isıtma bölgesi ekle"
+        }
+      },
+      "add_system": {
+        "title": "Global kontroller",
+        "description": "Global yaz modu seçiciyi (Otomatik / Açık / Kapalı) ve tatil anahtarını yapılandırır. Termostat gerekmez. Her iki kontrol de aynı anda tüm bölgelere uygulanır."
+      },
+      "add_zone": {
+        "title": "Adım 1 / 4 – Cihazlar ve sensörler",
+        "description": "Bu ısıtma bölgesi için TRV'leri ve sensörleri seçin. Kalibrasyon varlıkları ve quirk anahtarları otomatik olarak algılanır.",
+        "data": {
+          "name": "Bölge adı (ör. Oturma odası)",
+          "climate_entities": "Termostatlar / TRV'ler",
+          "temp_sensors": "İç mekan sıcaklık sensörleri (ortalama hesaplanır)",
+          "humidity_sensors": "İç mekan nem sensörleri",
+          "window_sensors": "Pencere sensörleri (binary_sensor)",
+          "window_open_delay": "Isıtma kapat – pencere açıldıktan sonra gecikme",
+          "window_close_delay": "Isıtma aç – pencere kapandıktan sonra gecikme",
+          "valve_maintenance": "Valf bakımını etkinleştir (Pazar 03:00 – yalnızca yaz modu veya tatil)",
+          "calibration_invert": "Kalibrasyon ofsetini ters çevir (işareti tersine çeviren ME167 gibi TRV'ler için)"
+        }
+      },
+      "schedule": {
+        "title": "Adım 2 / 4 – Sıcaklıklar ve program",
+        "description": "Günlük akış: Gece → Konfor → Gece\n\nTüm kişiler uzakta olduğunda, ThermoSmart programdan bağımsız olarak otomatik olarak uzakta sıcaklığına geçer.",
+        "data": {
+          "comfort_temp": "Konfor sıcaklığı (biri evdeyken)",
+          "night_temp": "Gece sıcaklığı (uyku sırasında azaltma)",
+          "away_temp": "Uzakta sıcaklığı (herkes gittiğinde otomatik)",
+          "vacation_temp": "Tatil sıcaklığı (don koruması)",
+          "eco_temp": "Eco sıcaklığı (enerji tasarrufu, gece ile konfor arası)",
+          "temp_tolerance": "Sıcaklık toleransı – TRV'yi yalnızca bu sapmanın ardından kontrol et",
+          "schedule_enabled": "Zaman programını etkinleştir",
+          "sched_wd_morning": "Hafta içi: Konfor saat",
+          "sched_wd_night": "Hafta içi: Gece saat",
+          "sched_we_morning": "Hafta sonu: Konfor saat",
+          "sched_we_night": "Hafta sonu: Gece saat"
+        },
+        "data_description": {
+          "schedule_enabled": "Devre dışı bırakıldığında, konfor sıcaklığı 24 saat aktiftir – otomatik gündüz/gece geçişi yoktur.",
+          "sched_wd_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
+          "sched_wd_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
+          "sched_we_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
+          "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir"
+        }
+      },
+      "presence": {
+        "title": "Adım 3 / 4 – Varlık ve otomasyon",
+        "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
+        "data": {
+          "presence_persons": "Varlık algılama için kişiler",
+          "home_zone": "Ev bölgesi (varsayılan: zone.home)",
+          "learning_enabled": "Öğrenme algoritmasını etkinleştir"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart bu bölge için ısıtma ve soğutma hızlarını ve optimal sıcaklıkları öğrenir."
+        }
+      },
+      "weather": {
+        "title": "Adım 4 / 4 – Hava durumu ve dış sensörler",
+        "description": "Tüm alanlar isteğe bağlıdır – kendi sensörleriniz hava durumu varlığına göre önceliklidir. Sistem hava durumu verileri olmadan da çalışır.",
+        "data": {
+          "weather_entity": "Hava durumu varlığı (ör. weather.home)",
+          "outdoor_temp_sensor": "Dış sıcaklık – kendi istasyonunuz (öncelikli)",
+          "outdoor_humidity_sensor": "Dış nem",
+          "outdoor_wind_sensor": "Rüzgar hızı (m/s veya km/h)",
+          "outdoor_solar_sensor": "Güneş ışınımı (W/m²)",
+          "outdoor_rain_sensor": "Yağış"
+        },
+        "data_description": {
+          "weather_entity": "Tahminler ve tahmin bastırma için kullanılır. Yalnızca kendi sensörlerinizi kullanıyorsanız boş bırakın.",
+          "outdoor_temp_sensor": "Kendi sensörleriniz hava durumu varlığından daha hassastır ve tercih edilir."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Hava durumu varlığı bulunamadı. Geçerli bir varlık seçin veya alanı boş bırakın.",
+      "name_required": "Bir bölge adı girin.",
+      "required": "En az bir termostat / TRV gereklidir.",
+      "night_temp_too_high": "Gece sıcaklığı konfor sıcaklığından düşük olmalıdır.",
+      "away_temp_too_high": "Uzakta sıcaklığı gece sıcaklığından yüksek olmamalıdır."
+    },
+    "abort": {
+      "already_configured": "Bu bölge zaten yapılandırılmış.",
+      "system_already_configured": "ThermoSmart global kontrolleri zaten ayarlanmış.",
+      "system_no_options": "ThermoSmart System'in yapılandırılabilir seçeneği yoktur. Tüm bölgeleri kontrol etmek için yaz modu seçiciyi ve tatil anahtarını kullanın."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Adım 1 / 4 – Cihazlar ve sensörler",
+        "description": "Kalibrasyon varlıkları ve quirk anahtarları otomatik olarak algılanır.",
+        "data": {
+          "name": "Bölge adı",
+          "climate_entities": "Termostatlar / TRV'ler",
+          "temp_sensors": "İç mekan sıcaklık sensörleri",
+          "humidity_sensors": "İç mekan nem sensörleri",
+          "window_sensors": "Pencere sensörleri",
+          "window_open_delay": "Isıtma kapat – pencere açıldıktan sonra gecikme",
+          "window_close_delay": "Isıtma aç – pencere kapandıktan sonra gecikme",
+          "valve_maintenance": "Valf bakımını etkinleştir (yalnızca yaz / tatil modu)",
+          "calibration_invert": "Kalibrasyon ofsetini ters çevir (ME167 ve benzerleri)"
+        }
+      },
+      "schedule": {
+        "title": "Adım 2 / 4 – Sıcaklıklar ve program",
+        "description": "Günlük akış: Gece → Konfor → Gece",
+        "data": {
+          "comfort_temp": "Konfor sıcaklığı",
+          "night_temp": "Gece sıcaklığı",
+          "away_temp": "Uzakta sıcaklığı",
+          "vacation_temp": "Tatil sıcaklığı",
+          "eco_temp": "Eco sıcaklığı",
+          "temp_tolerance": "Sıcaklık toleransı",
+          "schedule_enabled": "Zaman programını etkinleştir",
+          "sched_wd_morning": "Hafta içi: Konfor saat",
+          "sched_wd_night": "Hafta içi: Gece saat",
+          "sched_we_morning": "Hafta sonu: Konfor saat",
+          "sched_we_night": "Hafta sonu: Gece saat"
+        },
+        "data_description": {
+          "schedule_enabled": "Devre dışı bırakıldığında, konfor sıcaklığı 24 saat aktiftir – otomatik gündüz/gece geçişi yoktur.",
+          "sched_wd_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
+          "sched_wd_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
+          "sched_we_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
+          "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir"
+        }
+      },
+      "presence": {
+        "title": "Adım 3 / 4 – Varlık ve otomasyon",
+        "data": {
+          "presence_persons": "Varlık algılama için kişiler",
+          "home_zone": "Ev bölgesi",
+          "learning_enabled": "Öğrenme algoritmasını etkinleştir"
+        }
+      },
+      "weather": {
+        "title": "Adım 4 / 4 – Hava durumu ve dış sensörler",
+        "description": "Tüm alanlar isteğe bağlıdır. Kendi sensörleriniz hava durumu varlığına göre önceliklidir.",
+        "data": {
+          "weather_entity": "Hava durumu varlığı",
+          "outdoor_temp_sensor": "Dış sıcaklık (kendi istasyonunuz)",
+          "outdoor_humidity_sensor": "Dış nem",
+          "outdoor_wind_sensor": "Rüzgar hızı",
+          "outdoor_solar_sensor": "Güneş ışınımı",
+          "outdoor_rain_sensor": "Yağış"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Otomatik",
+              "vacation": "Tatil",
+              "sleep":    "Gece"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Aktif kontrol",
+        "state": { "on": "Aktif – ThermoSmart kontrol ediyor", "off": "Gözlem modu" }
+      },
+      "learning": { "name": "Öğrenme modu" },
+      "vacation_mode": { "name": "Tatil modu" }
+    },
+    "select": {
+      "mode": {
+        "name": "Isıtma modu",
+        "state": {
+          "auto":     "Otomatik",
+          "comfort":  "Konfor",
+          "eco":      "Eco",
+          "night":    "Gece",
+          "away":     "Uzakta",
+          "vacation": "Tatil"
+        }
+      },
+      "summer_mode": {
+        "name": "Yaz modu",
+        "state": {
+          "automatic": "Otomatik",
+          "on":        "Açık",
+          "off":       "Kapalı"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Hedef sıcaklık" },
+      "trv_setpoint": { "name": "TRV ayar noktası" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Sonuç puanı" },
+      "preheat_minutes": { "name": "Ön ısıtma süresi" },
+      "confidence": { "name": "Öğrenme ilerlemesi" },
+      "weather_offset": { "name": "Hava durumu düzeltmesi" },
+      "status": {
+        "name": "Durum",
+        "state": {
+          "disabled":              "Devre dışı",
+          "observation_mode":      "Gözlem modu",
+          "controlling_no_learning": "Aktif kontrol (öğrenme kapalı)",
+          "heating_failure":       "Isıtma arızası!",
+          "preheating":            "Ön ısıtma",
+          "summer":                "Yaz – ısıtma kapalı",
+          "window_open":           "Pencere açık",
+          "vacation":              "Tatil",
+          "away":                  "Uzakta",
+          "heating":               "Isıtılıyor",
+          "idle":                  "Sıcaklık korunuyor",
+          "active":                "Aktif"
+        }
+      },
+      "temp_slope": { "name": "Sıcaklık eğimi" },
+      "temp_ema_1h": { "name": "Sıcaklık EMA 1s" },
+      "heat_loss": { "name": "Isı kaybı" },
+      "heating_power": { "name": "Isıtma gücü" },
+      "sun_intensity": { "name": "Güneş ısı kazancı" },
+      "window_cooling_rate": { "name": "Pencereden soğuma hızı" },
+      "trv_observations": { "name": "TRV gözlemleri" }
+    }
+  }
+}

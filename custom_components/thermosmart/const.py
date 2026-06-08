@@ -13,7 +13,6 @@ CONF_OUTDOOR_SOLAR_SENSOR = "outdoor_solar_sensor"
 CONF_OUTDOOR_RAIN_SENSOR = "outdoor_rain_sensor"
 CONF_LEARNING_ENABLED = "learning_enabled"
 CONF_SCHEDULE_ENABLED = "schedule_enabled"
-CONF_HEATING_ZONE = "heating_zone"
 CONF_PRESENCE_PERSONS = "presence_persons"
 CONF_HOME_ZONE = "home_zone"           # Welche Zone gilt als "zuhause"?
 CONF_VACATION_BOOLEAN = "vacation_boolean"

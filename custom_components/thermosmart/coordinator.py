@@ -158,7 +158,7 @@ class ThermoSmartCoordinator(
 
     def set_active_control(self, active: bool) -> None:
         self._active_control = active
-        _LOGGER.warning(
+        _LOGGER.info(
             "ThermoSmart '%s': Aktive Steuerung %s",
             self.zone_name,
             "AN – Thermostat wird gesteuert" if active else "AUS – Beobachtungsmodus",

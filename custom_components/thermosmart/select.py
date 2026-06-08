@@ -155,6 +155,7 @@ class ThermoSmartGlobalSummerSelect(SelectEntity, RestoreEntity):
             name="ThermoSmart System",
             manufacturer="ThermoSmart",
             model="Global Control",
+            sw_version=VERSION,
         )
         self._current_option: str = SUMMER_OPT_AUTOMATIC
         self._unsub_listeners: list = []

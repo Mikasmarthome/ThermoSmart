@@ -152,6 +152,7 @@ def _global_device_info() -> DeviceInfo:
         name="ThermoSmart System",
         manufacturer="ThermoSmart",
         model="Global Control",
+        sw_version=VERSION,
     )
 
 def _all_coordinators(hass: HomeAssistant):

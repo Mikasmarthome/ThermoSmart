@@ -178,9 +178,12 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         self._is_on = last is not None and last.state == "on"
+        # Store for coordinators that load after this entity (race condition fix)
+        self._hass.data[DOMAIN]["global_vacation_override"] = self._is_on
         if self._is_on:
             for coord in _all_coordinators(self._hass):
                 coord.set_vacation_override(True)
+                await coord.async_request_refresh()
 
     @property
     def is_on(self) -> bool:

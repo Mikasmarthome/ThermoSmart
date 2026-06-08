@@ -170,6 +170,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         learning_engine=learning_engine,
     )
     await coordinator.async_config_entry_first_refresh()
+
+    # Apply global overrides that were already restored by the system entry
+    # before this zone loaded (race condition fix: system entry may load first).
+    _SUMMER_OPT_MAP: dict[str, bool | None] = {"automatic": None, "on": True, "off": False}
+    _needs_refresh = False
+    if hass.data[DOMAIN].get("global_vacation_override"):
+        coordinator.set_vacation_override(True)
+        _needs_refresh = True
+    _summer_opt = hass.data[DOMAIN].get("global_summer_override")
+    if _summer_opt is not None:
+        coordinator.set_summer_override(_SUMMER_OPT_MAP.get(_summer_opt))
+        _needs_refresh = True
+    if _needs_refresh:
+        await coordinator.async_request_refresh()
+
     await coordinator.async_detect_device_entities()
     coordinator.setup_event_listeners()
     entry.async_on_unload(coordinator.cleanup_event_listeners)
@@ -199,7 +214,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             remaining = [
                 k for k in hass.data[DOMAIN]
                 if k not in ("learning_engine", "global_switches_created",
-                             "global_summer_select_created", "summer_switch_migrated")
+                             "global_summer_select_created", "summer_switch_migrated",
+                             "global_vacation_override", "global_summer_override")
                 and not (isinstance(hass.data[DOMAIN].get(k), dict)
                          and hass.data[DOMAIN][k].get("type") == "system")
             ]

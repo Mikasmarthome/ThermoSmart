@@ -220,6 +220,7 @@ class ThermoSmartGlobalSummerSelect(SelectEntity, RestoreEntity):
         if option not in _SUMMER_OPTS:
             return
         self._current_option = option
+        self._hass.data[DOMAIN]["global_summer_override"] = option
         override_val = _SUMMER_OVERRIDE_MAP[option]
         for coord in _all_coordinators(self._hass):
             coord.set_summer_override(override_val)

@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Активно управление",
-        "state": { "on": "Активно – ThermoSmart управлява", "off": "Режим на наблюдение" }
+        "name": "Активно управление"
       },
       "learning": { "name": "Режим на учене" },
       "vacation_mode": { "name": "Режим почивка" }

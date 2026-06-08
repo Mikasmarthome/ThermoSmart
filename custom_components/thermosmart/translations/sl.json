@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktivno krmiljenje",
-        "state": { "on": "Aktivno – ThermoSmart krmili", "off": "Način opazovanja" }
+        "name": "Aktivno krmiljenje"
       },
       "learning": { "name": "Način učenja" },
       "vacation_mode": { "name": "Počitniški način" }

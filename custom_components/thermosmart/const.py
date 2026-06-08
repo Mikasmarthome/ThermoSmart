@@ -171,20 +171,7 @@ STORAGE_KEY = f"{DOMAIN}_learning_data"
 # Platforms
 PLATFORMS = ["climate", "sensor", "switch", "select"]
 
-# Attributes
-ATTR_ZONE = "zone"
-ATTR_TARGET_TEMP = "target_temperature"
-ATTR_CURRENT_TEMP = "current_temperature"
-ATTR_OUTDOOR_TEMP = "outdoor_temperature"
-ATTR_WEATHER_CONDITION = "weather_condition"
-ATTR_WIND_SPEED = "wind_speed"
-ATTR_PREHEAT_MINUTES = "preheat_minutes"
-ATTR_LEARNING_CONFIDENCE = "learning_confidence"
-ATTR_WEATHER_OFFSET = "weather_offset"
-ATTR_LAST_UPDATED = "last_updated"
-
 # Icons
-ICON_THERMOSMART = "mdi:thermostat-auto"
 ICON_ZONE = "mdi:home-thermometer"
 ICON_LEARNING = "mdi:brain"
 ICON_WEATHER_ADJUST = "mdi:weather-partly-cloudy"

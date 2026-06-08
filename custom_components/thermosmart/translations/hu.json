@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktív vezérlés",
-        "state": { "on": "Aktív – ThermoSmart vezérel", "off": "Megfigyelési mód" }
+        "name": "Aktív vezérlés"
       },
       "learning": { "name": "Tanulási mód" },
       "vacation_mode": { "name": "Vakációs mód" }

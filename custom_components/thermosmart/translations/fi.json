@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktiivinen ohjaus",
-        "state": { "on": "Aktiivinen – ThermoSmart ohjaa", "off": "Havainnointitila" }
+        "name": "Aktiivinen ohjaus"
       },
       "learning": { "name": "Oppimistila" },
       "vacation_mode": { "name": "Lomatila" }

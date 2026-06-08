@@ -7,8 +7,8 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--beta.23-orange.svg" alt="Version"/></a>
-  <img src="https://img.shields.io/badge/status-beta-red.svg" alt="Beta"/>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--rc.1-blue.svg" alt="Version"/></a>
+  <img src="https://img.shields.io/badge/status-release--candidate-blue.svg" alt="Release Candidate"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
 </p>
@@ -17,9 +17,9 @@
 
 > ⚠️ **Use at your own risk.** ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices. Always set a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
 
-> 🧪 **Beta (v1.0.0-beta.23)** — Core features are functional. The learning algorithm improves with each heating season. Please report issues on GitHub.
+> 🚀 **Release Candidate (v1.0.0-rc.1)** — Core features are complete and tested. The learning algorithm improves with each heating season. Please report any issues on GitHub before the stable release.
 
-> 🔄 **Migration notice:** The accidentally published `v1.0.1-beta.x` releases have been removed. The current release is `v1.0.0-beta.23`. If you installed a `v1.0.1-beta.x` version, HACS may not offer an automatic update — go to HACS → ThermoSmart → **⋮** → **Redownload** and select `v1.0.0-beta.23`. *(This notice will be removed with the first stable release.)*
+> 🔄 **Migration notice:** The accidentally published `v1.0.1-beta.x` releases have been removed. The current release is `v1.0.0-rc.1`. If you installed a `v1.0.1-beta.x` version, HACS may not offer an automatic update — go to HACS → ThermoSmart → **⋮** → **Redownload** and select `v1.0.0-rc.1`. *(This notice will be removed with the first stable release.)*
 
 ---
 
@@ -54,7 +54,7 @@ HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://
 
 > ⚠️ Beta versions are only visible when Pre-Releases are enabled in HACS.
 
-HACS → Integrations → find **ThermoSmart** → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-beta.23` → Download
+HACS → Integrations → find **ThermoSmart** → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-rc.1` → Download
 
 ### 3 — Restart and Add
 
@@ -98,7 +98,7 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 ### Global (ThermoSmart System)
 | Entity | Description |
 |---|---|
-| `select.thermosmart_summer_mode` | Summer mode — `Automatic` / `On` / `Off` |
+| `select.thermosmart_summer_mode` | Summer mode — `automatic` / `on` / `off` |
 | `switch.thermosmart_vacation_mode` | Vacation mode — all zones → vacation temperature |
 
 ---
@@ -145,9 +145,9 @@ ThermoSmart falls back to setpoint boost on devices without a recognised valve e
 
 | Option | Behaviour |
 |---|---|
-| `Automatic` | Activates when the 72 h rolling outdoor average exceeds **18 °C**; deactivates below **15 °C** (3 °C hysteresis prevents rapid toggling) |
-| `On` | Forces summer mode — heating disabled, frost protection (12 °C) active |
-| `Off` | Forces winter mode — normal heating regardless of outdoor temperature |
+| `automatic` | Activates when the 72 h rolling outdoor average exceeds **18 °C**; deactivates below **15 °C** (3 °C hysteresis prevents rapid toggling) |
+| `on` | Forces summer mode — heating disabled, frost protection (12 °C) active |
+| `off` | Forces winter mode — normal heating regardless of outdoor temperature |
 
 In summer mode all normal heating is suspended. TRVs are held at 12 °C to keep valves exercised.
 
@@ -179,8 +179,8 @@ Sets all zones to the configured vacation temperature (default 12 °C). Takes pr
 **Why does HACS not show ThermoSmart or show no version?**  
 Beta versions only appear when Pre-Releases are enabled. HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions**.
 
-**How do I switch to v1.0.0-beta.23 manually?**  
-HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-beta.23` → Download → restart HA.
+**How do I switch to v1.0.0-rc.1 manually?**  
+HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-rc.1` → Download → restart HA.
 
 **What is Observation mode?**  
 Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.
@@ -205,13 +205,15 @@ ThermoSmart averages the remaining sensors. Temperature decisions pause only if 
 | `switch.thermosmart_global_summer` | `select.thermosmart_summer_mode` |
 
 The old entity is automatically removed from the Entity Registry on upgrade. **Dashboards and automations referencing the old entity must be updated manually.**  
-New options: `Automatic` · `On` · `Off`
+New options: `automatic` · `on` · `off`
 
 ---
 
 ## Languages
 
-DE · EN · FR · NL · PL · SV · IT — translation files available. Additional languages welcome via Pull Request (`custom_components/thermosmart/translations/`).
+24 UI languages supported: BG · CA · CS · DA · DE · EL · EN · ES · FI · FR · HU · IT · NB · NL · PL · PT · RO · RU · SK · SL · SV · TR · UK · ZH-Hans
+
+Additional languages welcome via Pull Request (`custom_components/thermosmart/translations/`).
 
 ---
 

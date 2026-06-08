@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Sett opp ThermoSmart",
+        "menu_options": {
+          "add_system": "Sett opp globale kontroller (sommer- og feriemodus)",
+          "add_zone": "Legg til varmesone"
+        }
+      },
+      "add_system": {
+        "title": "Globale kontroller",
+        "description": "Setter opp den globale sommermodusvelgeren (Automatisk / På / Av) og feriebryteren. Ingen termostat kreves. Begge kontrollene gjelder for alle soner samtidig."
+      },
+      "add_zone": {
+        "title": "Trinn 1 / 4 – Enheter og sensorer",
+        "description": "Velg TRV-er og sensorer for denne varmesonen. Kalibreringsenheter og quirk-brytere oppdages automatisk.",
+        "data": {
+          "name": "Sonenavn (f.eks. Stue)",
+          "climate_entities": "Termostater / TRV-er",
+          "temp_sensors": "Innendørs temperatursensorer (gjennomsnitt beregnes)",
+          "humidity_sensors": "Innendørs fuktighetssensorer",
+          "window_sensors": "Vinduensensorer (binary_sensor)",
+          "window_open_delay": "Varme av – forsinkelse etter vindu åpnes",
+          "window_close_delay": "Varme på – forsinkelse etter vindu lukkes",
+          "valve_maintenance": "Aktiver ventilvedlikehold (søndag 03:00 – kun sommer- eller feriemodus)",
+          "calibration_invert": "Inverter kalibreringsoffset (for TRV-er som ME167 som inverterer fortegnet)"
+        }
+      },
+      "schedule": {
+        "title": "Trinn 2 / 4 – Temperaturer og tidsplan",
+        "description": "Daglig forløp: Natt → Komfort → Natt\n\nNår alle personer er borte, bytter ThermoSmart automatisk til fraværstemperaturen – uavhengig av tidsplanen.",
+        "data": {
+          "comfort_temp": "Komforttemperatur (når noen er hjemme)",
+          "night_temp": "Natttemperatur (senking under søvn)",
+          "away_temp": "Fraværstemperatur (automatisk når alle er gått)",
+          "vacation_temp": "Ferietemperatur (frostbeskyttelse)",
+          "eco_temp": "Eco-temperatur (energisparing, mellom natt og komfort)",
+          "temp_tolerance": "Temperaturtolerance – styr TRV kun utover denne avviket",
+          "schedule_enabled": "Aktiver tidsplan",
+          "sched_wd_morning": "Hverdag: Komfort fra",
+          "sched_wd_night": "Hverdag: Natt fra",
+          "sched_we_morning": "Helg: Komfort fra",
+          "sched_we_night": "Helg: Natt fra"
+        },
+        "data_description": {
+          "schedule_enabled": "Når deaktivert er komforttemperaturen aktiv hele døgnet – ingen automatisk dag/natt-bytte.",
+          "sched_wd_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
+          "sched_wd_night": "Natttemperaturen gjelder fra dette tidspunktet",
+          "sched_we_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
+          "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet"
+        }
+      },
+      "presence": {
+        "title": "Trinn 3 / 4 – Tilstedeværelse og automatisering",
+        "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
+        "data": {
+          "presence_persons": "Personer for tilstedeværelsesregistrering",
+          "home_zone": "Hjemmesone (standard: zone.home)",
+          "learning_enabled": "Aktiver læringsalgoritme"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart lærer oppvarmings- og avkjølingshastigheter samt optimale temperaturer for denne sonen."
+        }
+      },
+      "weather": {
+        "title": "Trinn 4 / 4 – Vær og utendørs sensorer",
+        "description": "Alle felt er valgfrie – egne sensorer har forrang over værenheten. Systemet fungerer også uten værdata.",
+        "data": {
+          "weather_entity": "Værenhet (f.eks. weather.home)",
+          "outdoor_temp_sensor": "Utendørs temperatur – egen værstasjon (prioritet)",
+          "outdoor_humidity_sensor": "Utendørs fuktighet",
+          "outdoor_wind_sensor": "Vindhastighet (m/s eller km/h)",
+          "outdoor_solar_sensor": "Solstråling (W/m²)",
+          "outdoor_rain_sensor": "Nedbør"
+        },
+        "data_description": {
+          "weather_entity": "Brukes til værvarsler og prognosesuppresjon. La feltet stå tomt hvis du bare bruker egne sensorer.",
+          "outdoor_temp_sensor": "Egne sensorer er mer nøyaktige enn værenheten og foretrekkes."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Værenhet ikke funnet. Velg en gyldig enhet eller la feltet stå tomt.",
+      "name_required": "Skriv inn et sonenavn.",
+      "required": "Minst én termostat / TRV er påkrevd.",
+      "night_temp_too_high": "Natttemperaturen må være lavere enn komforttemperaturen.",
+      "away_temp_too_high": "Fraværstemperaturen må ikke være høyere enn natttemperaturen."
+    },
+    "abort": {
+      "already_configured": "Denne sonen er allerede konfigurert.",
+      "system_already_configured": "De globale ThermoSmart-kontrollene er allerede satt opp.",
+      "system_no_options": "ThermoSmart System har ingen konfigurerbare alternativer. Bruk sommermodusvelgeren og feriebyteren til å styre alle soner."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Trinn 1 / 4 – Enheter og sensorer",
+        "description": "Kalibreringsenheter og quirk-brytere oppdages automatisk.",
+        "data": {
+          "name": "Sonenavn",
+          "climate_entities": "Termostater / TRV-er",
+          "temp_sensors": "Innendørs temperatursensorer",
+          "humidity_sensors": "Innendørs fuktighetssensorer",
+          "window_sensors": "Vinduensensorer",
+          "window_open_delay": "Varme av – forsinkelse etter vindu åpnes",
+          "window_close_delay": "Varme på – forsinkelse etter vindu lukkes",
+          "valve_maintenance": "Aktiver ventilvedlikehold (kun sommer- / feriemodus)",
+          "calibration_invert": "Inverter kalibreringsoffset (ME167 og lignende)"
+        }
+      },
+      "schedule": {
+        "title": "Trinn 2 / 4 – Temperaturer og tidsplan",
+        "description": "Daglig forløp: Natt → Komfort → Natt",
+        "data": {
+          "comfort_temp": "Komforttemperatur",
+          "night_temp": "Natttemperatur",
+          "away_temp": "Fraværstemperatur",
+          "vacation_temp": "Ferietemperatur",
+          "eco_temp": "Eco-temperatur",
+          "temp_tolerance": "Temperaturtolerance",
+          "schedule_enabled": "Aktiver tidsplan",
+          "sched_wd_morning": "Hverdag: Komfort fra",
+          "sched_wd_night": "Hverdag: Natt fra",
+          "sched_we_morning": "Helg: Komfort fra",
+          "sched_we_night": "Helg: Natt fra"
+        },
+        "data_description": {
+          "schedule_enabled": "Når deaktivert er komforttemperaturen aktiv hele døgnet – ingen automatisk dag/natt-bytte.",
+          "sched_wd_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
+          "sched_wd_night": "Natttemperaturen gjelder fra dette tidspunktet",
+          "sched_we_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
+          "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet"
+        }
+      },
+      "presence": {
+        "title": "Trinn 3 / 4 – Tilstedeværelse og automatisering",
+        "data": {
+          "presence_persons": "Personer for tilstedeværelsesregistrering",
+          "home_zone": "Hjemmesone",
+          "learning_enabled": "Aktiver læringsalgoritme"
+        }
+      },
+      "weather": {
+        "title": "Trinn 4 / 4 – Vær og utendørs sensorer",
+        "description": "Alle felt er valgfrie. Egne sensorer har forrang over værenheten.",
+        "data": {
+          "weather_entity": "Værenhet",
+          "outdoor_temp_sensor": "Utendørs temperatur (egen stasjon)",
+          "outdoor_humidity_sensor": "Utendørs fuktighet",
+          "outdoor_wind_sensor": "Vindhastighet",
+          "outdoor_solar_sensor": "Solstråling",
+          "outdoor_rain_sensor": "Nedbør"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Auto",
+              "vacation": "Ferie",
+              "sleep":    "Natt"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Aktiv styring",
+        "state": { "on": "Aktiv – ThermoSmart styrer", "off": "Observasjonsmodus" }
+      },
+      "learning": { "name": "Læringsmodus" },
+      "vacation_mode": { "name": "Feriemodus" }
+    },
+    "select": {
+      "mode": {
+        "name": "Varmemodus",
+        "state": {
+          "auto":     "Auto",
+          "comfort":  "Komfort",
+          "eco":      "Eco",
+          "night":    "Natt",
+          "away":     "Borte",
+          "vacation": "Ferie"
+        }
+      },
+      "summer_mode": {
+        "name": "Sommermodus",
+        "state": {
+          "automatic": "Automatisk",
+          "on":        "På",
+          "off":       "Av"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Måltemperatur" },
+      "trv_setpoint": { "name": "TRV-innstillingspunkt" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Resultatscore" },
+      "preheat_minutes": { "name": "Forvarmingstid" },
+      "confidence": { "name": "Læringsfremdrift" },
+      "weather_offset": { "name": "Værkorrigering" },
+      "status": {
+        "name": "Status",
+        "state": {
+          "disabled":              "Deaktivert",
+          "observation_mode":      "Observasjonsmodus",
+          "controlling_no_learning": "Aktiv styring (læring av)",
+          "heating_failure":       "Varmefeil!",
+          "preheating":            "Forvarmer",
+          "summer":                "Sommer – varme av",
+          "window_open":           "Vindu åpent",
+          "vacation":              "Ferie",
+          "away":                  "Borte",
+          "heating":               "Varmer",
+          "idle":                  "Temperatur opprettholdt",
+          "active":                "Aktiv"
+        }
+      },
+      "temp_slope": { "name": "Temperaturhelling" },
+      "temp_ema_1h": { "name": "Temperatur EMA 1h" },
+      "heat_loss": { "name": "Varmetap" },
+      "heating_power": { "name": "Varmeeffekt" },
+      "sun_intensity": { "name": "Solvarmegevinst" },
+      "window_cooling_rate": { "name": "Vindusavkjølingshastighet" },
+      "trv_observations": { "name": "TRV-observasjoner" }
+    }
+  }
+}

@@ -35,6 +35,7 @@ from .const import (
     HEATING_FAILURE_SLOPE_THRESH,
     HEATING_FAILURE_CMD_DELTA,
     TPI_MAX_BOOST_CELSIUS,
+    INDOOR_SAFETY_TEMP,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -111,6 +112,7 @@ class ThermoSmartCoordinator(
             maxlen=int(SEASON_HOURS * 3600 / DEFAULT_SCAN_INTERVAL)
         )
         self._is_summer: bool = False
+        self._indoor_safety_active: bool = False
 
         # Wartung (genutzt von MaintenanceMixin)
         self._last_maintenance: datetime | None = None
@@ -156,7 +158,7 @@ class ThermoSmartCoordinator(
 
     def set_active_control(self, active: bool) -> None:
         self._active_control = active
-        _LOGGER.warning(
+        _LOGGER.info(
             "ThermoSmart '%s': Aktive Steuerung %s",
             self.zone_name,
             "AN – Thermostat wird gesteuert" if active else "AUS – Beobachtungsmodus",
@@ -404,7 +406,32 @@ class ThermoSmartCoordinator(
             presence = self._get_presence_state()
             mode = self._effective_mode(presence)
             recommendation = await self._compute_recommendation(cfg, weather_data, mode)
-            recommendation["is_summer"] = self._is_summer
+
+            effective_summer = self._is_summer
+            if self._is_summer and self._summer_override is None:
+                current_indoor = recommendation.get("current_temp")
+                if current_indoor is not None and current_indoor < INDOOR_SAFETY_TEMP:
+                    effective_summer = False
+                    if not self._indoor_safety_active:
+                        self._indoor_safety_active = True
+                        _LOGGER.warning(
+                            "ThermoSmart '%s': Automatic summer mode temporarily bypassed "
+                            "because indoor temperature %.1f°C is below safety threshold %.1f°C",
+                            self.zone_name,
+                            current_indoor,
+                            INDOOR_SAFETY_TEMP,
+                        )
+                elif self._indoor_safety_active:
+                    self._indoor_safety_active = False
+                    _LOGGER.info(
+                        "ThermoSmart '%s': Automatic summer mode indoor safety no longer active",
+                        self.zone_name,
+                    )
+            else:
+                if self._indoor_safety_active:
+                    self._indoor_safety_active = False
+
+            recommendation["is_summer"] = effective_summer
 
             self.learning_engine.evaluate_forecast_decisions(
                 self.zone_id,
@@ -456,7 +483,7 @@ class ThermoSmartCoordinator(
             await self._async_observe_trv_setpoints(cfg, recommendation, weather_data)
 
             # Outcome-Scoring: Heizsitzung tracken und bewerten
-            if not self._is_summer:
+            if not effective_summer:
                 self.learning_engine.update_heating_session(
                     zone_id=self.zone_id,
                     current_temp=current_temp,
@@ -478,7 +505,7 @@ class ThermoSmartCoordinator(
             # – verbessert die TRV-interne Regelung unabhängig von der aktiven Steuerung
             await self._async_write_external_temp(cfg, recommendation)
 
-            if self._active_control and not self._is_summer:
+            if self._active_control and not effective_summer:
                 await self._async_apply_quirks(cfg)
                 await self._watchdog_hvac(cfg, recommendation)
                 await self._async_calibrate_trvs(cfg, recommendation)
@@ -488,7 +515,7 @@ class ThermoSmartCoordinator(
                 if recommendation.get("window_open"):
                     duty = 0.0
                 await self._async_set_valve_percent(cfg, duty)
-            elif self._active_control and self._is_summer:
+            elif self._active_control and effective_summer:
                 await self._async_apply_quirks(cfg)
                 await self._apply_frost_protection(cfg)
 

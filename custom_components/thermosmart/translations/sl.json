@@ -1,0 +1,236 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Nastavitev ThermoSmart",
+        "menu_options": {
+          "add_system": "Nastavitev globalnih krmilnikov (poletni način in počitnice)",
+          "add_zone": "Dodaj ogrevalno cono"
+        }
+      },
+      "add_system": {
+        "title": "Globalni krmilniki",
+        "description": "Nastavi globalni izbirnik poletnega načina (Samodejno / Vklopljeno / Izklopljeno) in stikalo za počitnice. Termostat ni potreben. Oba krmilnika se uporabljata za vse cone hkrati."
+      },
+      "add_zone": {
+        "title": "Korak 1 / 4 – Naprave in senzorji",
+        "description": "Izberite TRV-je in senzorje za to ogrevalno cono. Kalibracijske entitete in stikala quirk se zaznajo samodejno.",
+        "data": {
+          "name": "Ime cone (npr. Dnevna soba)",
+          "climate_entities": "Termostati / TRV-ji",
+          "temp_sensors": "Senzorji notranje temperature (izračuna se povprečje)",
+          "humidity_sensors": "Senzorji notranje vlažnosti",
+          "window_sensors": "Senzorji oken (binary_sensor)",
+          "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
+          "window_close_delay": "Ogrevanje vklop – zamuda po zapiranju okna",
+          "valve_maintenance": "Aktivacija vzdrževanja ventilov (nedelja 03:00 – samo poletni ali počitniški način)",
+          "calibration_invert": "Invertiranje kalibracijskega odmika (za TRV-je kot ME167, ki invertirajo predznak)"
+        }
+      },
+      "schedule": {
+        "title": "Korak 2 / 4 – Temperature in urnik",
+        "description": "Dnevni potek: Noč → Udobje → Noč\n\nKo so vse osebe odsotne, ThermoSmart samodejno preklopi na temperaturo odsotnosti – ne glede na urnik.",
+        "data": {
+          "comfort_temp": "Temperatura udobja (ko je nekdo doma)",
+          "night_temp": "Nočna temperatura (znižanje med spanjem)",
+          "away_temp": "Temperatura odsotnosti (samodejno ko so vsi odšli)",
+          "vacation_temp": "Počitniška temperatura (zaščita pred zmrzovanjem)",
+          "eco_temp": "Eco temperatura (varčevanje z energijo, med nočno in udobno)",
+          "temp_tolerance": "Temperaturna toleranca – krmilite TRV šele po tem odstopanju",
+          "schedule_enabled": "Aktivacija časovnega urnika",
+          "sched_wd_morning": "Delavnik: Udobje od",
+          "sched_wd_night": "Delavnik: Noč od",
+          "sched_we_morning": "Vikend: Udobje od",
+          "sched_we_night": "Vikend: Noč od"
+        },
+        "data_description": {
+          "schedule_enabled": "Ko je deaktivirano, je temperatura udobja aktivna 24 ur – brez samodejnega preklapljanja dan/noč.",
+          "sched_wd_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
+          "sched_wd_night": "Nočna temperatura velja od tega časa",
+          "sched_we_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
+          "sched_we_night": "Nočna temperatura velja od tega časa"
+        }
+      },
+      "presence": {
+        "title": "Korak 3 / 4 – Prisotnost in avtomatizacija",
+        "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
+        "data": {
+          "presence_persons": "Osebe za zaznavanje prisotnosti",
+          "home_zone": "Domača cona (privzeto: zone.home)",
+          "learning_enabled": "Aktivacija algoritma učenja"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart se uči hitrosti ogrevanja, hlajenja in optimalne temperature za to cono."
+        }
+      },
+      "weather": {
+        "title": "Korak 4 / 4 – Vreme in zunanji senzorji",
+        "description": "Vsa polja so neobvezna – lastni senzorji imajo prednost pred vremensko entiteto. Sistem deluje tudi brez vremenskih podatkov.",
+        "data": {
+          "weather_entity": "Vremenska entiteta (npr. weather.home)",
+          "outdoor_temp_sensor": "Zunanja temperatura – lastna postaja (prednost)",
+          "outdoor_humidity_sensor": "Zunanja vlažnost",
+          "outdoor_wind_sensor": "Hitrost vetra (m/s ali km/h)",
+          "outdoor_solar_sensor": "Sončno obsevanje (W/m²)",
+          "outdoor_rain_sensor": "Padavine"
+        },
+        "data_description": {
+          "weather_entity": "Uporablja se za napovedi in zatiranje napovedi. Pustite prazno, če uporabljate samo lastne senzorje.",
+          "outdoor_temp_sensor": "Lastni senzorji so natančnejši od vremenske entitete in imajo prednost."
+        }
+      }
+    },
+    "error": {
+      "entity_not_found": "Vremenska entiteta ni bila najdena. Izberite veljavno entiteto ali pustite polje prazno.",
+      "name_required": "Vnesite ime cone.",
+      "required": "Potreben je vsaj en termostat / TRV.",
+      "night_temp_too_high": "Nočna temperatura mora biti nižja od temperature udobja.",
+      "away_temp_too_high": "Temperatura odsotnosti ne sme biti višja od nočne temperature."
+    },
+    "abort": {
+      "already_configured": "Ta cona je že konfigurirana.",
+      "system_already_configured": "Globalni krmilniki ThermoSmart so že nastavljeni.",
+      "system_no_options": "ThermoSmart System nima nastavljivih možnosti. Uporabite izbirnik poletnega načina in stikalo za počitnice za krmiljenje vseh con."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Korak 1 / 4 – Naprave in senzorji",
+        "description": "Kalibracijske entitete in stikala quirk se zaznajo samodejno.",
+        "data": {
+          "name": "Ime cone",
+          "climate_entities": "Termostati / TRV-ji",
+          "temp_sensors": "Senzorji notranje temperature",
+          "humidity_sensors": "Senzorji notranje vlažnosti",
+          "window_sensors": "Senzorji oken",
+          "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
+          "window_close_delay": "Ogrevanje vklop – zamuda po zapiranju okna",
+          "valve_maintenance": "Aktivacija vzdrževanja ventilov (samo poletni / počitniški način)",
+          "calibration_invert": "Invertiranje kalibracijskega odmika (ME167 in podobni)"
+        }
+      },
+      "schedule": {
+        "title": "Korak 2 / 4 – Temperature in urnik",
+        "description": "Dnevni potek: Noč → Udobje → Noč",
+        "data": {
+          "comfort_temp": "Temperatura udobja",
+          "night_temp": "Nočna temperatura",
+          "away_temp": "Temperatura odsotnosti",
+          "vacation_temp": "Počitniška temperatura",
+          "eco_temp": "Eco temperatura",
+          "temp_tolerance": "Temperaturna toleranca",
+          "schedule_enabled": "Aktivacija časovnega urnika",
+          "sched_wd_morning": "Delavnik: Udobje od",
+          "sched_wd_night": "Delavnik: Noč od",
+          "sched_we_morning": "Vikend: Udobje od",
+          "sched_we_night": "Vikend: Noč od"
+        },
+        "data_description": {
+          "schedule_enabled": "Ko je deaktivirano, je temperatura udobja aktivna 24 ur – brez samodejnega preklapljanja dan/noč.",
+          "sched_wd_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
+          "sched_wd_night": "Nočna temperatura velja od tega časa",
+          "sched_we_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
+          "sched_we_night": "Nočna temperatura velja od tega časa"
+        }
+      },
+      "presence": {
+        "title": "Korak 3 / 4 – Prisotnost in avtomatizacija",
+        "data": {
+          "presence_persons": "Osebe za zaznavanje prisotnosti",
+          "home_zone": "Domača cona",
+          "learning_enabled": "Aktivacija algoritma učenja"
+        }
+      },
+      "weather": {
+        "title": "Korak 4 / 4 – Vreme in zunanji senzorji",
+        "description": "Vsa polja so neobvezna. Lastni senzorji imajo prednost pred vremensko entiteto.",
+        "data": {
+          "weather_entity": "Vremenska entiteta",
+          "outdoor_temp_sensor": "Zunanja temperatura (lastna postaja)",
+          "outdoor_humidity_sensor": "Zunanja vlažnost",
+          "outdoor_wind_sensor": "Hitrost vetra",
+          "outdoor_solar_sensor": "Sončno obsevanje",
+          "outdoor_rain_sensor": "Padavine"
+        }
+      }
+    }
+  },
+  "entity": {
+    "climate": {
+      "zone": {
+        "state_attributes": {
+          "preset_mode": {
+            "state": {
+              "auto":     "Samodejno",
+              "vacation": "Počitnice",
+              "sleep":    "Noč"
+            }
+          }
+        }
+      }
+    },
+    "switch": {
+      "active_control": {
+        "name": "Aktivno krmiljenje",
+        "state": { "on": "Aktivno – ThermoSmart krmili", "off": "Način opazovanja" }
+      },
+      "learning": { "name": "Način učenja" },
+      "vacation_mode": { "name": "Počitniški način" }
+    },
+    "select": {
+      "mode": {
+        "name": "Način ogrevanja",
+        "state": {
+          "auto":     "Samodejno",
+          "comfort":  "Udobje",
+          "eco":      "Eco",
+          "night":    "Noč",
+          "away":     "Odsoten",
+          "vacation": "Počitnice"
+        }
+      },
+      "summer_mode": {
+        "name": "Poletni način",
+        "state": {
+          "automatic": "Samodejno",
+          "on":        "Vklopljeno",
+          "off":       "Izklopljeno"
+        }
+      }
+    },
+    "sensor": {
+      "adjusted_target": { "name": "Ciljna temperatura" },
+      "trv_setpoint": { "name": "Nastavitvena vrednost TRV" },
+      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "outcome_score": { "name": "Rezultatna ocena" },
+      "preheat_minutes": { "name": "Čas predgrevanja" },
+      "confidence": { "name": "Napredek učenja" },
+      "weather_offset": { "name": "Vremenski odmik" },
+      "status": {
+        "name": "Stanje",
+        "state": {
+          "disabled":              "Deaktivirano",
+          "observation_mode":      "Način opazovanja",
+          "controlling_no_learning": "Aktivno krmiljenje (učenje izklop.)",
+          "heating_failure":       "Napaka ogrevanja!",
+          "preheating":            "Predgrevanje",
+          "summer":                "Poletje – ogrevanje izklop.",
+          "window_open":           "Okno odprto",
+          "vacation":              "Počitnice",
+          "away":                  "Odsoten",
+          "heating":               "Ogrevanje",
+          "idle":                  "Temperatura vzdrževana",
+          "active":                "Aktivno"
+        }
+      },
+      "temp_slope": { "name": "Naklon temperature" },
+      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "heat_loss": { "name": "Toplotne izgube" },
+      "heating_power": { "name": "Moč ogrevanja" },
+      "sun_intensity": { "name": "Solarni toplotni dobitek" },
+      "window_cooling_rate": { "name": "Hitrost ohlajanja skozi okno" },
+      "trv_observations": { "name": "Opazovanja TRV" }
+    }
+  }
+}

@@ -217,3 +217,29 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+
+# Home Assistant local/private files
+secrets.yaml
+configuration.yaml
+automations.yaml
+scripts.yaml
+scenes.yaml
+known_devices.yaml
+.storage/
+*.storage
+lovelace*.yaml
+ui-lovelace.yaml
+*.yaml.bak
+*.backup
+*.tar
+*.log
+
+# Local diagnostics / exports
+diagnostics/
+*.diagnostics.json
+*.trace
+*.trace.json
+
+# Local editor / OS
+.DS_Store
+Thumbs.db

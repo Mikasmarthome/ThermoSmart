@@ -152,6 +152,7 @@ def _global_device_info() -> DeviceInfo:
         name="ThermoSmart System",
         manufacturer="ThermoSmart",
         model="Global Control",
+        sw_version=VERSION,
     )
 
 def _all_coordinators(hass: HomeAssistant):
@@ -164,8 +165,8 @@ def _all_coordinators(hass: HomeAssistant):
 
 class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
     """Vacation mode – applies to all ThermoSmart zones simultaneously."""
-    _attr_has_entity_name = False
-    _attr_name = "ThermoSmart – Vacation Mode"
+    _attr_has_entity_name = True
+    _attr_translation_key = "vacation_mode"
     _attr_icon = "mdi:airplane"
     _attr_unique_id = DOMAIN_GLOBAL_VACATION
 
@@ -178,9 +179,12 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         self._is_on = last is not None and last.state == "on"
+        # Store for coordinators that load after this entity (race condition fix)
+        self._hass.data[DOMAIN]["global_vacation_override"] = self._is_on
         if self._is_on:
             for coord in _all_coordinators(self._hass):
                 coord.set_vacation_override(True)
+                await coord.async_request_refresh()
 
     @property
     def is_on(self) -> bool:
@@ -193,6 +197,7 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True
+        self._hass.data[DOMAIN]["global_vacation_override"] = True
         self.async_write_ha_state()
         for coord in _all_coordinators(self._hass):
             coord.set_vacation_override(True)
@@ -200,6 +205,7 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
+        self._hass.data[DOMAIN]["global_vacation_override"] = False
         self.async_write_ha_state()
         for coord in _all_coordinators(self._hass):
             coord.set_vacation_override(False)

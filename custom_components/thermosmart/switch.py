@@ -164,8 +164,8 @@ def _all_coordinators(hass: HomeAssistant):
 
 class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
     """Vacation mode – applies to all ThermoSmart zones simultaneously."""
-    _attr_has_entity_name = False
-    _attr_name = "ThermoSmart – Vacation Mode"
+    _attr_has_entity_name = True
+    _attr_translation_key = "vacation_mode"
     _attr_icon = "mdi:airplane"
     _attr_unique_id = DOMAIN_GLOBAL_VACATION
 

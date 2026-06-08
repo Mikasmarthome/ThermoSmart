@@ -163,7 +163,8 @@
           "preset_mode": {
             "state": {
               "auto":     "Auto",
-              "vacation": "Vakantie"
+              "vacation": "Vakantie",
+              "sleep":    "Nacht"
             }
           }
         }
@@ -174,7 +175,8 @@
         "name": "Actieve bediening",
         "state": { "on": "Actief – ThermoSmart stuurt aan", "off": "Observatiemodus" }
       },
-      "learning": { "name": "Leermodus" }
+      "learning": { "name": "Leermodus" },
+      "vacation_mode": { "name": "Vakantiemodus" }
     },
     "select": {
       "mode": {
@@ -186,6 +188,14 @@
           "night":    "Nacht",
           "away":     "Afwezig",
           "vacation": "Vakantie"
+        }
+      },
+      "summer_mode": {
+        "name": "Zomermodus",
+        "state": {
+          "automatic": "Automatisch",
+          "on":        "Aan",
+          "off":       "Uit"
         }
       }
     },

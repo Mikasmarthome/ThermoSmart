@@ -657,6 +657,21 @@ class ThermoSmartCoordinator(
                 self._override = None
                 self._override_schedule_period = None
 
+        # Presence-aware override clearing: when presence detection switches to
+        # all-away (AUTO mode only), a manual override must not block the away
+        # temperature from taking effect.
+        # VACATION mode has higher priority (set via set_vacation_override) and is
+        # never reached as HEATING_MODE_AWAY here.
+        # Non-AUTO modes (_mode != HEATING_MODE_AUTO) return their own mode via
+        # _effective_mode(), never HEATING_MODE_AWAY, so this block is inert.
+        if mode == HEATING_MODE_AWAY and self._override is not None:
+            _LOGGER.info(
+                "ThermoSmart '%s': Manual override cleared – all persons away",
+                self.zone_name,
+            )
+            self._override = None
+            self._override_schedule_period = None
+
         override = self.get_override()
         biased_suppression = 1.0
 

@@ -213,6 +213,21 @@ class ThermoSmartStatusSensor(_Base):
     def __init__(self, coordinator, entry):
         super().__init__(coordinator, entry, "status")
         self._attr_unique_id = f"{entry.entry_id}_status"
+        self._attr_device_class = SensorDeviceClass.ENUM
+        self._attr_options = [
+            "disabled",
+            "observation_mode",
+            "controlling_no_learning",
+            "heating_failure",
+            "preheating",
+            "summer",
+            "window_open",
+            "vacation",
+            "away",
+            "heating",
+            "idle",
+            "active",
+        ]
         self._attr_icon = "mdi:home-thermometer"
 
     @property

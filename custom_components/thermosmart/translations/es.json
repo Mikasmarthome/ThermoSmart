@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Control activo",
-        "state": { "on": "Activo – ThermoSmart controla", "off": "Modo observación" }
+        "name": "Control activo"
       },
       "learning": { "name": "Modo aprendizaje" },
       "vacation_mode": { "name": "Modo vacaciones" }

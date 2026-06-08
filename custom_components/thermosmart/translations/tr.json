@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktif kontrol",
-        "state": { "on": "Aktif – ThermoSmart kontrol ediyor", "off": "Gözlem modu" }
+        "name": "Aktif kontrol"
       },
       "learning": { "name": "Öğrenme modu" },
       "vacation_mode": { "name": "Tatil modu" }

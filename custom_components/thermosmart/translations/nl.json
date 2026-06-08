@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Actieve bediening",
-        "state": { "on": "Actief – ThermoSmart stuurt aan", "off": "Observatiemodus" }
+        "name": "Actieve bediening"
       },
       "learning": { "name": "Leermodus" },
       "vacation_mode": { "name": "Vakantiemodus" }

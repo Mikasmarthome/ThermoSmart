@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktívne ovládanie",
-        "state": { "on": "Aktívne – ThermoSmart ovláda", "off": "Pozorovací režim" }
+        "name": "Aktívne ovládanie"
       },
       "learning": { "name": "Režim učenia" },
       "vacation_mode": { "name": "Dovolenkový režim" }

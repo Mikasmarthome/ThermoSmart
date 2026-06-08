@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "主动控制",
-        "state": { "on": "活跃 – ThermoSmart 控制中", "off": "观察模式" }
+        "name": "主动控制"
       },
       "learning": { "name": "学习模式" },
       "vacation_mode": { "name": "假期模式" }

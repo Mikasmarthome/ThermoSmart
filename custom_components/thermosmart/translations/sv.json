@@ -163,7 +163,8 @@
           "preset_mode": {
             "state": {
               "auto":     "Auto",
-              "vacation": "Semester"
+              "vacation": "Semester",
+              "sleep":    "Natt"
             }
           }
         }
@@ -174,7 +175,8 @@
         "name": "Aktiv styrning",
         "state": { "on": "Aktiv – ThermoSmart styr", "off": "Observationsläge" }
       },
-      "learning": { "name": "Inlärningsläge" }
+      "learning": { "name": "Inlärningsläge" },
+      "vacation_mode": { "name": "Semesterläge" }
     },
     "select": {
       "mode": {
@@ -186,6 +188,14 @@
           "night":    "Natt",
           "away":     "Borta",
           "vacation": "Semester"
+        }
+      },
+      "summer_mode": {
+        "name": "Sommarläge",
+        "state": {
+          "automatic": "Automatisk",
+          "on":        "På",
+          "off":       "Av"
         }
       }
     },

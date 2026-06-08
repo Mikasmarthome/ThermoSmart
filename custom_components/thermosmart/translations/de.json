@@ -163,7 +163,8 @@
           "preset_mode": {
             "state": {
               "auto":     "Auto",
-              "vacation": "Urlaub"
+              "vacation": "Urlaub",
+              "sleep":    "Nacht"
             }
           }
         }
@@ -174,7 +175,8 @@
         "name": "Aktive Steuerung",
         "state": { "on": "Aktiv – ThermoSmart steuert", "off": "Beobachtungsmodus" }
       },
-      "learning": { "name": "Lernmodus" }
+      "learning": { "name": "Lernmodus" },
+      "vacation_mode": { "name": "Urlaubsmodus" }
     },
     "select": {
       "mode": {
@@ -186,6 +188,14 @@
           "night":    "Nacht",
           "away":     "Abwesend",
           "vacation": "Urlaub"
+        }
+      },
+      "summer_mode": {
+        "name": "Sommermodus",
+        "state": {
+          "automatic": "Automatisch",
+          "on":        "An",
+          "off":       "Aus"
         }
       }
     },

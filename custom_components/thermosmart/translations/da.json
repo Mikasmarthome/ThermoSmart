@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktiv styring",
-        "state": { "on": "Aktiv – ThermoSmart styrer", "off": "Observationstilstand" }
+        "name": "Aktiv styring"
       },
       "learning": { "name": "Læringstilstand" },
       "vacation_mode": { "name": "Ferietilstand" }

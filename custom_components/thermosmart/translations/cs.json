@@ -172,8 +172,7 @@
     },
     "switch": {
       "active_control": {
-        "name": "Aktivní řízení",
-        "state": { "on": "Aktivní – ThermoSmart řídí", "off": "Pozorovací režim" }
+        "name": "Aktivní řízení"
       },
       "learning": { "name": "Učicí režim" },
       "vacation_mode": { "name": "Dovolenkový režim" }

@@ -171,10 +171,14 @@ class ThermoSmartGlobalSummerSelect(SelectEntity, RestoreEntity):
         else:
             self._current_option = SUMMER_OPT_AUTOMATIC
 
+        # Store for coordinators that load after this entity (race condition fix)
+        self._hass.data[DOMAIN]["global_summer_override"] = self._current_option
+
         # Override sofort auf alle bereits geladenen Coordinatoren anwenden
         override_val = _SUMMER_OVERRIDE_MAP[self._current_option]
         for coord in _all_coordinators(self._hass):
             coord.set_summer_override(override_val)
+            await coord.async_request_refresh()
 
         # Als Listener auf alle Coordinatoren registrieren
         # → async_write_ha_state() aktualisiert extra_state_attributes (effective_summer)

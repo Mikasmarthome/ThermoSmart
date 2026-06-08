@@ -99,6 +99,16 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity, RestoreEntity):
         if last and (preset := last.attributes.get("preset_mode")):
             mode = PRESET_TO_MODE.get(preset, HEATING_MODE_AUTO)
             self.coordinator.set_mode(mode)
+        # Restore manual temperature override (persisted via extra_state_attributes)
+        if last:
+            try:
+                if last.attributes.get("override_active") is True:
+                    override_temp = last.attributes.get("override_temp")
+                    if override_temp is not None:
+                        self.coordinator.set_override(float(override_temp))
+                        await self.coordinator.async_request_refresh()
+            except (TypeError, ValueError):
+                pass
 
     # ── Eigenschaften ────────────────────────────────────────────────
 

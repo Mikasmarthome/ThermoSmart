@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Trin 3 / 4 – Tilstedeværelse og automatisering",
+        "title": "Trin 3 / 4 – Tilstedeværelse og læring",
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Trin 2 / 4 – Temperaturer og tidsplan",
-        "description": "Dagligt forløb: Nat → Komfort → Nat",
+        "description": "Dagligt forløb: Nat → Komfort → Nat\n\nNår alle personer er væk, skifter ThermoSmart automatisk til fraværstemperaturen – uanset tidsplanen.",
         "data": {
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nattemperatur",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Trin 3 / 4 – Tilstedeværelse og automatisering",
+        "title": "Trin 3 / 4 – Tilstedeværelse og læring",
+        "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
-          "home_zone": "Hjemzone",
+          "home_zone": "Hjemzone (standard: zone.home)",
           "learning_enabled": "Aktivér læringsalgoritme"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart lærer opvarmnings- og nedkølingshastigheder samt optimale temperaturer for denne zone."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Vindhastighed",
           "outdoor_solar_sensor": "Solstråling",
           "outdoor_rain_sensor": "Nedbør"
+        },
+        "data_description": {
+          "weather_entity": "Bruges til vejrudsigter og prognosesuppression. Lad feltet stå tomt, hvis du kun bruger egne sensorer.",
+          "outdoor_temp_sensor": "Egne sensorer er mere præcise end vejrenheden og foretrækkes."
         }
       }
     }

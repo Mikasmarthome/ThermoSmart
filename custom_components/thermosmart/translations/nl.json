@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Stap 3 / 4 – Aanwezigheid & Automatisering",
+        "title": "Stap 3 / 4 – Aanwezigheid & Leren",
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Stap 2 / 4 – Temperaturen & Schema",
-        "description": "Dagverloop: Nacht → Comfort → Nacht",
+        "description": "Dagverloop: Nacht → Comfort → Nacht\n\nAls alle personen afwezig zijn, schakelt ThermoSmart automatisch naar de afwezigheidstemperatuur – ongeacht het schema.",
         "data": {
           "comfort_temp": "Comforttemperatuur",
           "night_temp": "Nachttemperatuur",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Stap 3 / 4 – Aanwezigheid & Automatisering",
+        "title": "Stap 3 / 4 – Aanwezigheid & Leren",
+        "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
-          "home_zone": "Thuiszone",
+          "home_zone": "Thuiszone (standaard: zone.home)",
           "learning_enabled": "Leeralgoritme inschakelen"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart leert verwarmings- en afkoelsnelheden en optimale temperaturen voor deze zone."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Windsnelheid",
           "outdoor_solar_sensor": "Zonnestraling",
           "outdoor_rain_sensor": "Neerslag"
+        },
+        "data_description": {
+          "weather_entity": "Gebruikt voor weersvoorspellingen en prognose-onderdrukking. Leeg laten als u alleen eigen sensoren gebruikt.",
+          "outdoor_temp_sensor": "Eigen sensoren zijn nauwkeuriger dan de weer-entiteit en krijgen voorrang."
         }
       }
     }

@@ -1,5 +1,23 @@
 # ThermoSmart – Release Notes
 
+## v1.0.0-rc.4
+
+**Changes since v1.0.0-rc.3**
+
+### Bug Fixes
+
+- **Battery level not detected for Zigbee TRVs**: TRV climate entities (Z2M/ZHA) do not expose battery level as an entity attribute. The previous implementation searched only attributes, so `device_batteries` was always empty for TRV-only zones — making the card's battery warning permanently invisible. Fixed by adding a second lookup path: if no battery attribute is found on the entity itself, ThermoSmart walks the HA entity registry to find a sibling `sensor` entity with `device_class=battery` on the same device. Method 1 (attribute-based) is preserved as the primary path for backwards compatibility.
+
+### Improvements
+
+- **Local brand assets for Geräte & Dienste**: Added `custom_components/thermosmart/brand/` with `icon.png`, `icon@2x.png`, `logo.png`, and `logo@2x.png`. Home Assistant 2026.3+ uses these files to display the ThermoSmart logo in Devices & Services instead of the default placeholder icon. Existing `icon.png` files for HACS and README are unchanged.
+
+### Stability
+
+- Additional RC validation and stability improvements before v1.0.0 Stable.
+
+---
+
 ## v1.0.0-rc.3
 
 **Changes since v1.0.0-rc.2**

@@ -1,5 +1,20 @@
 # ThermoSmart – Release Notes
 
+## v1.0.0
+
+**First stable release — changes since v1.0.0-rc.4**
+
+### Bug Fixes
+
+- **Automatic summer mode indoor safety uses configured night temperature**: The indoor safety threshold that temporarily bypasses automatic summer mode was previously fixed at 16 °C regardless of zone configuration. It now uses the zone's configured night temperature (default 18 °C) as the safety threshold, with a 0.5 °C hysteresis on recovery to prevent rapid toggling around the boundary. Only applies to `summer_mode = automatic`; the manual `on` override is unaffected.
+
+### Stable Finalization
+
+- Version bumped to 1.0.0 — the integration has been validated across multiple RC cycles covering all core features.
+- README updated for stable installation: no pre-release flag required in HACS, simplified installation steps.
+
+---
+
 ## v1.0.0-rc.4
 
 **Changes since v1.0.0-rc.3**

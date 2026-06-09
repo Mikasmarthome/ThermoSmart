@@ -41,7 +41,6 @@ from .const import (
     HEATING_FAILURE_SLOPE_THRESH,
     HEATING_FAILURE_CMD_DELTA,
     TPI_MAX_BOOST_CELSIUS,
-    INDOOR_SAFETY_TEMP,
 )
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
@@ -435,22 +434,28 @@ class ThermoSmartCoordinator(
             effective_summer = self._is_summer
             if self._is_summer and self._summer_override is None:
                 current_indoor = recommendation.get("current_temp")
-                if current_indoor is not None and current_indoor < INDOOR_SAFETY_TEMP:
+                safety_threshold = cfg.get("night_temp", TEMP_NIGHT)
+                if current_indoor is not None and current_indoor < safety_threshold:
                     effective_summer = False
                     if not self._indoor_safety_active:
                         self._indoor_safety_active = True
                         _LOGGER.warning(
                             "ThermoSmart '%s': Automatic summer mode temporarily bypassed "
-                            "because indoor temperature %.1f°C is below safety threshold %.1f°C",
+                            "because indoor temperature %.1f°C is below night temperature %.1f°C",
                             self.zone_name,
                             current_indoor,
-                            INDOOR_SAFETY_TEMP,
+                            safety_threshold,
                         )
-                elif self._indoor_safety_active:
+                elif self._indoor_safety_active and (
+                    current_indoor is None or current_indoor >= safety_threshold + 0.5
+                ):
                     self._indoor_safety_active = False
                     _LOGGER.info(
-                        "ThermoSmart '%s': Automatic summer mode indoor safety no longer active",
+                        "ThermoSmart '%s': Automatic summer mode indoor safety cleared "
+                        "(indoor %.1f°C ≥ night temp %.1f°C + 0.5°C hysteresis)",
                         self.zone_name,
+                        current_indoor if current_indoor is not None else float("nan"),
+                        safety_threshold,
                     )
             else:
                 if self._indoor_safety_active:

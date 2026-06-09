@@ -1115,9 +1115,9 @@ class LearningEngine:
         def t(key: str, fallback: str) -> int:
             raw = (schedule_cfg or {}).get(key, fallback)
             try:
-                h, m = str(raw).split(":")
-                return int(h) * 60 + int(m)
-            except (ValueError, AttributeError):
+                parts = str(raw).split(":")
+                return int(parts[0]) * 60 + int(parts[1])
+            except (ValueError, AttributeError, IndexError):
                 h2, m2 = fallback.split(":")
                 return int(h2) * 60 + int(m2)
 

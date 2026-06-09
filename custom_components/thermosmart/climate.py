@@ -17,6 +17,7 @@ from homeassistant.components.climate import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature, ATTR_TEMPERATURE
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er_helper
 from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
@@ -157,26 +158,56 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity, RestoreEntity):
         return MODE_TO_PRESET.get(self.coordinator._mode, "auto")
 
     def _get_device_batteries(self) -> dict[str, int]:
-        """Liest Batteriestände aller Geräte in der Zone (TRVs + Temp-/Feuchtigkeitssensoren)."""
+        """Liest Batteriestände aller Geräte in der Zone (TRVs + Temp-/Feuchtigkeitssensoren).
+
+        Zwei Methoden werden nacheinander versucht:
+        1. Batterie als Attribut direkt auf der Entity (z. B. manche Aqara-Sensoren via ZHA).
+        2. Separate battery-Sensor-Entity am selben Gerät (Standard bei Zigbee-TRVs via Z2M/ZHA).
+        """
         cfg = self.coordinator.zone_cfg
         devices: list[str] = []
         devices.extend(cfg.get("climate_entities", []))
         devices.extend(s for s in cfg.get("temp_sensors", []) if s)
         devices.extend(s for s in cfg.get("humidity_sensors", []) if s)
 
+        er = er_helper.async_get(self.coordinator.hass)
         batteries: dict[str, int] = {}
+
         for entity_id in devices:
+            # Methode 1: Batterie-Attribut direkt auf der Entity
             state = self.coordinator.hass.states.get(entity_id)
-            if state is None or state.state in ("unavailable", "unknown"):
+            if state is not None and state.state not in ("unavailable", "unknown"):
+                for attr_name in ("battery_level", "battery", "bat_percent", "battery_percent"):
+                    val = state.attributes.get(attr_name)
+                    if val is not None:
+                        try:
+                            batteries[entity_id] = int(float(val))
+                            break
+                        except (TypeError, ValueError):
+                            pass
+
+            if entity_id in batteries:
                 continue
-            for attr_name in ("battery_level", "battery", "bat_percent", "battery_percent"):
-                val = state.attributes.get(attr_name)
-                if val is not None:
-                    try:
-                        batteries[entity_id] = int(float(val))
-                        break
-                    except (TypeError, ValueError):
-                        pass
+
+            # Methode 2: Separate battery-Sensor-Entity am selben Gerät (Zigbee-TRVs u. a.)
+            entry = er.async_get(entity_id)
+            if entry is None or entry.device_id is None:
+                continue
+            for sibling in er.entities.get_entries_for_device_id(entry.device_id):
+                if sibling.domain != "sensor":
+                    continue
+                dc = sibling.device_class or sibling.original_device_class
+                if dc != "battery":
+                    continue
+                bat_state = self.coordinator.hass.states.get(sibling.entity_id)
+                if bat_state is None or bat_state.state in ("unavailable", "unknown"):
+                    continue
+                try:
+                    batteries[entity_id] = int(float(bat_state.state))
+                    break
+                except (TypeError, ValueError):
+                    pass
+
         return batteries
 
     @property

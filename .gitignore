@@ -1,3 +1,6 @@
+# Local branding source files (master assets, not distributed)
+icon_neue_version.png
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

@@ -48,12 +48,15 @@
           "sched_wd_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "sched_we_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
-          "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
+          "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
+          "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
+          "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
+          "temp_tolerance": "ThermoSmart steuert den TRV erst an wenn die Temperatur um mehr als diesen Wert abweicht. 0,5 °C funktioniert gut für die meisten Räume. Kleiner = reaktiver, größer = weniger Anpassungen."
         }
       },
       "presence": {
-        "title": "Schritt 3 / 4 – Präsenz & Automatik",
-        "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.",
+        "title": "Schritt 3 / 4 – Präsenz & Lernen",
+        "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone (Standard: zone.home)",
@@ -112,7 +115,7 @@
       },
       "schedule": {
         "title": "Schritt 2 / 4 – Temperaturen & Zeitplan",
-        "description": "Tagesablauf: Nacht → Komfort → Nacht",
+        "description": "Tagesablauf: Nacht → Komfort → Nacht\n\nWenn alle Personen abwesend sind, schaltet ThermoSmart automatisch auf die Abwesenheitstemperatur – unabhängig vom Zeitplan.",
         "data": {
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Nachttemperatur",
@@ -131,15 +134,22 @@
           "sched_wd_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "sched_we_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
-          "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur"
+          "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
+          "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
+          "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
+          "temp_tolerance": "ThermoSmart steuert den TRV erst an wenn die Temperatur um mehr als diesen Wert abweicht. 0,5 °C funktioniert gut für die meisten Räume. Kleiner = reaktiver, größer = weniger Anpassungen."
         }
       },
       "presence": {
-        "title": "Schritt 3 / 4 – Präsenz & Automatik",
+        "title": "Schritt 3 / 4 – Präsenz & Lernen",
+        "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
-          "home_zone": "Heimzone",
+          "home_zone": "Heimzone (Standard: zone.home)",
           "learning_enabled": "Lernalgorithmus aktivieren"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart lernt Heizraten, Abkühlraten und optimale Temperaturen für diese Zone."
         }
       },
       "weather": {
@@ -152,6 +162,10 @@
           "outdoor_wind_sensor": "Windgeschwindigkeit",
           "outdoor_solar_sensor": "Sonneneinstrahlung",
           "outdoor_rain_sensor": "Niederschlag"
+        },
+        "data_description": {
+          "weather_entity": "Für Wettervorhersagen und Prognose-Unterdrückung. Leer lassen wenn nur eigene Sensoren genutzt werden.",
+          "outdoor_temp_sensor": "Eigene Sensoren sind genauer als die Wetter-Entity und werden bevorzugt."
         }
       }
     }

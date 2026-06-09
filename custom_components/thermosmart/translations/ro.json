@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Pasul 3 / 4 – Prezență și automatizare",
+        "title": "Pasul 3 / 4 – Prezență și învățare",
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Pasul 2 / 4 – Temperaturi și program",
-        "description": "Flux zilnic: Noapte → Confort → Noapte",
+        "description": "Flux zilnic: Noapte → Confort → Noapte\n\nCând toate persoanele sunt absente, ThermoSmart trece automat la temperatura de absență – indiferent de program.",
         "data": {
           "comfort_temp": "Temperatură de confort",
           "night_temp": "Temperatură de noapte",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Pasul 3 / 4 – Prezență și automatizare",
+        "title": "Pasul 3 / 4 – Prezență și învățare",
+        "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
-          "home_zone": "Zona de acasă",
+          "home_zone": "Zona de acasă (implicit: zone.home)",
           "learning_enabled": "Activare algoritm de învățare"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart învață ratele de încălzire, răcire și temperaturile optime pentru această zonă."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Viteză vânt",
           "outdoor_solar_sensor": "Radiație solară",
           "outdoor_rain_sensor": "Precipitații"
+        },
+        "data_description": {
+          "weather_entity": "Folosit pentru prognoze și suprimarea prognozelor. Lăsați gol dacă folosiți doar senzori proprii.",
+          "outdoor_temp_sensor": "Senzorii proprii sunt mai precisi decât entitatea meteo și sunt preferați."
         }
       }
     }

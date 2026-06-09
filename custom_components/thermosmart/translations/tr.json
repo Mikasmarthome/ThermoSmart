@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Adım 3 / 4 – Varlık ve otomasyon",
+        "title": "Adım 3 / 4 – Varlık ve öğrenme",
         "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Adım 2 / 4 – Sıcaklıklar ve program",
-        "description": "Günlük akış: Gece → Konfor → Gece",
+        "description": "Günlük akış: Gece → Konfor → Gece\n\nTüm kişiler uzakta olduğunda, ThermoSmart programdan bağımsız olarak otomatik olarak uzakta sıcaklığına geçer.",
         "data": {
           "comfort_temp": "Konfor sıcaklığı",
           "night_temp": "Gece sıcaklığı",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Adım 3 / 4 – Varlık ve otomasyon",
+        "title": "Adım 3 / 4 – Varlık ve öğrenme",
+        "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
-          "home_zone": "Ev bölgesi",
+          "home_zone": "Ev bölgesi (varsayılan: zone.home)",
           "learning_enabled": "Öğrenme algoritmasını etkinleştir"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart bu bölge için ısıtma ve soğutma hızlarını ve optimal sıcaklıkları öğrenir."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Rüzgar hızı",
           "outdoor_solar_sensor": "Güneş ışınımı",
           "outdoor_rain_sensor": "Yağış"
+        },
+        "data_description": {
+          "weather_entity": "Tahminler ve tahmin bastırma için kullanılır. Yalnızca kendi sensörlerinizi kullanıyorsanız boş bırakın.",
+          "outdoor_temp_sensor": "Kendi sensörleriniz hava durumu varlığından daha hassastır ve tercih edilir."
         }
       }
     }

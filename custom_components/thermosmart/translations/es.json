@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Paso 3 / 4 – Presencia y automatización",
+        "title": "Paso 3 / 4 – Presencia y aprendizaje",
         "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Paso 2 / 4 – Temperaturas y horario",
-        "description": "Flujo diario: Noche → Confort → Noche",
+        "description": "Flujo diario: Noche → Confort → Noche\n\nCuando todas las personas están ausentes, ThermoSmart cambia automáticamente a la temperatura de ausencia – independientemente del horario.",
         "data": {
           "comfort_temp": "Temperatura de confort",
           "night_temp": "Temperatura nocturna",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Paso 3 / 4 – Presencia y automatización",
+        "title": "Paso 3 / 4 – Presencia y aprendizaje",
+        "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
-          "home_zone": "Zona de inicio",
+          "home_zone": "Zona de inicio (predeterminado: zone.home)",
           "learning_enabled": "Activar algoritmo de aprendizaje"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart aprende velocidades de calentamiento, enfriamiento y temperaturas óptimas para esta zona."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Velocidad del viento",
           "outdoor_solar_sensor": "Radiación solar",
           "outdoor_rain_sensor": "Precipitación"
+        },
+        "data_description": {
+          "weather_entity": "Utilizado para pronósticos y supresión de pronósticos. Déjalo vacío si solo usas sensores propios.",
+          "outdoor_temp_sensor": "Los sensores propios son más precisos que la entidad meteorológica y se prefieren."
         }
       }
     }

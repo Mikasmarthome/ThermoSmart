@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/thermosmart-logo.png" alt="ThermoSmart" width="256"/>
+  <img src="https://raw.githubusercontent.com/Mikasmarthome/ThermoSmart/main/assets/thermosmart-logo.png" alt="ThermoSmart" width="256"/>
 </p>
 
 <h1 align="center">ThermoSmart</h1>

@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Vaihe 3 / 4 – Läsnäolo ja automaatio",
+        "title": "Vaihe 3 / 4 – Läsnäolo ja oppiminen",
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Vaihe 2 / 4 – Lämpötilat ja aikataulu",
-        "description": "Päivittäinen kulku: Yö → Mukavuus → Yö",
+        "description": "Päivittäinen kulku: Yö → Mukavuus → Yö\n\nKun kaikki henkilöt ovat poissa, ThermoSmart vaihtaa automaattisesti poissaololämpötilaan – aikataulusta riippumatta.",
         "data": {
           "comfort_temp": "Mukavuuslämpötila",
           "night_temp": "Yölämpötila",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Vaihe 3 / 4 – Läsnäolo ja automaatio",
+        "title": "Vaihe 3 / 4 – Läsnäolo ja oppiminen",
+        "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke",
+          "home_zone": "Kotivyöhyke (oletus: zone.home)",
           "learning_enabled": "Ota oppimisalgoritmi käyttöön"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart oppii lämmitys- ja jäähdytysnopeudet sekä optimaaliset lämpötilat tälle vyöhykkeelle."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Tuulennopeus",
           "outdoor_solar_sensor": "Auringonsäteily",
           "outdoor_rain_sensor": "Sademäärä"
+        },
+        "data_description": {
+          "weather_entity": "Käytetään ennusteisiin ja ennusteiden tukahduttamiseen. Jätä tyhjäksi, jos käytät vain omia antureita.",
+          "outdoor_temp_sensor": "Omat anturit ovat tarkempia kuin sääentiteetti ja niitä suositaan."
         }
       }
     }

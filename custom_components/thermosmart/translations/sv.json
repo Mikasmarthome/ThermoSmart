@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Steg 3 / 4 – Närvaro & Automatisering",
+        "title": "Steg 3 / 4 – Närvaro & Inlärning",
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Steg 2 / 4 – Temperaturer & Schema",
-        "description": "Dagligt flöde: Natt → Komfort → Natt",
+        "description": "Dagligt flöde: Natt → Komfort → Natt\n\nNär alla personer är borta växlar ThermoSmart automatiskt till borta-temperaturen – oavsett schemat.",
         "data": {
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Natttemperatur",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Steg 3 / 4 – Närvaro & Automatisering",
+        "title": "Steg 3 / 4 – Närvaro & Inlärning",
+        "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
-          "home_zone": "Hemzon",
+          "home_zone": "Hemzon (standard: zone.home)",
           "learning_enabled": "Aktivera inlärningsalgoritm"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart lär sig uppvärmnings- och kylhastigheter samt optimala temperaturer för denna zon."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Vindhastighet",
           "outdoor_solar_sensor": "Solinstrålning",
           "outdoor_rain_sensor": "Nederbörd"
+        },
+        "data_description": {
+          "weather_entity": "Används för väderprognoser och prognossuppression. Lämna tomt om du endast använder egna sensorer.",
+          "outdoor_temp_sensor": "Egna sensorer är mer exakta än väderentiteten och prioriteras."
         }
       }
     }

@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Obecność i automatyzacja",
+        "title": "Krok 3 / 4 – Obecność i uczenie",
         "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Krok 2 / 4 – Temperatury i harmonogram",
-        "description": "Przebieg dnia: Noc → Komfort → Noc",
+        "description": "Przebieg dnia: Noc → Komfort → Noc\n\nGdy wszystkie osoby są nieobecne, ThermoSmart automatycznie przełącza na temperaturę nieobecności – niezależnie od harmonogramu.",
         "data": {
           "comfort_temp": "Temperatura komfortu",
           "night_temp": "Temperatura nocna",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Obecność i automatyzacja",
+        "title": "Krok 3 / 4 – Obecność i uczenie",
+        "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
-          "home_zone": "Strefa domowa",
+          "home_zone": "Strefa domowa (domyślnie: zone.home)",
           "learning_enabled": "Włącz algorytm uczenia"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart uczy się szybkości ogrzewania, chłodzenia i optymalnych temperatur dla tej strefy."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Prędkość wiatru",
           "outdoor_solar_sensor": "Promieniowanie słoneczne",
           "outdoor_rain_sensor": "Opady"
+        },
+        "data_description": {
+          "weather_entity": "Używane do prognoz pogody i tłumienia prognoz. Pozostaw puste jeśli używasz tylko własnych czujników.",
+          "outdoor_temp_sensor": "Własne czujniki są dokładniejsze niż jednostka pogodowa i są preferowane."
         }
       }
     }

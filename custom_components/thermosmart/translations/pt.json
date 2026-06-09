@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Passo 3 / 4 – Presença e automatização",
+        "title": "Passo 3 / 4 – Presença e aprendizagem",
         "description": "Quem está em casa? O ThermoSmart muda automaticamente para o modo ausência quando todos saem.",
         "data": {
           "presence_persons": "Pessoas para deteção de presença",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Passo 2 / 4 – Temperaturas e horário",
-        "description": "Fluxo diário: Noite → Conforto → Noite",
+        "description": "Fluxo diário: Noite → Conforto → Noite\n\nQuando todas as pessoas estão ausentes, o ThermoSmart muda automaticamente para a temperatura de ausência, independentemente do horário.",
         "data": {
           "comfort_temp": "Temperatura de conforto",
           "night_temp": "Temperatura noturna",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Passo 3 / 4 – Presença e automatização",
+        "title": "Passo 3 / 4 – Presença e aprendizagem",
+        "description": "Quem está em casa? O ThermoSmart muda automaticamente para o modo ausência quando todos saem.",
         "data": {
           "presence_persons": "Pessoas para deteção de presença",
-          "home_zone": "Zona de casa",
+          "home_zone": "Zona de casa (predefinição: zone.home)",
           "learning_enabled": "Ativar algoritmo de aprendizagem"
+        },
+        "data_description": {
+          "learning_enabled": "O ThermoSmart aprende taxas de aquecimento, arrefecimento e temperaturas ótimas para esta zona."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Velocidade do vento",
           "outdoor_solar_sensor": "Radiação solar",
           "outdoor_rain_sensor": "Precipitação"
+        },
+        "data_description": {
+          "weather_entity": "Utilizado para previsões e supressão de previsões. Deixar vazio se usar apenas sensores próprios.",
+          "outdoor_temp_sensor": "Os sensores próprios são mais precisos do que a entidade meteorológica e são preferidos."
         }
       }
     }

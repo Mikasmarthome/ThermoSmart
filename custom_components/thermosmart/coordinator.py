@@ -24,11 +24,17 @@ from .const import (
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
     TEMP_ECO,
+    TEMP_COMFORT,
+    TEMP_AWAY,
+    TEMP_FROST_PROTECTION,
     EMA_1H_ALPHA,
     FORECAST_DELTA_FULL_HEAT,
     FORECAST_DELTA_BLEND,
     SEASON_HOURS,
     HEATING_MODE_AUTO,
+    HEATING_MODE_COMFORT,
+    HEATING_MODE_NIGHT,
+    HEATING_MODE_ECO,
     HEATING_MODE_AWAY,
     HEATING_MODE_VACATION,
     HEATING_FAILURE_DELAY_MIN,
@@ -166,6 +172,23 @@ class ThermoSmartCoordinator(
 
     def set_mode(self, mode: str) -> None:
         self._mode = mode
+        # Immediately patch adjusted_target with the preset base temperature so
+        # that async_write_ha_state() in climate.py can expose the new target at
+        # once – before async_request_refresh() runs the full weather/learning
+        # recalculation.  The refresh will overwrite this value with the properly
+        # adjusted figure shortly after.
+        if self.data is not None and isinstance(self.data.get("zone"), dict):
+            cfg = self.zone_cfg
+            quick_target = {
+                HEATING_MODE_COMFORT:  cfg.get("comfort_temp", TEMP_COMFORT),
+                HEATING_MODE_NIGHT:    cfg.get("night_temp", TEMP_NIGHT),
+                HEATING_MODE_ECO:      cfg.get(CONF_ECO_TEMP, TEMP_ECO),
+                HEATING_MODE_AWAY:     cfg.get("away_temp", TEMP_AWAY),
+                HEATING_MODE_VACATION: cfg.get(CONF_VACATION_TEMP, TEMP_FROST_PROTECTION),
+                HEATING_MODE_AUTO:     cfg.get("comfort_temp", TEMP_COMFORT),
+            }.get(mode)
+            if quick_target is not None:
+                self.data["zone"]["adjusted_target"] = quick_target
 
     def set_vacation_override(self, active: bool) -> None:
         """Globaler Urlaubs-Override – speichert/restauriert den bisherigen Modus."""

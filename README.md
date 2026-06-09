@@ -7,8 +7,8 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0--rc.4-blue.svg" alt="Version"/></a>
-  <img src="https://img.shields.io/badge/status-release--candidate-blue.svg" alt="Release Candidate"/>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.0-blue.svg" alt="Version"/></a>
+  <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
 </p>
@@ -16,10 +16,6 @@
 ---
 
 > ⚠️ **Use at your own risk.** ThermoSmart is not affiliated with Home Assistant or Nabu Casa. It controls physical heating devices. Always set a safe minimum temperature and verify behaviour in Observation mode before enabling Active Control.
-
-> 🚀 **Release Candidate (v1.0.0-rc.4)** — Core features are complete and tested. The learning algorithm improves with each heating season. Please report any issues on GitHub before the stable release.
-
-> 🔄 **Migration notice:** The accidentally published `v1.0.1-beta.x` releases have been removed. The current release is `v1.0.0-rc.4`. If you installed a `v1.0.1-beta.x` version, HACS may not offer an automatic update — go to HACS → ThermoSmart → **⋮** → **Redownload** and select `v1.0.0-rc.4`. *(This notice will be removed with the first stable release.)*
 
 ---
 
@@ -50,11 +46,9 @@ Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar �
 
 HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://github.com/Mikasmarthome/ThermoSmart` → Category: **Integration** → Add
 
-### 2 — Enable Pre-Release Versions
+### 2 — Download
 
-> ⚠️ Beta versions are only visible when Pre-Releases are enabled in HACS.
-
-HACS → Integrations → find **ThermoSmart** → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-rc.4` → Download
+HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.0` → Download
 
 ### 3 — Restart and Add
 
@@ -176,11 +170,8 @@ Sets all zones to the configured vacation temperature (default 12 °C). Takes pr
 
 ## FAQ
 
-**Why does HACS not show ThermoSmart or show no version?**  
-Beta versions only appear when Pre-Releases are enabled. HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions**.
-
-**How do I switch to v1.0.0-rc.4 manually?**  
-HACS → ThermoSmart → **⋮** → **Redownload** → enable **Show beta versions** → select `v1.0.0-rc.4` → Download → restart HA.
+**How do I update ThermoSmart?**  
+HACS → Integrations → ThermoSmart → **Update** → Restart Home Assistant. Learning data is preserved across updates.
 
 **What is Observation mode?**  
 Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.

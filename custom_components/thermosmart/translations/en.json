@@ -48,12 +48,15 @@
           "sched_wd_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_wd_night": "Night temperature applies from this time",
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
-          "sched_we_night": "Night temperature applies from this time"
+          "sched_we_night": "Night temperature applies from this time",
+          "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
+          "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
+          "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
         }
       },
       "presence": {
-        "title": "Step 3 / 4 – Presence & Automation",
-        "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.",
+        "title": "Step 3 / 4 – Presence & Learning",
+        "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
           "home_zone": "Home zone (default: zone.home)",
@@ -112,7 +115,7 @@
       },
       "schedule": {
         "title": "Step 2 / 4 – Temperatures & Schedule",
-        "description": "Daily flow: Night → Comfort → Night",
+        "description": "Daily flow: Night → Comfort → Night\n\nWhen all persons are away, ThermoSmart automatically switches to the away temperature – regardless of the schedule.",
         "data": {
           "comfort_temp": "Comfort temperature",
           "night_temp": "Night temperature",
@@ -131,15 +134,22 @@
           "sched_wd_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_wd_night": "Night temperature applies from this time",
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
-          "sched_we_night": "Night temperature applies from this time"
+          "sched_we_night": "Night temperature applies from this time",
+          "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
+          "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
+          "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
         }
       },
       "presence": {
-        "title": "Step 3 / 4 – Presence & Automation",
+        "title": "Step 3 / 4 – Presence & Learning",
+        "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
-          "home_zone": "Home zone",
+          "home_zone": "Home zone (default: zone.home)",
           "learning_enabled": "Enable learning algorithm"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart learns heating rates, cooling rates and optimal temperatures for this zone."
         }
       },
       "weather": {
@@ -152,6 +162,10 @@
           "outdoor_wind_sensor": "Wind speed",
           "outdoor_solar_sensor": "Solar radiation",
           "outdoor_rain_sensor": "Precipitation"
+        },
+        "data_description": {
+          "weather_entity": "Used for forecasts and forecast suppression. Leave empty if using only own sensors.",
+          "outdoor_temp_sensor": "Own sensors are more accurate than the weather entity and are preferred."
         }
       }
     }

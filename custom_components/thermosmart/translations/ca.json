@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Pas 3 / 4 – Presència i automatització",
+        "title": "Pas 3 / 4 – Presència i aprenentatge",
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Pas 2 / 4 – Temperatures i horari",
-        "description": "Flux diari: Nit → Confort → Nit",
+        "description": "Flux diari: Nit → Confort → Nit\n\nQuan totes les persones estan absents, ThermoSmart canvia automàticament a la temperatura d'absència, independentment de l'horari.",
         "data": {
           "comfort_temp": "Temperatura de confort",
           "night_temp": "Temperatura nocturna",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Pas 3 / 4 – Presència i automatització",
+        "title": "Pas 3 / 4 – Presència i aprenentatge",
+        "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
-          "home_zone": "Zona de casa",
+          "home_zone": "Zona de casa (per defecte: zone.home)",
           "learning_enabled": "Activar algorisme d'aprenentatge"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart aprèn les velocitats de calefacció, refrigeració i les temperatures òptimes per a aquesta zona."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Velocitat del vent",
           "outdoor_solar_sensor": "Radiació solar",
           "outdoor_rain_sensor": "Precipitació"
+        },
+        "data_description": {
+          "weather_entity": "Utilitzat per a prediccions i supressió de prediccions. Deixeu-lo buit si useu només sensors propis.",
+          "outdoor_temp_sensor": "Els sensors propis són més precisos que l'entitat meteorològica i es prefereixen."
         }
       }
     }

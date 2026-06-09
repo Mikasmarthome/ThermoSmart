@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "3. lépés / 4 – Jelenlét és automatizálás",
+        "title": "3. lépés / 4 – Jelenlét és tanulás",
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "2. lépés / 4 – Hőmérsékletek és ütemterv",
-        "description": "Napi folyamat: Éjszaka → Komfort → Éjszaka",
+        "description": "Napi folyamat: Éjszaka → Komfort → Éjszaka\n\nHa minden személy távol van, a ThermoSmart automatikusan a távolléti hőmérsékletre vált – az ütemtervtől függetlenül.",
         "data": {
           "comfort_temp": "Kényelmi hőmérséklet",
           "night_temp": "Éjszakai hőmérséklet",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "3. lépés / 4 – Jelenlét és automatizálás",
+        "title": "3. lépés / 4 – Jelenlét és tanulás",
+        "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
-          "home_zone": "Otthoni zóna",
+          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)",
           "learning_enabled": "Tanulási algoritmus engedélyezése"
+        },
+        "data_description": {
+          "learning_enabled": "A ThermoSmart megtanulja a fűtési és hűtési sebességeket, valamint az optimális hőmérsékleteket ehhez a zónához."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Szélsebesség",
           "outdoor_solar_sensor": "Napsugárzás",
           "outdoor_rain_sensor": "Csapadék"
+        },
+        "data_description": {
+          "weather_entity": "Előrejelzésekhez és előrejelzés-elnyomáshoz használatos. Hagyja üresen, ha csak saját érzékelőket használ.",
+          "outdoor_temp_sensor": "A saját érzékelők pontosabbak az időjárás entitásnál, és előnyt élveznek."
         }
       }
     }

@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Trinn 3 / 4 – Tilstedeværelse og automatisering",
+        "title": "Trinn 3 / 4 – Tilstedeværelse og læring",
         "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Trinn 2 / 4 – Temperaturer og tidsplan",
-        "description": "Daglig forløp: Natt → Komfort → Natt",
+        "description": "Daglig forløp: Natt → Komfort → Natt\n\nNår alle personer er borte, bytter ThermoSmart automatisk til fraværstemperaturen – uavhengig av tidsplanen.",
         "data": {
           "comfort_temp": "Komforttemperatur",
           "night_temp": "Natttemperatur",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Trinn 3 / 4 – Tilstedeværelse og automatisering",
+        "title": "Trinn 3 / 4 – Tilstedeværelse og læring",
+        "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
-          "home_zone": "Hjemmesone",
+          "home_zone": "Hjemmesone (standard: zone.home)",
           "learning_enabled": "Aktiver læringsalgoritme"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart lærer oppvarmings- og avkjølingshastigheter samt optimale temperaturer for denne sonen."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Vindhastighet",
           "outdoor_solar_sensor": "Solstråling",
           "outdoor_rain_sensor": "Nedbør"
+        },
+        "data_description": {
+          "weather_entity": "Brukes til værvarsler og prognosesuppresjon. La feltet stå tomt hvis du bare bruker egne sensorer.",
+          "outdoor_temp_sensor": "Egne sensorer er mer nøyaktige enn værenheten og foretrekkes."
         }
       }
     }

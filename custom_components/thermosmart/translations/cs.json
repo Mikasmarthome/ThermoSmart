@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Přítomnost a automatizace",
+        "title": "Krok 3 / 4 – Přítomnost a učení",
         "description": "Kdo je doma? ThermoSmart automaticky přepne do režimu nepřítomnosti, když všichni odejdou.",
         "data": {
           "presence_persons": "Osoby pro detekci přítomnosti",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Krok 2 / 4 – Teploty a plán",
-        "description": "Denní průběh: Noc → Komfort → Noc",
+        "description": "Denní průběh: Noc → Komfort → Noc\n\nKdyž jsou všechny osoby nepřítomny, ThermoSmart automaticky přepne na teplotu při nepřítomnosti – bez ohledu na plán.",
         "data": {
           "comfort_temp": "Teplota komfortu",
           "night_temp": "Noční teplota",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Přítomnost a automatizace",
+        "title": "Krok 3 / 4 – Přítomnost a učení",
+        "description": "Kdo je doma? ThermoSmart automaticky přepne do režimu nepřítomnosti, když všichni odejdou.",
         "data": {
           "presence_persons": "Osoby pro detekci přítomnosti",
-          "home_zone": "Domovská zóna",
+          "home_zone": "Domovská zóna (výchozí: zone.home)",
           "learning_enabled": "Aktivovat učicí algoritmus"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart se učí rychlosti topení, chlazení a optimální teploty pro tuto zónu."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Rychlost větru",
           "outdoor_solar_sensor": "Sluneční záření",
           "outdoor_rain_sensor": "Srážky"
+        },
+        "data_description": {
+          "weather_entity": "Používáno pro předpovědi a potlačení předpovědí. Ponechte prázdné, pokud používáte pouze vlastní senzory.",
+          "outdoor_temp_sensor": "Vlastní senzory jsou přesnější než entita počasí a mají přednost."
         }
       }
     }

@@ -294,6 +294,8 @@ class ThermoSmartCoordinator(
         cfg = self.zone_cfg
         window_sensors: set[str] = set(s for s in cfg.get("window_sensors", []) if s)
         presence: set[str] = set(p for p in cfg.get(CONF_PRESENCE_PERSONS, []) if p)
+        # CONF_VACATION_BOOLEAN: planned per-zone vacation boolean input —
+        # implemented here (tracks state changes) but NOT exposed in config_flow UI.
         vacation_entity = cfg.get(CONF_VACATION_BOOLEAN, "")
         if vacation_entity:
             presence.add(vacation_entity)
@@ -596,6 +598,8 @@ class ThermoSmartCoordinator(
                 persons_away.append(person)
 
         vacation = False
+        # CONF_VACATION_BOOLEAN: planned per-zone vacation boolean input —
+        # implemented here (reads state) but NOT exposed in config_flow UI.
         vacation_entity = cfg.get(CONF_VACATION_BOOLEAN, "")
         if vacation_entity:
             vs = self.hass.states.get(vacation_entity)

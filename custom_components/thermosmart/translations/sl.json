@@ -52,7 +52,7 @@
         }
       },
       "presence": {
-        "title": "Korak 3 / 4 – Prisotnost in avtomatizacija",
+        "title": "Korak 3 / 4 – Prisotnost in učenje",
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
@@ -112,7 +112,7 @@
       },
       "schedule": {
         "title": "Korak 2 / 4 – Temperature in urnik",
-        "description": "Dnevni potek: Noč → Udobje → Noč",
+        "description": "Dnevni potek: Noč → Udobje → Noč\n\nKo so vse osebe odsotne, ThermoSmart samodejno preklopi na temperaturo odsotnosti – ne glede na urnik.",
         "data": {
           "comfort_temp": "Temperatura udobja",
           "night_temp": "Nočna temperatura",
@@ -135,11 +135,15 @@
         }
       },
       "presence": {
-        "title": "Korak 3 / 4 – Prisotnost in avtomatizacija",
+        "title": "Korak 3 / 4 – Prisotnost in učenje",
+        "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
-          "home_zone": "Domača cona",
+          "home_zone": "Domača cona (privzeto: zone.home)",
           "learning_enabled": "Aktivacija algoritma učenja"
+        },
+        "data_description": {
+          "learning_enabled": "ThermoSmart se uči hitrosti ogrevanja, hlajenja in optimalne temperature za to cono."
         }
       },
       "weather": {
@@ -152,6 +156,10 @@
           "outdoor_wind_sensor": "Hitrost vetra",
           "outdoor_solar_sensor": "Sončno obsevanje",
           "outdoor_rain_sensor": "Padavine"
+        },
+        "data_description": {
+          "weather_entity": "Uporablja se za napovedi in zatiranje napovedi. Pustite prazno, če uporabljate samo lastne senzorje.",
+          "outdoor_temp_sensor": "Lastni senzorji so natančnejši od vremenske entitete in imajo prednost."
         }
       }
     }

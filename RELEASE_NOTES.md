@@ -1,5 +1,24 @@
 # ThermoSmart – Release Notes
 
+## v1.0.0-rc.3
+
+**Changes since v1.0.0-rc.2**
+
+### Bug Fixes
+
+- **Schedule times ignored (silent fallback)**: HA `TimeSelector` stores times as `HH:MM:SS` (e.g. `06:30:00`). The three schedule parsers in `coordinator.py` and `learning_engine.py` used `h, m = split(":")` unpacking, which raised `ValueError` on three-part strings. The error was silently caught and the hardcoded fallback time was used instead — causing user-configured schedule times to be ignored. Fixed by indexing `parts[0]` / `parts[1]`, which handles both `HH:MM` and `HH:MM:SS` correctly.
+
+### Improvements
+
+- **Mode change: immediate temperature display**: Switching heating mode (Comfort, Night, Eco, Away, Vacation) now immediately updates the target temperature sensor. Previously the card showed the old temperature for several seconds until the next coordinator refresh. `coordinator.set_mode()` now patches `adjusted_target` with the configured preset base value before `async_write_ha_state()` is called; the full weather/learning recalculation on the next refresh overwrites it with the properly adjusted figure.
+- **Options flow UI strings**: Cleaned up options flow labels and descriptions across all 25 translation files for consistency.
+
+### Stability
+
+- Additional RC validation and stability improvements before v1.0.0 Stable.
+
+---
+
 ## v1.0.0-rc.2
 
 **Changes since v1.0.0-rc.1**

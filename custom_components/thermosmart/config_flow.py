@@ -153,26 +153,26 @@ def _schema_presence(d: dict) -> vol.Schema:
 
 def _schema_weather(d: dict) -> vol.Schema:
     return vol.Schema({
-        vol.Optional(CONF_WEATHER_ENTITY, default=d.get(CONF_WEATHER_ENTITY, "")):
+        vol.Optional(CONF_WEATHER_ENTITY, default=d.get(CONF_WEATHER_ENTITY) or None):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
 
-        vol.Optional(CONF_OUTDOOR_TEMP_SENSOR, default=d.get(CONF_OUTDOOR_TEMP_SENSOR, "")):
+        vol.Optional(CONF_OUTDOOR_TEMP_SENSOR, default=d.get(CONF_OUTDOOR_TEMP_SENSOR) or None):
             selector.EntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="temperature"
             )),
-        vol.Optional(CONF_OUTDOOR_HUMIDITY_SENSOR, default=d.get(CONF_OUTDOOR_HUMIDITY_SENSOR, "")):
+        vol.Optional(CONF_OUTDOOR_HUMIDITY_SENSOR, default=d.get(CONF_OUTDOOR_HUMIDITY_SENSOR) or None):
             selector.EntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="humidity"
             )),
-        vol.Optional(CONF_OUTDOOR_WIND_SENSOR, default=d.get(CONF_OUTDOOR_WIND_SENSOR, "")):
+        vol.Optional(CONF_OUTDOOR_WIND_SENSOR, default=d.get(CONF_OUTDOOR_WIND_SENSOR) or None):
             selector.EntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="wind_speed"
             )),
-        vol.Optional(CONF_OUTDOOR_SOLAR_SENSOR, default=d.get(CONF_OUTDOOR_SOLAR_SENSOR, "")):
+        vol.Optional(CONF_OUTDOOR_SOLAR_SENSOR, default=d.get(CONF_OUTDOOR_SOLAR_SENSOR) or None):
             selector.EntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="irradiance"
             )),
-        vol.Optional(CONF_OUTDOOR_RAIN_SENSOR, default=d.get(CONF_OUTDOOR_RAIN_SENSOR, "")):
+        vol.Optional(CONF_OUTDOOR_RAIN_SENSOR, default=d.get(CONF_OUTDOOR_RAIN_SENSOR) or None):
             selector.EntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class=["precipitation", "precipitation_intensity"]
             )),

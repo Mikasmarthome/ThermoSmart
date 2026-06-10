@@ -123,7 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     weather_engine = WeatherEngine(
         hass,
-        cfg.get(CONF_WEATHER_ENTITY, "weather.home"),
+        cfg.get(CONF_WEATHER_ENTITY) or "weather.home",
         outdoor_temp_sensor=_sensor(CONF_OUTDOOR_TEMP_SENSOR),
         outdoor_humidity_sensor=_sensor(CONF_OUTDOOR_HUMIDITY_SENSOR),
         outdoor_wind_sensor=_sensor(CONF_OUTDOOR_WIND_SENSOR),

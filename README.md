@@ -66,10 +66,12 @@ Add **ThermoSmart System** first (Summer mode select + Vacation switch), then ad
 
 | Step | Fields |
 |---|---|
-| **1 – Devices** | Zone name · TRVs · Temperature sensors · Humidity sensors · Window / door sensors · Window delays · Valve maintenance · Calibration invert |
+| **1 – Devices** | Zone name · TRVs · Temperature sensors *(optional)* · Humidity sensors · Window / door sensors · Window delays · Valve maintenance · Calibration invert |
 | **2 – Temperatures** | Comfort · Night · Away · Vacation · Eco · Tolerance · Weekday/weekend schedule times |
 | **3 – Presence** | Person entities · Home zone · Learning on/off |
 | **4 – Weather** | Weather entity · Outdoor temp/humidity · Wind speed · Solar radiation · Precipitation |
+
+> **External temperature sensors are optional.** Since v1.0.3, ThermoSmart automatically uses the TRV's built-in temperature sensor as fallback when no external sensor is configured. Adding a dedicated room sensor improves accuracy, but is not required to get started.
 
 ---
 
@@ -201,6 +203,14 @@ In **Observation mode** ThermoSmart does not write setpoints, so the TRV stays i
 
 ## Breaking Changes
 
+### v1.0.0-rc.1 — Summer mode state values changed to lowercase
+
+The state values of `select.thermosmart_summer_mode` were changed from `Automatic` / `On` / `Off` to `automatic` / `on` / `off`.
+
+**Automations and templates that check these states must be updated.** For example: `state: "Automatic"` → `state: "automatic"`.
+
+---
+
 ### v1.0.0-beta.23 — Summer mode switch replaced by select
 
 | Removed entity | New entity |
@@ -217,6 +227,12 @@ New options: `automatic` · `on` · `off`
 24 UI languages supported: BG · CA · CS · DA · DE · EL · EN · ES · FI · FR · HU · IT · NB · NL · PL · PT · RO · RU · SK · SL · SV · TR · UK · ZH-Hans
 
 Additional languages welcome via Pull Request (`custom_components/thermosmart/translations/`).
+
+---
+
+## Changelog
+
+Full release history: [RELEASE_NOTES.md](RELEASE_NOTES.md)
 
 ---
 

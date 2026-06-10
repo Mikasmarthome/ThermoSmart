@@ -356,10 +356,16 @@ class ThermoSmartCoordinator(
         if climate_entities:
             @callback
             def _handle_trv_change(event) -> None:
-                if not self._active_control:
-                    return
                 new = event.data.get("new_state")
                 if new is None:
+                    return
+                # TRV-only zone: keep display cache current when no external sensor.
+                if not temp_sensors:
+                    trv_t = self._read_trv_avg_temp(list(climate_entities))
+                    if trv_t is not None:
+                        self._live_temp = trv_t
+                        self.async_update_listeners()
+                if not self._active_control:
                     return
                 entity_id = event.data["entity_id"]
                 new_setpoint = new.attributes.get("temperature")
@@ -393,7 +399,7 @@ class ThermoSmartCoordinator(
                 if new is None or new.state in ("unknown", "unavailable"):
                     return
                 if temp_sensors:
-                    val = self._read_avg_sensor(list(temp_sensors))
+                    val = self._read_raw_avg_sensor(list(temp_sensors))
                     if val is not None:
                         self._live_temp = val
                 if humidity_sensors:
@@ -557,9 +563,14 @@ class ThermoSmartCoordinator(
             recommendation["heating_failure"] = self._heating_failure_notified
             recommendation["indoor_humidity"] = indoor_humidity
 
-            # Live-Cache aktuell halten (wird auch von Sensor-Listener aktualisiert)
-            if recommendation.get("current_temp") is not None:
-                self._live_temp = recommendation["current_temp"]
+            # Display cache: raw sensor average so climate.current_temperature
+            # reflects the actual reading, not the EMA-smoothed control value.
+            # Fallback: use TRV current_temperature when no external sensor.
+            raw_temp = self._read_raw_avg_sensor(cfg.get("temp_sensors", []))
+            if raw_temp is None:
+                raw_temp = self._read_trv_avg_temp(cfg.get("climate_entities", []))
+            if raw_temp is not None:
+                self._live_temp = raw_temp
             if indoor_humidity is not None:
                 self._live_humidity = indoor_humidity
 
@@ -630,6 +641,8 @@ class ThermoSmartCoordinator(
 
     async def _compute_recommendation(self, cfg: dict, weather_data: dict, mode: str) -> dict:
         current_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
+        if current_temp is None:
+            current_temp = self._read_trv_avg_temp(cfg.get("climate_entities", []))
 
         now = dt_util.now()
         if current_temp is not None:
@@ -810,6 +823,51 @@ class ThermoSmartCoordinator(
         }
 
     # ── Sensor-Lesen ─────────────────────────────────────────────────
+
+    def _read_raw_avg_sensor(self, sensor_ids: list[str]) -> float | None:
+        """Raw average of available sensors — no EMA smoothing, for display only.
+
+        Filters out invalid states (unknown, unavailable, None) but does not
+        apply EMA or spike detection. Used exclusively for _live_temp so that
+        climate.current_temperature reflects the actual sensor reading instead
+        of the EMA-smoothed value used by the control path.
+        """
+        values = []
+        seen: set[str] = set()
+        for sid in sensor_ids:
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            state = self.hass.states.get(sid)
+            if state and state.state not in ("unknown", "unavailable", "None"):
+                try:
+                    values.append(float(state.state))
+                except ValueError:
+                    pass
+        return round(sum(values) / len(values), 1) if values else None
+
+    def _read_trv_avg_temp(self, climate_entity_ids: list[str]) -> float | None:
+        """Average current_temperature from TRV entities — fallback when no external sensor.
+
+        Reads the current_temperature attribute directly; no EMA, no spike filter.
+        Used when temp_sensors is empty so TPI and the display cache have a valid value.
+        External temp sensors always take priority — this method is only called as fallback.
+        """
+        values = []
+        seen: set[str] = set()
+        for eid in climate_entity_ids:
+            if not eid or eid in seen:
+                continue
+            seen.add(eid)
+            state = self.hass.states.get(eid)
+            if state and state.state not in ("unknown", "unavailable"):
+                trv_t = state.attributes.get("current_temperature")
+                if trv_t is not None:
+                    try:
+                        values.append(float(trv_t))
+                    except (TypeError, ValueError):
+                        pass
+        return round(sum(values) / len(values), 1) if values else None
 
     def _read_avg_sensor(self, sensor_ids: list[str]) -> float | None:
         """Durchschnitt über alle verfügbaren Sensoren – ignoriert Ausfälle automatisch."""

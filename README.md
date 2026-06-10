@@ -60,7 +60,7 @@ Restart Home Assistant, then: **Settings → Integrations → Add Integration �
 
 Add **ThermoSmart System** first (Summer mode select + Vacation switch), then add each heating zone.
 
-**Start in Observation mode** — leave Active Control off for the first 2–3 weeks. ThermoSmart watches your existing TRVs and builds a thermal model without changing anything. Switch to Active Control once `sensor.*_confidence` reaches ~50 %.
+**Observation mode is recommended to start.** With Active Control off, ThermoSmart watches your existing TRVs and builds an initial thermal model without changing anything in your setup. Use the first day or two to verify that sensors, temperatures, and schedules are configured correctly — then enable Active Control whenever you're ready. Learning continues in both modes; Observation mode is not a prerequisite.
 
 ### Zone Configuration (4 steps)
 
@@ -179,7 +179,7 @@ HACS → Integrations → ThermoSmart → **Update** → Restart Home Assistant.
 Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.
 
 **How long until the learning algorithm is effective?**  
-Learning builds from active heating observations. Phase 1 (<5 obs): physical fallback only. Phase 2 (5–50): first patterns. Phase 3 (50+): learning dominates. Expect several weeks of regular heating. Exact timelines have not yet been validated at scale.
+Learning builds from active heating observations and works in both Observation mode and Active Control. Phase 1 (<5 obs): physical fallback only. Phase 2 (5–50): first patterns emerge. Phase 3 (50+): learning dominates. How quickly you reach each phase depends on how often your heating runs — results improve steadily as observations accumulate.
 
 **A sensor goes offline — what happens?**  
 ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors in a zone are unavailable simultaneously.

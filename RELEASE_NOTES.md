@@ -1,5 +1,22 @@
 # ThermoSmart – Release Notes
 
+## v1.0.2
+
+### Fixes
+
+- Fixed validation of empty optional weather and outdoor sensor entity fields in the zone creation flow.
+- Empty weather-related entity selectors now correctly accept both `None` and empty values without raising entity ID validation errors.
+
+### Notes
+
+This fixes an issue where creating a new zone without weather or outdoor sensor entities could fail with:
+
+`Entity None is neither a valid entity ID nor a valid UUID`
+
+No migration is required.
+
+---
+
 ## v1.0.1
 
 ### Fixes

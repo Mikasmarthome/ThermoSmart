@@ -393,7 +393,7 @@ class ThermoSmartCoordinator(
                 if new is None or new.state in ("unknown", "unavailable"):
                     return
                 if temp_sensors:
-                    val = self._read_avg_sensor(list(temp_sensors))
+                    val = self._read_raw_avg_sensor(list(temp_sensors))
                     if val is not None:
                         self._live_temp = val
                 if humidity_sensors:
@@ -557,9 +557,11 @@ class ThermoSmartCoordinator(
             recommendation["heating_failure"] = self._heating_failure_notified
             recommendation["indoor_humidity"] = indoor_humidity
 
-            # Live-Cache aktuell halten (wird auch von Sensor-Listener aktualisiert)
-            if recommendation.get("current_temp") is not None:
-                self._live_temp = recommendation["current_temp"]
+            # Display cache: raw sensor average so climate.current_temperature
+            # reflects the actual reading, not the EMA-smoothed control value.
+            raw_temp = self._read_raw_avg_sensor(cfg.get("temp_sensors", []))
+            if raw_temp is not None:
+                self._live_temp = raw_temp
             if indoor_humidity is not None:
                 self._live_humidity = indoor_humidity
 
@@ -810,6 +812,28 @@ class ThermoSmartCoordinator(
         }
 
     # ── Sensor-Lesen ─────────────────────────────────────────────────
+
+    def _read_raw_avg_sensor(self, sensor_ids: list[str]) -> float | None:
+        """Raw average of available sensors — no EMA smoothing, for display only.
+
+        Filters out invalid states (unknown, unavailable, None) but does not
+        apply EMA or spike detection. Used exclusively for _live_temp so that
+        climate.current_temperature reflects the actual sensor reading instead
+        of the EMA-smoothed value used by the control path.
+        """
+        values = []
+        seen: set[str] = set()
+        for sid in sensor_ids:
+            if not sid or sid in seen:
+                continue
+            seen.add(sid)
+            state = self.hass.states.get(sid)
+            if state and state.state not in ("unknown", "unavailable", "None"):
+                try:
+                    values.append(float(state.state))
+                except ValueError:
+                    pass
+        return round(sum(values) / len(values), 1) if values else None
 
     def _read_avg_sensor(self, sensor_ids: list[str]) -> float | None:
         """Durchschnitt über alle verfügbaren Sensoren – ignoriert Ausfälle automatisch."""

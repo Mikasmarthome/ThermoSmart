@@ -185,6 +185,18 @@ ThermoSmart averages the remaining sensors. Temperature decisions pause only if 
 **Where is the learning data stored?**  
 `/config/.storage/thermosmart_learning_data` — safe to share for debugging.
 
+**SONOFF TRVZB via Zigbee2MQTT — `heat` vs `auto` mode and internal weekly schedule**  
+Zigbee2MQTT exposes two HVAC modes on the SONOFF TRVZB:
+
+- **`heat`** — manual setpoint mode: the TRV follows the setpoint written by ThermoSmart (or any other controller)
+- **`auto`** — the TRV follows its own internal weekly schedule and ignores externally written setpoints
+
+When ThermoSmart is in **Active Control**, it calls `climate.set_temperature` on every cycle. This automatically switches the TRV to `heat` mode, so the internal weekly schedule is bypassed — the TRV follows ThermoSmart's setpoints instead.
+
+**You do not need to delete the internal schedule.** It has no effect while the TRV is in `heat` mode. If Active Control is ever disabled and the TRV is switched back to `auto` manually, the internal schedule becomes active again.
+
+In **Observation mode** ThermoSmart does not write setpoints, so the TRV stays in whatever mode it was last set to (typically `auto` after initial pairing). Observations and learning are recorded correctly regardless of the TRV's active mode.
+
 ---
 
 ## Breaking Changes

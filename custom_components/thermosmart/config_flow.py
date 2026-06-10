@@ -30,6 +30,22 @@ from .const import (
 )
 
 
+# ── Hilfklasse: EntitySelector der None und "" als "nicht gesetzt" akzeptiert ─
+
+class _NullableEntitySelector(selector.EntitySelector):
+    """EntitySelector that treats None and '' as unset (returns None, no error).
+
+    HA 2026.x sends null for empty optional entity pickers and auto-validates
+    data_schema before calling the step handler. The standard EntitySelector
+    rejects None via cv.entity_id_or_uuid(None). This subclass short-circuits
+    that path while remaining a proper EntitySelector for frontend serialization.
+    """
+    def __call__(self, data):
+        if data is None or data == "":
+            return None
+        return super().__call__(data)
+
+
 # ── Validierung ─────────────────────────────────────────────────────────────
 
 def _validate_temps(data: dict) -> dict[str, str]:
@@ -154,26 +170,26 @@ def _schema_presence(d: dict) -> vol.Schema:
 def _schema_weather(d: dict) -> vol.Schema:
     return vol.Schema({
         vol.Optional(CONF_WEATHER_ENTITY, default=d.get(CONF_WEATHER_ENTITY) or None):
-            selector.EntitySelector(selector.EntitySelectorConfig(domain="weather")),
+            _NullableEntitySelector(selector.EntitySelectorConfig(domain="weather")),
 
         vol.Optional(CONF_OUTDOOR_TEMP_SENSOR, default=d.get(CONF_OUTDOOR_TEMP_SENSOR) or None):
-            selector.EntitySelector(selector.EntitySelectorConfig(
+            _NullableEntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="temperature"
             )),
         vol.Optional(CONF_OUTDOOR_HUMIDITY_SENSOR, default=d.get(CONF_OUTDOOR_HUMIDITY_SENSOR) or None):
-            selector.EntitySelector(selector.EntitySelectorConfig(
+            _NullableEntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="humidity"
             )),
         vol.Optional(CONF_OUTDOOR_WIND_SENSOR, default=d.get(CONF_OUTDOOR_WIND_SENSOR) or None):
-            selector.EntitySelector(selector.EntitySelectorConfig(
+            _NullableEntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="wind_speed"
             )),
         vol.Optional(CONF_OUTDOOR_SOLAR_SENSOR, default=d.get(CONF_OUTDOOR_SOLAR_SENSOR) or None):
-            selector.EntitySelector(selector.EntitySelectorConfig(
+            _NullableEntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class="irradiance"
             )),
         vol.Optional(CONF_OUTDOOR_RAIN_SENSOR, default=d.get(CONF_OUTDOOR_RAIN_SENSOR) or None):
-            selector.EntitySelector(selector.EntitySelectorConfig(
+            _NullableEntitySelector(selector.EntitySelectorConfig(
                 domain="sensor", device_class=["precipitation", "precipitation_intensity"]
             )),
     })

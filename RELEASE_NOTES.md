@@ -1,5 +1,23 @@
 # ThermoSmart – Release Notes
 
+## v1.0.3
+
+### Bug Fixes
+
+- **Current temperature displayed immediately**: `climate.current_temperature` and the dashboard card now reflect the actual sensor reading instantly on every state change. Previously the display was updated from the EMA-smoothed control value, causing a visible lag of several update cycles. Display path (raw average) and control path (EMA + spike filter) are now fully separated.
+
+- **Current temperature available for TRV-only zones**: Zones without external temperature sensors now have a valid `current_temperature` — ThermoSmart reads the `current_temperature` attribute from TRV entities as fallback. This re-enables TPI, learning, slope calculation, and calibration for sensorless zones. External sensors always take priority.
+
+### Documentation
+
+- **FAQ: SONOFF TRVZB `heat` vs `auto` mode**: Added a FAQ entry explaining why Active Control users do not need to delete the TRV's internal weekly schedule — Active Control automatically switches the TRV to `heat` mode on every cycle, bypassing the internal schedule.
+
+### Notes
+
+No migration required. No configuration changes needed.
+
+---
+
 ## v1.0.2
 
 ### Fixes

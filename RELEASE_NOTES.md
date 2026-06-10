@@ -1,5 +1,18 @@
 # ThermoSmart – Release Notes
 
+## v1.0.1
+
+### Fixes
+
+- Fixed handling of empty optional weather and outdoor sensor entity fields during zone creation and editing.
+- Improved fallback handling for missing weather entities.
+
+### Notes
+
+Optional weather-related entity fields can now safely be left empty.
+
+---
+
 ## v1.0.0
 
 **First stable release — changes since v1.0.0-rc.4**

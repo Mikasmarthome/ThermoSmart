@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.0.3"
+VERSION = "1.0.4"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -39,13 +39,16 @@ AUTO_CALIBRATION_PATTERNS = [
 # Muster für automatisch erkannte External-Temperature-Input-Entities (TRVZB)
 AUTO_EXT_TEMP_PATTERNS = ["external_temperature_input", "external_temperature"]
 
-# Muster für direkte Ventilsteuerung (valve_opening_degree, pi_heating_demand etc.)
+# Patterns for direct valve position control (written with TPI duty-cycle 0–100%).
+# valve_opening_degree is intentionally excluded: on SONOFF TRVZB (and similar devices)
+# it configures the maximum opening limit, not the live valve position. Writing the TPI
+# duty-cycle to it caps heating capacity instead of modulating it. Those devices are
+# controlled via climate.set_temperature (setpoint boost) instead.
 AUTO_VALVE_PATTERNS = [
-    "valve_opening_degree",   # Sonoff TRVZB, Danfoss
-    "valve_position",         # Eurotronic Spirit (SPZB0001)
-    "pi_heating_demand",      # Tuya TS0601_3/5, einige Danfoss
-    "heating_demand",         # alternative Benennung
-    "level",                  # Homematic IP via hahomematic (0.0–1.0 → skaliert auf %)
+    "valve_position",         # Eurotronic Spirit (SPZB0001) — direct motor position
+    "pi_heating_demand",      # Tuya TS0601_3/5, some Danfoss — live heating demand
+    "heating_demand",         # alternative name for pi_heating_demand
+    "level",                  # Homematic IP via hahomematic (0.0–1.0 scaled to %)
 ]
 
 # Kalibrierungs-Inversion (z.B. ME167 invertiert Offset-Vorzeichen)

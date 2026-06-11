@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.4-blue.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.5-blue.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -48,7 +48,7 @@ HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://
 
 ### 2 — Download
 
-HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.4` → Download
+HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.5` → Download
 
 ### 3 — Restart and Add
 

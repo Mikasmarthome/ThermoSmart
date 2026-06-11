@@ -1,5 +1,31 @@
 # ThermoSmart – Release Notes
 
+## v1.0.5
+
+### Bug Fix
+
+**valve_opening_degree recovery now works after a full Home Assistant restart**
+
+v1.0.4 introduced an automatic recovery that resets `valve_opening_degree` to 100%
+on SONOFF TRVZB (and similar devices) if a previous ThermoSmart version had written
+the TPI duty-cycle to it. That recovery ran during integration setup — before
+Zigbee2MQTT entities were available on a full HA restart — so it was silently
+skipped.
+
+v1.0.5 retries the recovery across the first three coordinator refresh cycles
+(≈ 5 s apart). The `_valve_opening_degree` reset now fires as soon as the relevant
+entity becomes reachable, regardless of how fast Zigbee2MQTT comes online after a
+restart. If no relevant entity is found within three attempts, a warning is logged.
+
+Integration Reload behaviour is unchanged: the reset fires immediately as before.
+
+### Upgrade
+
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+No configuration changes required. Learning data is preserved.
+
+---
+
 ## v1.0.4
 
 ### Bug Fix

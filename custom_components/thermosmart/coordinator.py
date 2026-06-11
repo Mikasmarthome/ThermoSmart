@@ -51,6 +51,10 @@ from .maintenance import MaintenanceMixin
 
 _LOGGER = logging.getLogger(__name__)
 
+# valve_opening_degree recovery is retried across the first N coordinator refreshes
+# to handle slow Zigbee2MQTT startup on full HA restart.
+_VALVE_RESET_MAX_ATTEMPTS = 3
+
 
 class ThermoSmartCoordinator(
     DataUpdateCoordinator,
@@ -111,6 +115,8 @@ class ThermoSmartCoordinator(
         self._auto_ext_temp_map: dict[str, str] = {}
         self._auto_valve_map: dict[str, str] = {}
         self._trv_offline: set[str] = set()
+        self._valve_reset_done: bool = False
+        self._valve_reset_attempts: int = 0
 
         # Sommer (genutzt von SeasonMixin)
         self._outdoor_temp_history: deque = deque(
@@ -428,6 +434,24 @@ class ThermoSmartCoordinator(
     async def _async_update_data(self) -> dict:
         try:
             cfg = self.zone_cfg
+
+            # Safety-net for full HA restart: valve_opening_degree recovery is also
+            # called from async_detect_device_entities, but at startup Z2M entities
+            # may not be available yet.  Retry across up to _VALVE_RESET_MAX_ATTEMPTS
+            # refreshes; stop as soon as recovery reports success (all relevant entities
+            # were reachable) or after the attempt limit is exhausted.
+            if not self._valve_reset_done:
+                done = await self._reset_valve_opening_degree()
+                self._valve_reset_attempts += 1
+                if done or self._valve_reset_attempts >= _VALVE_RESET_MAX_ATTEMPTS:
+                    if not done:
+                        _LOGGER.warning(
+                            "ThermoSmart '%s': valve_opening_degree recovery gave up after "
+                            "%d attempts — some TRV entities were still unavailable",
+                            self.zone_name, self._valve_reset_attempts,
+                        )
+                    self._valve_reset_done = True
+
             self._check_boost_outcome(cfg)
 
             weather_data = await self.weather_engine.async_get_data()

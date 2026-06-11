@@ -48,7 +48,10 @@
           "sched_wd_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
           "sched_wd_night": "Nočna temperatura velja od tega časa",
           "sched_we_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
-          "sched_we_night": "Nočna temperatura velja od tega časa"
+          "sched_we_night": "Nočna temperatura velja od tega časa",
+          "away_temp": "Samodejno se uporabi samo, ko je konfigurirana zaznava prisotnosti (Korak 3). Lahko se nastavi tudi ročno prek izbirnika načina.",
+          "eco_temp": "Uporablja se, ko je izbirnik načina ročno nastavljen na 'Eco'. Ne aktivira se samodejno.",
+          "temp_tolerance": "ThermoSmart prilagodi TRV le, ko se temperatura razlikuje za več kot to vrednost. 0,5 °C deluje dobro za večino sob. Nižja = bolj odzivna, višja = manj prilagoditev."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
           "sched_wd_night": "Nočna temperatura velja od tega časa",
           "sched_we_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
-          "sched_we_night": "Nočna temperatura velja od tega časa"
+          "sched_we_night": "Nočna temperatura velja od tega časa",
+          "away_temp": "Samodejno se uporabi samo, ko je konfigurirana zaznava prisotnosti (Korak 3). Lahko se nastavi tudi ročno prek izbirnika načina.",
+          "eco_temp": "Uporablja se, ko je izbirnik načina ročno nastavljen na 'Eco'. Ne aktivira se samodejno.",
+          "temp_tolerance": "ThermoSmart prilagodi TRV le, ko se temperatura razlikuje za več kot to vrednost. 0,5 °C deluje dobro za večino sob. Nižja = bolj odzivna, višja = manj prilagoditev."
         }
       },
       "presence": {

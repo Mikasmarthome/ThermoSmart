@@ -48,7 +48,10 @@
           "sched_wd_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
           "sched_wd_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "sched_we_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
-          "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir"
+          "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
+          "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
+          "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
+          "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
           "sched_wd_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "sched_we_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
-          "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir"
+          "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
+          "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
+          "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
+          "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
         }
       },
       "presence": {

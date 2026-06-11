@@ -48,7 +48,10 @@
           "sched_wd_morning": "Temperatura de confort trebuie atinsă până la această oră – ThermoSmart preîncălzește automat în avans",
           "sched_wd_night": "Temperatura de noapte se aplică de la această oră",
           "sched_we_morning": "Temperatura de confort trebuie atinsă până la această oră – ThermoSmart preîncălzește automat în avans",
-          "sched_we_night": "Temperatura de noapte se aplică de la această oră"
+          "sched_we_night": "Temperatura de noapte se aplică de la această oră",
+          "away_temp": "Aplicată automat doar când detectarea prezenței este configurată (Pasul 3). Poate fi setată și manual prin selectorul de mod.",
+          "eco_temp": "Folosită când selectorul de mod este setat manual pe 'Eco'. Nu se activează automat.",
+          "temp_tolerance": "ThermoSmart ajustează TRV-ul doar când temperatura se abate mai mult decât această valoare. 0,5 °C funcționează bine pentru majoritatea camerelor. Mai mic = mai reactiv, mai mare = mai puține ajustări."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Temperatura de confort trebuie atinsă până la această oră – ThermoSmart preîncălzește automat în avans",
           "sched_wd_night": "Temperatura de noapte se aplică de la această oră",
           "sched_we_morning": "Temperatura de confort trebuie atinsă până la această oră – ThermoSmart preîncălzește automat în avans",
-          "sched_we_night": "Temperatura de noapte se aplică de la această oră"
+          "sched_we_night": "Temperatura de noapte se aplică de la această oră",
+          "away_temp": "Aplicată automat doar când detectarea prezenței este configurată (Pasul 3). Poate fi setată și manual prin selectorul de mod.",
+          "eco_temp": "Folosită când selectorul de mod este setat manual pe 'Eco'. Nu se activează automat.",
+          "temp_tolerance": "ThermoSmart ajustează TRV-ul doar când temperatura se abate mai mult decât această valoare. 0,5 °C funcționează bine pentru majoritatea camerelor. Mai mic = mai reactiv, mai mare = mai puține ajustări."
         }
       },
       "presence": {

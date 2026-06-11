@@ -48,7 +48,10 @@
           "sched_wd_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
           "sched_wd_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
           "sched_we_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
-          "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes"
+          "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
+          "away_temp": "Csak akkor kerül automatikusan alkalmazásra, ha a jelenlétérzékelés konfigurálva van (3. lépés). Manuálisan is beállítható az üzemmód-választón keresztül.",
+          "eco_temp": "Akkor használatos, ha az üzemmód-választót manuálisan 'Eco'-ra állítják. Nem aktiválódik automatikusan.",
+          "temp_tolerance": "A ThermoSmart csak akkor állítja be a TRV-t, ha a hőmérséklet ennél az értéknél jobban eltér. 0,5 °C a legtöbb szobában jól működik. Alacsonyabb = reaktívabb, magasabb = kevesebb beállítás."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
           "sched_wd_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
           "sched_we_morning": "A kényelmi hőmérsékletet erre az időre kell elérni – a ThermoSmart előre automatikusan előmelegít",
-          "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes"
+          "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
+          "away_temp": "Csak akkor kerül automatikusan alkalmazásra, ha a jelenlétérzékelés konfigurálva van (3. lépés). Manuálisan is beállítható az üzemmód-választón keresztül.",
+          "eco_temp": "Akkor használatos, ha az üzemmód-választót manuálisan 'Eco'-ra állítják. Nem aktiválódik automatikusan.",
+          "temp_tolerance": "A ThermoSmart csak akkor állítja be a TRV-t, ha a hőmérséklet ennél az értéknél jobban eltér. 0,5 °C a legtöbb szobában jól működik. Alacsonyabb = reaktívabb, magasabb = kevesebb beállítás."
         }
       },
       "presence": {

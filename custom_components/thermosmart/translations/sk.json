@@ -48,7 +48,10 @@
           "sched_wd_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
           "sched_wd_night": "Nočná teplota platí od tohto času",
           "sched_we_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
-          "sched_we_night": "Nočná teplota platí od tohto času"
+          "sched_we_night": "Nočná teplota platí od tohto času",
+          "away_temp": "Použije sa automaticky len pri nakonfigurovanom rozpoznávaní prítomnosti (Krok 3). Možno nastaviť aj ručne prostredníctvom výberu režimu.",
+          "eco_temp": "Použije sa, keď je výber režimu ručne nastavený na 'Eco'. Neaktivuje sa automaticky.",
+          "temp_tolerance": "ThermoSmart nastavuje TRV len vtedy, keď sa teplota odchýli o viac ako túto hodnotu. 0,5 °C funguje dobre pre väčšinu miestností. Nižší = reaktívnejší, vyšší = menej nastavení."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
           "sched_wd_night": "Nočná teplota platí od tohto času",
           "sched_we_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
-          "sched_we_night": "Nočná teplota platí od tohto času"
+          "sched_we_night": "Nočná teplota platí od tohto času",
+          "away_temp": "Použije sa automaticky len pri nakonfigurovanom rozpoznávaní prítomnosti (Krok 3). Možno nastaviť aj ručne prostredníctvom výberu režimu.",
+          "eco_temp": "Použije sa, keď je výber režimu ručne nastavený na 'Eco'. Neaktivuje sa automaticky.",
+          "temp_tolerance": "ThermoSmart nastavuje TRV len vtedy, keď sa teplota odchýli o viac ako túto hodnotu. 0,5 °C funguje dobre pre väčšinu miestností. Nižší = reaktívnejší, vyšší = menej nastavení."
         }
       },
       "presence": {

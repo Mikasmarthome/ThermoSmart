@@ -90,7 +90,7 @@ class TRVControlMixin:
                 self.zone_name, ext_temp_map,
             )
 
-        # Direkte Ventilsteuerung (valve_opening_degree, pi_heating_demand etc.)
+        # Direct valve position control (TPI duty-cycle written as 0–100%).
         valve_map: dict[str, str] = {}
         for device_id, climate_id in device_to_climate.items():
             for entry in er.async_entries_for_device(ent_reg, device_id):
@@ -111,6 +111,43 @@ class TRVControlMixin:
                 "ThermoSmart '%s': Ventil-Autodetect (direkte %-Steuerung): %s",
                 self.zone_name, valve_map,
             )
+
+        # Recovery: reset valve_opening_degree to 100% on all managed TRV devices.
+        # This entity is a maximum-opening limit config on SONOFF TRVZB and similar
+        # devices — not a live position command. Previous ThermoSmart versions wrote
+        # the TPI duty-cycle to it, which capped heating capacity (e.g. 0% blocked
+        # the valve entirely). Reset to 100% restores full heating capacity on upgrade.
+        for device_id in device_to_climate:
+            for entry in er.async_entries_for_device(ent_reg, device_id):
+                if entry.entity_id.split(".")[0] != "number":
+                    continue
+                eid_lower = entry.entity_id.lower()
+                tk = (getattr(entry, "translation_key", None) or "").lower()
+                name = (getattr(entry, "original_name", None) or "").lower()
+                if not ("valve_opening_degree" in eid_lower
+                        or "valve_opening_degree" in tk
+                        or "valve_opening_degree" in name):
+                    continue
+                state = self.hass.states.get(entry.entity_id)
+                if state is None or state.state in ("unavailable", "unknown"):
+                    continue
+                try:
+                    if float(state.state) < 100.0:
+                        _LOGGER.info(
+                            "ThermoSmart '%s': Resetting %s from %s%% to 100%% "
+                            "(valve_opening_degree is a max-opening limit, not a live "
+                            "position — TPI duty-cycle is no longer written here)",
+                            self.zone_name, entry.entity_id, state.state,
+                        )
+                        self.hass.async_create_task(
+                            self.hass.services.async_call(
+                                "number", "set_value",
+                                {"entity_id": entry.entity_id, "value": 100},
+                                blocking=False,
+                            )
+                        )
+                except (TypeError, ValueError):
+                    pass
 
         self._auto_quirk_entities = quirks
         self._auto_calibration_map = cal_map

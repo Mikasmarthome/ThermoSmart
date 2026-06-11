@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.3-blue.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.4-blue.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -48,7 +48,7 @@ HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://
 
 ### 2 — Download
 
-HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.3` → Download
+HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.4` → Download
 
 ### 3 — Restart and Add
 
@@ -104,7 +104,7 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 ### Developer-tested
 | Device | Protocol | Notes |
 |---|---|---|
-| SONOFF TRVZB | Zigbee via Zigbee2MQTT | TPI setpoint and direct valve control. `valve_opening_degree` entity is auto-detected and written. Physical proportional behaviour depends on firmware version. A motor-protection workaround is applied on close. |
+| SONOFF TRVZB | Zigbee via Zigbee2MQTT | Controlled via setpoint boost (`climate.set_temperature`) and `external_temperature_input` for improved TRV-internal accuracy. `valve_opening_degree` is a max-opening limit on this device — ThermoSmart does not write TPI duty-cycle to it. A motor-protection workaround is applied on close. |
 
 ### Untested — setpoint boost expected to work
 Any `climate` entity supporting `set_temperature`: Danfoss Ally, Eurotronic Spirit, Tuya TS0601, generic ZHA / Z-Wave / Matter TRVs.
@@ -129,7 +129,7 @@ ThermoSmart falls back to setpoint boost on devices without a recognised valve e
 
 ¹ Auto-detection finds a matching entity and writes values to it — it does not guarantee physical function on every device.
 
-**Direct valve control** auto-detects writable `number` entities matching: `valve_opening_degree`, `pi_heating_demand`, `valve_position`, `heating_demand`, or `level`.
+**Direct valve control** auto-detects writable `number` entities matching: `pi_heating_demand`, `valve_position`, `heating_demand`, or `level`. Note: `valve_opening_degree` (used on some devices as a max-opening limit, not a live position) is intentionally excluded and not written by ThermoSmart.
 
 **Setpoint boost** converts TPI duty-cycle to `setpoint = target + duty% × 8 °C` via `climate.set_temperature`. Works on all devices; less precise than direct valve control.
 

@@ -112,11 +112,45 @@ class TRVControlMixin:
                 self.zone_name, valve_map,
             )
 
-        # Recovery: reset valve_opening_degree to 100% on all managed TRV devices.
-        # This entity is a maximum-opening limit config on SONOFF TRVZB and similar
-        # devices — not a live position command. Previous ThermoSmart versions wrote
-        # the TPI duty-cycle to it, which capped heating capacity (e.g. 0% blocked
-        # the valve entirely). Reset to 100% restores full heating capacity on upgrade.
+        await self._reset_valve_opening_degree()
+
+        self._auto_quirk_entities = quirks
+        self._auto_calibration_map = cal_map
+        self._auto_ext_temp_map = ext_temp_map
+        self._auto_valve_map = valve_map
+
+    async def _reset_valve_opening_degree(self) -> bool:
+        """Reset valve_opening_degree to 100% on all managed TRV devices.
+
+        valve_opening_degree is a max-opening limit on SONOFF TRVZB (and similar
+        devices) — not a live valve position.  Previous ThermoSmart versions wrote
+        the TPI duty-cycle to it, which capped heating capacity at the duty-cycle
+        value (e.g. 0% blocked the valve entirely).  Resetting to 100% restores
+        full heating capacity on upgrade.
+
+        Called from async_detect_device_entities (fires immediately on Integration
+        Reload when Zigbee2MQTT entities are already available) and from
+        _async_update_data on the first coordinator refreshes as a safety-net for
+        full HA restart, where Z2M entities are not yet available at setup time.
+
+        Returns:
+            True  — recovery complete or nothing to do (caller should not retry).
+            False — at least one relevant entity was unavailable; caller should
+                    retry on the next refresh cycle.
+        """
+        cfg = self.zone_cfg
+        climate_entities = cfg.get("climate_entities", [])
+        if not climate_entities:
+            return True
+
+        ent_reg = er.async_get(self.hass)
+        device_to_climate: dict[str, str] = {}
+        for entity_id in climate_entities:
+            entry = ent_reg.async_get(entity_id)
+            if entry and entry.device_id:
+                device_to_climate[entry.device_id] = entity_id
+
+        retry_needed = False
         for device_id in device_to_climate:
             for entry in er.async_entries_for_device(ent_reg, device_id):
                 if entry.entity_id.split(".")[0] != "number":
@@ -130,6 +164,7 @@ class TRVControlMixin:
                     continue
                 state = self.hass.states.get(entry.entity_id)
                 if state is None or state.state in ("unavailable", "unknown"):
+                    retry_needed = True
                     continue
                 try:
                     if float(state.state) < 100.0:
@@ -149,10 +184,7 @@ class TRVControlMixin:
                 except (TypeError, ValueError):
                     pass
 
-        self._auto_quirk_entities = quirks
-        self._auto_calibration_map = cal_map
-        self._auto_ext_temp_map = ext_temp_map
-        self._auto_valve_map = valve_map
+        return not retry_needed
 
     # ── TRV-Offline-Tracking ─────────────────────────────────────────
 

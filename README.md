@@ -187,6 +187,18 @@ ThermoSmart averages the remaining sensors. Temperature decisions pause only if 
 **Where is the learning data stored?**  
 `/config/.storage/thermosmart_learning_data` — safe to share for debugging.
 
+**Which TRVs use direct valve control?**  
+ThermoSmart auto-detects a direct-valve entity on each TRV device and writes the TPI duty-cycle (0–100%) to it when one is found. Recognised patterns:
+
+| Pattern | Example devices |
+|---|---|
+| `valve_position` | Eurotronic Spirit (SPZB0001) |
+| `pi_heating_demand` | Tuya TS0601_3/5, some Danfoss |
+| `heating_demand` | Alternative name for the above |
+| `level` | Homematic IP (hahomematic, 0.0–1.0 scaled) |
+
+TRVs without a recognised pattern — including **SONOFF TRVZB** — are controlled via setpoint boost (`climate.set_temperature`). On SONOFF TRVZB, ThermoSmart additionally writes the room temperature to `external_temperature_input`, which feeds the TRV's own internal controller for better accuracy. `valve_opening_degree` is intentionally not written: on this device it configures a maximum-opening limit, not the live valve position.
+
 **SONOFF TRVZB via Zigbee2MQTT — `heat` vs `auto` mode and internal weekly schedule**  
 Zigbee2MQTT exposes two HVAC modes on the SONOFF TRVZB:
 

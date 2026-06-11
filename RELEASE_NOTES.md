@@ -1,5 +1,39 @@
 # ThermoSmart – Release Notes
 
+## v1.0.4
+
+### Bug Fix
+
+**SONOFF TRVZB and similar devices: heating capacity was unintentionally limited**
+
+ThermoSmart previously auto-detected `valve_opening_degree` entities on TRV devices
+and wrote the TPI duty-cycle directly to them (0–100%). On SONOFF TRVZB (via
+Zigbee2MQTT), this entity is a **maximum-opening limit config**, not a live valve
+position command. The result:
+
+- At 60% TPI duty: valve could open no more than 60% → reduced heating power
+- At 0% TPI duty (idle): valve was blocked entirely → no heating possible until
+  the next 5-minute update cycle
+
+**Fix:** `valve_opening_degree` is no longer written by ThermoSmart.
+Control continues via `climate.set_temperature` (setpoint boost), which is the
+correct path for these devices. The existing `external_temperature_input` feed
+is unaffected and continues to improve TRV accuracy.
+
+**Automatic recovery on upgrade:** If ThermoSmart finds a `valve_opening_degree`
+entity with a value below 100% on a managed TRV device, it resets it to 100%
+at startup and logs the action. No manual intervention required.
+
+### Unaffected devices
+Eurotronic Spirit (`valve_position`), Tuya TS0601 (`pi_heating_demand`),
+Homematic IP (`level`) — all other direct-valve patterns are unchanged.
+
+### Upgrade
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+Learning data is preserved.
+
+---
+
 ## v1.0.3
 
 ### Bug Fixes

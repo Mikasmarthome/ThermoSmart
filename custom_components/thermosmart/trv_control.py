@@ -427,7 +427,9 @@ class TRVControlMixin:
     async def _async_set_valve_percent(self, cfg: dict, duty_cycle: float) -> bool:
         """Schreibt TPI Duty-Cycle direkt als Ventilprozent (0–100%) auf unterstützte TRVs.
 
-        Unterstützte Entities: valve_opening_degree, pi_heating_demand, valve_position.
+        Unterstützte Entities: valve_position, pi_heating_demand, heating_demand, level.
+        valve_opening_degree is intentionally excluded (max-opening limit, not a live
+        position — see AUTO_VALVE_PATTERNS in const.py).
 
         Valve-Bump-Workaround (TRVZB-Motor):
         Beim Schließen (neuer Wert < letzter Wert) kurz weiter öffnen und dann

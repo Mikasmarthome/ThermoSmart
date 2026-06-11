@@ -350,8 +350,10 @@ class ThermoSmartHeatingPowerSensor(_Base):
 class ThermoSmartTpiSensor(_Base):
     """TPI Duty-Cycle – how far the valve should theoretically open (0–100%).
 
-    With valve_opening_degree support: written directly to the valve.
-    Without: converted to a boost setpoint.
+    With a recognised direct-valve entity (valve_position, pi_heating_demand,
+    heating_demand, level): written directly to the valve.
+    Without (e.g. SONOFF TRVZB): converted to a setpoint boost via
+    climate.set_temperature.
     """
     _attr_entity_registry_enabled_default = True
     _attr_translation_key = "tpi_duty_cycle"

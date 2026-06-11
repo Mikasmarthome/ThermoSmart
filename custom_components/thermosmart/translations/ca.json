@@ -48,7 +48,10 @@
           "sched_wd_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
           "sched_wd_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
           "sched_we_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
-          "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora"
+          "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
+          "away_temp": "S'aplica automàticament només si la detecció de presència està configurada (Pas 3). Pot establir-se manualment a través del selector de mode.",
+          "eco_temp": "S'utilitza quan el selector de mode s'estableix manualment en 'Eco'. No s'aplica automàticament.",
+          "temp_tolerance": "ThermoSmart ajusta la TRV només quan la temperatura es desvia més que aquest valor. 0,5 °C funciona bé per a la majoria d'habitacions. Menor = més reactiu, major = menys ajustos."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
           "sched_wd_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
           "sched_we_morning": "La temperatura de confort ha d'assolir-se a aquesta hora – ThermoSmart preescalfa automàticament amb antelació",
-          "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora"
+          "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
+          "away_temp": "S'aplica automàticament només si la detecció de presència està configurada (Pas 3). Pot establir-se manualment a través del selector de mode.",
+          "eco_temp": "S'utilitza quan el selector de mode s'estableix manualment en 'Eco'. No s'aplica automàticament.",
+          "temp_tolerance": "ThermoSmart ajusta la TRV només quan la temperatura es desvia més que aquest valor. 0,5 °C funciona bé per a la majoria d'habitacions. Menor = més reactiu, major = menys ajustos."
         }
       },
       "presence": {

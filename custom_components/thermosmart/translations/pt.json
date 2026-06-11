@@ -48,7 +48,10 @@
           "sched_wd_morning": "A temperatura de conforto deve ser atingida a esta hora – o ThermoSmart pré-aquece automaticamente com antecedência",
           "sched_wd_night": "A temperatura noturna aplica-se a partir desta hora",
           "sched_we_morning": "A temperatura de conforto deve ser atingida a esta hora – o ThermoSmart pré-aquece automaticamente com antecedência",
-          "sched_we_night": "A temperatura noturna aplica-se a partir desta hora"
+          "sched_we_night": "A temperatura noturna aplica-se a partir desta hora",
+          "away_temp": "Aplicada automaticamente apenas quando a deteção de presença está configurada (Passo 3). Pode também ser definida manualmente através do seletor de modo.",
+          "eco_temp": "Usada quando o seletor de modo é definido manualmente para 'Eco'. Não é ativada automaticamente.",
+          "temp_tolerance": "O ThermoSmart só ajusta a TRV quando a temperatura se desvia mais do que este valor. 0,5 °C funciona bem para a maioria dos quartos. Menor = mais reativo, maior = menos ajustes."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "A temperatura de conforto deve ser atingida a esta hora – o ThermoSmart pré-aquece automaticamente com antecedência",
           "sched_wd_night": "A temperatura noturna aplica-se a partir desta hora",
           "sched_we_morning": "A temperatura de conforto deve ser atingida a esta hora – o ThermoSmart pré-aquece automaticamente com antecedência",
-          "sched_we_night": "A temperatura noturna aplica-se a partir desta hora"
+          "sched_we_night": "A temperatura noturna aplica-se a partir desta hora",
+          "away_temp": "Aplicada automaticamente apenas quando a deteção de presença está configurada (Passo 3). Pode também ser definida manualmente através do seletor de modo.",
+          "eco_temp": "Usada quando o seletor de modo é definido manualmente para 'Eco'. Não é ativada automaticamente.",
+          "temp_tolerance": "O ThermoSmart só ajusta a TRV quando a temperatura se desvia mais do que este valor. 0,5 °C funciona bem para a maioria dos quartos. Menor = mais reativo, maior = menos ajustes."
         }
       },
       "presence": {

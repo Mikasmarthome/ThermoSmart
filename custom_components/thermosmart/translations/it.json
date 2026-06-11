@@ -48,7 +48,10 @@
           "sched_wd_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
           "sched_wd_night": "La temperatura notturna si applica da quest'ora",
           "sched_we_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
-          "sched_we_night": "La temperatura notturna si applica da quest'ora"
+          "sched_we_night": "La temperatura notturna si applica da quest'ora",
+          "away_temp": "Applicata automaticamente solo se il rilevamento della presenza è configurato (Passaggio 3). Può essere impostata manualmente tramite il selettore di modalità.",
+          "eco_temp": "Usata quando il selettore di modalità è impostato manualmente su 'Eco'. Non si attiva automaticamente.",
+          "temp_tolerance": "ThermoSmart regola la TRV solo quando la temperatura si discosta di più di questo valore. 0,5 °C funziona bene per la maggior parte delle stanze. Inferiore = più reattivo, superiore = meno regolazioni."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
           "sched_wd_night": "La temperatura notturna si applica da quest'ora",
           "sched_we_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
-          "sched_we_night": "La temperatura notturna si applica da quest'ora"
+          "sched_we_night": "La temperatura notturna si applica da quest'ora",
+          "away_temp": "Applicata automaticamente solo se il rilevamento della presenza è configurato (Passaggio 3). Può essere impostata manualmente tramite il selettore di modalità.",
+          "eco_temp": "Usata quando il selettore di modalità è impostato manualmente su 'Eco'. Non si attiva automaticamente.",
+          "temp_tolerance": "ThermoSmart regola la TRV solo quando la temperatura si discosta di più di questo valore. 0,5 °C funziona bene per la maggior parte delle stanze. Inferiore = più reattivo, superiore = meno regolazioni."
         }
       },
       "presence": {

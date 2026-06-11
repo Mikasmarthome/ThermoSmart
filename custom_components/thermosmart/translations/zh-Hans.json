@@ -48,7 +48,10 @@
           "sched_wd_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
           "sched_wd_night": "夜间温度从此时间起生效",
           "sched_we_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
-          "sched_we_night": "夜间温度从此时间起生效"
+          "sched_we_night": "夜间温度从此时间起生效",
+          "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
+          "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
+          "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
           "sched_wd_night": "夜间温度从此时间起生效",
           "sched_we_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
-          "sched_we_night": "夜间温度从此时间起生效"
+          "sched_we_night": "夜间温度从此时间起生效",
+          "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
+          "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
+          "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
         }
       },
       "presence": {

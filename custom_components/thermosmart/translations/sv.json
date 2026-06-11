@@ -48,7 +48,10 @@
           "sched_wd_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
           "sched_wd_night": "Natttemperaturen gäller från denna tid",
           "sched_we_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
-          "sched_we_night": "Natttemperaturen gäller från denna tid"
+          "sched_we_night": "Natttemperaturen gäller från denna tid",
+          "away_temp": "Tillämpas automatiskt bara om närvarodetektering är konfigurerad (Steg 3). Kan också ställas in manuellt via lägesväljaren.",
+          "eco_temp": "Används när lägesväljaren manuellt är satt till 'Eco'. Aktiveras inte automatiskt.",
+          "temp_tolerance": "ThermoSmart justerar TRV:n bara när temperaturen avviker mer än detta värde. 0,5 °C fungerar bra för de flesta rum. Lägre = mer reaktiv, högre = färre justeringar."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
           "sched_wd_night": "Natttemperaturen gäller från denna tid",
           "sched_we_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
-          "sched_we_night": "Natttemperaturen gäller från denna tid"
+          "sched_we_night": "Natttemperaturen gäller från denna tid",
+          "away_temp": "Tillämpas automatiskt bara om närvarodetektering är konfigurerad (Steg 3). Kan också ställas in manuellt via lägesväljaren.",
+          "eco_temp": "Används när lägesväljaren manuellt är satt till 'Eco'. Aktiveras inte automatiskt.",
+          "temp_tolerance": "ThermoSmart justerar TRV:n bara när temperaturen avviker mer än detta värde. 0,5 °C fungerar bra för de flesta rum. Lägre = mer reaktiv, högre = färre justeringar."
         }
       },
       "presence": {

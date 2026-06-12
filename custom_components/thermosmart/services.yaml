@@ -1,0 +1,10 @@
+export_learning_data:
+  name: Export anonymized learning data
+  description: >
+    Saves an anonymized snapshot of ThermoSmart learning data to
+    /config/www/thermosmart_export_<timestamp>.json.
+    No data is sent anywhere — review the file and share it manually
+    to support LE 2.0 development.
+    The file contains numeric learning data only; entity IDs, device names,
+    and personal identifiers are never included.
+  fields: {}

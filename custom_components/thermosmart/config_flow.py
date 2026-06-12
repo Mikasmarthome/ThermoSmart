@@ -70,7 +70,7 @@ def _validate_temps(data: dict) -> dict[str, str]:
     except (TypeError, ValueError):
         return errors   # Schema-Validierung ist bereits vorab passiert
 
-    if night >= comfort:
+    if night > comfort:
         errors["night_temp"] = "night_temp_too_high"
     if away > night:
         errors["away_temp"] = "away_temp_too_high"

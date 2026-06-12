@@ -171,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Експортиране на данни за обучение"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

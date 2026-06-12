@@ -37,12 +37,12 @@ from .const import (
 from .coordinator import ThermoSmartCoordinator
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
-from .export import async_export_learning_data
+from .export import async_export_learning_data, build_export_notification_message
 
 _LOGGER = logging.getLogger(__name__)
 
 ZONE_PLATFORMS = PLATFORMS               # ["climate", "sensor", "switch", "select"]
-SYSTEM_PLATFORMS = ["switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
+SYSTEM_PLATFORMS = ["button", "switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
 
 
 def _migrate_old_summer_switch(hass: HomeAssistant) -> None:
@@ -124,13 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 filename = os.path.basename(filepath)
                 _pn_create(
                     hass,
-                    message=(
-                        f"Export saved to `/config/www/{filename}`.\n\n"
-                        "To download, open this path in your browser:\n\n"
-                        f"`/local/{filename}`\n\n"
-                        "Review the file before sharing. "
-                        "No data has been sent anywhere."
-                    ),
+                    message=build_export_notification_message(filename),
                     title="ThermoSmart — Learning Data Export",
                     notification_id="thermosmart_export",
                 )

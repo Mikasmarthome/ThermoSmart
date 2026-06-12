@@ -26,6 +26,9 @@
           "valve_maintenance": "Szelepes karbantartás engedélyezése (vasárnap 03:00 – csak nyári vagy vakációs módban)",
           "calibration_invert": "Kalibrációs eltolás invertálása (ME167-hez hasonló TRV-khez, amelyek invertálják az előjelet)",
           "manage_temp_source": "Külső szobahőmérséklet automatikus használata a támogatott TRV-khez"
+        },
+        "data_description": {
+          "manage_temp_source": "A ThermoSmart továbbra is használja a külső hőmérséklet-érzékelőket saját szabályozási logikájához. Ha engedélyezve van, a ThermoSmart a támogatott TRV-ket is átkapcsolja külső hőmérsékleti forrásukra, és visszavált a TRV belső érzékelőjére, ha a külső érzékelők elérhetetlenné válnak."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Szelepes karbantartás engedélyezése (csak nyári / vakációs módban)",
           "calibration_invert": "Kalibrációs eltolás invertálása (ME167 és hasonlók)",
           "manage_temp_source": "Külső szobahőmérséklet automatikus használata a támogatott TRV-khez"
+        },
+        "data_description": {
+          "manage_temp_source": "A ThermoSmart továbbra is használja a külső hőmérséklet-érzékelőket saját szabályozási logikájához. Ha engedélyezve van, a ThermoSmart a támogatott TRV-ket is átkapcsolja külső hőmérsékleti forrásukra, és visszavált a TRV belső érzékelőjére, ha a külső érzékelők elérhetetlenné válnak."
         }
       },
       "schedule": {

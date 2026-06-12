@@ -26,6 +26,9 @@
           "valve_maintenance": "Activar manteniment de vàlvules (diumenge 03:00 – només mode Estiu o Vacances)",
           "calibration_invert": "Invertir offset de calibratge (per a TRVs com ME167 que inverteixen el signe)",
           "manage_temp_source": "Usar automàticament la temperatura ambient externa per a TRVs compatibles"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart continua usant sensors de temperatura externs per a la seva pròpia lògica de control. Quan està activat, ThermoSmart també canvia els TRVs compatibles a la seva font de temperatura externa i torna al sensor intern del TRV si els sensors externs queden no disponibles."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Activar manteniment de vàlvules (només mode Estiu / Vacances)",
           "calibration_invert": "Invertir offset de calibratge (ME167 i similars)",
           "manage_temp_source": "Usar automàticament la temperatura ambient externa per a TRVs compatibles"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart continua usant sensors de temperatura externs per a la seva pròpia lògica de control. Quan està activat, ThermoSmart també canvia els TRVs compatibles a la seva font de temperatura externa i torna al sensor intern del TRV si els sensors externs queden no disponibles."
         }
       },
       "schedule": {

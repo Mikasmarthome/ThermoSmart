@@ -26,6 +26,9 @@
           "valve_maintenance": "Ativar manutenção de válvulas (domingo 03:00 – apenas modo Verão ou Férias)",
           "calibration_invert": "Inverter offset de calibração (para válvulas TRV como ME167 que invertem o sinal)",
           "manage_temp_source": "Usar automaticamente a temperatura ambiente externa para TRV compatíveis"
+        },
+        "data_description": {
+          "manage_temp_source": "O ThermoSmart continua a usar sensores de temperatura externos para a sua própria lógica de controlo. Quando ativado, o ThermoSmart também muda os TRV compatíveis para a sua fonte de temperatura externa e reverte para o sensor interno do TRV se os sensores externos ficarem indisponíveis."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Ativar manutenção de válvulas (apenas modo Verão / Férias)",
           "calibration_invert": "Inverter offset de calibração (ME167 e similares)",
           "manage_temp_source": "Usar automaticamente a temperatura ambiente externa para TRV compatíveis"
+        },
+        "data_description": {
+          "manage_temp_source": "O ThermoSmart continua a usar sensores de temperatura externos para a sua própria lógica de controlo. Quando ativado, o ThermoSmart também muda os TRV compatíveis para a sua fonte de temperatura externa e reverte para o sensor interno do TRV se os sensores externos ficarem indisponíveis."
         }
       },
       "schedule": {

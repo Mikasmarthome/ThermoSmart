@@ -26,6 +26,9 @@
           "valve_maintenance": "Aktiver ventilvedlikehold (søndag 03:00 – kun sommer- eller feriemodus)",
           "calibration_invert": "Inverter kalibreringsoffset (for TRV-er som ME167 som inverterer fortegnet)",
           "manage_temp_source": "Bruk automatisk ekstern romtemperatur for støttede TRV-er"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart fortsetter å bruke eksterne temperatursensorer for sin egen styrelogikk. Når den er aktivert, bytter ThermoSmart også støttede TRV-er til sin eksterne temperaturkilde og faller tilbake til den interne TRV-sensoren hvis eksterne sensorer blir utilgjengelige."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Aktiver ventilvedlikehold (kun sommer- / feriemodus)",
           "calibration_invert": "Inverter kalibreringsoffset (ME167 og lignende)",
           "manage_temp_source": "Bruk automatisk ekstern romtemperatur for støttede TRV-er"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart fortsetter å bruke eksterne temperatursensorer for sin egen styrelogikk. Når den er aktivert, bytter ThermoSmart også støttede TRV-er til sin eksterne temperaturkilde og faller tilbake til den interne TRV-sensoren hvis eksterne sensorer blir utilgjengelige."
         }
       },
       "schedule": {

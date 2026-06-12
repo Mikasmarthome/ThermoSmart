@@ -26,6 +26,9 @@
           "valve_maintenance": "Klep-onderhoud inschakelen (zondag 03:00 – alleen in Zomer- of Vakantiemodus)",
           "calibration_invert": "Kalibratie-offset omkeren (voor TRV's zoals ME167 die het teken omkeren)",
           "manage_temp_source": "Externe kamertemperatuur automatisch gebruiken voor ondersteunde TRV's"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart blijft externe temperatuursensoren gebruiken voor zijn eigen regellogica. Indien ingeschakeld, schakelt ThermoSmart ondersteunde TRV's ook over naar hun externe temperatuurbron en valt terug op de interne TRV-sensor als externe sensoren niet beschikbaar zijn."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Klep-onderhoud inschakelen (alleen Zomer- / Vakantiemodus)",
           "calibration_invert": "Kalibratie-offset omkeren (ME167 en vergelijkbaar)",
           "manage_temp_source": "Externe kamertemperatuur automatisch gebruiken voor ondersteunde TRV's"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart blijft externe temperatuursensoren gebruiken voor zijn eigen regellogica. Indien ingeschakeld, schakelt ThermoSmart ondersteunde TRV's ook over naar hun externe temperatuurbron en valt terug op de interne TRV-sensor als externe sensoren niet beschikbaar zijn."
         }
       },
       "schedule": {

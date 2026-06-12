@@ -26,6 +26,9 @@
           "valve_maintenance": "Aktivovať údržbu ventilov (nedeľa 03:00 – len letný alebo dovolenkový režim)",
           "calibration_invert": "Invertovať kalibračný offset (pre TRV ako ME167, ktoré invertujú znamienko)",
           "manage_temp_source": "Automaticky použiť externú teplotu miestnosti pre podporované TRV"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart naďalej používa externé teplotné senzory pre vlastnú riadiacu logiku. Po aktivácii ThermoSmart tiež prepne podporované TRV na ich externý zdroj teploty a vráti sa na interný senzor TRV, ak sa externé senzory stanú nedostupnými."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Aktivovať údržbu ventilov (len letný / dovolenkový režim)",
           "calibration_invert": "Invertovať kalibračný offset (ME167 a podobné)",
           "manage_temp_source": "Automaticky použiť externú teplotu miestnosti pre podporované TRV"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart naďalej používa externé teplotné senzory pre vlastnú riadiacu logiku. Po aktivácii ThermoSmart tiež prepne podporované TRV na ich externý zdroj teploty a vráti sa na interný senzor TRV, ak sa externé senzory stanú nedostupnými."
         }
       },
       "schedule": {

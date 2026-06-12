@@ -94,6 +94,82 @@ def _zone_meta(cfg: dict) -> dict:
     }
 
 
+def _compute_analytics(learning: dict) -> dict:
+    """Compute per-zone analytics from existing observations at export time.
+
+    Pure calculation — no new fields are written to storage, no counters are
+    maintained at runtime.  All inputs come from learning data already present.
+    """
+    observations: list[dict] = learning.get("observations", [])
+    trv_observations: list[dict] = learning.get("trv_observations", [])
+
+    # --- observation_span_days -------------------------------------------
+    span_days = 0.0
+    if len(observations) >= 2:
+        try:
+            first_ts = datetime.fromisoformat(observations[0]["ts"])
+            last_ts = datetime.fromisoformat(observations[-1]["ts"])
+            span_days = round((last_ts - first_ts).total_seconds() / 86400, 2)
+        except (KeyError, ValueError):
+            span_days = 0.0
+
+    # --- target_changes (transitions) ------------------------------------
+    target_changes = 0
+    prev_target = None
+    for obs in observations:
+        t = obs.get("target")
+        if prev_target is not None and t != prev_target:
+            target_changes += 1
+        prev_target = t
+
+    target_changes_per_day = (
+        round(target_changes / span_days, 3) if span_days > 0 else 0.0
+    )
+
+    # --- delta stats -------------------------------------------------------
+    deltas = [obs["delta"] for obs in observations if "delta" in obs]
+    avg_delta = round(sum(deltas) / len(deltas), 3) if deltas else 0.0
+    max_undershoot = round(min(deltas), 3) if deltas else 0.0
+    pct_obs_at_target = (
+        round(sum(1 for d in deltas if d >= 0) / len(deltas) * 100, 1)
+        if deltas else 0.0
+    )
+
+    # --- heat_rate / norm_heat_rate ----------------------------------------
+    heat_rates = [obs["heat_rate"] for obs in observations if "heat_rate" in obs]
+    heat_rate_obs_count = len(heat_rates)
+    heat_rate_mean = (
+        round(sum(heat_rates) / heat_rate_obs_count, 5)
+        if heat_rate_obs_count else None
+    )
+
+    norm_rates = [obs["norm_heat_rate"] for obs in observations if "norm_heat_rate" in obs]
+    norm_heat_rate_mean = (
+        round(sum(norm_rates) / len(norm_rates), 6) if norm_rates else None
+    )
+
+    # --- setpoint_excess from trv_observations ----------------------------
+    excesses = [
+        o["setpoint_excess"] for o in trv_observations if "setpoint_excess" in o
+    ]
+    avg_setpoint_excess = (
+        round(sum(excesses) / len(excesses), 3) if excesses else None
+    )
+
+    return {
+        "observation_span_days": span_days,
+        "target_changes": target_changes,
+        "target_changes_per_day": target_changes_per_day,
+        "avg_delta": avg_delta,
+        "max_undershoot": max_undershoot,
+        "pct_obs_at_target": pct_obs_at_target,
+        "heat_rate_obs_count": heat_rate_obs_count,
+        "heat_rate_mean": heat_rate_mean,
+        "norm_heat_rate_mean": norm_heat_rate_mean,
+        "avg_setpoint_excess": avg_setpoint_excess,
+    }
+
+
 async def async_export_learning_data(hass: HomeAssistant) -> str:
     """Build anonymized export, write to /config/www/, return absolute file path."""
     le: LearningEngine | None = hass.data.get(DOMAIN, {}).get("learning_engine")
@@ -109,11 +185,13 @@ async def async_export_learning_data(hass: HomeAssistant) -> str:
 
         meta = _zone_meta(cfg)
         learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
+        analytics = _compute_analytics(learning)
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
             **meta,
             "learning": learning,
+            "analytics": analytics,
         })
 
     export: dict = {

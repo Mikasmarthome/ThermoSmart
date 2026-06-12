@@ -149,9 +149,9 @@ def build_export_notification_message(filename: str) -> str:
     """
     return (
         f"Export saved to `/config/www/{filename}`.\n\n"
-        "To download, append this path to your Home Assistant URL "
-        "and open it in your browser:\n\n"
+        "To open the export file, append this path to your Home Assistant URL:\n\n"
         f"`/local/{filename}`\n\n"
-        "Review the file before sharing. "
-        "No data has been sent anywhere."
+        "The file will open as JSON in your browser. "
+        "To save it, use **Save Page As…** (Ctrl+S / Cmd+S).\n\n"
+        "Review the file before sharing. No data has been sent anywhere."
     )

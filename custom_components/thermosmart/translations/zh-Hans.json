@@ -25,7 +25,7 @@
           "window_close_delay": "供暖开启 – 窗户关闭后延迟",
           "valve_maintenance": "启用阀门维护（周日 03:00 – 仅夏季或假期模式）",
           "calibration_invert": "反转校准偏移（适用于反转符号的 ME167 等 TRV）",
-          "manage_temp_source": "自动管理TRV温度源"
+          "manage_temp_source": "自动为支持的TRV使用外部室温"
         }
       },
       "schedule": {
@@ -112,7 +112,7 @@
           "window_close_delay": "供暖开启 – 窗户关闭后延迟",
           "valve_maintenance": "启用阀门维护（仅夏季 / 假期模式）",
           "calibration_invert": "反转校准偏移（ME167 及类似设备）",
-          "manage_temp_source": "自动管理TRV温度源"
+          "manage_temp_source": "自动为支持的TRV使用外部室温"
         }
       },
       "schedule": {

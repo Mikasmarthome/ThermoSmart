@@ -25,7 +25,7 @@
           "window_close_delay": "Calefacción encendida – retraso tras cerrar ventana",
           "valve_maintenance": "Activar mantenimiento de válvulas (domingo 03:00 – solo modo Verano o Vacaciones)",
           "calibration_invert": "Invertir offset de calibración (para TRVs como ME167 que invierten el signo)",
-          "manage_temp_source": "Gestionar automáticamente la fuente de temperatura del TRV"
+          "manage_temp_source": "Usar automáticamente la temperatura ambiente externa para TRV compatibles"
         }
       },
       "schedule": {
@@ -112,7 +112,7 @@
           "window_close_delay": "Calefacción encendida – retraso tras cerrar ventana",
           "valve_maintenance": "Activar mantenimiento de válvulas (solo modo Verano / Vacaciones)",
           "calibration_invert": "Invertir offset de calibración (ME167 y similares)",
-          "manage_temp_source": "Gestionar automáticamente la fuente de temperatura del TRV"
+          "manage_temp_source": "Usar automáticamente la temperatura ambiente externa para TRV compatibles"
         }
       },
       "schedule": {

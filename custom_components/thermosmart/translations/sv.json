@@ -24,7 +24,8 @@
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
           "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
           "valve_maintenance": "Aktivera ventilunderhåll (söndag 03:00 – endast i Sommar- eller Semesterläge)",
-          "calibration_invert": "Invertera kalibrerings-offset (för TRV:er som ME167 som inverterar tecknet)"
+          "calibration_invert": "Invertera kalibrerings-offset (för TRV:er som ME167 som inverterar tecknet)",
+          "manage_temp_source": "Hantera TRV-temperaturkälla automatiskt"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
           "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
           "valve_maintenance": "Aktivera ventilunderhåll (endast Sommar- / Semesterläge)",
-          "calibration_invert": "Invertera kalibrerings-offset (ME167 och liknande)"
+          "calibration_invert": "Invertera kalibrerings-offset (ME167 och liknande)",
+          "manage_temp_source": "Hantera TRV-temperaturkälla automatiskt"
         }
       },
       "schedule": {

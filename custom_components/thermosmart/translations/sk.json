@@ -24,7 +24,8 @@
           "window_open_delay": "Vykurovanie vyp. – oneskorenie po otvorení okna",
           "window_close_delay": "Vykurovanie zap. – oneskorenie po zatvorení okna",
           "valve_maintenance": "Aktivovať údržbu ventilov (nedeľa 03:00 – len letný alebo dovolenkový režim)",
-          "calibration_invert": "Invertovať kalibračný offset (pre TRV ako ME167, ktoré invertujú znamienko)"
+          "calibration_invert": "Invertovať kalibračný offset (pre TRV ako ME167, ktoré invertujú znamienko)",
+          "manage_temp_source": "Automaticky spravovať zdroj teploty TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Vykurovanie vyp. – oneskorenie po otvorení okna",
           "window_close_delay": "Vykurovanie zap. – oneskorenie po zatvorení okna",
           "valve_maintenance": "Aktivovať údržbu ventilov (len letný / dovolenkový režim)",
-          "calibration_invert": "Invertovať kalibračný offset (ME167 a podobné)"
+          "calibration_invert": "Invertovať kalibračný offset (ME167 a podobné)",
+          "manage_temp_source": "Automaticky spravovať zdroj teploty TRV"
         }
       },
       "schedule": {

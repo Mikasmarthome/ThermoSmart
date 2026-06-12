@@ -24,7 +24,8 @@
           "window_open_delay": "Varme slukket – forsinkelse efter vindue åbnes",
           "window_close_delay": "Varme tændt – forsinkelse efter vindue lukkes",
           "valve_maintenance": "Aktivér ventilvedligeholdelse (søndag 03:00 – kun sommer- eller feriestilstand)",
-          "calibration_invert": "Inverter kalibrerings-offset (for TRV'er som ME167 der inverterer fortegnet)"
+          "calibration_invert": "Inverter kalibrerings-offset (for TRV'er som ME167 der inverterer fortegnet)",
+          "manage_temp_source": "Administrer automatisk TRV temperaturkilde"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Varme slukket – forsinkelse efter vindue åbnes",
           "window_close_delay": "Varme tændt – forsinkelse efter vindue lukkes",
           "valve_maintenance": "Aktivér ventilvedligeholdelse (kun sommer- / feriestilstand)",
-          "calibration_invert": "Inverter kalibrerings-offset (ME167 og lignende)"
+          "calibration_invert": "Inverter kalibrerings-offset (ME167 og lignende)",
+          "manage_temp_source": "Administrer automatisk TRV temperaturkilde"
         }
       },
       "schedule": {

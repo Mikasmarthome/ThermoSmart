@@ -24,7 +24,8 @@
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",
           "window_close_delay": "Ogrzewanie włączone – opóźnienie po zamknięciu okna",
           "valve_maintenance": "Włącz konserwację zaworów (niedziela 03:00 – tylko w trybie Lato lub Urlop)",
-          "calibration_invert": "Odwróć offset kalibracji (dla zaworów TRV jak ME167, które odwracają znak)"
+          "calibration_invert": "Odwróć offset kalibracji (dla zaworów TRV jak ME167, które odwracają znak)",
+          "manage_temp_source": "Automatycznie zarządzaj źródłem temperatury TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",
           "window_close_delay": "Ogrzewanie włączone – opóźnienie po zamknięciu okna",
           "valve_maintenance": "Włącz konserwację zaworów (tylko tryb Lato / Urlop)",
-          "calibration_invert": "Odwróć offset kalibracji (ME167 i podobne)"
+          "calibration_invert": "Odwróć offset kalibracji (ME167 i podobne)",
+          "manage_temp_source": "Automatycznie zarządzaj źródłem temperatury TRV"
         }
       },
       "schedule": {

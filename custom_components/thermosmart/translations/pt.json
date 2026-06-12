@@ -24,7 +24,8 @@
           "window_open_delay": "Aquecimento desligado – atraso após abertura da janela",
           "window_close_delay": "Aquecimento ligado – atraso após fecho da janela",
           "valve_maintenance": "Ativar manutenção de válvulas (domingo 03:00 – apenas modo Verão ou Férias)",
-          "calibration_invert": "Inverter offset de calibração (para válvulas TRV como ME167 que invertem o sinal)"
+          "calibration_invert": "Inverter offset de calibração (para válvulas TRV como ME167 que invertem o sinal)",
+          "manage_temp_source": "Gerir automaticamente a fonte de temperatura do TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Aquecimento desligado – atraso após abertura da janela",
           "window_close_delay": "Aquecimento ligado – atraso após fecho da janela",
           "valve_maintenance": "Ativar manutenção de válvulas (apenas modo Verão / Férias)",
-          "calibration_invert": "Inverter offset de calibração (ME167 e similares)"
+          "calibration_invert": "Inverter offset de calibração (ME167 e similares)",
+          "manage_temp_source": "Gerir automaticamente a fonte de temperatura do TRV"
         }
       },
       "schedule": {

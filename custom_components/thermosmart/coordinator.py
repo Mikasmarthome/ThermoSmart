@@ -114,9 +114,15 @@ class ThermoSmartCoordinator(
         self._auto_calibration_map: dict[str, str] = {}
         self._auto_ext_temp_map: dict[str, str] = {}
         self._auto_valve_map: dict[str, str] = {}
+        self._auto_temp_source_map: dict[str, str] = {}
         self._trv_offline: set[str] = set()
         self._valve_reset_done: bool = False
         self._valve_reset_attempts: int = 0
+
+        # Temperature source management (genutzt von TRVControlMixin)
+        self._temp_source_owned: dict[str, str] = {}   # select_entity_id → "external"
+        self._sensor_unavail_since: datetime | None = None
+        self._temp_source_warn_ts: datetime | None = None
 
         # Sommer (genutzt von SeasonMixin)
         self._outdoor_temp_history: deque = deque(
@@ -564,6 +570,10 @@ class ThermoSmartCoordinator(
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
             # – verbessert die TRV-interne Regelung unabhängig von der aktiven Steuerung
             await self._async_write_external_temp(cfg, recommendation)
+
+            # Temperature source select management (external/internal)
+            # Must run after effective_summer is resolved so recommendation["is_summer"] is set.
+            await self._async_manage_temp_source(cfg, recommendation)
 
             if self._active_control and not effective_summer:
                 await self._async_apply_quirks(cfg)

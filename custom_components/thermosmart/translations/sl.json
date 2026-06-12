@@ -24,7 +24,8 @@
           "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
           "window_close_delay": "Ogrevanje vklop – zamuda po zapiranju okna",
           "valve_maintenance": "Aktivacija vzdrževanja ventilov (nedelja 03:00 – samo poletni ali počitniški način)",
-          "calibration_invert": "Invertiranje kalibracijskega odmika (za TRV-je kot ME167, ki invertirajo predznak)"
+          "calibration_invert": "Invertiranje kalibracijskega odmika (za TRV-je kot ME167, ki invertirajo predznak)",
+          "manage_temp_source": "Samodejno upravljaj vir temperature TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
           "window_close_delay": "Ogrevanje vklop – zamuda po zapiranju okna",
           "valve_maintenance": "Aktivacija vzdrževanja ventilov (samo poletni / počitniški način)",
-          "calibration_invert": "Invertiranje kalibracijskega odmika (ME167 in podobni)"
+          "calibration_invert": "Invertiranje kalibracijskega odmika (ME167 in podobni)",
+          "manage_temp_source": "Samodejno upravljaj vir temperature TRV"
         }
       },
       "schedule": {

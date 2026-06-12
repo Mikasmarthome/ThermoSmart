@@ -24,7 +24,8 @@
           "window_open_delay": "Chauffage arrêté – délai après ouverture de fenêtre",
           "window_close_delay": "Chauffage allumé – délai après fermeture de fenêtre",
           "valve_maintenance": "Activer la maintenance des vannes (dimanche 03h00 – mode Été ou Vacances uniquement)",
-          "calibration_invert": "Inverser le décalage de calibration (pour les TRV comme ME167 qui inversent le signe)"
+          "calibration_invert": "Inverser le décalage de calibration (pour les TRV comme ME167 qui inversent le signe)",
+          "manage_temp_source": "Gérer automatiquement la source de température du TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Chauffage arrêté – délai après ouverture de fenêtre",
           "window_close_delay": "Chauffage allumé – délai après fermeture de fenêtre",
           "valve_maintenance": "Activer la maintenance des vannes (mode Été / Vacances uniquement)",
-          "calibration_invert": "Inverser le décalage de calibration (ME167 et similaires)"
+          "calibration_invert": "Inverser le décalage de calibration (ME167 et similaires)",
+          "manage_temp_source": "Gérer automatiquement la source de température du TRV"
         }
       },
       "schedule": {

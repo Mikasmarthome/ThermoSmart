@@ -48,7 +48,10 @@
           "sched_wd_morning": "Temperatura komfortu powinna być osiągnięta o tej godzinie – ThermoSmart automatycznie podgrzewa wcześniej",
           "sched_wd_night": "Od tej godziny obowiązuje temperatura nocna",
           "sched_we_morning": "Temperatura komfortu powinna być osiągnięta o tej godzinie – ThermoSmart automatycznie podgrzewa wcześniej",
-          "sched_we_night": "Od tej godziny obowiązuje temperatura nocna"
+          "sched_we_night": "Od tej godziny obowiązuje temperatura nocna",
+          "away_temp": "Stosowana automatycznie tylko gdy skonfigurowane jest wykrywanie obecności (Krok 3). Można ją również ustawić ręcznie za pomocą selektora trybu.",
+          "eco_temp": "Używana, gdy selektor trybu jest ręcznie ustawiony na 'Eco'. Nie jest aktywowana automatycznie.",
+          "temp_tolerance": "ThermoSmart reguluje TRV tylko gdy temperatura odchyla się o więcej niż ta wartość. 0,5 °C sprawdza się dobrze w większości pomieszczeń. Niższy = bardziej reaktywny, wyższy = mniej regulacji."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Temperatura komfortu powinna być osiągnięta o tej godzinie – ThermoSmart automatycznie podgrzewa wcześniej",
           "sched_wd_night": "Od tej godziny obowiązuje temperatura nocna",
           "sched_we_morning": "Temperatura komfortu powinna być osiągnięta o tej godzinie – ThermoSmart automatycznie podgrzewa wcześniej",
-          "sched_we_night": "Od tej godziny obowiązuje temperatura nocna"
+          "sched_we_night": "Od tej godziny obowiązuje temperatura nocna",
+          "away_temp": "Stosowana automatycznie tylko gdy skonfigurowane jest wykrywanie obecności (Krok 3). Można ją również ustawić ręcznie za pomocą selektora trybu.",
+          "eco_temp": "Używana, gdy selektor trybu jest ręcznie ustawiony na 'Eco'. Nie jest aktywowana automatycznie.",
+          "temp_tolerance": "ThermoSmart reguluje TRV tylko gdy temperatura odchyla się o więcej niż ta wartość. 0,5 °C sprawdza się dobrze w większości pomieszczeń. Niższy = bardziej reaktywny, wyższy = mniej regulacji."
         }
       },
       "presence": {
@@ -165,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Eksportuj dane uczenia"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

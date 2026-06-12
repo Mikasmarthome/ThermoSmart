@@ -48,7 +48,10 @@
           "sched_wd_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
           "sched_wd_night": "Yölämpötila on voimassa tästä ajasta alkaen",
           "sched_we_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
-          "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen"
+          "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen",
+          "away_temp": "Käytetään automaattisesti vain, kun läsnäolon tunnistus on määritetty (Vaihe 3). Voidaan myös asettaa manuaalisesti tilavalitsimen kautta.",
+          "eco_temp": "Käytetään, kun tilavalitsin asetetaan manuaalisesti arvoon 'Eco'. Ei aktivoidu automaattisesti.",
+          "temp_tolerance": "ThermoSmart säätää TRV:tä vain, kun lämpötila poikkeaa enemmän kuin tämä arvo. 0,5 °C toimii hyvin useimmissa huoneissa. Pienempi = reaktiivisempi, suurempi = vähemmän säätöjä."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
           "sched_wd_night": "Yölämpötila on voimassa tästä ajasta alkaen",
           "sched_we_morning": "Mukavuuslämpötilan tulisi olla saavutettu tähän aikaan – ThermoSmart esilämmittää automaattisesti etukäteen",
-          "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen"
+          "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen",
+          "away_temp": "Käytetään automaattisesti vain, kun läsnäolon tunnistus on määritetty (Vaihe 3). Voidaan myös asettaa manuaalisesti tilavalitsimen kautta.",
+          "eco_temp": "Käytetään, kun tilavalitsin asetetaan manuaalisesti arvoon 'Eco'. Ei aktivoidu automaattisesti.",
+          "temp_tolerance": "ThermoSmart säätää TRV:tä vain, kun lämpötila poikkeaa enemmän kuin tämä arvo. 0,5 °C toimii hyvin useimmissa huoneissa. Pienempi = reaktiivisempi, suurempi = vähemmän säätöjä."
         }
       },
       "presence": {
@@ -165,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Vie oppimisdata"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

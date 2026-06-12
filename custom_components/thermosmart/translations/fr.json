@@ -48,7 +48,10 @@
           "sched_wd_morning": "La température de confort doit être atteinte à cette heure – ThermoSmart préchauffe automatiquement en avance",
           "sched_wd_night": "La température de nuit s'applique à partir de cette heure",
           "sched_we_morning": "La température de confort doit être atteinte à cette heure – ThermoSmart préchauffe automatiquement en avance",
-          "sched_we_night": "La température de nuit s'applique à partir de cette heure"
+          "sched_we_night": "La température de nuit s'applique à partir de cette heure",
+          "away_temp": "Appliquée automatiquement uniquement si la détection de présence est configurée (Étape 3). Peut aussi être définie manuellement via le sélecteur de mode.",
+          "eco_temp": "Utilisée lorsque le sélecteur de mode est réglé manuellement sur 'Eco'. Ne s'active pas automatiquement.",
+          "temp_tolerance": "ThermoSmart n'ajuste le TRV que lorsque la température s'écarte de plus que cette valeur. 0,5 °C convient à la plupart des pièces. Plus bas = plus réactif, plus haut = moins d'ajustements."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "La température de confort doit être atteinte à cette heure – ThermoSmart préchauffe automatiquement en avance",
           "sched_wd_night": "La température de nuit s'applique à partir de cette heure",
           "sched_we_morning": "La température de confort doit être atteinte à cette heure – ThermoSmart préchauffe automatiquement en avance",
-          "sched_we_night": "La température de nuit s'applique à partir de cette heure"
+          "sched_we_night": "La température de nuit s'applique à partir de cette heure",
+          "away_temp": "Appliquée automatiquement uniquement si la détection de présence est configurée (Étape 3). Peut aussi être définie manuellement via le sélecteur de mode.",
+          "eco_temp": "Utilisée lorsque le sélecteur de mode est réglé manuellement sur 'Eco'. Ne s'active pas automatiquement.",
+          "temp_tolerance": "ThermoSmart n'ajuste le TRV que lorsque la température s'écarte de plus que cette valeur. 0,5 °C convient à la plupart des pièces. Plus bas = plus réactif, plus haut = moins d'ajustements."
         }
       },
       "presence": {
@@ -165,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Exporter les données d'apprentissage"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

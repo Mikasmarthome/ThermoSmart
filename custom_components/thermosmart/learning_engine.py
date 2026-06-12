@@ -1203,6 +1203,26 @@ class LearningEngine:
             return None
         return round(sum(samples[-50:]) / len(samples[-50:]), 5)
 
+    def get_export_data(self, zone_id: str) -> dict:
+        """Return all learning data for a zone for anonymized export.
+
+        All numeric sensor data is included unchanged — entity IDs and names
+        are never stored in learning data, so no additional scrubbing is needed.
+        """
+        return {
+            "observation_count": len(self._observations.get(zone_id, [])),
+            "trv_observation_count": len(self._trv_observations.get(zone_id, [])),
+            "window_cooling_obs_count": len(self._window_cooling_obs.get(zone_id, [])),
+            "confidence": self._confidence.get(zone_id, 0.0),
+            "boost_factor": self._boost_factors.get(zone_id),
+            "forecast_bias": self._forecast_bias.get(zone_id),
+            "heat_loss_ema": self._heat_loss_ema.get(zone_id),
+            "observations": list(self._observations.get(zone_id, [])),
+            "trv_observations": list(self._trv_observations.get(zone_id, [])),
+            "window_cooling_obs": list(self._window_cooling_obs.get(zone_id, [])),
+            "outcome_log": list(self._outcome_log.get(zone_id, [])),
+        }
+
     def _get_heat_rate(self, zone_id: str, weather_data: dict, target: float | None = None) -> float:
         if self._is_enabled(zone_id) and self.get_confidence(zone_id) >= 0.3:
             learned = self._learned_heat_rate_multifactor(zone_id, weather_data, target=target)

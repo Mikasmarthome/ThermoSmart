@@ -48,7 +48,10 @@
           "sched_wd_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
           "sched_wd_night": "Natttemperaturen gjelder fra dette tidspunktet",
           "sched_we_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
-          "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet"
+          "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet",
+          "away_temp": "Brukes automatisk bare når tilstedeværelsesgjenkjenning er konfigurert (Trinn 3). Kan også angis manuelt via modusvelgeren.",
+          "eco_temp": "Brukes når modusvelgeren manuelt er satt til 'Eco'. Aktiveres ikke automatisk.",
+          "temp_tolerance": "ThermoSmart justerer TRV-en bare når temperaturen avviker mer enn denne verdien. 0,5 °C fungerer bra for de fleste rom. Lavere = mer reaktiv, høyere = færre justeringer."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
           "sched_wd_night": "Natttemperaturen gjelder fra dette tidspunktet",
           "sched_we_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
-          "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet"
+          "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet",
+          "away_temp": "Brukes automatisk bare når tilstedeværelsesgjenkjenning er konfigurert (Trinn 3). Kan også angis manuelt via modusvelgeren.",
+          "eco_temp": "Brukes når modusvelgeren manuelt er satt til 'Eco'. Aktiveres ikke automatisk.",
+          "temp_tolerance": "ThermoSmart justerer TRV-en bare når temperaturen avviker mer enn denne verdien. 0,5 °C fungerer bra for de fleste rom. Lavere = mer reaktiv, høyere = færre justeringer."
         }
       },
       "presence": {
@@ -165,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Eksporter læringsdata"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

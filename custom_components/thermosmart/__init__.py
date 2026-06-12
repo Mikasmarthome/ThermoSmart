@@ -126,7 +126,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     hass,
                     message=(
                         f"Export saved to `/config/www/{filename}`.\n\n"
-                        f"Download: [/local/{filename}](/local/{filename})\n\n"
+                        "To download, open this path in your browser:\n\n"
+                        f"`/local/{filename}`\n\n"
                         "Review the file before sharing. "
                         "No data has been sent anywhere."
                     ),

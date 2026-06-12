@@ -48,7 +48,10 @@
           "sched_wd_morning": "Teplota komfortu by měla být dosažena v tento čas – ThermoSmart předehřívá automaticky předem",
           "sched_wd_night": "Noční teplota platí od tohoto času",
           "sched_we_morning": "Teplota komfortu by měla být dosažena v tento čas – ThermoSmart předehřívá automaticky předem",
-          "sched_we_night": "Noční teplota platí od tohoto času"
+          "sched_we_night": "Noční teplota platí od tohoto času",
+          "away_temp": "Použije se automaticky pouze při nakonfigurovaném rozpoznávání přítomnosti (Krok 3). Lze nastavit i ručně přes výběr režimu.",
+          "eco_temp": "Použije se, když je výběr režimu ručně nastaven na 'Eco'. Neaktivuje se automaticky.",
+          "temp_tolerance": "ThermoSmart nastavuje TRV pouze tehdy, když se teplota odchýlí o více než tuto hodnotu. 0,5 °C funguje dobře pro většinu místností. Nižší = reaktivnější, vyšší = méně úprav."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Teplota komfortu by měla být dosažena v tento čas – ThermoSmart předehřívá automaticky předem",
           "sched_wd_night": "Noční teplota platí od tohoto času",
           "sched_we_morning": "Teplota komfortu by měla být dosažena v tento čas – ThermoSmart předehřívá automaticky předem",
-          "sched_we_night": "Noční teplota platí od tohoto času"
+          "sched_we_night": "Noční teplota platí od tohoto času",
+          "away_temp": "Použije se automaticky pouze při nakonfigurovaném rozpoznávání přítomnosti (Krok 3). Lze nastavit i ručně přes výběr režimu.",
+          "eco_temp": "Použije se, když je výběr režimu ručně nastaven na 'Eco'. Neaktivuje se automaticky.",
+          "temp_tolerance": "ThermoSmart nastavuje TRV pouze tehdy, když se teplota odchýlí o více než tuto hodnotu. 0,5 °C funguje dobře pro většinu místností. Nižší = reaktivnější, vyšší = méně úprav."
         }
       },
       "presence": {
@@ -165,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Exportovat data učení"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

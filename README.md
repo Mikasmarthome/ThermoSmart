@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.5-blue.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.6-blue.svg" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -48,7 +48,7 @@ HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://
 
 ### 2 — Download
 
-HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.5` → Download
+HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.6` → Download
 
 ### 3 — Restart and Add
 
@@ -210,6 +210,32 @@ When ThermoSmart is in **Active Control**, it calls `climate.set_temperature` on
 **You do not need to delete the internal schedule.** It has no effect while the TRV is in `heat` mode. If Active Control is ever disabled and the TRV is switched back to `auto` manually, the internal schedule becomes active again.
 
 In **Observation mode** ThermoSmart does not write setpoints, so the TRV stays in whatever mode it was last set to (typically `auto` after initial pairing). Observations and learning are recorded correctly regardless of the TRV's active mode.
+
+---
+
+## Export Learning Data
+
+ThermoSmart can export an anonymized snapshot of its learning data as a JSON file — for voluntary debugging or to contribute data to future Learning Engine improvements.
+
+**How to export:**
+- Press the **Export Learning Data** button in the *ThermoSmart System* device card, **or**
+- Call the service `thermosmart.export_learning_data` from Developer Tools → Services.
+
+The file is saved to `/config/www/` and can be opened via `/local/<filename>` appended to your Home Assistant URL.
+
+**Privacy — what the export contains:**
+- ThermoSmart version, export timestamp, zone count
+- Per-zone: TRV count, sensor counts, feature flags (booleans only)
+- Per-zone: all numeric learning data (observations, rates, confidence, boost factor, …)
+- Observation timestamps (required for longitudinal learning analysis)
+
+**Privacy — what the export does NOT contain:**
+- Passwords or authentication tokens of any kind
+- Entity IDs, device names, or integration names
+- Person names or user identifiers
+- Street addresses or geographic coordinates
+
+**The export is strictly local.** No data is sent anywhere automatically. You can review the file before deciding whether to share it.
 
 ---
 

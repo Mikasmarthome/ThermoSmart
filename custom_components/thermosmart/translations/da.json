@@ -48,7 +48,10 @@
           "sched_wd_morning": "Komforttemperaturen skal nås inden dette tidspunkt – ThermoSmart forvarmer automatisk i forvejen",
           "sched_wd_night": "Nattemperaturen gælder fra dette tidspunkt",
           "sched_we_morning": "Komforttemperaturen skal nås inden dette tidspunkt – ThermoSmart forvarmer automatisk i forvejen",
-          "sched_we_night": "Nattemperaturen gælder fra dette tidspunkt"
+          "sched_we_night": "Nattemperaturen gælder fra dette tidspunkt",
+          "away_temp": "Anvendes kun automatisk, når tilstedeværelsesgenkendelse er konfigureret (Trin 3). Kan også angives manuelt via tilstandsvælgeren.",
+          "eco_temp": "Bruges når tilstandsvælgeren manuelt er sat til 'Eco'. Aktiveres ikke automatisk.",
+          "temp_tolerance": "ThermoSmart justerer kun TRV'en, når temperaturen afviger mere end denne værdi. 0,5 °C fungerer godt for de fleste rum. Lavere = mere reaktiv, højere = færre justeringer."
         }
       },
       "presence": {
@@ -131,7 +134,10 @@
           "sched_wd_morning": "Komforttemperaturen skal nås inden dette tidspunkt – ThermoSmart forvarmer automatisk i forvejen",
           "sched_wd_night": "Nattemperaturen gælder fra dette tidspunkt",
           "sched_we_morning": "Komforttemperaturen skal nås inden dette tidspunkt – ThermoSmart forvarmer automatisk i forvejen",
-          "sched_we_night": "Nattemperaturen gælder fra dette tidspunkt"
+          "sched_we_night": "Nattemperaturen gælder fra dette tidspunkt",
+          "away_temp": "Anvendes kun automatisk, når tilstedeværelsesgenkendelse er konfigureret (Trin 3). Kan også angives manuelt via tilstandsvælgeren.",
+          "eco_temp": "Bruges når tilstandsvælgeren manuelt er sat til 'Eco'. Aktiveres ikke automatisk.",
+          "temp_tolerance": "ThermoSmart justerer kun TRV'en, når temperaturen afviger mere end denne værdi. 0,5 °C fungerer godt for de fleste rum. Lavere = mere reaktiv, højere = færre justeringer."
         }
       },
       "presence": {
@@ -165,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Eksporter læringsdata"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

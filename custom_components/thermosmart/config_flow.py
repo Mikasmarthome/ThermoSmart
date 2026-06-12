@@ -10,6 +10,7 @@ from homeassistant.helpers import selector
 from .const import (
     DOMAIN,
     CONF_CALIBRATION_INVERT,
+    CONF_MANAGE_TEMP_SOURCE,
     CONF_WEATHER_ENTITY,
     CONF_OUTDOOR_TEMP_SENSOR,
     CONF_OUTDOOR_HUMIDITY_SENSOR,
@@ -111,6 +112,9 @@ def _schema_devices(d: dict) -> vol.Schema:
             selector.BooleanSelector(),
 
         vol.Optional(CONF_CALIBRATION_INVERT, default=d.get(CONF_CALIBRATION_INVERT, False)):
+            selector.BooleanSelector(),
+
+        vol.Optional(CONF_MANAGE_TEMP_SOURCE, default=d.get(CONF_MANAGE_TEMP_SOURCE, False)):
             selector.BooleanSelector(),
     })
 

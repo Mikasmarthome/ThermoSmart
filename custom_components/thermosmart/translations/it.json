@@ -24,7 +24,8 @@
           "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",
           "window_close_delay": "Riscaldamento acceso – ritardo dopo chiusura finestra",
           "valve_maintenance": "Abilita manutenzione valvole (domenica 03:00 – solo modalità Estate o Vacanza)",
-          "calibration_invert": "Inverti offset di calibrazione (per valvole TRV come ME167 che invertono il segno)"
+          "calibration_invert": "Inverti offset di calibrazione (per valvole TRV come ME167 che invertono il segno)",
+          "manage_temp_source": "Gestisci automaticamente la sorgente di temperatura TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",
           "window_close_delay": "Riscaldamento acceso – ritardo dopo chiusura finestra",
           "valve_maintenance": "Abilita manutenzione valvole (solo modalità Estate / Vacanza)",
-          "calibration_invert": "Inverti offset di calibrazione (ME167 e simili)"
+          "calibration_invert": "Inverti offset di calibrazione (ME167 e simili)",
+          "manage_temp_source": "Gestisci automaticamente la sorgente di temperatura TRV"
         }
       },
       "schedule": {

@@ -24,7 +24,8 @@
           "window_open_delay": "Heating off – delay after window opens",
           "window_close_delay": "Heating on – delay after window closes",
           "valve_maintenance": "Enable valve maintenance (Sunday 03:00 – Summer & Vacation mode only)",
-          "calibration_invert": "Invert calibration offset (for TRVs like ME167 that reverse the sign)"
+          "calibration_invert": "Invert calibration offset (for TRVs like ME167 that reverse the sign)",
+          "manage_temp_source": "Automatically manage TRV temperature source"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Heating off – delay after window opens",
           "window_close_delay": "Heating on – delay after window closes",
           "valve_maintenance": "Enable valve maintenance (Summer & Vacation mode only)",
-          "calibration_invert": "Invert calibration offset (ME167 and similar)"
+          "calibration_invert": "Invert calibration offset (ME167 and similar)",
+          "manage_temp_source": "Automatically manage TRV temperature source"
         }
       },
       "schedule": {

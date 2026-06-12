@@ -24,7 +24,8 @@
           "window_open_delay": "Topení vypnuto – prodleva po otevření okna",
           "window_close_delay": "Topení zapnuto – prodleva po zavření okna",
           "valve_maintenance": "Aktivovat údržbu ventilů (neděle 03:00 – pouze letní nebo dovolenkový režim)",
-          "calibration_invert": "Invertovat kalibrační offset (pro ventily TRV jako ME167, které invertují znaménko)"
+          "calibration_invert": "Invertovat kalibrační offset (pro ventily TRV jako ME167, které invertují znaménko)",
+          "manage_temp_source": "Automaticky spravovat zdroj teploty TRV"
         }
       },
       "schedule": {
@@ -110,7 +111,8 @@
           "window_open_delay": "Topení vypnuto – prodleva po otevření okna",
           "window_close_delay": "Topení zapnuto – prodleva po zavření okna",
           "valve_maintenance": "Aktivovat údržbu ventilů (pouze letní / dovolenkový režim)",
-          "calibration_invert": "Invertovat kalibrační offset (ME167 a podobné)"
+          "calibration_invert": "Invertovat kalibrační offset (ME167 a podobné)",
+          "manage_temp_source": "Automaticky spravovat zdroj teploty TRV"
         }
       },
       "schedule": {

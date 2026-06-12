@@ -4,19 +4,31 @@ Creates a JSON snapshot of per-zone learning data that can be shared voluntarily
 to support LE 2.0 development.  Nothing is sent automatically — the user decides
 whether and how to share the file.
 
-Anonymization contract
-----------------------
+Privacy contract
+----------------
 Exported data contains:
-  - ThermoSmart version + format version
+  - ThermoSmart version + export format version
   - Export timestamp
-  - Per-zone: TRV count, sensor counts, feature flags (booleans)
+  - Per-zone: TRV count, sensor counts, feature flags (booleans only)
   - Per-zone: all numeric learning data (observations, rates, confidence, …)
 
 Exported data does NOT contain:
-  - Entity IDs or device names (never stored in learning data)
+  - Passwords or authentication tokens of any kind
+  - Entity IDs, device names, or integration names
   - Person names or user identifiers
-  - HA configuration, tokens, or credentials
-  - Exact geographic location data
+  - Street addresses or geographic coordinates
+
+Timestamps are intentionally retained:
+  Observation timestamps (ts, hour, minute, weekday) are required for
+  longitudinal learning analysis and are the primary reason this data is
+  valuable for LE 2.0.  A series of heating timestamps can reveal usage
+  patterns (presence, sleep schedule, away periods).  Users should review
+  the exported file before sharing it with anyone.
+
+has_forecast note:
+  has_forecast is derived from whether a weather entity is configured.
+  It does not guarantee that the entity actually provides forecast data —
+  some weather integrations only expose current conditions.
 
 Zone identity: each zone_id (HA entry_id UUID) is replaced with a deterministic
 12-char hex digest.  Exports from the same installation share the same digests,
@@ -117,7 +129,8 @@ async def async_export_learning_data(hass: HomeAssistant) -> str:
 
     www_dir = hass.config.path("www")
     os.makedirs(www_dir, exist_ok=True)
-    filename = f"thermosmart_export_{ts_str}.json"
+    random_suffix = os.urandom(3).hex()
+    filename = f"thermosmart_export_{ts_str}_{random_suffix}.json"
     filepath = os.path.join(www_dir, filename)
 
     def _write() -> None:

@@ -26,6 +26,9 @@
           "valve_maintenance": "Activer la maintenance des vannes (dimanche 03h00 – mode Été ou Vacances uniquement)",
           "calibration_invert": "Inverser le décalage de calibration (pour les TRV comme ME167 qui inversent le signe)",
           "manage_temp_source": "Utiliser automatiquement la température ambiante externe pour les TRV compatibles"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart continue d'utiliser les capteurs de température externes pour sa propre logique de contrôle. Lorsqu'elle est activée, ThermoSmart bascule également les TRV compatibles vers leur source de température externe et revient au capteur interne du TRV si les capteurs externes deviennent indisponibles."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Activer la maintenance des vannes (mode Été / Vacances uniquement)",
           "calibration_invert": "Inverser le décalage de calibration (ME167 et similaires)",
           "manage_temp_source": "Utiliser automatiquement la température ambiante externe pour les TRV compatibles"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart continue d'utiliser les capteurs de température externes pour sa propre logique de contrôle. Lorsqu'elle est activée, ThermoSmart bascule également les TRV compatibles vers leur source de température externe et revient au capteur interne du TRV si les capteurs externes deviennent indisponibles."
         }
       },
       "schedule": {

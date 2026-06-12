@@ -26,6 +26,9 @@
           "valve_maintenance": "Włącz konserwację zaworów (niedziela 03:00 – tylko w trybie Lato lub Urlop)",
           "calibration_invert": "Odwróć offset kalibracji (dla zaworów TRV jak ME167, które odwracają znak)",
           "manage_temp_source": "Automatycznie użyj zewnętrznej temperatury pokojowej dla obsługiwanych TRV"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart nadal używa zewnętrznych czujników temperatury do własnej logiki sterowania. Po włączeniu ThermoSmart przełącza również obsługiwane TRV na zewnętrzne źródło temperatury i wraca do wewnętrznego czujnika TRV, gdy zewnętrzne czujniki stają się niedostępne."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Włącz konserwację zaworów (tylko tryb Lato / Urlop)",
           "calibration_invert": "Odwróć offset kalibracji (ME167 i podobne)",
           "manage_temp_source": "Automatycznie użyj zewnętrznej temperatury pokojowej dla obsługiwanych TRV"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart nadal używa zewnętrznych czujników temperatury do własnej logiki sterowania. Po włączeniu ThermoSmart przełącza również obsługiwane TRV na zewnętrzne źródło temperatury i wraca do wewnętrznego czujnika TRV, gdy zewnętrzne czujniki stają się niedostępne."
         }
       },
       "schedule": {

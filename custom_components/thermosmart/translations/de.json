@@ -26,6 +26,9 @@
           "valve_maintenance": "Ventil-Wartung aktivieren (Sonntag 03:00 – nur im Sommer- oder Urlaubsmodus)",
           "calibration_invert": "Kalibrierungs-Offset invertieren (für TRVs wie ME167 die das Vorzeichen umkehren)",
           "manage_temp_source": "Externe Raumtemperatur automatisch für TRVs verwenden"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart nutzt externe Temperatursensoren weiterhin für die eigene Regelung. Wenn diese Option aktiv ist, stellt ThermoSmart unterstützte TRVs zusätzlich auf deren externe Temperaturquelle um und fällt bei Sensorausfall wieder auf den internen TRV-Sensor zurück."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Ventil-Wartung aktivieren (nur Sommer- / Urlaubsmodus)",
           "calibration_invert": "Kalibrierungs-Offset invertieren (ME167 und ähnliche)",
           "manage_temp_source": "Externe Raumtemperatur automatisch für TRVs verwenden"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart nutzt externe Temperatursensoren weiterhin für die eigene Regelung. Wenn diese Option aktiv ist, stellt ThermoSmart unterstützte TRVs zusätzlich auf deren externe Temperaturquelle um und fällt bei Sensorausfall wieder auf den internen TRV-Sensor zurück."
         }
       },
       "schedule": {

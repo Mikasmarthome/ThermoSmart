@@ -26,6 +26,9 @@
           "valve_maintenance": "启用阀门维护（周日 03:00 – 仅夏季或假期模式）",
           "calibration_invert": "反转校准偏移（适用于反转符号的 ME167 等 TRV）",
           "manage_temp_source": "自动为支持的TRV使用外部室温"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart继续使用外部温度传感器进行自身控制逻辑。启用后，ThermoSmart还会将支持的TRV切换到其外部温度源，并在外部传感器不可用时回退到TRV内部传感器。"
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "启用阀门维护（仅夏季 / 假期模式）",
           "calibration_invert": "反转校准偏移（ME167 及类似设备）",
           "manage_temp_source": "自动为支持的TRV使用外部室温"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart继续使用外部温度传感器进行自身控制逻辑。启用后，ThermoSmart还会将支持的TRV切换到其外部温度源，并在外部传感器不可用时回退到TRV内部传感器。"
         }
       },
       "schedule": {

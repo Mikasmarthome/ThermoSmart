@@ -26,6 +26,9 @@
           "valve_maintenance": "Valf bakımını etkinleştir (Pazar 03:00 – yalnızca yaz modu veya tatil)",
           "calibration_invert": "Kalibrasyon ofsetini ters çevir (işareti tersine çeviren ME167 gibi TRV'ler için)",
           "manage_temp_source": "Desteklenen TRV'ler için harici oda sıcaklığını otomatik kullan"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart, kendi kontrol mantığı için harici sıcaklık sensörlerini kullanmaya devam eder. Etkinleştirildiğinde, ThermoSmart desteklenen TRV'leri harici sıcaklık kaynağına da geçirir ve harici sensörler kullanılamaz hale gelirse TRV'nin dahili sensörüne geri döner."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Valf bakımını etkinleştir (yalnızca yaz / tatil modu)",
           "calibration_invert": "Kalibrasyon ofsetini ters çevir (ME167 ve benzerleri)",
           "manage_temp_source": "Desteklenen TRV'ler için harici oda sıcaklığını otomatik kullan"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart, kendi kontrol mantığı için harici sıcaklık sensörlerini kullanmaya devam eder. Etkinleştirildiğinde, ThermoSmart desteklenen TRV'leri harici sıcaklık kaynağına da geçirir ve harici sensörler kullanılamaz hale gelirse TRV'nin dahili sensörüne geri döner."
         }
       },
       "schedule": {

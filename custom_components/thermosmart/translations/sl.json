@@ -26,6 +26,9 @@
           "valve_maintenance": "Aktivacija vzdrževanja ventilov (nedelja 03:00 – samo poletni ali počitniški način)",
           "calibration_invert": "Invertiranje kalibracijskega odmika (za TRV-je kot ME167, ki invertirajo predznak)",
           "manage_temp_source": "Samodejno uporabi zunanjo temperaturo prostora za podprte TRV-je"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart še naprej uporablja zunanje temperaturne senzorje za lastno logiko krmiljenja. Ko je omogočeno, ThermoSmart tudi preklopi podprte TRV-je na njihov zunanji temperaturni vir in se vrne na notranji senzor TRV, če zunanji senzorji postanejo nedosegljivi."
         }
       },
       "schedule": {
@@ -113,6 +116,9 @@
           "valve_maintenance": "Aktivacija vzdrževanja ventilov (samo poletni / počitniški način)",
           "calibration_invert": "Invertiranje kalibracijskega odmika (ME167 in podobni)",
           "manage_temp_source": "Samodejno uporabi zunanjo temperaturo prostora za podprte TRV-je"
+        },
+        "data_description": {
+          "manage_temp_source": "ThermoSmart še naprej uporablja zunanje temperaturne senzorje za lastno logiko krmiljenja. Ko je omogočeno, ThermoSmart tudi preklopi podprte TRV-je na njihov zunanji temperaturni vir in se vrne na notranji senzor TRV, če zunanji senzorji postanejo nedosegljivi."
         }
       },
       "schedule": {

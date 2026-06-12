@@ -15,10 +15,12 @@ Modulstruktur:
 from __future__ import annotations
 
 import logging
+import os
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant, Event
+from homeassistant.core import HomeAssistant, Event, ServiceCall
+from homeassistant.components.persistent_notification import async_create as _pn_create
 
 from .const import (
     DOMAIN,
@@ -35,6 +37,7 @@ from .const import (
 from .coordinator import ThermoSmartCoordinator
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
+from .export import async_export_learning_data
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -114,6 +117,26 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if cfg.get("entry_type") == "system":
         hass.data[DOMAIN][entry.entry_id] = {"type": "system"}
         await hass.config_entries.async_forward_entry_setups(entry, SYSTEM_PLATFORMS)
+
+        if not hass.services.has_service(DOMAIN, "export_learning_data"):
+            async def _handle_export(call: ServiceCall) -> None:
+                filepath = await async_export_learning_data(hass)
+                filename = os.path.basename(filepath)
+                _pn_create(
+                    hass,
+                    message=(
+                        f"Export saved to `/config/www/{filename}`.\n\n"
+                        f"Download: [/local/{filename}](/local/{filename})\n\n"
+                        "Review the file before sharing. "
+                        "No data has been sent anywhere."
+                    ),
+                    title="ThermoSmart — Learning Data Export",
+                    notification_id="thermosmart_export",
+                )
+
+            hass.services.async_register(DOMAIN, "export_learning_data", _handle_export)
+            _LOGGER.debug("ThermoSmart: export_learning_data service registered")
+
         _LOGGER.info("ThermoSmart System geladen (globale Schalter)")
         return True
 

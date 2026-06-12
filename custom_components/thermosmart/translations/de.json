@@ -25,7 +25,7 @@
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
           "valve_maintenance": "Ventil-Wartung aktivieren (Sonntag 03:00 – nur im Sommer- oder Urlaubsmodus)",
           "calibration_invert": "Kalibrierungs-Offset invertieren (für TRVs wie ME167 die das Vorzeichen umkehren)",
-          "manage_temp_source": "TRV-Temperaturquelle automatisch verwalten"
+          "manage_temp_source": "Externe Raumtemperatur automatisch für TRVs verwenden"
         }
       },
       "schedule": {
@@ -112,7 +112,7 @@
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
           "valve_maintenance": "Ventil-Wartung aktivieren (nur Sommer- / Urlaubsmodus)",
           "calibration_invert": "Kalibrierungs-Offset invertieren (ME167 und ähnliche)",
-          "manage_temp_source": "TRV-Temperaturquelle automatisch verwalten"
+          "manage_temp_source": "Externe Raumtemperatur automatisch für TRVs verwenden"
         }
       },
       "schedule": {

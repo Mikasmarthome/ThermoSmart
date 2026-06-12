@@ -25,7 +25,7 @@
           "window_close_delay": "Fűtés be – késleltetés az ablak becsukása után",
           "valve_maintenance": "Szelepes karbantartás engedélyezése (vasárnap 03:00 – csak nyári vagy vakációs módban)",
           "calibration_invert": "Kalibrációs eltolás invertálása (ME167-hez hasonló TRV-khez, amelyek invertálják az előjelet)",
-          "manage_temp_source": "TRV hőmérsékletforrás automatikus kezelése"
+          "manage_temp_source": "Külső szobahőmérséklet automatikus használata a támogatott TRV-khez"
         }
       },
       "schedule": {
@@ -112,7 +112,7 @@
           "window_close_delay": "Fűtés be – késleltetés az ablak becsukása után",
           "valve_maintenance": "Szelepes karbantartás engedélyezése (csak nyári / vakációs módban)",
           "calibration_invert": "Kalibrációs eltolás invertálása (ME167 és hasonlók)",
-          "manage_temp_source": "TRV hőmérsékletforrás automatikus kezelése"
+          "manage_temp_source": "Külső szobahőmérséklet automatikus használata a támogatott TRV-khez"
         }
       },
       "schedule": {

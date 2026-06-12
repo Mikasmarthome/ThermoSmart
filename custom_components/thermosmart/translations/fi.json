@@ -25,7 +25,7 @@
           "window_close_delay": "Lämmitys päälle – viive ikkunan sulkemisen jälkeen",
           "valve_maintenance": "Ota venttiilin huolto käyttöön (sunnuntai 03:00 – vain kesä- tai lomatila)",
           "calibration_invert": "Käännä kalibrointipoikkeama (TRV:ille kuten ME167, jotka kääntävät merkin)",
-          "manage_temp_source": "Hallinnoi TRV:n lämpötilalähdettä automaattisesti"
+          "manage_temp_source": "Käytä automaattisesti ulkoista huonelämpötilaa tuetuille TRV:ille"
         }
       },
       "schedule": {
@@ -112,7 +112,7 @@
           "window_close_delay": "Lämmitys päälle – viive ikkunan sulkemisen jälkeen",
           "valve_maintenance": "Ota venttiilin huolto käyttöön (vain kesä- / lomatila)",
           "calibration_invert": "Käännä kalibrointipoikkeama (ME167 ja vastaavat)",
-          "manage_temp_source": "Hallinnoi TRV:n lämpötilalähdettä automaattisesti"
+          "manage_temp_source": "Käytä automaattisesti ulkoista huonelämpötilaa tuetuille TRV:ille"
         }
       },
       "schedule": {

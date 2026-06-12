@@ -25,7 +25,7 @@
           "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
           "valve_maintenance": "Klep-onderhoud inschakelen (zondag 03:00 – alleen in Zomer- of Vakantiemodus)",
           "calibration_invert": "Kalibratie-offset omkeren (voor TRV's zoals ME167 die het teken omkeren)",
-          "manage_temp_source": "TRV-temperatuurbron automatisch beheren"
+          "manage_temp_source": "Externe kamertemperatuur automatisch gebruiken voor ondersteunde TRV's"
         }
       },
       "schedule": {
@@ -112,7 +112,7 @@
           "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
           "valve_maintenance": "Klep-onderhoud inschakelen (alleen Zomer- / Vakantiemodus)",
           "calibration_invert": "Kalibratie-offset omkeren (ME167 en vergelijkbaar)",
-          "manage_temp_source": "TRV-temperatuurbron automatisch beheren"
+          "manage_temp_source": "Externe kamertemperatuur automatisch gebruiken voor ondersteunde TRV's"
         }
       },
       "schedule": {

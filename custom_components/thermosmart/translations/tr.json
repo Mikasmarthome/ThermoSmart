@@ -171,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Öğrenme verilerini dışa aktar"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

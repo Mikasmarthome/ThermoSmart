@@ -171,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Vie oppimisdata"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

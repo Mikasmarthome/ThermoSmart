@@ -140,3 +140,17 @@ async def async_export_learning_data(hass: HomeAssistant) -> str:
     await hass.async_add_executor_job(_write)
     _LOGGER.info("ThermoSmart: anonymized export written → %s", filepath)
     return filepath
+
+
+def build_export_notification_message(filename: str) -> str:
+    """Return the persistent notification message for a completed export.
+
+    Single source of truth — used by both the service handler and the button entity.
+    """
+    return (
+        f"Export saved to `/config/www/{filename}`.\n\n"
+        "To download, open this path in your browser:\n\n"
+        f"`/local/{filename}`\n\n"
+        "Review the file before sharing. "
+        "No data has been sent anywhere."
+    )

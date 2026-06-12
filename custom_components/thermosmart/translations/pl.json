@@ -171,6 +171,11 @@
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Eksportuj dane uczenia"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {

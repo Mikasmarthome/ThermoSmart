@@ -1,5 +1,39 @@
 # ThermoSmart – Release Notes
 
+## v1.0.6
+
+### New Feature — Export Learning Data
+
+ThermoSmart can now export an anonymized snapshot of its learning data as a local JSON file. This is intended for voluntary debugging and to contribute real-world data to future Learning Engine improvements.
+
+**Two ways to trigger the export:**
+- **Button:** Press *Export Learning Data* in the ThermoSmart System device card in your HA dashboard.
+- **Service:** Call `thermosmart.export_learning_data` from Developer Tools → Services.
+
+The file is saved to `/config/www/` with a timestamped, randomized filename. It can be opened via `/local/<filename>` appended to your HA base URL.
+
+**What is exported:**
+- ThermoSmart version, export timestamp, zone count
+- Per-zone: TRV count, sensor counts, feature flags (booleans)
+- Per-zone: all numeric learning data (observations, rates, confidence, boost factor, …)
+- Observation timestamps (needed for longitudinal analysis)
+
+**What is NOT exported:**
+- Passwords or authentication tokens
+- Entity IDs, device names, or integration names
+- Person names or user identifiers
+- Street addresses or geographic coordinates
+
+No data is sent anywhere automatically. You review the file locally and decide whether and with whom to share it.
+
+### Bug Fixes
+
+**Export notification link** — Replaced a non-functional Markdown link in the persistent notification with a plain path. Home Assistant's SPA router was intercepting relative `<a href>` clicks and closing the notification drawer instead of navigating to the file.
+
+**Export notification text** — Clarified that the `/local/<filename>` path must be appended to the HA base URL, that the file opens as JSON in the browser, and how to save it (Save Page As… / Ctrl+S / Cmd+S).
+
+---
+
 ## v1.0.5
 
 ### Bug Fix

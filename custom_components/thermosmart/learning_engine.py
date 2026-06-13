@@ -340,6 +340,10 @@ class LearningEngine:
         weather_data: dict,
         indoor_humidity: float | None = None,
         is_active_control: bool = False,
+        window_open: bool = False,
+        control_reason: str = "schedule",
+        preheat_active: bool = False,
+        heating_failure: bool = False,
     ) -> None:
         """Beobachtung aufzeichnen – alle verfügbaren Bedingungen speichern."""
         if not self._is_enabled(zone_id):
@@ -396,6 +400,10 @@ class LearningEngine:
             "indoor_temp": current_temp,
             "delta": round(adjusted_target - current_temp, 2),
             "active_control": is_active_control,
+            "window_open": window_open,
+            "control_reason": control_reason,
+            "preheat_active": preheat_active,
+            "heating_failure": heating_failure,
         }
 
         # Alle verfügbaren Außenbedingungen speichern

@@ -566,6 +566,10 @@ class ThermoSmartCoordinator(
                 weather_data=weather_data,
                 indoor_humidity=indoor_humidity,
                 is_active_control=self._active_control,
+                window_open=recommendation.get("window_open", False),
+                control_reason=self._control_reason(recommendation),
+                preheat_active=recommendation.get("preheat_active", False),
+                heating_failure=bool(recommendation.get("heating_failure")),
             )
 
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
@@ -671,6 +675,32 @@ class ThermoSmartCoordinator(
         if presence["all_away"]:
             return HEATING_MODE_AWAY
         return HEATING_MODE_AUTO
+
+    def _control_reason(self, recommendation: dict) -> str:
+        """Determine the primary reason that governs the current heating target.
+
+        Priority order ensures only one unambiguous reason is recorded:
+          1. window_open    – heating suppressed due to open window
+          2. manual_override – user set an explicit target temperature
+          3. vacation       – vacation/frost-protection mode active
+          4. summer_mode    – season-based heating suppression active
+          5. presence       – away mode triggered by absence of all occupants
+          6. schedule       – default: auto mode driven by time schedule
+        Note: frost_protection is not a separate state; it is covered by summer_mode.
+        Note: explicit eco/night/comfort mode selections are covered by schedule
+              (they are schedule-like user preferences, not presence or override events).
+        """
+        if recommendation.get("window_open"):
+            return "window_open"
+        if recommendation.get("override_active"):
+            return "manual_override"
+        if recommendation.get("mode") == HEATING_MODE_VACATION:
+            return "vacation"
+        if recommendation.get("is_summer"):
+            return "summer_mode"
+        if recommendation.get("mode") == HEATING_MODE_AWAY:
+            return "presence"
+        return "schedule"
 
     # ── Berechnung ───────────────────────────────────────────────────
 

@@ -24,7 +24,13 @@
           "window_open_delay": "Fűtés ki – késleltetés az ablak kinyitása után",
           "window_close_delay": "Fűtés be – késleltetés az ablak becsukása után",
           "valve_maintenance": "Szelepes karbantartás engedélyezése (vasárnap 03:00 – csak nyári vagy vakációs módban)",
+          "manage_temp_source": "Külső szobahőmérséklet automatikus használata a támogatott TRV-khez",
           "calibration_invert": "Kalibrációs eltolás invertálása (ME167-hez hasonló TRV-khez, amelyek invertálják az előjelet)"
+        },
+        "data_description": {
+          "valve_maintenance": "Megakadályozza a szelepek beragadását a hosszabb fűtés nélküli időszakokban. A ThermoSmart alkalmanként automatikusan mozgatja a szelepeket, amikor a Nyári mód vagy a Vakációs mód aktív.",
+          "manage_temp_source": "A ThermoSmart továbbra is használja a külső hőmérséklet-érzékelőket saját szabályozási logikájához. Ha engedélyezve van, a ThermoSmart a támogatott TRV-ket is átkapcsolja külső hőmérsékleti forrásukra, és visszavált a TRV belső érzékelőjére, ha a külső érzékelők elérhetetlenné válnak.",
+          "calibration_invert": "Megfordítja a kalibrációs eltolás előjelét azon TRV-modelleknél, amelyek eltolásának iránya eltér a szabványos viselkedéstől. Csak akkor engedélyezze, ha az eszköze ezt igényli."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Fűtés ki – késleltetés az ablak kinyitása után",
           "window_close_delay": "Fűtés be – késleltetés az ablak becsukása után",
           "valve_maintenance": "Szelepes karbantartás engedélyezése (csak nyári / vakációs módban)",
+          "manage_temp_source": "Külső szobahőmérséklet automatikus használata a támogatott TRV-khez",
           "calibration_invert": "Kalibrációs eltolás invertálása (ME167 és hasonlók)"
+        },
+        "data_description": {
+          "valve_maintenance": "Megakadályozza a szelepek beragadását a hosszabb fűtés nélküli időszakokban. A ThermoSmart alkalmanként automatikusan mozgatja a szelepeket, amikor a Nyári mód vagy a Vakációs mód aktív.",
+          "manage_temp_source": "A ThermoSmart továbbra is használja a külső hőmérséklet-érzékelőket saját szabályozási logikájához. Ha engedélyezve van, a ThermoSmart a támogatott TRV-ket is átkapcsolja külső hőmérsékleti forrásukra, és visszavált a TRV belső érzékelőjére, ha a külső érzékelők elérhetetlenné válnak.",
+          "calibration_invert": "Megfordítja a kalibrációs eltolás előjelét azon TRV-modelleknél, amelyek eltolásának iránya eltér a szabványos viselkedéstől. Csak akkor engedélyezze, ha az eszköze ezt igényli."
         }
       },
       "schedule": {

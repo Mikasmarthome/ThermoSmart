@@ -24,7 +24,13 @@
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
           "valve_maintenance": "Ventil-Wartung aktivieren (Sonntag 03:00 – nur im Sommer- oder Urlaubsmodus)",
+          "manage_temp_source": "Externe Raumtemperatur automatisch für TRVs verwenden",
           "calibration_invert": "Kalibrierungs-Offset invertieren (für TRVs wie ME167 die das Vorzeichen umkehren)"
+        },
+        "data_description": {
+          "valve_maintenance": "Verhindert das Festsetzen von Ventilen während längerer Phasen ohne Heizbetrieb. ThermoSmart bewegt die Ventile gelegentlich automatisch, wenn Sommer- oder Urlaubsmodus aktiv ist.",
+          "manage_temp_source": "ThermoSmart nutzt externe Temperatursensoren weiterhin für die eigene Regelung. Wenn diese Option aktiv ist, stellt ThermoSmart unterstützte TRVs zusätzlich auf deren externe Temperaturquelle um und fällt bei Sensorausfall wieder auf den internen TRV-Sensor zurück.",
+          "calibration_invert": "Invertiert das Vorzeichen des Kalibrierungs-Offsets für bestimmte TRV-Modelle, bei denen die Richtung nicht mit dem Standard übereinstimmt. Nur aktivieren, wenn dies für das verwendete Gerät erforderlich ist."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",
           "window_close_delay": "Heizung an – Verzögerung nach Fenster schließen",
           "valve_maintenance": "Ventil-Wartung aktivieren (nur Sommer- / Urlaubsmodus)",
+          "manage_temp_source": "Externe Raumtemperatur automatisch für TRVs verwenden",
           "calibration_invert": "Kalibrierungs-Offset invertieren (ME167 und ähnliche)"
+        },
+        "data_description": {
+          "valve_maintenance": "Verhindert das Festsetzen von Ventilen während längerer Phasen ohne Heizbetrieb. ThermoSmart bewegt die Ventile gelegentlich automatisch, wenn Sommer- oder Urlaubsmodus aktiv ist.",
+          "manage_temp_source": "ThermoSmart nutzt externe Temperatursensoren weiterhin für die eigene Regelung. Wenn diese Option aktiv ist, stellt ThermoSmart unterstützte TRVs zusätzlich auf deren externe Temperaturquelle um und fällt bei Sensorausfall wieder auf den internen TRV-Sensor zurück.",
+          "calibration_invert": "Invertiert das Vorzeichen des Kalibrierungs-Offsets für bestimmte TRV-Modelle, bei denen die Richtung nicht mit dem Standard übereinstimmt. Nur aktivieren, wenn dies für das verwendete Gerät erforderlich ist."
         }
       },
       "schedule": {

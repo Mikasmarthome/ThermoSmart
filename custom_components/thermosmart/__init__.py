@@ -226,6 +226,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     cfg = {**entry.data, **entry.options}
     platforms = SYSTEM_PLATFORMS if cfg.get("entry_type") == "system" else ZONE_PLATFORMS
 
+    # Best-effort restore of temperature_sensor selects before entity teardown
+    if cfg.get("entry_type") != "system":
+        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+        if coordinator := entry_data.get("coordinator"):
+            await coordinator._async_restore_temp_source()
+
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, platforms):
         hass.data[DOMAIN].pop(entry.entry_id, {})
         if cfg.get("entry_type") != "system":

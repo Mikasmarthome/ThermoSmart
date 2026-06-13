@@ -10,6 +10,7 @@ from homeassistant.helpers import selector
 from .const import (
     DOMAIN,
     CONF_CALIBRATION_INVERT,
+    CONF_MANAGE_TEMP_SOURCE,
     CONF_WEATHER_ENTITY,
     CONF_OUTDOOR_TEMP_SENSOR,
     CONF_OUTDOOR_HUMIDITY_SENSOR,
@@ -69,7 +70,7 @@ def _validate_temps(data: dict) -> dict[str, str]:
     except (TypeError, ValueError):
         return errors   # Schema-Validierung ist bereits vorab passiert
 
-    if night >= comfort:
+    if night > comfort:
         errors["night_temp"] = "night_temp_too_high"
     if away > night:
         errors["away_temp"] = "away_temp_too_high"
@@ -108,6 +109,9 @@ def _schema_devices(d: dict) -> vol.Schema:
                 min=0, max=30, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
             )),
         vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
+            selector.BooleanSelector(),
+
+        vol.Optional(CONF_MANAGE_TEMP_SOURCE, default=d.get(CONF_MANAGE_TEMP_SOURCE, False)):
             selector.BooleanSelector(),
 
         vol.Optional(CONF_CALIBRATION_INVERT, default=d.get(CONF_CALIBRATION_INVERT, False)):

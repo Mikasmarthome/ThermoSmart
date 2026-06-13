@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.0.6"
+VERSION = "1.0.7"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -53,6 +53,15 @@ AUTO_VALVE_PATTERNS = [
 
 # Kalibrierungs-Inversion (z.B. ME167 invertiert Offset-Vorzeichen)
 CONF_CALIBRATION_INVERT = "calibration_invert"
+
+# TRV temperature source management (external/internal select on SONOFF TRVZB etc.)
+CONF_MANAGE_TEMP_SOURCE = "manage_temp_source"
+
+# Patterns for temperature_sensor select entity detection
+AUTO_TEMP_SOURCE_PATTERNS = ["temperature_sensor"]
+
+# Seconds all external temp sensors must be unavailable before switching TRV to internal
+TEMP_SOURCE_SENSOR_GRACE_SECONDS = 300
 
 # TPI-Regler Konstanten
 TPI_COEF_INT_DEFAULT  = 0.6    # Duty-Cycle-Anteil pro °C Raumfehler (0→100%)

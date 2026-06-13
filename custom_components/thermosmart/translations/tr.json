@@ -24,7 +24,13 @@
           "window_open_delay": "Isıtma kapat – pencere açıldıktan sonra gecikme",
           "window_close_delay": "Isıtma aç – pencere kapandıktan sonra gecikme",
           "valve_maintenance": "Valf bakımını etkinleştir (Pazar 03:00 – yalnızca yaz modu veya tatil)",
+          "manage_temp_source": "Desteklenen TRV'ler için harici oda sıcaklığını otomatik kullan",
           "calibration_invert": "Kalibrasyon ofsetini ters çevir (işareti tersine çeviren ME167 gibi TRV'ler için)"
+        },
+        "data_description": {
+          "valve_maintenance": "Uzun ısıtmasız dönemler boyunca vanaların sıkışmasını önler. Yaz Modu veya Tatil Modu etkinken ThermoSmart vanaları zaman zaman otomatik olarak hareket ettirir.",
+          "manage_temp_source": "ThermoSmart, kendi kontrol mantığı için harici sıcaklık sensörlerini kullanmaya devam eder. Etkinleştirildiğinde, ThermoSmart desteklenen TRV'leri harici sıcaklık kaynağına da geçirir ve harici sensörler kullanılamaz hale gelirse TRV'nin dahili sensörüne geri döner.",
+          "calibration_invert": "Standart davranıştan farklı offset yönüne sahip belirli TRV modelleri için kalibrasyon offset işaretini tersine çevirir. Yalnızca cihazınız gerektiriyorsa etkinleştirin."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Isıtma kapat – pencere açıldıktan sonra gecikme",
           "window_close_delay": "Isıtma aç – pencere kapandıktan sonra gecikme",
           "valve_maintenance": "Valf bakımını etkinleştir (yalnızca yaz / tatil modu)",
+          "manage_temp_source": "Desteklenen TRV'ler için harici oda sıcaklığını otomatik kullan",
           "calibration_invert": "Kalibrasyon ofsetini ters çevir (ME167 ve benzerleri)"
+        },
+        "data_description": {
+          "valve_maintenance": "Uzun ısıtmasız dönemler boyunca vanaların sıkışmasını önler. Yaz Modu veya Tatil Modu etkinken ThermoSmart vanaları zaman zaman otomatik olarak hareket ettirir.",
+          "manage_temp_source": "ThermoSmart, kendi kontrol mantığı için harici sıcaklık sensörlerini kullanmaya devam eder. Etkinleştirildiğinde, ThermoSmart desteklenen TRV'leri harici sıcaklık kaynağına da geçirir ve harici sensörler kullanılamaz hale gelirse TRV'nin dahili sensörüne geri döner.",
+          "calibration_invert": "Standart davranıştan farklı offset yönüne sahip belirli TRV modelleri için kalibrasyon offset işaretini tersine çevirir. Yalnızca cihazınız gerektiriyorsa etkinleştirin."
         }
       },
       "schedule": {

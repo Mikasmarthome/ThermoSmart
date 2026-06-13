@@ -24,7 +24,13 @@
           "window_open_delay": "Încălzire oprită – întârziere după deschiderea ferestrei",
           "window_close_delay": "Încălzire pornită – întârziere după închiderea ferestrei",
           "valve_maintenance": "Activare întreținere valve (duminică 03:00 – doar modul Vară sau Vacanță)",
+          "manage_temp_source": "Utilizați automat temperatura camerei externe pentru TRV-uri compatibile",
           "calibration_invert": "Inversare offset calibrare (pentru TRV-uri precum ME167 care inversează semnul)"
+        },
+        "data_description": {
+          "valve_maintenance": "Previne blocarea ventilelor în perioadele prelungite fără încălzire. ThermoSmart mișcă ocazional ventilele automat când modul Vară sau Vacanță este activ.",
+          "manage_temp_source": "ThermoSmart continuă să utilizeze senzorii de temperatură externi pentru propria logică de control. Când este activat, ThermoSmart comută și TRV-urile compatibile la sursa lor externă de temperatură și revine la senzorul intern al TRV dacă senzorii externi devin indisponibili.",
+          "calibration_invert": "Inversează semnul offsetului de calibrare pentru modele TRV specifice la care direcția offsetului diferă de comportamentul standard. Activați doar dacă dispozitivul dvs. o necesită."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Încălzire oprită – întârziere după deschiderea ferestrei",
           "window_close_delay": "Încălzire pornită – întârziere după închiderea ferestrei",
           "valve_maintenance": "Activare întreținere valve (doar modul Vară / Vacanță)",
+          "manage_temp_source": "Utilizați automat temperatura camerei externe pentru TRV-uri compatibile",
           "calibration_invert": "Inversare offset calibrare (ME167 și similare)"
+        },
+        "data_description": {
+          "valve_maintenance": "Previne blocarea ventilelor în perioadele prelungite fără încălzire. ThermoSmart mișcă ocazional ventilele automat când modul Vară sau Vacanță este activ.",
+          "manage_temp_source": "ThermoSmart continuă să utilizeze senzorii de temperatură externi pentru propria logică de control. Când este activat, ThermoSmart comută și TRV-urile compatibile la sursa lor externă de temperatură și revine la senzorul intern al TRV dacă senzorii externi devin indisponibili.",
+          "calibration_invert": "Inversează semnul offsetului de calibrare pentru modele TRV specifice la care direcția offsetului diferă de comportamentul standard. Activați doar dacă dispozitivul dvs. o necesită."
         }
       },
       "schedule": {

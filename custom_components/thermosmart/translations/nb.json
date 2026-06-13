@@ -24,7 +24,13 @@
           "window_open_delay": "Varme av – forsinkelse etter vindu åpnes",
           "window_close_delay": "Varme på – forsinkelse etter vindu lukkes",
           "valve_maintenance": "Aktiver ventilvedlikehold (søndag 03:00 – kun sommer- eller feriemodus)",
+          "manage_temp_source": "Bruk automatisk ekstern romtemperatur for støttede TRV-er",
           "calibration_invert": "Inverter kalibreringsoffset (for TRV-er som ME167 som inverterer fortegnet)"
+        },
+        "data_description": {
+          "valve_maintenance": "Forhindrer at ventiler setter seg fast i lengre perioder uten oppvarming. ThermoSmart beveger ventilene av og til automatisk når Sommer- eller Feriemodus er aktiv.",
+          "manage_temp_source": "ThermoSmart fortsetter å bruke eksterne temperatursensorer for sin egen styrelogikk. Når den er aktivert, bytter ThermoSmart også støttede TRV-er til sin eksterne temperaturkilde og faller tilbake til den interne TRV-sensoren hvis eksterne sensorer blir utilgjengelige.",
+          "calibration_invert": "Inverterer kalibreringsoffset-fortegnet for spesifikke TRV-modeller der offsetretningen avviker fra standardatferden. Aktiver bare hvis enheten din krever det."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Varme av – forsinkelse etter vindu åpnes",
           "window_close_delay": "Varme på – forsinkelse etter vindu lukkes",
           "valve_maintenance": "Aktiver ventilvedlikehold (kun sommer- / feriemodus)",
+          "manage_temp_source": "Bruk automatisk ekstern romtemperatur for støttede TRV-er",
           "calibration_invert": "Inverter kalibreringsoffset (ME167 og lignende)"
+        },
+        "data_description": {
+          "valve_maintenance": "Forhindrer at ventiler setter seg fast i lengre perioder uten oppvarming. ThermoSmart beveger ventilene av og til automatisk når Sommer- eller Feriemodus er aktiv.",
+          "manage_temp_source": "ThermoSmart fortsetter å bruke eksterne temperatursensorer for sin egen styrelogikk. Når den er aktivert, bytter ThermoSmart også støttede TRV-er til sin eksterne temperaturkilde og faller tilbake til den interne TRV-sensoren hvis eksterne sensorer blir utilgjengelige.",
+          "calibration_invert": "Inverterer kalibreringsoffset-fortegnet for spesifikke TRV-modeller der offsetretningen avviker fra standardatferden. Aktiver bare hvis enheten din krever det."
         }
       },
       "schedule": {

@@ -24,7 +24,13 @@
           "window_open_delay": "Verwarming uit – vertraging na openen raam",
           "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
           "valve_maintenance": "Klep-onderhoud inschakelen (zondag 03:00 – alleen in Zomer- of Vakantiemodus)",
+          "manage_temp_source": "Externe kamertemperatuur automatisch gebruiken voor ondersteunde TRV's",
           "calibration_invert": "Kalibratie-offset omkeren (voor TRV's zoals ME167 die het teken omkeren)"
+        },
+        "data_description": {
+          "valve_maintenance": "Voorkomt dat kleppen vastlopen tijdens langere periodes zonder verwarming. ThermoSmart beweegt de kleppen af en toe automatisch wanneer de Zomer- of Vakantiemodus actief is.",
+          "manage_temp_source": "ThermoSmart blijft externe temperatuursensoren gebruiken voor zijn eigen regellogica. Indien ingeschakeld, schakelt ThermoSmart ondersteunde TRV's ook over naar hun externe temperatuurbron en valt terug op de interne TRV-sensor als externe sensoren niet beschikbaar zijn.",
+          "calibration_invert": "Keert het teken van de kalibratie-offset om voor specifieke TRV-modellen waarvan de offsetrichting afwijkt van het standaardgedrag. Schakel dit alleen in als uw apparaat dit vereist."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Verwarming uit – vertraging na openen raam",
           "window_close_delay": "Verwarming aan – vertraging na sluiten raam",
           "valve_maintenance": "Klep-onderhoud inschakelen (alleen Zomer- / Vakantiemodus)",
+          "manage_temp_source": "Externe kamertemperatuur automatisch gebruiken voor ondersteunde TRV's",
           "calibration_invert": "Kalibratie-offset omkeren (ME167 en vergelijkbaar)"
+        },
+        "data_description": {
+          "valve_maintenance": "Voorkomt dat kleppen vastlopen tijdens langere periodes zonder verwarming. ThermoSmart beweegt de kleppen af en toe automatisch wanneer de Zomer- of Vakantiemodus actief is.",
+          "manage_temp_source": "ThermoSmart blijft externe temperatuursensoren gebruiken voor zijn eigen regellogica. Indien ingeschakeld, schakelt ThermoSmart ondersteunde TRV's ook over naar hun externe temperatuurbron en valt terug op de interne TRV-sensor als externe sensoren niet beschikbaar zijn.",
+          "calibration_invert": "Keert het teken van de kalibratie-offset om voor specifieke TRV-modellen waarvan de offsetrichting afwijkt van het standaardgedrag. Schakel dit alleen in als uw apparaat dit vereist."
         }
       },
       "schedule": {

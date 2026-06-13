@@ -24,7 +24,13 @@
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
           "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
           "valve_maintenance": "Aktivera ventilunderhåll (söndag 03:00 – endast i Sommar- eller Semesterläge)",
+          "manage_temp_source": "Använd automatiskt extern rumstemperatur för TRV:er som stöds",
           "calibration_invert": "Invertera kalibrerings-offset (för TRV:er som ME167 som inverterar tecknet)"
+        },
+        "data_description": {
+          "valve_maintenance": "Förhindrar att ventiler fastnar under längre perioder utan uppvärmning. ThermoSmart rör ventilerna då och då automatiskt när Sommar- eller Semesterläget är aktivt.",
+          "manage_temp_source": "ThermoSmart fortsätter att använda externa temperatursensorer för sin egen styrlogik. När det är aktiverat växlar ThermoSmart även stödda TRV:er till deras externa temperaturkälla och faller tillbaka till den interna TRV-sensorn om externa sensorer blir otillgängliga.",
+          "calibration_invert": "Inverterar kalibrerings-offset-tecknet för specifika TRV-modeller vars offsetriktning skiljer sig från standardbeteendet. Aktivera bara om din enhet kräver det."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
           "window_close_delay": "Uppvärmning på – fördröjning efter fönster stängs",
           "valve_maintenance": "Aktivera ventilunderhåll (endast Sommar- / Semesterläge)",
+          "manage_temp_source": "Använd automatiskt extern rumstemperatur för TRV:er som stöds",
           "calibration_invert": "Invertera kalibrerings-offset (ME167 och liknande)"
+        },
+        "data_description": {
+          "valve_maintenance": "Förhindrar att ventiler fastnar under längre perioder utan uppvärmning. ThermoSmart rör ventilerna då och då automatiskt när Sommar- eller Semesterläget är aktivt.",
+          "manage_temp_source": "ThermoSmart fortsätter att använda externa temperatursensorer för sin egen styrlogik. När det är aktiverat växlar ThermoSmart även stödda TRV:er till deras externa temperaturkälla och faller tillbaka till den interna TRV-sensorn om externa sensorer blir otillgängliga.",
+          "calibration_invert": "Inverterar kalibrerings-offset-tecknet för specifika TRV-modeller vars offsetriktning skiljer sig från standardbeteendet. Aktivera bara om din enhet kräver det."
         }
       },
       "schedule": {

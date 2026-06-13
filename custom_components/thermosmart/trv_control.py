@@ -382,22 +382,18 @@ class TRVControlMixin:
 
             raw_offset = room_temp - trv_temp
 
-            # Hint when profile flags calibration_inverted but zone config doesn't enable it.
-            # Auto-applying profile.calibration_inverted is deferred: CONF_CALIBRATION_INVERT=False
-            # is indistinguishable from "key absent in old ConfigEntry", so applying the profile
-            # default could silently double-invert users who already set the flag manually.
-            if (_cal_profile is not None
-                    and _cal_profile.calibration_inverted
-                    and not cfg.get(CONF_CALIBRATION_INVERT, False)):
-                _LOGGER.debug(
-                    "ThermoSmart '%s': profile '%s' has calibration_inverted=True for %s – "
-                    "consider enabling 'Invert calibration offset' in zone config if the "
-                    "offset direction appears wrong",
-                    self.zone_name, _cal_profile.identifier, cal_entity,
-                )
-
-            # Kalibrierungs-Inversion (z.B. ME167 invertiert das Offset-Vorzeichen)
-            if cfg.get(CONF_CALIBRATION_INVERT, False):
+            # Inversion priority:
+            #   1. Key present in cfg → user made an explicit choice; use it as-is.
+            #      (key present + False means user consciously disabled inversion)
+            #   2. Key absent (old ConfigEntry pre-dating the field) → use profile default.
+            #      This is safe: old entries without the key never had user-configured
+            #      inversion, so applying the profile default cannot reverse a user setting.
+            _invert = (
+                cfg[CONF_CALIBRATION_INVERT]
+                if CONF_CALIBRATION_INVERT in cfg
+                else (_cal_profile.calibration_inverted if _cal_profile is not None else False)
+            )
+            if _invert:
                 raw_offset = -raw_offset
 
             _plaus_limit = (

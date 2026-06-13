@@ -7,7 +7,7 @@ import logging
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .device_profiles import DeviceProfile, get_profile, VALVE_MAX_LIMIT
+from .device_profiles import DeviceProfile, get_profile, VALVE_MAX_LIMIT, SETPOINT_HVAC_FIRST
 from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERNS,
@@ -519,11 +519,44 @@ class TRVControlMixin:
                 self.zone_name, entity_id, trv_setpoint, target, trv_setpoint - target,
             )
             self._last_written_setpoints[entity_id] = trv_setpoint
-            tasks.append(self.hass.services.async_call(
-                "climate", "set_temperature",
-                {"entity_id": entity_id, "temperature": trv_setpoint},
-                blocking=True,
-            ))
+
+            _profile = self._device_profiles.get(entity_id)
+            if _profile is not None and _profile.setpoint_method == SETPOINT_HVAC_FIRST:
+                # Sequential write: set HVAC mode first, wait, then write setpoint.
+                # Required for TRVs that silently ignore climate.set_temperature unless
+                # they are already in the correct HVAC mode (e.g. Eurotronic Spirit).
+                mode = _profile.hvac_mode_before_write or "heat"
+                if state.state != mode:
+                    try:
+                        await self.hass.services.async_call(
+                            "climate", "set_hvac_mode",
+                            {"entity_id": entity_id, "hvac_mode": mode},
+                            blocking=True,
+                        )
+                    except Exception as err:
+                        _LOGGER.warning(
+                            "ThermoSmart '%s': HVAC mode pre-write failed for %s: %s",
+                            self.zone_name, entity_id, err,
+                        )
+                    if _profile.setpoint_delay_seconds > 0.0:
+                        await asyncio.sleep(_profile.setpoint_delay_seconds)
+                try:
+                    await self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": entity_id, "temperature": trv_setpoint},
+                        blocking=True,
+                    )
+                except Exception as err:
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': HVAC_FIRST setpoint failed for %s: %s",
+                        self.zone_name, entity_id, err,
+                    )
+            else:
+                tasks.append(self.hass.services.async_call(
+                    "climate", "set_temperature",
+                    {"entity_id": entity_id, "temperature": trv_setpoint},
+                    blocking=True,
+                ))
 
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)

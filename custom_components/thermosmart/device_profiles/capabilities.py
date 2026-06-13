@@ -56,3 +56,7 @@ class DeviceProfile:
     is_active: bool = True
     hvac_watchdog: bool = True
     valve_bump_on_close: bool = True
+    allow_external_temp_input: bool = True
+    allow_temp_source_select: bool = True
+    calibration_sync: bool = True
+    calibration_plausibility_limit: float = 7.0

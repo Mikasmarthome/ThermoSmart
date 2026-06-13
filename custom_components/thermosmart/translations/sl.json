@@ -24,11 +24,13 @@
           "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
           "window_close_delay": "Ogrevanje vklop – zamuda po zapiranju okna",
           "valve_maintenance": "Aktivacija vzdrževanja ventilov (nedelja 03:00 – samo poletni ali počitniški način)",
-          "calibration_invert": "Invertiranje kalibracijskega odmika (za TRV-je kot ME167, ki invertirajo predznak)",
-          "manage_temp_source": "Samodejno uporabi zunanjo temperaturo prostora za podprte TRV-je"
+          "manage_temp_source": "Samodejno uporabi zunanjo temperaturo prostora za podprte TRV-je",
+          "calibration_invert": "Invertiranje kalibracijskega odmika (za TRV-je kot ME167, ki invertirajo predznak)"
         },
         "data_description": {
-          "manage_temp_source": "ThermoSmart še naprej uporablja zunanje temperaturne senzorje za lastno logiko krmiljenja. Ko je omogočeno, ThermoSmart tudi preklopi podprte TRV-je na njihov zunanji temperaturni vir in se vrne na notranji senzor TRV, če zunanji senzorji postanejo nedosegljivi."
+          "valve_maintenance": "Preprečuje, da bi se ventili zagozdili med daljšimi obdobji brez ogrevanja. ThermoSmart občasno samodejno premika ventile, ko je aktiven poletni ali počitniški način.",
+          "manage_temp_source": "ThermoSmart še naprej uporablja zunanje temperaturne senzorje za lastno logiko krmiljenja. Ko je omogočeno, ThermoSmart tudi preklopi podprte TRV-je na njihov zunanji temperaturni vir in se vrne na notranji senzor TRV, če zunanji senzorji postanejo nedosegljivi.",
+          "calibration_invert": "Invertira predznak kalibracijskega odmika za specifične modele TRV, pri katerih se smer odmika razlikuje od standardnega vedenja. Omogočite le, če to vaša naprava zahteva."
         }
       },
       "schedule": {
@@ -114,11 +116,13 @@
           "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
           "window_close_delay": "Ogrevanje vklop – zamuda po zapiranju okna",
           "valve_maintenance": "Aktivacija vzdrževanja ventilov (samo poletni / počitniški način)",
-          "calibration_invert": "Invertiranje kalibracijskega odmika (ME167 in podobni)",
-          "manage_temp_source": "Samodejno uporabi zunanjo temperaturo prostora za podprte TRV-je"
+          "manage_temp_source": "Samodejno uporabi zunanjo temperaturo prostora za podprte TRV-je",
+          "calibration_invert": "Invertiranje kalibracijskega odmika (ME167 in podobni)"
         },
         "data_description": {
-          "manage_temp_source": "ThermoSmart še naprej uporablja zunanje temperaturne senzorje za lastno logiko krmiljenja. Ko je omogočeno, ThermoSmart tudi preklopi podprte TRV-je na njihov zunanji temperaturni vir in se vrne na notranji senzor TRV, če zunanji senzorji postanejo nedosegljivi."
+          "valve_maintenance": "Preprečuje, da bi se ventili zagozdili med daljšimi obdobji brez ogrevanja. ThermoSmart občasno samodejno premika ventile, ko je aktiven poletni ali počitniški način.",
+          "manage_temp_source": "ThermoSmart še naprej uporablja zunanje temperaturne senzorje za lastno logiko krmiljenja. Ko je omogočeno, ThermoSmart tudi preklopi podprte TRV-je na njihov zunanji temperaturni vir in se vrne na notranji senzor TRV, če zunanji senzorji postanejo nedosegljivi.",
+          "calibration_invert": "Invertira predznak kalibracijskega odmika za specifične modele TRV, pri katerih se smer odmika razlikuje od standardnega vedenja. Omogočite le, če to vaša naprava zahteva."
         }
       },
       "schedule": {

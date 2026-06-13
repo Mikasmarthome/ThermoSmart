@@ -111,10 +111,10 @@ def _schema_devices(d: dict) -> vol.Schema:
         vol.Optional(CONF_VALVE_MAINTENANCE, default=d.get(CONF_VALVE_MAINTENANCE, True)):
             selector.BooleanSelector(),
 
-        vol.Optional(CONF_CALIBRATION_INVERT, default=d.get(CONF_CALIBRATION_INVERT, False)):
+        vol.Optional(CONF_MANAGE_TEMP_SOURCE, default=d.get(CONF_MANAGE_TEMP_SOURCE, False)):
             selector.BooleanSelector(),
 
-        vol.Optional(CONF_MANAGE_TEMP_SOURCE, default=d.get(CONF_MANAGE_TEMP_SOURCE, False)):
+        vol.Optional(CONF_CALIBRATION_INVERT, default=d.get(CONF_CALIBRATION_INVERT, False)):
             selector.BooleanSelector(),
     })
 

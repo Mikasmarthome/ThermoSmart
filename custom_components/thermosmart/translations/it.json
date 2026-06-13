@@ -24,11 +24,13 @@
           "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",
           "window_close_delay": "Riscaldamento acceso – ritardo dopo chiusura finestra",
           "valve_maintenance": "Abilita manutenzione valvole (domenica 03:00 – solo modalità Estate o Vacanza)",
-          "calibration_invert": "Inverti offset di calibrazione (per valvole TRV come ME167 che invertono il segno)",
-          "manage_temp_source": "Utilizza automaticamente la temperatura ambiente esterna per i TRV compatibili"
+          "manage_temp_source": "Utilizza automaticamente la temperatura ambiente esterna per i TRV compatibili",
+          "calibration_invert": "Inverti offset di calibrazione (per valvole TRV come ME167 che invertono il segno)"
         },
         "data_description": {
-          "manage_temp_source": "ThermoSmart continua a utilizzare i sensori di temperatura esterni per la propria logica di controllo. Se attivata, ThermoSmart passa anche i TRV compatibili alla loro fonte di temperatura esterna e torna al sensore interno del TRV se i sensori esterni diventano non disponibili."
+          "valve_maintenance": "Evita che le valvole si inceppino durante lunghi periodi senza riscaldamento. ThermoSmart muove occasionalmente le valvole automaticamente quando è attiva la modalità Estate o Vacanza.",
+          "manage_temp_source": "ThermoSmart continua a utilizzare i sensori di temperatura esterni per la propria logica di controllo. Se attivata, ThermoSmart passa anche i TRV compatibili alla loro fonte di temperatura esterna e torna al sensore interno del TRV se i sensori esterni diventano non disponibili.",
+          "calibration_invert": "Inverte il segno dell'offset di calibrazione per specifici modelli TRV la cui direzione dell'offset differisce dal comportamento standard. Attivare solo se richiesto dal dispositivo in uso."
         }
       },
       "schedule": {
@@ -114,11 +116,13 @@
           "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",
           "window_close_delay": "Riscaldamento acceso – ritardo dopo chiusura finestra",
           "valve_maintenance": "Abilita manutenzione valvole (solo modalità Estate / Vacanza)",
-          "calibration_invert": "Inverti offset di calibrazione (ME167 e simili)",
-          "manage_temp_source": "Utilizza automaticamente la temperatura ambiente esterna per i TRV compatibili"
+          "manage_temp_source": "Utilizza automaticamente la temperatura ambiente esterna per i TRV compatibili",
+          "calibration_invert": "Inverti offset di calibrazione (ME167 e simili)"
         },
         "data_description": {
-          "manage_temp_source": "ThermoSmart continua a utilizzare i sensori di temperatura esterni per la propria logica di controllo. Se attivata, ThermoSmart passa anche i TRV compatibili alla loro fonte di temperatura esterna e torna al sensore interno del TRV se i sensori esterni diventano non disponibili."
+          "valve_maintenance": "Evita che le valvole si inceppino durante lunghi periodi senza riscaldamento. ThermoSmart muove occasionalmente le valvole automaticamente quando è attiva la modalità Estate o Vacanza.",
+          "manage_temp_source": "ThermoSmart continua a utilizzare i sensori di temperatura esterni per la propria logica di controllo. Se attivata, ThermoSmart passa anche i TRV compatibili alla loro fonte di temperatura esterna e torna al sensore interno del TRV se i sensori esterni diventano non disponibili.",
+          "calibration_invert": "Inverte il segno dell'offset di calibrazione per specifici modelli TRV la cui direzione dell'offset differisce dal comportamento standard. Attivare solo se richiesto dal dispositivo in uso."
         }
       },
       "schedule": {

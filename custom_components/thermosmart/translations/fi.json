@@ -24,11 +24,13 @@
           "window_open_delay": "Lämmitys pois – viive ikkunan avaamisen jälkeen",
           "window_close_delay": "Lämmitys päälle – viive ikkunan sulkemisen jälkeen",
           "valve_maintenance": "Ota venttiilin huolto käyttöön (sunnuntai 03:00 – vain kesä- tai lomatila)",
-          "calibration_invert": "Käännä kalibrointipoikkeama (TRV:ille kuten ME167, jotka kääntävät merkin)",
-          "manage_temp_source": "Käytä automaattisesti ulkoista huonelämpötilaa tuetuille TRV:ille"
+          "manage_temp_source": "Käytä automaattisesti ulkoista huonelämpötilaa tuetuille TRV:ille",
+          "calibration_invert": "Käännä kalibrointipoikkeama (TRV:ille kuten ME167, jotka kääntävät merkin)"
         },
         "data_description": {
-          "manage_temp_source": "ThermoSmart jatkaa ulkoisten lämpötila-anturien käyttöä omassa ohjaustoiminnossaan. Kun se on käytössä, ThermoSmart myös vaihtaa tuettujen TRV-laitteiden lämpötilalähteeksi ulkoisen lähteen ja palaa TRV:n sisäiseen anturiin, jos ulkoiset anturit eivät ole käytettävissä."
+          "valve_maintenance": "Estää venttiilejä jumiutumasta pitkien lämmittämättömien jaksojen aikana. ThermoSmart liikuttaa venttiilejä ajoittain automaattisesti, kun Kesä- tai Lomatila on aktiivinen.",
+          "manage_temp_source": "ThermoSmart jatkaa ulkoisten lämpötila-anturien käyttöä omassa ohjaustoiminnossaan. Kun se on käytössä, ThermoSmart myös vaihtaa tuettujen TRV-laitteiden lämpötilalähteeksi ulkoisen lähteen ja palaa TRV:n sisäiseen anturiin, jos ulkoiset anturit eivät ole käytettävissä.",
+          "calibration_invert": "Kääntää kalibrointipoikkeaman merkin tietyille TRV-malleille, joiden poikkeamasuunta poikkeaa standardikäyttäytymisestä. Ota käyttöön vain, jos laitteesi sitä vaatii."
         }
       },
       "schedule": {
@@ -114,11 +116,13 @@
           "window_open_delay": "Lämmitys pois – viive ikkunan avaamisen jälkeen",
           "window_close_delay": "Lämmitys päälle – viive ikkunan sulkemisen jälkeen",
           "valve_maintenance": "Ota venttiilin huolto käyttöön (vain kesä- / lomatila)",
-          "calibration_invert": "Käännä kalibrointipoikkeama (ME167 ja vastaavat)",
-          "manage_temp_source": "Käytä automaattisesti ulkoista huonelämpötilaa tuetuille TRV:ille"
+          "manage_temp_source": "Käytä automaattisesti ulkoista huonelämpötilaa tuetuille TRV:ille",
+          "calibration_invert": "Käännä kalibrointipoikkeama (ME167 ja vastaavat)"
         },
         "data_description": {
-          "manage_temp_source": "ThermoSmart jatkaa ulkoisten lämpötila-anturien käyttöä omassa ohjaustoiminnossaan. Kun se on käytössä, ThermoSmart myös vaihtaa tuettujen TRV-laitteiden lämpötilalähteeksi ulkoisen lähteen ja palaa TRV:n sisäiseen anturiin, jos ulkoiset anturit eivät ole käytettävissä."
+          "valve_maintenance": "Estää venttiilejä jumiutumasta pitkien lämmittämättömien jaksojen aikana. ThermoSmart liikuttaa venttiilejä ajoittain automaattisesti, kun Kesä- tai Lomatila on aktiivinen.",
+          "manage_temp_source": "ThermoSmart jatkaa ulkoisten lämpötila-anturien käyttöä omassa ohjaustoiminnossaan. Kun se on käytössä, ThermoSmart myös vaihtaa tuettujen TRV-laitteiden lämpötilalähteeksi ulkoisen lähteen ja palaa TRV:n sisäiseen anturiin, jos ulkoiset anturit eivät ole käytettävissä.",
+          "calibration_invert": "Kääntää kalibrointipoikkeaman merkin tietyille TRV-malleille, joiden poikkeamasuunta poikkeaa standardikäyttäytymisestä. Ota käyttöön vain, jos laitteesi sitä vaatii."
         }
       },
       "schedule": {

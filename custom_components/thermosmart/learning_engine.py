@@ -344,6 +344,9 @@ class LearningEngine:
         control_reason: str = "schedule",
         preheat_active: bool = False,
         heating_failure: bool = False,
+        vacation: bool = False,
+        summer_mode: bool = False,
+        schedule_period: str | None = None,
     ) -> None:
         """Beobachtung aufzeichnen – alle verfügbaren Bedingungen speichern."""
         if not self._is_enabled(zone_id):
@@ -404,6 +407,8 @@ class LearningEngine:
             "control_reason": control_reason,
             "preheat_active": preheat_active,
             "heating_failure": heating_failure,
+            "vacation": vacation,
+            "summer_mode": summer_mode,
         }
 
         # Alle verfügbaren Außenbedingungen speichern
@@ -433,6 +438,8 @@ class LearningEngine:
             obs["norm_heat_rate"] = round(heat_rate / outdoor_delta, 6)
         if cool_rate is not None:
             obs["cool_rate"] = cool_rate
+        if schedule_period is not None:
+            obs["schedule_period"] = schedule_period
         if recommendation.get("forecast_high") is not None:
             obs["forecast_high"] = recommendation["forecast_high"]
 

@@ -46,7 +46,7 @@ _MATCH_TABLE: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
     # ── Broader Tuya catch-all after all specific _TZE variants ─────────────
     ("tuya_ts0601",         ("TS0601",),                      ("_TZE", "Tuya")),
     # ── HomeKit bridge — short "Eve" string kept last among active profiles ──
-    ("eve_thermo",          ("Eve Thermo", "SEA80"),          ("Eve Systems", "Eve")),
+    ("eve_thermo",          ("Eve Thermo", "SEA80"),          ("Eve Systems",)),
     # ── Warning / inactive profiles ──────────────────────────────────────────
     ("daikin_climate",      (),                               ("Daikin",)),
     ("netatmo",             ("NRV", "Smart Radiator Valve"),  ("Netatmo",)),

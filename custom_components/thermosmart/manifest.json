@@ -1,14 +1,13 @@
 {
   "domain": "thermosmart",
   "name": "ThermoSmart",
-  "version": "1.0.8",
-  "description": "Self-learning, weather-aware heating control for Home Assistant",
-  "documentation": "https://github.com/Mikasmarthome/ThermoSmart",
-  "issue_tracker": "https://github.com/Mikasmarthome/ThermoSmart/issues",
-  "requirements": [],
-  "dependencies": [],
   "after_dependencies": ["weather", "climate"],
   "codeowners": ["@Mikasmarthome"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Mikasmarthome/ThermoSmart",
   "iot_class": "local_polling",
-  "config_flow": true
+  "issue_tracker": "https://github.com/Mikasmarthome/ThermoSmart/issues",
+  "requirements": [],
+  "version": "1.0.9"
 }

@@ -156,6 +156,30 @@ def _compute_analytics(learning: dict) -> dict:
         round(sum(excesses) / len(excesses), 3) if excesses else None
     )
 
+    # --- contaminated / clean heat_rate -----------------------------------
+    # Contaminated: heat_rate present but delta < -1.0 (room clearly below target,
+    # reading reflects catch-up heating rather than steady-state performance).
+    # Clean: heat_rate present and delta >= -1.0.
+    contaminated_heat_rate_count = sum(
+        1 for obs in observations
+        if "heat_rate" in obs and obs.get("delta", 0.0) < -1.0
+    )
+    clean_heat_obs = [
+        obs for obs in observations
+        if "heat_rate" in obs and obs.get("delta", 0.0) >= -1.0
+    ]
+    clean_heat_rate_mean = (
+        round(sum(o["heat_rate"] for o in clean_heat_obs) / len(clean_heat_obs), 5)
+        if clean_heat_obs else None
+    )
+    clean_norm_rates = [
+        o["norm_heat_rate"] for o in clean_heat_obs if "norm_heat_rate" in o
+    ]
+    clean_norm_heat_rate_mean = (
+        round(sum(clean_norm_rates) / len(clean_norm_rates), 6)
+        if clean_norm_rates else None
+    )
+
     return {
         "observation_span_days": span_days,
         "target_changes": target_changes,
@@ -167,6 +191,9 @@ def _compute_analytics(learning: dict) -> dict:
         "heat_rate_mean": heat_rate_mean,
         "norm_heat_rate_mean": norm_heat_rate_mean,
         "avg_setpoint_excess": avg_setpoint_excess,
+        "contaminated_heat_rate_count": contaminated_heat_rate_count,
+        "clean_heat_rate_mean": clean_heat_rate_mean,
+        "clean_norm_heat_rate_mean": clean_norm_heat_rate_mean,
     }
 
 

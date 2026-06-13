@@ -1,5 +1,33 @@
 # ThermoSmart – Release Notes
 
+## v1.0.7
+
+### New Features
+
+**TRV Temperature Source Management**
+Opt-in feature for TRVs that expose a `temperature_sensor` select entity (e.g. SONOFF TRVZB). When enabled, ThermoSmart automatically switches the TRV between `internal` and `external` temperature source based on sensor availability. Falls back to `internal` with a 5-minute grace period if external sensors become unavailable. Ownership tracking ensures manual user changes are never overwritten.
+
+**Per-Zone Analytics in Learning Data Export**
+The learning data export now includes a computed `analytics` block per zone: observation span, target-change frequency, delta statistics, heat rate mean, and setpoint excess — all computed at export time with no storage changes and no migration required.
+
+### Improvements
+
+- **UX: Toggle descriptions** — All three device toggles (Valve Maintenance, External Room Temperature, Calibration Invert) now show descriptive helper text in all 24 supported languages.
+- **UX: Toggle order** — Device options are now consistently ordered: Valve Maintenance → External Room Temperature → Calibration Invert.
+- **UX: Clearer label** — The "External Room Temperature" option label was improved for clarity in all 24 languages.
+
+### Bug Fixes
+
+- **Calibration skip when `temperature_sensor = external`** — When a TRV is confirmed to be using its external temperature source, ThermoSmart no longer writes a calibration offset that the TRV firmware would ignore anyway.
+- **Allow `comfort_temp == night_temp`** — The config flow no longer rejects equal comfort and night temperatures, enabling single-setpoint setups.
+
+### Upgrade
+
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+No configuration changes required. Learning data is preserved.
+
+---
+
 ## v1.0.6
 
 ### New Feature — Export Learning Data

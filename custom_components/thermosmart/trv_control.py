@@ -4,9 +4,10 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 
+from .device_profiles import DeviceProfile, get_profile
 from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERNS,
@@ -48,6 +49,20 @@ class TRVControlMixin:
 
         if not device_to_climate:
             return
+
+        # ── Device profile detection ──────────────────────────────────────────
+        dev_reg = dr.async_get(self.hass)
+        profile_map: dict[str, DeviceProfile] = {}
+        for device_id, climate_id in device_to_climate.items():
+            dev_entry = dev_reg.async_get(device_id)
+            manufacturer = dev_entry.manufacturer if dev_entry else None
+            model = dev_entry.model if dev_entry else None
+            profile = get_profile(model, manufacturer)
+            profile_map[climate_id] = profile
+            _LOGGER.debug(
+                "ThermoSmart '%s': device profile → %s (entity=%s, manufacturer=%r, model=%r)",
+                self.zone_name, profile.identifier, climate_id, manufacturer, model,
+            )
 
         quirks: list[str] = []
         cal_map: dict[str, str] = {}
@@ -143,6 +158,7 @@ class TRVControlMixin:
         self._auto_ext_temp_map = ext_temp_map
         self._auto_valve_map = valve_map
         self._auto_temp_source_map = temp_source_map
+        self._device_profiles = profile_map
 
     async def _reset_valve_opening_degree(self) -> bool:
         """Reset valve_opening_degree to 100% on all managed TRV devices.

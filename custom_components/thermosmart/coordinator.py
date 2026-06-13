@@ -42,6 +42,7 @@ from .const import (
     HEATING_FAILURE_CMD_DELTA,
     TPI_MAX_BOOST_CELSIUS,
 )
+from .device_profiles import DeviceProfile
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
 from .window import WindowMixin
@@ -118,6 +119,9 @@ class ThermoSmartCoordinator(
         self._trv_offline: set[str] = set()
         self._valve_reset_done: bool = False
         self._valve_reset_attempts: int = 0
+
+        # Device profiles — populated by async_detect_device_entities (TRVControlMixin)
+        self._device_profiles: dict[str, DeviceProfile] = {}
 
         # Temperature source management (genutzt von TRVControlMixin)
         self._temp_source_owned: dict[str, str] = {}   # select_entity_id → "external"

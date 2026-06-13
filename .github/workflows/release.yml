@@ -23,7 +23,7 @@ jobs:
         id: prerelease
         run: |
           TAG="${{ github.ref_name }}"
-          # Pre-Release wenn Tag alpha, beta oder PEP-440 bN enthält (z.B. v0.9.0b1)
+          # Mark as pre-release if the tag contains alpha, beta, rc, or PEP-440 bN (e.g. v0.9.0b1)
           if echo "$TAG" | grep -qE 'alpha|beta|rc|b[0-9]+$'; then
             echo "is_prerelease=true" >> $GITHUB_OUTPUT
           else

@@ -570,6 +570,9 @@ class ThermoSmartCoordinator(
                 control_reason=self._control_reason(recommendation),
                 preheat_active=recommendation.get("preheat_active", False),
                 heating_failure=bool(recommendation.get("heating_failure")),
+                vacation=recommendation.get("mode") == HEATING_MODE_VACATION,
+                summer_mode=bool(recommendation.get("is_summer", False)),
+                schedule_period=self._schedule_period(recommendation, cfg),
             )
 
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
@@ -701,6 +704,23 @@ class ThermoSmartCoordinator(
         if recommendation.get("mode") == HEATING_MODE_AWAY:
             return "presence"
         return "schedule"
+
+    def _schedule_period(self, recommendation: dict, cfg: dict) -> str | None:
+        """Determine the active schedule period for observation context.
+
+        Returns one of: "comfort", "night", "eco", "away", or None
+        (vacation and summer_mode are captured by their own boolean fields).
+        """
+        mode = recommendation.get("mode", HEATING_MODE_AUTO)
+        if recommendation.get("is_summer") or mode == HEATING_MODE_VACATION:
+            return None
+        if mode in (HEATING_MODE_COMFORT, HEATING_MODE_NIGHT, HEATING_MODE_ECO, HEATING_MODE_AWAY):
+            return mode
+        # AUTO mode: derive from the active schedule slot
+        if not cfg.get("schedule_enabled", True):
+            return "comfort"
+        raw = self._current_schedule_period()
+        return raw.split("_", 1)[1] if "_" in raw else "comfort"
 
     # ── Berechnung ───────────────────────────────────────────────────
 

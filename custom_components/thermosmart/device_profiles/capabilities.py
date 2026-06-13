@@ -54,3 +54,5 @@ class DeviceProfile:
     quirk_entities: tuple[str, ...] = ()
     warning: str | None = None
     is_active: bool = True
+    hvac_watchdog: bool = True
+    valve_bump_on_close: bool = True

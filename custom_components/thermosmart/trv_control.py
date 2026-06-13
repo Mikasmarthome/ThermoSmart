@@ -421,12 +421,23 @@ class TRVControlMixin:
 
         if target is None:
             if recommendation.get("window_open"):
-                frost_temp = WINDOW_OPEN_SETPOINT
                 tasks = []
                 for entity_id in cfg.get("climate_entities", []):
                     state = self._get_trv_state(entity_id)
                     if state is None:
                         continue
+                    frost_temp = WINDOW_OPEN_SETPOINT
+                    try:
+                        device_min = float(state.attributes.get("min_temp", 0))
+                        if 0 < device_min <= 30 and device_min > frost_temp:
+                            _LOGGER.debug(
+                                "ThermoSmart '%s': clamped window-open setpoint for %s"
+                                " from %.1f°C to %.1f°C due to device min_temp",
+                                self.zone_name, entity_id, frost_temp, device_min,
+                            )
+                            frost_temp = device_min
+                    except (TypeError, ValueError):
+                        pass
                     try:
                         if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
                             continue
@@ -457,21 +468,32 @@ class TRVControlMixin:
             state = self._get_trv_state(entity_id)
             if state is None:
                 continue
+            effective_setpoint = trv_setpoint
+            try:
+                device_min = float(state.attributes.get("min_temp", 0))
+                if 0 < device_min <= 30 and device_min > effective_setpoint:
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C due to device min_temp",
+                        self.zone_name, entity_id, effective_setpoint, device_min,
+                    )
+                    effective_setpoint = device_min
+            except (TypeError, ValueError):
+                pass
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:
-                    if abs(float(current_setpoint) - trv_setpoint) < tolerance:
+                    if abs(float(current_setpoint) - effective_setpoint) < tolerance:
                         continue
                 except (TypeError, ValueError):
                     pass
             _LOGGER.debug(
                 "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",
-                self.zone_name, entity_id, trv_setpoint, target, trv_setpoint - target,
+                self.zone_name, entity_id, effective_setpoint, target, effective_setpoint - target,
             )
-            self._last_written_setpoints[entity_id] = trv_setpoint
+            self._last_written_setpoints[entity_id] = effective_setpoint
             tasks.append(self.hass.services.async_call(
                 "climate", "set_temperature",
-                {"entity_id": entity_id, "temperature": trv_setpoint},
+                {"entity_id": entity_id, "temperature": effective_setpoint},
                 blocking=True,
             ))
 

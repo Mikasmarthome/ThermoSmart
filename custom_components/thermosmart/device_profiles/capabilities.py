@@ -49,6 +49,8 @@ class DeviceProfile:
     calibration_inverted: bool = False
     hvac_mode_before_write: str | None = None
     burst_guard_seconds: float = 5.0
+    setpoint_delay_seconds: float = 0.0
+    valve_control_uncertain: bool = False
     quirk_entities: tuple[str, ...] = ()
     warning: str | None = None
     is_active: bool = True

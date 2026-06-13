@@ -17,17 +17,40 @@ from .profiles import ALL_PROFILES, GENERIC
 _LOGGER = logging.getLogger(__name__)
 
 # Each entry: (profile_identifier, model_substrings, manufacturer_substrings)
-# A match on ANY model substring OR ANY manufacturer substring is sufficient.
-# More specific entries should appear before more general ones.
+# A device matches if ANY model substring OR ANY manufacturer substring is
+# found (case-insensitive) in the corresponding device registry string.
+# More specific entries must appear before broader catch-alls.
+#
+# Ordering rules applied here:
+#   1. Entries matched exclusively by model come before entries with broad
+#      manufacturer patterns (e.g. eurotronic_spzb0001 before eurotronic_spirit).
+#   2. Narrow manufacturer entries come before wide ones
+#      (e.g. moes_tv02 / beca_bht_002 before tuya_ts0601 which matches "_TZE").
+#   3. Warning / inactive profiles are last so active profiles win on overlap.
 _MATCH_TABLE: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
-    ("sonoff_trvzb",      ("TRVZB",),                    ("SONOFF",)),
-    ("tuya_ts0601",       ("TS0601",),                   ("_TZE", "Tuya")),
-    ("eve_thermo",        ("Eve Thermo", "SEA80"),        ("Eve Systems", "Eve")),
-    ("aqara_trv",         ("SRTS-A01",),                 ("Aqara", "LUMI")),
-    ("eurotronic_spirit", ("Spirit",),                   ("Eurotronic",)),
-    ("danfoss_ally",      ("Ally",),                     ("Danfoss",)),
-    ("bosch_bth",         ("BTH-RA",),                   ("Bosch",)),
-    ("tado",              ("tado",),                     ("tado",)),
+    # ── Precise model matches first ──────────────────────────────────────────
+    ("sonoff_trvzb",        ("TRVZB",),                       ("SONOFF",)),
+    ("innr_cozb0001",       ("COZB001",),                     ("innr", "Innr")),
+    ("avatto_me167",        ("ME167",),                       ("Avatto", "AVATTO")),
+    # Beca before Tuya: BHT-002-GCLZB also carries a _TZE manufacturer string
+    ("beca_bht_002",        ("BHT-002", "BHT002"),            ("BECA", "Beca", "BecaSmart")),
+    # Moes before Tuya: Moes TV02 uses _TZE manufacturer fingerprints too
+    ("moes_tv02",           ("TV02",),                        ("MOES", "Moes")),
+    # SPZB0001 matched on model only — no manufacturer tuple prevents false
+    # positives when another Eurotronic device lacks the SPZB0001 model string.
+    ("eurotronic_spzb0001", ("SPZB0001",),                    ()),
+    ("eurotronic_spirit",   ("Spirit",),                      ("Eurotronic",)),
+    ("aqara_trv",           ("SRTS-A01",),                    ("Aqara", "LUMI")),
+    ("danfoss_ally",        ("Ally",),                        ("Danfoss",)),
+    ("bosch_bth",           ("BTH-RA",),                      ("Bosch",)),
+    # ── Broader Tuya catch-all after all specific _TZE variants ─────────────
+    ("tuya_ts0601",         ("TS0601",),                      ("_TZE", "Tuya")),
+    # ── HomeKit bridge — short "Eve" string kept last among active profiles ──
+    ("eve_thermo",          ("Eve Thermo", "SEA80"),          ("Eve Systems", "Eve")),
+    # ── Warning / inactive profiles ──────────────────────────────────────────
+    ("daikin_climate",      (),                               ("Daikin",)),
+    ("netatmo",             ("NRV", "Smart Radiator Valve"),  ("Netatmo",)),
+    ("tado",                ("tado",),                        ("tado",)),
 )
 
 _BY_ID: dict[str, DeviceProfile] = {p.identifier: p for p in ALL_PROFILES}

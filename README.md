@@ -42,21 +42,9 @@ Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar �
 
 ## Screenshots
 
-<!-- TODO: Add screenshots before submitting to HACS default store.
-     Recommended: 1–3 screenshots showing the integration in use.
-     Place image files under assets/ and reference them below.
+![Three ThermoSmart heating zones displayed in a Lovelace dashboard — each zone shows a temperature ring with current and target temperature, active mode indicator, outdoor temperature, humidity, and mode buttons for Auto, Eco, Night, Comfort, Away and Vacation](assets/screenshots/dashboard-zones.jpeg)
 
-     Suggested screenshots:
-       - Zone device card with status sensor, mode select, and active control switch
-       - Config flow (step 1 – devices and sensors)
-       - Lovelace dashboard using thermosmart-card (optional)
-
-     Example once files are added:
-     ![ThermoSmart zone device card](assets/screenshot-zone-card.png)
-     ![ThermoSmart config flow](assets/screenshot-config-flow.png)
--->
-
-> 📸 **Screenshots will be added here before HACS default store submission.**
+*Three heating zones managed by ThermoSmart. The temperature ring shows current and target temperature at a glance. Mode buttons, outdoor conditions, and a history graph (Actual / Target / Outdoor) are visible per zone. Screenshot uses the optional [thermosmart-card](https://github.com/Mikasmarthome/thermosmart-card) Lovelace frontend.*
 
 ---
 

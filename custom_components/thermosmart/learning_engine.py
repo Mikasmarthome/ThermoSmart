@@ -339,6 +339,14 @@ class LearningEngine:
         recommendation: dict,
         weather_data: dict,
         indoor_humidity: float | None = None,
+        is_active_control: bool = False,
+        window_open: bool = False,
+        control_reason: str = "schedule",
+        preheat_active: bool = False,
+        heating_failure: bool = False,
+        vacation: bool = False,
+        summer_mode: bool = False,
+        schedule_period: str | None = None,
     ) -> None:
         """Beobachtung aufzeichnen – alle verfügbaren Bedingungen speichern."""
         if not self._is_enabled(zone_id):
@@ -394,6 +402,13 @@ class LearningEngine:
             "target": adjusted_target,
             "indoor_temp": current_temp,
             "delta": round(adjusted_target - current_temp, 2),
+            "active_control": is_active_control,
+            "window_open": window_open,
+            "control_reason": control_reason,
+            "preheat_active": preheat_active,
+            "heating_failure": heating_failure,
+            "vacation": vacation,
+            "summer_mode": summer_mode,
         }
 
         # Alle verfügbaren Außenbedingungen speichern
@@ -423,6 +438,8 @@ class LearningEngine:
             obs["norm_heat_rate"] = round(heat_rate / outdoor_delta, 6)
         if cool_rate is not None:
             obs["cool_rate"] = cool_rate
+        if schedule_period is not None:
+            obs["schedule_period"] = schedule_period
         if recommendation.get("forecast_high") is not None:
             obs["forecast_high"] = recommendation["forecast_high"]
 
@@ -488,6 +505,24 @@ class LearningEngine:
             if val is not None:
                 obs[map_key] = val
 
+        # Burst guard: reject identical observations within a 5-second window to
+        # prevent duplicate entries from rapid coordinator cycles.  Values in obs
+        # are already rounded to 1 dp, so the comparison is float-noise safe.
+        existing = self._trv_observations[zone_id]
+        if existing:
+            last = existing[-1]
+            try:
+                last_ts = datetime.fromisoformat(last["ts"])
+                if (now - last_ts).total_seconds() < 5.0:
+                    if (
+                        last.get("trv_setpoint") == obs["trv_setpoint"]
+                        and last.get("indoor_temp") == obs["indoor_temp"]
+                        and last.get("target") == obs["target"]
+                    ):
+                        return
+            except (ValueError, TypeError):
+                pass
+
         is_weekend = now.weekday() >= 5
         outdoor = weather_data.get("temperature") or 10.0
         if not self._is_duplicate(
@@ -517,6 +552,9 @@ class LearningEngine:
             return
         temp_drop = temp_at_open - temp_at_close
         if temp_drop <= 0:
+            return
+        # Reject noise: a drop below 0.5 °C is indistinguishable from sensor drift.
+        if temp_drop < 0.5:
             return
 
         now = dt_util.now()

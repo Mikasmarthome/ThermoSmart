@@ -565,6 +565,14 @@ class ThermoSmartCoordinator(
                 recommendation=recommendation,
                 weather_data=weather_data,
                 indoor_humidity=indoor_humidity,
+                is_active_control=self._active_control,
+                window_open=recommendation.get("window_open", False),
+                control_reason=self._control_reason(recommendation),
+                preheat_active=recommendation.get("preheat_active", False),
+                heating_failure=bool(recommendation.get("heating_failure")),
+                vacation=recommendation.get("mode") == HEATING_MODE_VACATION,
+                summer_mode=bool(recommendation.get("is_summer", False)),
+                schedule_period=self._schedule_period(recommendation, cfg),
             )
 
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
@@ -670,6 +678,49 @@ class ThermoSmartCoordinator(
         if presence["all_away"]:
             return HEATING_MODE_AWAY
         return HEATING_MODE_AUTO
+
+    def _control_reason(self, recommendation: dict) -> str:
+        """Determine the primary reason that governs the current heating target.
+
+        Priority order ensures only one unambiguous reason is recorded:
+          1. window_open    – heating suppressed due to open window
+          2. manual_override – user set an explicit target temperature
+          3. vacation       – vacation/frost-protection mode active
+          4. summer_mode    – season-based heating suppression active
+          5. presence       – away mode triggered by absence of all occupants
+          6. schedule       – default: auto mode driven by time schedule
+        Note: frost_protection is not a separate state; it is covered by summer_mode.
+        Note: explicit eco/night/comfort mode selections are covered by schedule
+              (they are schedule-like user preferences, not presence or override events).
+        """
+        if recommendation.get("window_open"):
+            return "window_open"
+        if recommendation.get("override_active"):
+            return "manual_override"
+        if recommendation.get("mode") == HEATING_MODE_VACATION:
+            return "vacation"
+        if recommendation.get("is_summer"):
+            return "summer_mode"
+        if recommendation.get("mode") == HEATING_MODE_AWAY:
+            return "presence"
+        return "schedule"
+
+    def _schedule_period(self, recommendation: dict, cfg: dict) -> str | None:
+        """Determine the active schedule period for observation context.
+
+        Returns one of: "comfort", "night", "eco", "away", or None
+        (vacation and summer_mode are captured by their own boolean fields).
+        """
+        mode = recommendation.get("mode", HEATING_MODE_AUTO)
+        if recommendation.get("is_summer") or mode == HEATING_MODE_VACATION:
+            return None
+        if mode in (HEATING_MODE_COMFORT, HEATING_MODE_NIGHT, HEATING_MODE_ECO, HEATING_MODE_AWAY):
+            return mode
+        # AUTO mode: derive from the active schedule slot
+        if not cfg.get("schedule_enabled", True):
+            return "comfort"
+        raw = self._current_schedule_period()
+        return raw.split("_", 1)[1] if "_" in raw else "comfort"
 
     # ── Berechnung ───────────────────────────────────────────────────
 

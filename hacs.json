@@ -2,5 +2,6 @@
   "name": "ThermoSmart",
   "content_type": "integration",
   "homeassistant": "2024.1.0",
-  "render_readme": true
+  "render_readme": true,
+  "logo": "https://raw.githubusercontent.com/Mikasmarthome/ThermoSmart/main/custom_components/thermosmart/brand/icon.png"
 }

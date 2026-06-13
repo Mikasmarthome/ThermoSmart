@@ -124,6 +124,7 @@ TADO = DeviceProfile(
     identifier="tado",
     display_name="tado°",
     is_active=False,
+    hvac_watchdog=False,
     warning=(
         "tado° devices rely on the tado° cloud API and cannot be controlled "
         "directly via a local climate entity. ThermoSmart can observe tado° "
@@ -136,6 +137,7 @@ DAIKIN_CLIMATE = DeviceProfile(
     identifier="daikin_climate",
     display_name="Daikin Climate",
     is_active=False,
+    hvac_watchdog=False,
     warning=(
         "Daikin climate devices are heat pumps or multi-split systems, not "
         "radiator TRVs. ThermoSmart's TPI control and heating-rate learning "
@@ -149,6 +151,7 @@ NETATMO = DeviceProfile(
     identifier="netatmo",
     display_name="Netatmo Smart Radiator Valve",
     is_active=False,
+    hvac_watchdog=False,
     warning=(
         "Netatmo devices rely on cloud connectivity for their primary control "
         "path. Local Home Assistant entity availability varies by setup. "

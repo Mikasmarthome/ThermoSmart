@@ -7,7 +7,7 @@ import logging
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 
-from .device_profiles import DeviceProfile, get_profile
+from .device_profiles import DeviceProfile, get_profile, VALVE_MAX_LIMIT
 from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERNS,
@@ -151,6 +151,7 @@ class TRVControlMixin:
                 self.zone_name, temp_source_map,
             )
 
+        self._device_profiles = profile_map
         await self._reset_valve_opening_degree()
 
         self._auto_quirk_entities = quirks
@@ -158,7 +159,6 @@ class TRVControlMixin:
         self._auto_ext_temp_map = ext_temp_map
         self._auto_valve_map = valve_map
         self._auto_temp_source_map = temp_source_map
-        self._device_profiles = profile_map
 
     async def _reset_valve_opening_degree(self) -> bool:
         """Reset valve_opening_degree to 100% on all managed TRV devices.
@@ -193,6 +193,10 @@ class TRVControlMixin:
 
         retry_needed = False
         for device_id in device_to_climate:
+            climate_id = device_to_climate[device_id]
+            _profile = getattr(self, "_device_profiles", {}).get(climate_id)
+            if _profile is not None and _profile.valve_semantics != VALVE_MAX_LIMIT:
+                continue
             for entry in er.async_entries_for_device(ent_reg, device_id):
                 if entry.entity_id.split(".")[0] != "number":
                     continue
@@ -278,6 +282,14 @@ class TRVControlMixin:
         for entity_id in cfg.get("climate_entities", []):
             state = self._get_trv_state(entity_id)
             if state is None:
+                continue
+
+            _profile = self._device_profiles.get(entity_id)
+            if _profile is not None and not _profile.hvac_watchdog:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Watchdog skipped for %s – profile '%s' has hvac_watchdog=False",
+                    self.zone_name, entity_id, _profile.identifier,
+                )
                 continue
 
             if state.state not in self._UNWANTED_MODES:
@@ -552,10 +564,12 @@ class TRVControlMixin:
             except (TypeError, ValueError):
                 current_pct = None
 
+            _profile = self._device_profiles.get(climate_id)
             # Valve-Bump: beim Schließen kurz öffnen dann schließen
             # Verhindert TRVZB-Motor-Sticking bei kleinen Schließbewegungen
             if (
-                current_pct is not None
+                (_profile is None or _profile.valve_bump_on_close)
+                and current_pct is not None
                 and target_pct < current_pct
                 and (current_pct - target_pct) >= 5
             ):

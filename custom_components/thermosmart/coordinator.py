@@ -565,6 +565,7 @@ class ThermoSmartCoordinator(
                 recommendation=recommendation,
                 weather_data=weather_data,
                 indoor_humidity=indoor_humidity,
+                is_active_control=self._active_control,
             )
 
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)

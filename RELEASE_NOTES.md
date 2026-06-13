@@ -1,5 +1,63 @@
 # ThermoSmart – Release Notes
 
+## v1.0.8
+
+### Learning Engine Data Collection
+
+This release completes the data collection phase for Learning Engine 2.0. All
+observations now carry a rich context layer that enables LE 2.0 to filter,
+weight, and analyse historical data without any ambiguity.
+
+**Observation context fields added to every learning observation:**
+
+- **`active_control`** — distinguishes pure observation mode (`false`) from active
+  TRV control (`true`). LE 2.0 can train exclusively on observations where
+  ThermoSmart was actually steering the heating.
+- **`window_open`** — flags observations recorded while a window was open.
+  Contaminated heat-rate readings during window events can be excluded from
+  thermal modelling.
+- **`control_reason`** — the primary driver of the current heating target:
+  `schedule`, `presence`, `manual_override`, `window_open`, `vacation`,
+  `summer_mode`. Single source of truth for why a particular target was set.
+- **`preheat_active`** — marks observations taken during a pre-heat ramp.
+  Pre-heat observations reflect catch-up heating, not steady-state performance.
+- **`heating_failure`** — flags observations where a heating failure was active.
+- **`vacation`** — boolean; true when vacation/frost-protection mode was active.
+  Enables LE 2.0 to optionally exclude long-absence periods from schedule learning.
+- **`summer_mode`** — boolean; true when summer mode was effectively active.
+- **`schedule_period`** — the active schedule slot at observation time: `comfort`,
+  `night`, `eco`, `away`, or `null` during vacation/summer. Enables per-slot
+  heat-rate analysis without post-hoc reconstruction from timestamps.
+
+### Data Quality Fixes
+
+- **TRV observation burst guard** — duplicate TRV setpoint observations within a
+  5-second window are rejected. Prevents inflated TRV observation counts caused
+  by rapid coordinator cycles.
+- **Window cooling false-positive threshold** — window cooling events below 0.5 °C
+  temperature drop are no longer recorded, eliminating sensor-noise artefacts.
+
+### Export Analytics
+
+The learning data export now includes additional computed metrics per zone:
+
+- `contaminated_heat_rate_count` — number of heat-rate observations where
+  `delta < −1.0 °C` (room clearly below target; reading reflects catch-up, not
+  steady-state performance).
+- `clean_heat_rate_mean` — mean heat rate excluding contaminated readings.
+- `clean_norm_heat_rate_mean` — mean normalised heat rate excluding contaminated
+  readings.
+
+No migration required. Older observations without context fields remain valid;
+absent fields are treated as unknown by LE 2.0. `export_format_version` stays 1.
+
+### Upgrade
+
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+No configuration changes required. Learning data is preserved.
+
+---
+
 ## v1.0.7
 
 ### New Features

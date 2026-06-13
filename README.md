@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/version-v1.0.8-blue.svg" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/github/v/release/Mikasmarthome/ThermoSmart?color=blue&label=version" alt="Version"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -37,6 +37,26 @@ ThermoSmart observes how your building heats and cools, then uses that data — 
 A dedicated Lovelace card is available: **[thermosmart-card](https://github.com/Mikasmarthome/thermosmart-card)**
 
 Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar — install separately via HACS (Frontend).
+
+---
+
+## Screenshots
+
+<!-- TODO: Add screenshots before submitting to HACS default store.
+     Recommended: 1–3 screenshots showing the integration in use.
+     Place image files under assets/ and reference them below.
+
+     Suggested screenshots:
+       - Zone device card with status sensor, mode select, and active control switch
+       - Config flow (step 1 – devices and sensors)
+       - Lovelace dashboard using thermosmart-card (optional)
+
+     Example once files are added:
+     ![ThermoSmart zone device card](assets/screenshot-zone-card.png)
+     ![ThermoSmart config flow](assets/screenshot-config-flow.png)
+-->
+
+> 📸 **Screenshots will be added here before HACS default store submission.**
 
 ---
 

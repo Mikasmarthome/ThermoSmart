@@ -310,6 +310,22 @@ class TRVControlMixin:
             if not cal_entity:
                 continue
 
+            # Skip calibration write when the TRV is confirmed to be using its
+            # external temperature source – the offset is ignored by the firmware
+            # in that mode, so writing it would be a no-op at best.
+            # Only skip on state == "external"; unavailable/unknown means we
+            # cannot be sure, so we fall through and calibrate as normal.
+            _temp_source_map = getattr(self, "_auto_temp_source_map", {})
+            _sel_entity = _temp_source_map.get(climate_id)
+            if _sel_entity:
+                _sel_state = self.hass.states.get(_sel_entity)
+                if _sel_state is not None and _sel_state.state == "external":
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': skipping calibration for %s – temperature_sensor is 'external'",
+                        self.zone_name, climate_id,
+                    )
+                    continue
+
             trv_temp: float | None = None
             trv_state = self._get_trv_state(climate_id)
             if trv_state:

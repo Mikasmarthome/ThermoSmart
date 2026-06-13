@@ -107,21 +107,57 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 
 ---
 
-## Supported Devices
+## Device Compatibility
 
-### Developer-tested
-| Device | Protocol | Notes |
+ThermoSmart includes prepared compatibility profiles for a range of common TRV families. Where device behaviour is known, profile-specific logic is applied automatically — no manual configuration needed. For devices without a specific profile, ThermoSmart falls back to a generic profile that works with any `climate` entity supporting `set_temperature`.
+
+> Feedback from real devices is very welcome. [Open an issue](https://github.com/Mikasmarthome/ThermoSmart/issues/new) to share your experience with a model not listed here.
+
+### Actively supported — profile-specific behavior
+
+These devices have a named profile with device-specific handling applied automatically.
+
+| Device | Protocol | Profile-specific behavior |
 |---|---|---|
-| SONOFF TRVZB | Zigbee via Zigbee2MQTT | Controlled via setpoint boost (`climate.set_temperature`) and `external_temperature_input` for improved TRV-internal accuracy. `valve_opening_degree` is a max-opening limit on this device — ThermoSmart does not write TPI duty-cycle to it. A motor-protection workaround is applied on close. |
+| SONOFF TRVZB | Zigbee (Z2M) | `valve_opening_degree` treated as max-opening limit (not written). Room temperature pushed to `external_temperature_input` for improved TRV-internal accuracy. Motor-protection on valve close. HVAC watchdog active. |
+| Eurotronic Spirit | Zigbee (Z2M / ZHA) | HVAC mode written to `heat` before each setpoint — required for the TRV to accept external setpoints reliably. |
+| Eurotronic SPZB0001 | Zigbee (Z2M / ZHA) | Same HVAC-first setpoint workflow as Eurotronic Spirit. |
+| Avatto ME167 | Zigbee (Z2M) | Calibration offset sign is inverted to match this device's firmware convention. |
+| Eve Thermo (HomeKit / SEA80x) | HomeKit | Valve position exposed as read-only sensor — ThermoSmart reads it for learning but does not write to it. External temperature, temperature source select, and calibration writes are disabled. |
+| Beca BHT-002 | Zigbee (Z2M) | Calibration plausibility limit tightened to ±3 °C to account for known firmware offset behaviour on some revisions. |
 
-### Untested — setpoint boost expected to work
-Any `climate` entity supporting `set_temperature`: Danfoss Ally, Eurotronic Spirit, Tuya TS0601, generic ZHA / Z-Wave / Matter TRVs.
-ThermoSmart falls back to setpoint boost on devices without a recognised valve entity.
+### Prepared profiles — standard behavior
 
-> [Open an issue](https://github.com/Mikasmarthome/ThermoSmart/issues/new) if you test a device — community results are very welcome.
+These devices have a named profile. Autodetection of valve, calibration, and quirk entities runs as normal. No device-specific overrides apply beyond what the hardware exposes.
 
-### Not recommended
-**Tado / Netatmo and other cloud-based thermostats:** cloud AI periodically overrides setpoints. ThermoSmart would learn the cloud's behaviour rather than your building's.
+| Device | Protocol |
+|---|---|
+| Tuya TS0601 | Zigbee (Z2M) |
+| Moes TV02 | Zigbee (Z2M) |
+| Aqara TRV (SRTS-A01) | Zigbee (Z2M / ZHA) |
+| Danfoss Ally | Zigbee (Z2M / ZHA) |
+| Bosch BTH-RA | Zigbee (Z2M / ZHA) |
+| Innr COZB001 | Zigbee (Z2M) |
+
+### Warning profiles — observation only recommended
+
+ThermoSmart can observe these devices and record learning data, but active setpoint control is not recommended. Cloud-based devices periodically override setpoints from external sources — ThermoSmart would learn the cloud's behaviour rather than your building's.
+
+| Device | Reason |
+|---|---|
+| tado° | Relies on the tado° cloud API. External setpoints are routinely overridden by the cloud schedule. |
+| Daikin Climate | Heat pump / multi-split system. ThermoSmart's TPI control targets single-zone radiator heating and is not designed for this device class. |
+| Netatmo Smart Radiator Valve | Cloud connectivity required for primary control. Local entity availability varies by setup. |
+
+### Generic fallback
+
+Any `climate` entity supporting `set_temperature` that does not match a named profile receives the generic fallback profile. Setpoint boost and all auto-detected features (valve, calibration, quirk entities) apply as normal.
+
+| Profile | Applies to |
+|---|---|
+| Generic TRV | All unrecognised `climate` entities |
+| Generic Zigbee TRV | Prepared — platform detection not yet active |
+| Generic HomeKit TRV | Prepared — platform detection not yet active |
 
 ### Protocol compatibility
 

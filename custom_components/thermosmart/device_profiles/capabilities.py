@@ -45,7 +45,6 @@ class DeviceProfile:
 
     setpoint_method: str = SETPOINT_CLIMATE
     valve_semantics: str = VALVE_READ_ONLY
-    has_temp_source_select: bool = False
     calibration_inverted: bool = False
     hvac_mode_before_write: str | None = None
     burst_guard_seconds: float = 5.0

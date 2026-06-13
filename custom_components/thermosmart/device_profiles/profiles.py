@@ -34,6 +34,9 @@ GENERIC_HOMEKIT_TRV = DeviceProfile(
     identifier="generic_homekit_trv",
     display_name="Generic HomeKit TRV",
     valve_semantics=VALVE_READ_ONLY,
+    allow_external_temp_input=False,
+    allow_temp_source_select=False,
+    calibration_sync=False,
 )
 
 # ── Named profiles ───────────────────────────────────────────────────────────
@@ -60,6 +63,9 @@ EVE_THERMO = DeviceProfile(
     identifier="eve_thermo",
     display_name="Eve Thermo (HomeKit / SEA80x)",
     valve_semantics=VALVE_READ_ONLY,
+    allow_external_temp_input=False,
+    allow_temp_source_select=False,
+    calibration_sync=False,
     # Valve position is exposed via HomeKit as a read-only sensor.
     # ThermoSmart reads it for learning; direct writes are not possible.
 )
@@ -118,6 +124,7 @@ BECA_BHT_002 = DeviceProfile(
     # implausibly large magnitude. ThermoSmart's standard plausibility checks
     # apply; no active workaround is implemented at this stage.
     valve_control_uncertain=True,
+    calibration_plausibility_limit=3.0,
 )
 
 TADO = DeviceProfile(
@@ -125,6 +132,9 @@ TADO = DeviceProfile(
     display_name="tado°",
     is_active=False,
     hvac_watchdog=False,
+    allow_external_temp_input=False,
+    allow_temp_source_select=False,
+    calibration_sync=False,
     warning=(
         "tado° devices rely on the tado° cloud API and cannot be controlled "
         "directly via a local climate entity. ThermoSmart can observe tado° "
@@ -138,6 +148,9 @@ DAIKIN_CLIMATE = DeviceProfile(
     display_name="Daikin Climate",
     is_active=False,
     hvac_watchdog=False,
+    allow_external_temp_input=False,
+    allow_temp_source_select=False,
+    calibration_sync=False,
     warning=(
         "Daikin climate devices are heat pumps or multi-split systems, not "
         "radiator TRVs. ThermoSmart's TPI control and heating-rate learning "
@@ -152,6 +165,9 @@ NETATMO = DeviceProfile(
     display_name="Netatmo Smart Radiator Valve",
     is_active=False,
     hvac_watchdog=False,
+    allow_external_temp_input=False,
+    allow_temp_source_select=False,
+    calibration_sync=False,
     warning=(
         "Netatmo devices rely on cloud connectivity for their primary control "
         "path. Local Home Assistant entity availability varies by setup. "

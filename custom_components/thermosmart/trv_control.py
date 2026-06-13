@@ -338,6 +338,14 @@ class TRVControlMixin:
             if not cal_entity:
                 continue
 
+            _cal_profile = self._device_profiles.get(climate_id)
+            if _cal_profile is not None and not _cal_profile.calibration_sync:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': calibration skipped for %s – profile '%s' has calibration_sync=False",
+                    self.zone_name, climate_id, _cal_profile.identifier,
+                )
+                continue
+
             # Skip calibration write when the TRV is confirmed to be using its
             # external temperature source – the offset is ignored by the firmware
             # in that mode, so writing it would be a no-op at best.
@@ -374,11 +382,29 @@ class TRVControlMixin:
 
             raw_offset = room_temp - trv_temp
 
+            # Hint when profile flags calibration_inverted but zone config doesn't enable it.
+            # Auto-applying profile.calibration_inverted is deferred: CONF_CALIBRATION_INVERT=False
+            # is indistinguishable from "key absent in old ConfigEntry", so applying the profile
+            # default could silently double-invert users who already set the flag manually.
+            if (_cal_profile is not None
+                    and _cal_profile.calibration_inverted
+                    and not cfg.get(CONF_CALIBRATION_INVERT, False)):
+                _LOGGER.debug(
+                    "ThermoSmart '%s': profile '%s' has calibration_inverted=True for %s – "
+                    "consider enabling 'Invert calibration offset' in zone config if the "
+                    "offset direction appears wrong",
+                    self.zone_name, _cal_profile.identifier, cal_entity,
+                )
+
             # Kalibrierungs-Inversion (z.B. ME167 invertiert das Offset-Vorzeichen)
             if cfg.get(CONF_CALIBRATION_INVERT, False):
                 raw_offset = -raw_offset
 
-            if abs(raw_offset) > 7.0:
+            _plaus_limit = (
+                _cal_profile.calibration_plausibility_limit
+                if _cal_profile is not None else 7.0
+            )
+            if abs(raw_offset) > _plaus_limit:
                 _LOGGER.warning(
                     "ThermoSmart '%s': Kalibrierungs-Offset %.1f°C für %s unplausibel – übersprungen",
                     self.zone_name, raw_offset, cal_entity,
@@ -629,6 +655,9 @@ class TRVControlMixin:
             return
 
         for climate_id in cfg.get("climate_entities", []):
+            _profile = self._device_profiles.get(climate_id)
+            if _profile is not None and not _profile.allow_external_temp_input:
+                continue
             ext_entity = ext_map.get(climate_id)
             if not ext_entity:
                 continue
@@ -705,6 +734,14 @@ class TRVControlMixin:
         for climate_id in cfg.get("climate_entities", []):
             select_entity = temp_source_map.get(climate_id)
             if not select_entity:
+                continue
+
+            _profile = self._device_profiles.get(climate_id)
+            if _profile is not None and not _profile.allow_temp_source_select:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': temp source select skipped for %s – profile '%s' has allow_temp_source_select=False",
+                    self.zone_name, climate_id, _profile.identifier,
+                )
                 continue
 
             # ── Readiness guards ─────────────────────────────────────

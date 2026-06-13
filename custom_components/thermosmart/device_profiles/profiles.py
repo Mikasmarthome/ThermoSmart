@@ -45,7 +45,6 @@ SONOFF_TRVZB = DeviceProfile(
     identifier="sonoff_trvzb",
     display_name="SONOFF TRVZB",
     valve_semantics=VALVE_MAX_LIMIT,
-    has_temp_source_select=True,
     quirk_entities=("external_temperature_input",),
 )
 
@@ -63,6 +62,7 @@ EVE_THERMO = DeviceProfile(
     identifier="eve_thermo",
     display_name="Eve Thermo (HomeKit / SEA80x)",
     valve_semantics=VALVE_READ_ONLY,
+    valve_bump_on_close=False,
     allow_external_temp_input=False,
     allow_temp_source_select=False,
     calibration_sync=False,

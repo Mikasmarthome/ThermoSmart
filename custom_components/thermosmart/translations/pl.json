@@ -24,7 +24,13 @@
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",
           "window_close_delay": "Ogrzewanie włączone – opóźnienie po zamknięciu okna",
           "valve_maintenance": "Włącz konserwację zaworów (niedziela 03:00 – tylko w trybie Lato lub Urlop)",
+          "manage_temp_source": "Automatycznie użyj zewnętrznej temperatury pokojowej dla obsługiwanych TRV",
           "calibration_invert": "Odwróć offset kalibracji (dla zaworów TRV jak ME167, które odwracają znak)"
+        },
+        "data_description": {
+          "valve_maintenance": "Zapobiega zacięciu się zaworów podczas długich okresów bez ogrzewania. ThermoSmart od czasu do czasu automatycznie porusza zaworami, gdy aktywny jest tryb Lato lub Urlop.",
+          "manage_temp_source": "ThermoSmart nadal używa zewnętrznych czujników temperatury do własnej logiki sterowania. Po włączeniu ThermoSmart przełącza również obsługiwane TRV na zewnętrzne źródło temperatury i wraca do wewnętrznego czujnika TRV, gdy zewnętrzne czujniki stają się niedostępne.",
+          "calibration_invert": "Odwraca znak offsetu kalibracji dla konkretnych modeli TRV, których kierunek offsetu różni się od standardowego zachowania. Aktywuj tylko wtedy, gdy wymaga tego urządzenie."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",
           "window_close_delay": "Ogrzewanie włączone – opóźnienie po zamknięciu okna",
           "valve_maintenance": "Włącz konserwację zaworów (tylko tryb Lato / Urlop)",
+          "manage_temp_source": "Automatycznie użyj zewnętrznej temperatury pokojowej dla obsługiwanych TRV",
           "calibration_invert": "Odwróć offset kalibracji (ME167 i podobne)"
+        },
+        "data_description": {
+          "valve_maintenance": "Zapobiega zacięciu się zaworów podczas długich okresów bez ogrzewania. ThermoSmart od czasu do czasu automatycznie porusza zaworami, gdy aktywny jest tryb Lato lub Urlop.",
+          "manage_temp_source": "ThermoSmart nadal używa zewnętrznych czujników temperatury do własnej logiki sterowania. Po włączeniu ThermoSmart przełącza również obsługiwane TRV na zewnętrzne źródło temperatury i wraca do wewnętrznego czujnika TRV, gdy zewnętrzne czujniki stają się niedostępne.",
+          "calibration_invert": "Odwraca znak offsetu kalibracji dla konkretnych modeli TRV, których kierunek offsetu różni się od standardowego zachowania. Aktywuj tylko wtedy, gdy wymaga tego urządzenie."
         }
       },
       "schedule": {

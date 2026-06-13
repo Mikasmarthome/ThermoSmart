@@ -24,7 +24,13 @@
           "window_open_delay": "Topení vypnuto – prodleva po otevření okna",
           "window_close_delay": "Topení zapnuto – prodleva po zavření okna",
           "valve_maintenance": "Aktivovat údržbu ventilů (neděle 03:00 – pouze letní nebo dovolenkový režim)",
+          "manage_temp_source": "Automaticky použít externí teplotu místnosti pro podporované TRV",
           "calibration_invert": "Invertovat kalibrační offset (pro ventily TRV jako ME167, které invertují znaménko)"
+        },
+        "data_description": {
+          "valve_maintenance": "Zabraňuje zaseknutí ventilů při delších periodách bez topení. ThermoSmart příležitostně automaticky pohybuje ventily, když je aktivní letní nebo dovolenkový režim.",
+          "manage_temp_source": "ThermoSmart nadále používá externí teplotní senzory pro vlastní řídicí logiku. Po aktivaci ThermoSmart také přepne podporované TRV na jejich externí zdroj teploty a vrátí se na interní senzor TRV, pokud se externí senzory stanou nedostupnými.",
+          "calibration_invert": "Invertuje znaménko kalibračního offsetu pro konkrétní modely TRV, jejichž směr offsetu se liší od standardního chování. Aktivujte pouze v případě, že to vaše zařízení vyžaduje."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Topení vypnuto – prodleva po otevření okna",
           "window_close_delay": "Topení zapnuto – prodleva po zavření okna",
           "valve_maintenance": "Aktivovat údržbu ventilů (pouze letní / dovolenkový režim)",
+          "manage_temp_source": "Automaticky použít externí teplotu místnosti pro podporované TRV",
           "calibration_invert": "Invertovat kalibrační offset (ME167 a podobné)"
+        },
+        "data_description": {
+          "valve_maintenance": "Zabraňuje zaseknutí ventilů při delších periodách bez topení. ThermoSmart příležitostně automaticky pohybuje ventily, když je aktivní letní nebo dovolenkový režim.",
+          "manage_temp_source": "ThermoSmart nadále používá externí teplotní senzory pro vlastní řídicí logiku. Po aktivaci ThermoSmart také přepne podporované TRV na jejich externí zdroj teploty a vrátí se na interní senzor TRV, pokud se externí senzory stanou nedostupnými.",
+          "calibration_invert": "Invertuje znaménko kalibračního offsetu pro konkrétní modely TRV, jejichž směr offsetu se liší od standardního chování. Aktivujte pouze v případě, že to vaše zařízení vyžaduje."
         }
       },
       "schedule": {

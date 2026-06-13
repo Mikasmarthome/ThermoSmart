@@ -24,7 +24,13 @@
           "window_open_delay": "Calefacció apagada – retard després d'obrir la finestra",
           "window_close_delay": "Calefacció encesa – retard després de tancar la finestra",
           "valve_maintenance": "Activar manteniment de vàlvules (diumenge 03:00 – només mode Estiu o Vacances)",
+          "manage_temp_source": "Usar automàticament la temperatura ambient externa per a TRVs compatibles",
           "calibration_invert": "Invertir offset de calibratge (per a TRVs com ME167 que inverteixen el signe)"
+        },
+        "data_description": {
+          "valve_maintenance": "Evita que les vàlvules s'encallin durant períodes prolongats sense calefacció. ThermoSmart mou ocasionalment les vàlvules automàticament quan el mode Estiu o Vacances està actiu.",
+          "manage_temp_source": "ThermoSmart continua usant sensors de temperatura externs per a la seva pròpia lògica de control. Quan està activat, ThermoSmart també canvia els TRVs compatibles a la seva font de temperatura externa i torna al sensor intern del TRV si els sensors externs queden no disponibles.",
+          "calibration_invert": "Inverteix el signe de l'offset de calibratge per a models TRV específics on la direcció de l'offset difereix del comportament estàndard. Activeu-ho només si el vostre dispositiu ho requereix."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Calefacció apagada – retard després d'obrir la finestra",
           "window_close_delay": "Calefacció encesa – retard després de tancar la finestra",
           "valve_maintenance": "Activar manteniment de vàlvules (només mode Estiu / Vacances)",
+          "manage_temp_source": "Usar automàticament la temperatura ambient externa per a TRVs compatibles",
           "calibration_invert": "Invertir offset de calibratge (ME167 i similars)"
+        },
+        "data_description": {
+          "valve_maintenance": "Evita que les vàlvules s'encallin durant períodes prolongats sense calefacció. ThermoSmart mou ocasionalment les vàlvules automàticament quan el mode Estiu o Vacances està actiu.",
+          "manage_temp_source": "ThermoSmart continua usant sensors de temperatura externs per a la seva pròpia lògica de control. Quan està activat, ThermoSmart també canvia els TRVs compatibles a la seva font de temperatura externa i torna al sensor intern del TRV si els sensors externs queden no disponibles.",
+          "calibration_invert": "Inverteix el signe de l'offset de calibratge per a models TRV específics on la direcció de l'offset difereix del comportament estàndard. Activeu-ho només si el vostre dispositiu ho requereix."
         }
       },
       "schedule": {

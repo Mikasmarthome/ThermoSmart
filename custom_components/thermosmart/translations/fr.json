@@ -24,7 +24,13 @@
           "window_open_delay": "Chauffage arrêté – délai après ouverture de fenêtre",
           "window_close_delay": "Chauffage allumé – délai après fermeture de fenêtre",
           "valve_maintenance": "Activer la maintenance des vannes (dimanche 03h00 – mode Été ou Vacances uniquement)",
+          "manage_temp_source": "Utiliser automatiquement la température ambiante externe pour les TRV compatibles",
           "calibration_invert": "Inverser le décalage de calibration (pour les TRV comme ME167 qui inversent le signe)"
+        },
+        "data_description": {
+          "valve_maintenance": "Évite le grippage des vannes pendant les longues périodes sans chauffage. ThermoSmart déplace occasionnellement les vannes automatiquement lorsque le mode Été ou Vacances est actif.",
+          "manage_temp_source": "ThermoSmart continue d'utiliser les capteurs de température externes pour sa propre logique de contrôle. Lorsqu'elle est activée, ThermoSmart bascule également les TRV compatibles vers leur source de température externe et revient au capteur interne du TRV si les capteurs externes deviennent indisponibles.",
+          "calibration_invert": "Inverse le signe du décalage de calibration pour certains modèles de TRV dont la direction du décalage diffère du comportement standard. N'activez ceci que si votre appareil le requiert."
         }
       },
       "schedule": {
@@ -110,7 +116,13 @@
           "window_open_delay": "Chauffage arrêté – délai après ouverture de fenêtre",
           "window_close_delay": "Chauffage allumé – délai après fermeture de fenêtre",
           "valve_maintenance": "Activer la maintenance des vannes (mode Été / Vacances uniquement)",
+          "manage_temp_source": "Utiliser automatiquement la température ambiante externe pour les TRV compatibles",
           "calibration_invert": "Inverser le décalage de calibration (ME167 et similaires)"
+        },
+        "data_description": {
+          "valve_maintenance": "Évite le grippage des vannes pendant les longues périodes sans chauffage. ThermoSmart déplace occasionnellement les vannes automatiquement lorsque le mode Été ou Vacances est actif.",
+          "manage_temp_source": "ThermoSmart continue d'utiliser les capteurs de température externes pour sa propre logique de contrôle. Lorsqu'elle est activée, ThermoSmart bascule également les TRV compatibles vers leur source de température externe et revient au capteur interne du TRV si les capteurs externes deviennent indisponibles.",
+          "calibration_invert": "Inverse le signe du décalage de calibration pour certains modèles de TRV dont la direction du décalage diffère du comportement standard. N'activez ceci que si votre appareil le requiert."
         }
       },
       "schedule": {

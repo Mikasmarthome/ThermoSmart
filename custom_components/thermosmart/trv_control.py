@@ -473,6 +473,7 @@ class TRVControlMixin:
         if target is None:
             if recommendation.get("window_open"):
                 tasks = []
+                effective_frost = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
                 for entity_id in cfg.get("climate_entities", []):
                     state = self._get_trv_state(entity_id)
                     if state is None:
@@ -497,6 +498,7 @@ class TRVControlMixin:
                             self.zone_name, entity_id, frost_temp, _wp.minimum_setpoint,
                         )
                         frost_temp = _wp.minimum_setpoint
+                    effective_frost = frost_temp  # track clamped value for sensor display
                     try:
                         if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
                             continue
@@ -510,6 +512,10 @@ class TRVControlMixin:
                     ))
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
+                # Immediately reflect the written frost temp in the sensor display.
+                # Without this, the display fallback (which runs before _apply_temperature)
+                # would show the stale pre-window-open setpoint for one full cycle.
+                recommendation["trv_setpoint"] = effective_frost
             return
 
         if not (5.0 <= target <= 30.0):

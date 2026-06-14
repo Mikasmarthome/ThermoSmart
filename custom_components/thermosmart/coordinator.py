@@ -5,9 +5,11 @@ import logging
 from collections import deque
 from datetime import datetime, timedelta
 
+from collections.abc import Callable
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_state_change_event
+from homeassistant.helpers.event import async_call_later, async_track_state_change_event
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
@@ -104,6 +106,8 @@ class ThermoSmartCoordinator(
         self._window_open_at: dict[str, datetime] = {}
         self._window_close_at: dict[str, datetime] = {}
         self._window_open_temp: dict[str, float] = {}
+        # Cancel functions for scheduled delay-expiry refreshes (one slot per sensor)
+        self._window_delay_cancel: dict[str, Callable[[], None]] = {}
 
         # Boost-Tracking (genutzt von TRVControlMixin)
         self._boost_active: dict[str, dict] = {}
@@ -330,11 +334,31 @@ class ThermoSmartCoordinator(
                 if entity_id in window_sensors:
                     if new.state == "on":
                         self._window_open_at[entity_id] = now
+                        # Cancel any pending timer (leftover close-delay or open-delay)
+                        _cancel = self._window_delay_cancel.pop(entity_id, None)
+                        if _cancel is not None:
+                            _cancel()
                         self._window_close_at.pop(entity_id, None)
                         current = self._read_avg_sensor(cfg.get("temp_sensors", []))
                         if current is not None:
                             self._window_open_temp[entity_id] = current
+                        # Schedule a coordinator refresh exactly when the open delay expires
+                        # so window-open mode activates at the configured time, not at the
+                        # next regular 5-minute coordinator cycle.
+                        open_delay_secs = cfg.get("window_open_delay", 5) * 60
+
+                        @callback
+                        def _open_delay_expired(_now, _eid=entity_id):
+                            self.hass.async_create_task(self.async_request_refresh())
+
+                        self._window_delay_cancel[entity_id] = async_call_later(
+                            self.hass, open_delay_secs, _open_delay_expired
+                        )
                     else:
+                        # Cancel any pending open-delay timer (sensor closed before delay elapsed)
+                        _cancel = self._window_delay_cancel.pop(entity_id, None)
+                        if _cancel is not None:
+                            _cancel()
                         if entity_id in self._window_open_at:
                             opened_at = self._window_open_at[entity_id]
                             open_delay_td = timedelta(minutes=cfg.get("window_open_delay", 5))
@@ -344,6 +368,17 @@ class ThermoSmartCoordinator(
                             # eine Heizpause noch ein close_delay ausgelöst werden.
                             if (now - opened_at) >= open_delay_td:
                                 self._window_close_at[entity_id] = now
+                                # Schedule refresh when close delay expires so the TRV
+                                # returns to normal at the configured time, not the next cycle.
+                                close_delay_secs = cfg.get("window_close_delay", 2) * 60
+
+                                @callback
+                                def _close_delay_expired(_now, _eid=entity_id):
+                                    self.hass.async_create_task(self.async_request_refresh())
+
+                                self._window_delay_cancel[entity_id] = async_call_later(
+                                    self.hass, close_delay_secs, _close_delay_expired
+                                )
 
                             duration_min = (now - opened_at).total_seconds() / 60
                             temp_at_open = self._window_open_temp.pop(entity_id, None)
@@ -382,6 +417,11 @@ class ThermoSmartCoordinator(
                         self._live_temp = trv_t
                         self.async_update_listeners()
                 if not self._active_control:
+                    return
+                # During window-open, the TRV may echo its previous setpoint before
+                # confirming the frost temp — suppress manual-change detection to
+                # prevent ping-pong between frost temp and normal setpoint.
+                if (self.data or {}).get("zone", {}).get("window_open", False):
                     return
                 entity_id = event.data["entity_id"]
                 new_setpoint = new.attributes.get("temperature")
@@ -438,6 +478,9 @@ class ThermoSmartCoordinator(
         for cancel in self._event_unsub:
             cancel()
         self._event_unsub.clear()
+        for cancel in self._window_delay_cancel.values():
+            cancel()
+        self._window_delay_cancel.clear()
 
     # ── Hauptschleife ────────────────────────────────────────────────
 

@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "Gece sıcaklığı (uyku sırasında azaltma)",
           "away_temp": "Uzakta sıcaklığı (herkes gittiğinde otomatik)",
           "vacation_temp": "Tatil sıcaklığı (don koruması)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco sıcaklığı (enerji tasarrufu, gece ile konfor arası)",
           "temp_tolerance": "Sıcaklık toleransı – TRV'yi yalnızca bu sapmanın ardından kontrol et",
           "schedule_enabled": "Zaman programını etkinleştir",
@@ -56,6 +57,7 @@
           "sched_we_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
           "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
           "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Gece sıcaklığı",
           "away_temp": "Uzakta sıcaklığı",
           "vacation_temp": "Tatil sıcaklığı",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco sıcaklığı",
           "temp_tolerance": "Sıcaklık toleransı",
           "schedule_enabled": "Zaman programını etkinleştir",
@@ -148,6 +151,7 @@
           "sched_we_morning": "Konfor sıcaklığına bu saatte ulaşılmalıdır – ThermoSmart önceden otomatik olarak ön ısıtma yapar",
           "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
           "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
         }

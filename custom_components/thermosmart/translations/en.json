@@ -41,6 +41,7 @@
           "night_temp": "Night temperature (setback during sleep)",
           "away_temp": "Away temperature (automatically when everyone is gone)",
           "vacation_temp": "Vacation temperature (frost protection)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco temperature (energy saving, between night and comfort)",
           "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
           "schedule_enabled": "Enable time schedule",
@@ -56,6 +57,7 @@
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_we_night": "Night temperature applies from this time",
           "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
           "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Night temperature",
           "away_temp": "Away temperature",
           "vacation_temp": "Vacation temperature",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco temperature",
           "temp_tolerance": "Temperature tolerance",
           "schedule_enabled": "Enable time schedule",
@@ -148,6 +151,7 @@
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_we_night": "Night temperature applies from this time",
           "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
           "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
         }

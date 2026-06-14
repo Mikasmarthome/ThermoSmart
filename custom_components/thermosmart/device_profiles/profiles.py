@@ -66,8 +66,11 @@ EVE_THERMO = DeviceProfile(
     allow_external_temp_input=False,
     allow_temp_source_select=False,
     calibration_sync=False,
+    minimum_setpoint=7.0,
     # Valve position is exposed via HomeKit as a read-only sensor.
     # ThermoSmart reads it for learning; direct writes are not possible.
+    # minimum_setpoint matches the HomeKit-reported min_temp for Eve Thermo devices.
+    # Guards against protocol stacks (e.g. some Matter bridges) that omit min_temp.
 )
 
 # Alias — same profile, both names accepted in code.

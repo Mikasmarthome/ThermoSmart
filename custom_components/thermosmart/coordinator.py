@@ -547,6 +547,28 @@ class ThermoSmartCoordinator(
                 recommendation["tpi_coef_ext"] = round(coef_ext, 4)
                 recommendation["tpi_valve_direct"] = has_valve
 
+            # Display fallback: when no active heating target exists (summer, window-open,
+            # away with adjusted_target=None), populate trv_setpoint for sensor display so
+            # the sensor does not show Unknown after restart. Does not affect control logic,
+            # TPI, learning, or boost tracking.
+            if "trv_setpoint" not in recommendation:
+                for _eid in cfg.get("climate_entities", []):
+                    _last = self._last_written_setpoints.get(_eid)
+                    if _last is not None:
+                        recommendation["trv_setpoint"] = _last
+                        break
+                if "trv_setpoint" not in recommendation:
+                    for _eid in cfg.get("climate_entities", []):
+                        _st = self.hass.states.get(_eid)
+                        if _st is not None:
+                            try:
+                                _t = float(_st.attributes.get("temperature", 0))
+                                if _t > 0:
+                                    recommendation["trv_setpoint"] = _t
+                                    break
+                            except (TypeError, ValueError):
+                                pass
+
             # Nach trv_setpoint-Berechnung: Heizungsausfall-Erkennung
             self._check_heating_failure(recommendation)
 

@@ -41,8 +41,8 @@
           "night_temp": "Temperatură de noapte (reducere în timpul somnului)",
           "away_temp": "Temperatură de absență (automat când toți au plecat)",
           "vacation_temp": "Temperatură de vacanță (protecție la îngheț)",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Temperatură Eco (economie de energie, între noapte și confort)",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Toleranță temperatură – controlați TRV-ul doar după această abatere",
           "schedule_enabled": "Activare program orar",
           "sched_wd_morning": "Zi lucrătoare: Confort de la",
@@ -57,8 +57,8 @@
           "sched_we_morning": "Temperatura de confort trebuie atinsă până la această oră – ThermoSmart preîncălzește automat în avans",
           "sched_we_night": "Temperatura de noapte se aplică de la această oră",
           "away_temp": "Aplicată automat doar când detectarea prezenței este configurată (Pasul 3). Poate fi setată și manual prin selectorul de mod.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Folosită când selectorul de mod este setat manual pe 'Eco'. Nu se activează automat.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart ajustează TRV-ul doar când temperatura se abate mai mult decât această valoare. 0,5 °C funcționează bine pentru majoritatea camerelor. Mai mic = mai reactiv, mai mare = mai puține ajustări."
         }
       },
@@ -135,8 +135,8 @@
           "night_temp": "Temperatură de noapte",
           "away_temp": "Temperatură de absență",
           "vacation_temp": "Temperatură de vacanță",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Temperatură Eco",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Toleranță temperatură",
           "schedule_enabled": "Activare program orar",
           "sched_wd_morning": "Zi lucrătoare: Confort de la",
@@ -151,8 +151,8 @@
           "sched_we_morning": "Temperatura de confort trebuie atinsă până la această oră – ThermoSmart preîncălzește automat în avans",
           "sched_we_night": "Temperatura de noapte se aplică de la această oră",
           "away_temp": "Aplicată automat doar când detectarea prezenței este configurată (Pasul 3). Poate fi setată și manual prin selectorul de mod.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Folosită când selectorul de mod este setat manual pe 'Eco'. Nu se activează automat.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart ajustează TRV-ul doar când temperatura se abate mai mult decât această valoare. 0,5 °C funcționează bine pentru majoritatea camerelor. Mai mic = mai reactiv, mai mare = mai puține ajustări."
         }
       },

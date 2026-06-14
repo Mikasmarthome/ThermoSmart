@@ -43,7 +43,7 @@
           "vacation_temp": "Vacation temperature (frost protection)",
           "eco_temp": "Eco temperature (energy saving, between night and comfort)",
           "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
+          "temp_tolerance": "Temperature tolerance – setpoint write threshold",
           "schedule_enabled": "Enable time schedule",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",
@@ -59,7 +59,7 @@
           "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
           "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
+          "temp_tolerance": "Minimum change in the calculated TRV setpoint before ThermoSmart sends a new update. This reduces unnecessary writes to the thermostat. 0.5 °C works well for most rooms."
         }
       },
       "presence": {
@@ -153,7 +153,7 @@
           "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
           "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
+          "temp_tolerance": "Minimum change in the calculated TRV setpoint before ThermoSmart sends a new update. This reduces unnecessary writes to the thermostat. 0.5 °C works well for most rooms."
         }
       },
       "presence": {

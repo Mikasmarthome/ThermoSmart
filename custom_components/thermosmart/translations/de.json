@@ -43,7 +43,7 @@
           "vacation_temp": "Urlaubstemperatur (Frostschutz)",
           "eco_temp": "Eco-Temperatur (energiesparend, zwischen Nacht und Komfort)",
           "window_open_temp": "Fenster-offen-Temperatur",
-          "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
+          "temp_tolerance": "Temperaturtoleranz – Schreib-Schwelle für TRV-Sollwert",
           "schedule_enabled": "Zeitplan aktivieren",
           "sched_wd_morning": "Werktag: Komfort ab",
           "sched_wd_night": "Werktag: Nacht ab",
@@ -59,7 +59,7 @@
           "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
           "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
           "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
-          "temp_tolerance": "ThermoSmart steuert den TRV erst an wenn die Temperatur um mehr als diesen Wert abweicht. 0,5 °C funktioniert gut für die meisten Räume. Kleiner = reaktiver, größer = weniger Anpassungen."
+          "temp_tolerance": "Mindeständerung des berechneten TRV-Sollwerts, bevor ThermoSmart einen neuen Wert an das Thermostat sendet. Reduziert unnötige Schreibvorgänge. 0,5 °C funktioniert gut für die meisten Räume."
         }
       },
       "presence": {
@@ -153,7 +153,7 @@
           "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
           "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
           "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
-          "temp_tolerance": "ThermoSmart steuert den TRV erst an wenn die Temperatur um mehr als diesen Wert abweicht. 0,5 °C funktioniert gut für die meisten Räume. Kleiner = reaktiver, größer = weniger Anpassungen."
+          "temp_tolerance": "Mindeständerung des berechneten TRV-Sollwerts, bevor ThermoSmart einen neuen Wert an das Thermostat sendet. Reduziert unnötige Schreibvorgänge. 0,5 °C funktioniert gut für die meisten Räume."
         }
       },
       "presence": {

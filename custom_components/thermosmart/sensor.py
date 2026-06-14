@@ -331,21 +331,23 @@ class ThermoSmartHeatingPowerSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return "learning"
+            return None
         stats = le.get_stats(self.coordinator.zone_id)
-        val = stats.get("avg_heat_rate_per_min")
-        return val if val is not None else "learning"
+        return stats.get("avg_heat_rate_per_min")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         le = self.coordinator.learning_engine
         if le is None:
-            return {}
+            return {"data_status": "learning"}
         stats = le.get_stats(self.coordinator.zone_id)
-        return {
+        attrs: dict[str, Any] = {
             "measurements": stats.get("with_heat_rate", 0),
             "boost_factor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
         }
+        if stats.get("avg_heat_rate_per_min") is None:
+            attrs["data_status"] = "learning"
+        return attrs
 
 
 class ThermoSmartTpiSensor(_Base):
@@ -405,26 +407,28 @@ class ThermoSmartHeatLossRateSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return "learning"
-        val = le.get_heat_loss_rate(self.coordinator.zone_id)
-        return val if val is not None else "learning"
+            return None
+        return le.get_heat_loss_rate(self.coordinator.zone_id)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         le = self.coordinator.learning_engine
         if le is None:
-            return {}
+            return {"data_status": "learning"}
         zone_id = self.coordinator.zone_id
         rate = le.get_heat_loss_rate(zone_id)
         rate_per_h = round(rate * 60, 3) if rate else None
         obs_count = sum(
             1 for o in le._observations.get(zone_id, []) if o.get("cool_rate")
         )
-        return {
+        attrs: dict[str, Any] = {
             "rate_per_hour_K": rate_per_h,
             "ema_active": zone_id in le._heat_loss_ema,
             "measurements": obs_count,
         }
+        if rate is None:
+            attrs["data_status"] = "learning"
+        return attrs
 
 
 class ThermoSmartSunIntensitySensor(_Base):
@@ -483,17 +487,20 @@ class ThermoSmartOutcomeScoreSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return "learning"
+            return None
         stats = le.get_outcome_stats(self.coordinator.zone_id)
-        val = stats.get("avg_score_%")
-        return val if val is not None else "learning"
+        return stats.get("avg_score_%")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         le = self.coordinator.learning_engine
         if le is None:
-            return {}
-        return le.get_outcome_stats(self.coordinator.zone_id)
+            return {"data_status": "learning"}
+        stats = le.get_outcome_stats(self.coordinator.zone_id)
+        attrs = dict(stats)
+        if stats.get("avg_score_%") is None:
+            attrs["data_status"] = "learning"
+        return attrs
 
 
 class ThermoSmartTRVObservationsSensor(_Base):
@@ -571,16 +578,21 @@ class ThermoSmartWindowCoolingRateSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return "learning"
+            return None
         data = self.coordinator.data or {}
         weather = data.get("weather", {})
-        val = le.get_window_cooling_rate(self.coordinator.zone_id, weather)
-        return val if val is not None else "learning"
+        return le.get_window_cooling_rate(self.coordinator.zone_id, weather)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         le = self.coordinator.learning_engine
         if le is None:
-            return {}
+            return {"data_status": "learning"}
+        data = self.coordinator.data or {}
+        weather = data.get("weather", {})
+        val = le.get_window_cooling_rate(self.coordinator.zone_id, weather)
         stats = le.get_trv_stats(self.coordinator.zone_id)
-        return {"window_events": stats.get("window_observations", 0)}
+        attrs: dict[str, Any] = {"window_events": stats.get("window_observations", 0)}
+        if val is None:
+            attrs["data_status"] = "learning"
+        return attrs

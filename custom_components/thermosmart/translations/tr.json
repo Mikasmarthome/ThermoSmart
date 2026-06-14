@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Hedef sıcaklık" },
       "trv_setpoint": { "name": "TRV ayar noktası" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Sonuç puanı" },
+      "outcome_score": {
+        "name": "Sonuç puanı",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
       "preheat_minutes": { "name": "Ön ısıtma süresi" },
       "confidence": { "name": "Öğrenme ilerlemesi" },
       "weather_offset": { "name": "Hava durumu düzeltmesi" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Sıcaklık eğimi" },
       "temp_ema_1h": { "name": "Sıcaklık EMA 1s" },
-      "heat_loss": { "name": "Isı kaybı" },
-      "heating_power": { "name": "Isıtma gücü" },
+      "heat_loss": {
+        "name": "Isı kaybı",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
+      "heating_power": {
+        "name": "Isıtma gücü",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
       "sun_intensity": { "name": "Güneş ısı kazancı" },
-      "window_cooling_rate": { "name": "Pencereden soğuma hızı" },
+      "window_cooling_rate": {
+        "name": "Pencereden soğuma hızı",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
       "trv_observations": { "name": "TRV gözlemleri" }
     }
   }

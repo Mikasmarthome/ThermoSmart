@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Célhőmérséklet" },
       "trv_setpoint": { "name": "TRV beállítási pont" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Eredménypontszám" },
+      "outcome_score": {
+        "name": "Eredménypontszám",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
       "preheat_minutes": { "name": "Előmelegítési idő" },
       "confidence": { "name": "Tanulási előrehaladás" },
       "weather_offset": { "name": "Időjárás-korrekció" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Hőmérséklet meredeksége" },
       "temp_ema_1h": { "name": "Hőmérséklet EMA 1h" },
-      "heat_loss": { "name": "Hőveszteség" },
-      "heating_power": { "name": "Fűtési teljesítmény" },
+      "heat_loss": {
+        "name": "Hőveszteség",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
+      "heating_power": {
+        "name": "Fűtési teljesítmény",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
       "sun_intensity": { "name": "Napenergia-nyereség" },
-      "window_cooling_rate": { "name": "Ablakon keresztüli hűtési sebesség" },
+      "window_cooling_rate": {
+        "name": "Ablakon keresztüli hűtési sebesség",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
       "trv_observations": { "name": "TRV-megfigyelések" }
     }
   }

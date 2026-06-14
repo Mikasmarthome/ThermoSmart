@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Måltemperatur" },
       "trv_setpoint": { "name": "TRV-indstillingspunkt" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Resultatscore" },
+      "outcome_score": {
+        "name": "Resultatscore",
+        "state": {
+          "learning": "Lærer"
+        }
+      },
       "preheat_minutes": { "name": "Forvarmingstid" },
       "confidence": { "name": "Læringsfremdrift" },
       "weather_offset": { "name": "Vejrkorrigering" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Temperaturhældning" },
       "temp_ema_1h": { "name": "Temperatur EMA 1h" },
-      "heat_loss": { "name": "Varmetab" },
-      "heating_power": { "name": "Varmeeffekt" },
+      "heat_loss": {
+        "name": "Varmetab",
+        "state": {
+          "learning": "Lærer"
+        }
+      },
+      "heating_power": {
+        "name": "Varmeeffekt",
+        "state": {
+          "learning": "Lærer"
+        }
+      },
       "sun_intensity": { "name": "Solvarmeindvinding" },
-      "window_cooling_rate": { "name": "Vinduesafkølingshastighed" },
+      "window_cooling_rate": {
+        "name": "Vinduesafkølingshastighed",
+        "state": {
+          "learning": "Lærer"
+        }
+      },
       "trv_observations": { "name": "TRV-observationer" }
     }
   }

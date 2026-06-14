@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Цільова температура" },
       "trv_setpoint": { "name": "Уставка TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Оцінка результату" },
+      "outcome_score": {
+        "name": "Оцінка результату",
+        "state": {
+          "learning": "Навчання"
+        }
+      },
       "preheat_minutes": { "name": "Час попереднього нагріву" },
       "confidence": { "name": "Прогрес навчання" },
       "weather_offset": { "name": "Поправка на погоду" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Нахил температури" },
       "temp_ema_1h": { "name": "Температура EMA 1год" },
-      "heat_loss": { "name": "Тепловтрати" },
-      "heating_power": { "name": "Потужність опалення" },
+      "heat_loss": {
+        "name": "Тепловтрати",
+        "state": {
+          "learning": "Навчання"
+        }
+      },
+      "heating_power": {
+        "name": "Потужність опалення",
+        "state": {
+          "learning": "Навчання"
+        }
+      },
       "sun_intensity": { "name": "Сонячне теплове надходження" },
-      "window_cooling_rate": { "name": "Швидкість охолодження через вікно" },
+      "window_cooling_rate": {
+        "name": "Швидкість охолодження через вікно",
+        "state": {
+          "learning": "Навчання"
+        }
+      },
       "trv_observations": { "name": "Спостереження TRV" }
     }
   }

@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Целевая температура" },
       "trv_setpoint": { "name": "Уставка TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Оценка результата" },
+      "outcome_score": {
+        "name": "Оценка результата",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
       "preheat_minutes": { "name": "Время предварительного нагрева" },
       "confidence": { "name": "Прогресс обучения" },
       "weather_offset": { "name": "Поправка на погоду" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Наклон температуры" },
       "temp_ema_1h": { "name": "Температура EMA 1ч" },
-      "heat_loss": { "name": "Теплопотери" },
-      "heating_power": { "name": "Мощность отопления" },
+      "heat_loss": {
+        "name": "Теплопотери",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
+      "heating_power": {
+        "name": "Мощность отопления",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
       "sun_intensity": { "name": "Солнечный тепловой прирост" },
-      "window_cooling_rate": { "name": "Скорость охлаждения через окно" },
+      "window_cooling_rate": {
+        "name": "Скорость охлаждения через окно",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
       "trv_observations": { "name": "Наблюдения TRV" }
     }
   }

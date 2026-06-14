@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Θερμοκρασία στόχου" },
       "trv_setpoint": { "name": "Σημείο ρύθμισης TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Βαθμολογία αποτελέσματος" },
+      "outcome_score": {
+        "name": "Βαθμολογία αποτελέσματος",
+        "state": {
+          "learning": "Εκπαίδευση"
+        }
+      },
       "preheat_minutes": { "name": "Χρόνος προθέρμανσης" },
       "confidence": { "name": "Πρόοδος εκμάθησης" },
       "weather_offset": { "name": "Διόρθωση καιρού" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Κλίση θερμοκρασίας" },
       "temp_ema_1h": { "name": "Θερμοκρασία EMA 1h" },
-      "heat_loss": { "name": "Απώλεια θερμότητας" },
-      "heating_power": { "name": "Ισχύς θέρμανσης" },
+      "heat_loss": {
+        "name": "Απώλεια θερμότητας",
+        "state": {
+          "learning": "Εκπαίδευση"
+        }
+      },
+      "heating_power": {
+        "name": "Ισχύς θέρμανσης",
+        "state": {
+          "learning": "Εκπαίδευση"
+        }
+      },
       "sun_intensity": { "name": "Ηλιακό θερμικό κέρδος" },
-      "window_cooling_rate": { "name": "Ρυθμός ψύξης παραθύρου" },
+      "window_cooling_rate": {
+        "name": "Ρυθμός ψύξης παραθύρου",
+        "state": {
+          "learning": "Εκπαίδευση"
+        }
+      },
       "trv_observations": { "name": "Παρατηρήσεις TRV" }
     }
   }

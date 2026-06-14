@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Temperatură țintă" },
       "trv_setpoint": { "name": "Punct de reglaj TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Scor de rezultat" },
+      "outcome_score": {
+        "name": "Scor de rezultat",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
       "preheat_minutes": { "name": "Timp de preîncălzire" },
       "confidence": { "name": "Progres de învățare" },
       "weather_offset": { "name": "Corecție meteo" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Pantă temperatură" },
       "temp_ema_1h": { "name": "Temperatură EMA 1h" },
-      "heat_loss": { "name": "Pierdere de căldură" },
-      "heating_power": { "name": "Putere de încălzire" },
+      "heat_loss": {
+        "name": "Pierdere de căldură",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
+      "heating_power": {
+        "name": "Putere de încălzire",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
       "sun_intensity": { "name": "Câștig termic solar" },
-      "window_cooling_rate": { "name": "Rată de răcire ferestră" },
+      "window_cooling_rate": {
+        "name": "Rată de răcire ferestră",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
       "trv_observations": { "name": "Observații TRV" }
     }
   }

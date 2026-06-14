@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Целева температура" },
       "trv_setpoint": { "name": "Зададена стойност TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Оценка на резултата" },
+      "outcome_score": {
+        "name": "Оценка на резултата",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
       "preheat_minutes": { "name": "Време за предварително загряване" },
       "confidence": { "name": "Напредък на обучението" },
       "weather_offset": { "name": "Корекция за времето" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Наклон на температурата" },
       "temp_ema_1h": { "name": "Температура EMA 1h" },
-      "heat_loss": { "name": "Топлинни загуби" },
-      "heating_power": { "name": "Мощност на отопление" },
+      "heat_loss": {
+        "name": "Топлинни загуби",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
+      "heating_power": {
+        "name": "Мощност на отопление",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
       "sun_intensity": { "name": "Слънчева топлинна печалба" },
-      "window_cooling_rate": { "name": "Скорост на охлаждане от прозорец" },
+      "window_cooling_rate": {
+        "name": "Скорост на охлаждане от прозорец",
+        "state": {
+          "learning": "Обучение"
+        }
+      },
       "trv_observations": { "name": "Наблюдения TRV" }
     }
   }

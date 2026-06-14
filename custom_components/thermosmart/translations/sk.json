@@ -41,8 +41,8 @@
           "night_temp": "Nočná teplota (zníženie počas spánku)",
           "away_temp": "Teplota neprítomnosti (automaticky keď všetci odišli)",
           "vacation_temp": "Dovolenkový teplota (ochrana pred mrazom)",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco teplota (úspora energie, medzi nočnou a komfortnou)",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Teplotná tolerancia – ovládajte TRV až po tejto odchýlke",
           "schedule_enabled": "Aktivovať časový plán",
           "sched_wd_morning": "Pracovný deň: Komfort od",
@@ -57,8 +57,8 @@
           "sched_we_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
           "sched_we_night": "Nočná teplota platí od tohto času",
           "away_temp": "Použije sa automaticky len pri nakonfigurovanom rozpoznávaní prítomnosti (Krok 3). Možno nastaviť aj ručne prostredníctvom výberu režimu.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Použije sa, keď je výber režimu ručne nastavený na 'Eco'. Neaktivuje sa automaticky.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart nastavuje TRV len vtedy, keď sa teplota odchýli o viac ako túto hodnotu. 0,5 °C funguje dobre pre väčšinu miestností. Nižší = reaktívnejší, vyšší = menej nastavení."
         }
       },
@@ -135,8 +135,8 @@
           "night_temp": "Nočná teplota",
           "away_temp": "Teplota neprítomnosti",
           "vacation_temp": "Dovolenkový teplota",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco teplota",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Teplotná tolerancia",
           "schedule_enabled": "Aktivovať časový plán",
           "sched_wd_morning": "Pracovný deň: Komfort od",
@@ -151,8 +151,8 @@
           "sched_we_morning": "Komfortná teplota musí byť dosiahnutá do tohto času – ThermoSmart vopred automaticky predohrieva",
           "sched_we_night": "Nočná teplota platí od tohto času",
           "away_temp": "Použije sa automaticky len pri nakonfigurovanom rozpoznávaní prítomnosti (Krok 3). Možno nastaviť aj ručne prostredníctvom výberu režimu.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Použije sa, keď je výber režimu ručne nastavený na 'Eco'. Neaktivuje sa automaticky.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart nastavuje TRV len vtedy, keď sa teplota odchýli o viac ako túto hodnotu. 0,5 °C funguje dobre pre väčšinu miestností. Nižší = reaktívnejší, vyšší = menej nastavení."
         }
       },

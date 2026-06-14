@@ -41,8 +41,8 @@
           "night_temp": "Νυχτερινή θερμοκρασία (μείωση κατά τον ύπνο)",
           "away_temp": "Θερμοκρασία απουσίας (αυτόματα όταν έχουν φύγει όλοι)",
           "vacation_temp": "Θερμοκρασία διακοπών (προστασία από παγετό)",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Θερμοκρασία Eco (εξοικονόμηση ενέργειας, μεταξύ νυχτερινής και άνεσης)",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Ανοχή θερμοκρασίας – έλεγχος TRV μόνο μετά από αυτή την απόκλιση",
           "schedule_enabled": "Ενεργοποίηση χρονοδιαγράμματος",
           "sched_wd_morning": "Καθημερινή: Άνεση από",
@@ -57,8 +57,8 @@
           "sched_we_morning": "Η θερμοκρασία άνεσης πρέπει να επιτευχθεί έως αυτή την ώρα – το ThermoSmart προθερμαίνει αυτόματα εκ των προτέρων",
           "sched_we_night": "Η νυχτερινή θερμοκρασία ισχύει από αυτή την ώρα",
           "away_temp": "Εφαρμόζεται αυτόματα μόνο όταν έχει διαμορφωθεί η ανίχνευση παρουσίας (Βήμα 3). Μπορεί επίσης να οριστεί χειροκίνητα μέσω του επιλογέα λειτουργίας.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Χρησιμοποιείται όταν ο επιλογέας λειτουργίας ρυθμίζεται χειροκίνητα σε 'Eco'. Δεν ενεργοποιείται αυτόματα.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "Το ThermoSmart ρυθμίζει την TRV μόνο όταν η θερμοκρασία αποκλίνει περισσότερο από αυτή την τιμή. 0,5 °C λειτουργεί καλά για τα περισσότερα δωμάτια. Χαμηλότερη = πιο αντιδραστική, υψηλότερη = λιγότερες ρυθμίσεις."
         }
       },
@@ -135,8 +135,8 @@
           "night_temp": "Νυχτερινή θερμοκρασία",
           "away_temp": "Θερμοκρασία απουσίας",
           "vacation_temp": "Θερμοκρασία διακοπών",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Θερμοκρασία Eco",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Ανοχή θερμοκρασίας",
           "schedule_enabled": "Ενεργοποίηση χρονοδιαγράμματος",
           "sched_wd_morning": "Καθημερινή: Άνεση από",
@@ -151,8 +151,8 @@
           "sched_we_morning": "Η θερμοκρασία άνεσης πρέπει να επιτευχθεί έως αυτή την ώρα – το ThermoSmart προθερμαίνει αυτόματα εκ των προτέρων",
           "sched_we_night": "Η νυχτερινή θερμοκρασία ισχύει από αυτή την ώρα",
           "away_temp": "Εφαρμόζεται αυτόματα μόνο όταν έχει διαμορφωθεί η ανίχνευση παρουσίας (Βήμα 3). Μπορεί επίσης να οριστεί χειροκίνητα μέσω του επιλογέα λειτουργίας.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Χρησιμοποιείται όταν ο επιλογέας λειτουργίας ρυθμίζεται χειροκίνητα σε 'Eco'. Δεν ενεργοποιείται αυτόματα.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "Το ThermoSmart ρυθμίζει την TRV μόνο όταν η θερμοκρασία αποκλίνει περισσότερο από αυτή την τιμή. 0,5 °C λειτουργεί καλά για τα περισσότερα δωμάτια. Χαμηλότερη = πιο αντιδραστική, υψηλότερη = λιγότερες ρυθμίσεις."
         }
       },

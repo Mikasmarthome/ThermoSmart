@@ -41,8 +41,8 @@
           "night_temp": "Nachttemperatuur (verlaging tijdens slaap)",
           "away_temp": "Afwezigheidstemperatuur (automatisch als iedereen weg is)",
           "vacation_temp": "Vakantietemperatuur (vorstbeveiliging)",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco-temperatuur (energiezuinig, tussen nacht en comfort)",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Temperatuurtolerantie – TRV pas aansturen bij deze afwijking",
           "schedule_enabled": "Tijdschema inschakelen",
           "sched_wd_morning": "Werkdag: Comfort vanaf",
@@ -57,8 +57,8 @@
           "sched_we_morning": "De comforttemperatuur moet op dit tijdstip bereikt zijn – ThermoSmart verwarmt automatisch eerder voor",
           "sched_we_night": "Vanaf dit tijdstip geldt de nachttemperatuur",
           "away_temp": "Wordt automatisch toegepast alleen als aanwezigheidsdetectie is geconfigureerd (Stap 3). Kan ook handmatig worden ingesteld via de modusselectie.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Wordt gebruikt wanneer de modusselectie handmatig op 'Eco' wordt gezet. Wordt niet automatisch geactiveerd.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart past de TRV alleen aan wanneer de temperatuur meer afwijkt dan deze waarde. 0,5 °C werkt goed voor de meeste kamers. Lager = reactiever, hoger = minder aanpassingen."
         }
       },
@@ -135,8 +135,8 @@
           "night_temp": "Nachttemperatuur",
           "away_temp": "Afwezigheidstemperatuur",
           "vacation_temp": "Vakantietemperatuur",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco-temperatuur",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Temperatuurtolerantie",
           "schedule_enabled": "Tijdschema inschakelen",
           "sched_wd_morning": "Werkdag: Comfort vanaf",
@@ -151,8 +151,8 @@
           "sched_we_morning": "De comforttemperatuur moet op dit tijdstip bereikt zijn – ThermoSmart verwarmt automatisch eerder voor",
           "sched_we_night": "Vanaf dit tijdstip geldt de nachttemperatuur",
           "away_temp": "Wordt automatisch toegepast alleen als aanwezigheidsdetectie is geconfigureerd (Stap 3). Kan ook handmatig worden ingesteld via de modusselectie.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Wordt gebruikt wanneer de modusselectie handmatig op 'Eco' wordt gezet. Wordt niet automatisch geactiveerd.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart past de TRV alleen aan wanneer de temperatuur meer afwijkt dan deze waarde. 0,5 °C werkt goed voor de meeste kamers. Lager = reactiever, hoger = minder aanpassingen."
         }
       },

@@ -41,8 +41,8 @@
           "night_temp": "Нощна температура (намаляване по време на сън)",
           "away_temp": "Температура при отсъствие (автоматично когато всички са тръгнали)",
           "vacation_temp": "Температура при почивка (защита от замръзване)",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco температура (икономия на енергия, между нощна и комфортна)",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Температурна толерантност – управлявайте TRV само след тази отклонение",
           "schedule_enabled": "Активиране на времеви график",
           "sched_wd_morning": "Делник: Комфорт от",
@@ -57,8 +57,8 @@
           "sched_we_morning": "Температурата на комфорт трябва да бъде достигната по това време – ThermoSmart предварително загрява автоматично",
           "sched_we_night": "Нощната температура е в сила от това време",
           "away_temp": "Прилага се автоматично само когато е конфигурирано разпознаване на присъствие (Стъпка 3). Може да се зададе и ръчно чрез избора на режим.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Използва се когато изборът на режим е ръчно зададен на 'Eco'. Не се прилага автоматично.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart регулира TRV само когато температурата се отклонява с повече от тази стойност. 0,5 °C работи добре за повечето стаи. По-ниска = по-реактивна, по-висока = по-малко регулации."
         }
       },
@@ -135,8 +135,8 @@
           "night_temp": "Нощна температура",
           "away_temp": "Температура при отсъствие",
           "vacation_temp": "Температура при почивка",
-          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco температура",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Температурна толерантност",
           "schedule_enabled": "Активиране на времеви график",
           "sched_wd_morning": "Делник: Комфорт от",
@@ -151,8 +151,8 @@
           "sched_we_morning": "Температурата на комфорт трябва да бъде достигната по това време – ThermoSmart предварително загрява автоматично",
           "sched_we_night": "Нощната температура е в сила от това време",
           "away_temp": "Прилага се автоматично само когато е конфигурирано разпознаване на присъствие (Стъпка 3). Може да се зададе и ръчно чрез избора на режим.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Използва се когато изборът на режим е ръчно зададен на 'Eco'. Не се прилага автоматично.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "ThermoSmart регулира TRV само когато температурата се отклонява с повече от тази стойност. 0,5 °C работи добре за повечето стаи. По-ниска = по-реактивна, по-висока = по-малко регулации."
         }
       },

@@ -41,8 +41,8 @@
           "night_temp": "Nachttemperatur (Absenkung beim Schlafen)",
           "away_temp": "Abwesenheitstemperatur (automatisch wenn alle weg sind)",
           "vacation_temp": "Urlaubstemperatur (Frostschutz)",
-          "window_open_temp": "Fenster-offen-Temperatur",
           "eco_temp": "Eco-Temperatur (energiesparend, zwischen Nacht und Komfort)",
+          "window_open_temp": "Fenster-offen-Temperatur",
           "temp_tolerance": "Temperaturtoleranz – TRV erst ansteuern ab dieser Abweichung",
           "schedule_enabled": "Zeitplan aktivieren",
           "sched_wd_morning": "Werktag: Komfort ab",
@@ -57,8 +57,8 @@
           "sched_we_morning": "Die Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
-          "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
           "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
+          "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
           "temp_tolerance": "ThermoSmart steuert den TRV erst an wenn die Temperatur um mehr als diesen Wert abweicht. 0,5 °C funktioniert gut für die meisten Räume. Kleiner = reaktiver, größer = weniger Anpassungen."
         }
       },
@@ -135,8 +135,8 @@
           "night_temp": "Nachttemperatur",
           "away_temp": "Abwesenheitstemperatur",
           "vacation_temp": "Urlaubstemperatur",
-          "window_open_temp": "Fenster-offen-Temperatur",
           "eco_temp": "Eco-Temperatur",
+          "window_open_temp": "Fenster-offen-Temperatur",
           "temp_tolerance": "Temperaturtoleranz",
           "schedule_enabled": "Zeitplan aktivieren",
           "sched_wd_morning": "Werktag: Komfort ab",
@@ -151,8 +151,8 @@
           "sched_we_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
-          "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
           "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
+          "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
           "temp_tolerance": "ThermoSmart steuert den TRV erst an wenn die Temperatur um mehr als diesen Wert abweicht. 0,5 °C funktioniert gut für die meisten Räume. Kleiner = reaktiver, größer = weniger Anpassungen."
         }
       },

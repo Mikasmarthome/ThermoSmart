@@ -349,6 +349,7 @@ class ThermoSmartCoordinator(
 
                         @callback
                         def _open_delay_expired(_now, _eid=entity_id):
+                            self._window_delay_cancel.pop(_eid, None)
                             self.hass.async_create_task(self.async_request_refresh())
 
                         self._window_delay_cancel[entity_id] = async_call_later(
@@ -374,6 +375,7 @@ class ThermoSmartCoordinator(
 
                                 @callback
                                 def _close_delay_expired(_now, _eid=entity_id):
+                                    self._window_delay_cancel.pop(_eid, None)
                                     self.hass.async_create_task(self.async_request_refresh())
 
                                 self._window_delay_cancel[entity_id] = async_call_later(

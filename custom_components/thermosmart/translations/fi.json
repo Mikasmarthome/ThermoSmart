@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Kohdelämpötila" },
       "trv_setpoint": { "name": "TRV-asetusarvo" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Tulospisteet" },
+      "outcome_score": {
+        "name": "Tulospisteet",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
       "preheat_minutes": { "name": "Esilämmitysaika" },
       "confidence": { "name": "Oppimisedistyminen" },
       "weather_offset": { "name": "Sääkorjaus" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Lämpötilan kaltevuus" },
       "temp_ema_1h": { "name": "Lämpötila EMA 1h" },
-      "heat_loss": { "name": "Lämpöhäviö" },
-      "heating_power": { "name": "Lämmitysteho" },
+      "heat_loss": {
+        "name": "Lämpöhäviö",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
+      "heating_power": {
+        "name": "Lämmitysteho",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
       "sun_intensity": { "name": "Aurinkolämpöhyöty" },
-      "window_cooling_rate": { "name": "Ikkunajäähdytysnopeus" },
+      "window_cooling_rate": {
+        "name": "Ikkunajäähdytysnopeus",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
       "trv_observations": { "name": "TRV-havainnot" }
     }
   }

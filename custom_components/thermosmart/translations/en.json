@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Target temperature" },
       "trv_setpoint": { "name": "TRV setpoint" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Outcome Score" },
+      "outcome_score": {
+        "name": "Outcome Score",
+        "state": {
+          "learning": "Learning"
+        }
+      },
       "preheat_minutes": { "name": "Preheat time" },
       "confidence": { "name": "Learning progress" },
       "weather_offset": { "name": "Weather correction" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Temperature slope" },
       "temp_ema_1h": { "name": "Temperature EMA 1h" },
-      "heat_loss": { "name": "Heat loss" },
-      "heating_power": { "name": "Heating power" },
+      "heat_loss": {
+        "name": "Heat loss",
+        "state": {
+          "learning": "Learning"
+        }
+      },
+      "heating_power": {
+        "name": "Heating power",
+        "state": {
+          "learning": "Learning"
+        }
+      },
       "sun_intensity": { "name": "Solar heat gain" },
-      "window_cooling_rate": { "name": "Window cooling rate" },
+      "window_cooling_rate": {
+        "name": "Window cooling rate",
+        "state": {
+          "learning": "Learning"
+        }
+      },
       "trv_observations": { "name": "TRV observations" }
     }
   }

@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "目标温度" },
       "trv_setpoint": { "name": "TRV 设定值" },
       "tpi_duty_cycle": { "name": "TPI 占空比" },
-      "outcome_score": { "name": "结果评分" },
+      "outcome_score": {
+        "name": "结果评分",
+        "state": {
+          "learning": "学习中"
+        }
+      },
       "preheat_minutes": { "name": "预热时间" },
       "confidence": { "name": "学习进度" },
       "weather_offset": { "name": "天气修正" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "温度斜率" },
       "temp_ema_1h": { "name": "温度 EMA 1小时" },
-      "heat_loss": { "name": "热量损失" },
-      "heating_power": { "name": "供暖功率" },
+      "heat_loss": {
+        "name": "热量损失",
+        "state": {
+          "learning": "学习中"
+        }
+      },
+      "heating_power": {
+        "name": "供暖功率",
+        "state": {
+          "learning": "学习中"
+        }
+      },
       "sun_intensity": { "name": "太阳热增益" },
-      "window_cooling_rate": { "name": "窗户冷却速率" },
+      "window_cooling_rate": {
+        "name": "窗户冷却速率",
+        "state": {
+          "learning": "学习中"
+        }
+      },
       "trv_observations": { "name": "TRV 观测值" }
     }
   }

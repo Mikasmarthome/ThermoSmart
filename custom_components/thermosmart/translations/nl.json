@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Doeltemperatuur" },
       "trv_setpoint": { "name": "TRV-instelpunt" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Resultaatscore" },
+      "outcome_score": {
+        "name": "Resultaatscore",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
       "preheat_minutes": { "name": "Voorverwarmingstijd" },
       "confidence": { "name": "Leervoortgang" },
       "weather_offset": { "name": "Weercorrectie" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Temperatuurhelling" },
       "temp_ema_1h": { "name": "Temperatuur EMA 1u" },
-      "heat_loss": { "name": "Warmteverlies" },
-      "heating_power": { "name": "Verwarmingsvermogen" },
+      "heat_loss": {
+        "name": "Warmteverlies",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
+      "heating_power": {
+        "name": "Verwarmingsvermogen",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
       "sun_intensity": { "name": "Zonnewinst" },
-      "window_cooling_rate": { "name": "Afkoelsnelheid raam" },
+      "window_cooling_rate": {
+        "name": "Afkoelsnelheid raam",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
       "trv_observations": { "name": "TRV-observaties" }
     }
   }

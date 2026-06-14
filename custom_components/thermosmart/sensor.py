@@ -331,9 +331,10 @@ class ThermoSmartHeatingPowerSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return None
+            return "learning"
         stats = le.get_stats(self.coordinator.zone_id)
-        return stats.get("avg_heat_rate_per_min")
+        val = stats.get("avg_heat_rate_per_min")
+        return val if val is not None else "learning"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -404,8 +405,9 @@ class ThermoSmartHeatLossRateSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return None
-        return le.get_heat_loss_rate(self.coordinator.zone_id)
+            return "learning"
+        val = le.get_heat_loss_rate(self.coordinator.zone_id)
+        return val if val is not None else "learning"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -481,9 +483,10 @@ class ThermoSmartOutcomeScoreSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return None
+            return "learning"
         stats = le.get_outcome_stats(self.coordinator.zone_id)
-        return stats.get("avg_score_%")
+        val = stats.get("avg_score_%")
+        return val if val is not None else "learning"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -568,10 +571,11 @@ class ThermoSmartWindowCoolingRateSensor(_Base):
     def native_value(self):
         le = self.coordinator.learning_engine
         if le is None:
-            return None
+            return "learning"
         data = self.coordinator.data or {}
         weather = data.get("weather", {})
-        return le.get_window_cooling_rate(self.coordinator.zone_id, weather)
+        val = le.get_window_cooling_rate(self.coordinator.zone_id, weather)
+        return val if val is not None else "learning"
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

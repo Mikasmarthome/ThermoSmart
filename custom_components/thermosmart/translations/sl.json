@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Ciljna temperatura" },
       "trv_setpoint": { "name": "Nastavitvena vrednost TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Rezultatna ocena" },
+      "outcome_score": {
+        "name": "Rezultatna ocena",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
       "preheat_minutes": { "name": "Čas predgrevanja" },
       "confidence": { "name": "Napredek učenja" },
       "weather_offset": { "name": "Vremenski odmik" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Naklon temperature" },
       "temp_ema_1h": { "name": "Temperatura EMA 1h" },
-      "heat_loss": { "name": "Toplotne izgube" },
-      "heating_power": { "name": "Moč ogrevanja" },
+      "heat_loss": {
+        "name": "Toplotne izgube",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
+      "heating_power": {
+        "name": "Moč ogrevanja",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
       "sun_intensity": { "name": "Solarni toplotni dobitek" },
-      "window_cooling_rate": { "name": "Hitrost ohlajanja skozi okno" },
+      "window_cooling_rate": {
+        "name": "Hitrost ohlajanja skozi okno",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
       "trv_observations": { "name": "Opazovanja TRV" }
     }
   }

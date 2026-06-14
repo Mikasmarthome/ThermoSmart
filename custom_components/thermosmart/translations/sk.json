@@ -237,7 +237,12 @@
       "adjusted_target": { "name": "Cieľová teplota" },
       "trv_setpoint": { "name": "Nastavená hodnota TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Skóre výsledku" },
+      "outcome_score": {
+        "name": "Skóre výsledku",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
       "preheat_minutes": { "name": "Čas predohrevu" },
       "confidence": { "name": "Pokrok učenia" },
       "weather_offset": { "name": "Korekcia počasia" },
@@ -260,10 +265,25 @@
       },
       "temp_slope": { "name": "Sklon teploty" },
       "temp_ema_1h": { "name": "Teplota EMA 1h" },
-      "heat_loss": { "name": "Tepelné straty" },
-      "heating_power": { "name": "Výkon vykurovania" },
+      "heat_loss": {
+        "name": "Tepelné straty",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
+      "heating_power": {
+        "name": "Výkon vykurovania",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
       "sun_intensity": { "name": "Solárny tepelný zisk" },
-      "window_cooling_rate": { "name": "Rýchlosť ochladzovania cez okno" },
+      "window_cooling_rate": {
+        "name": "Rýchlosť ochladzovania cez okno",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
       "trv_observations": { "name": "Pozorovania TRV" }
     }
   }

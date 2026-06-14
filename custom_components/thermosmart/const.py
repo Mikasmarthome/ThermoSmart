@@ -117,7 +117,7 @@ WIND_CHILL_BOOST = 0.5          # °C extra when cold AND windy
 
 # Learning algorithm settings
 LEARNING_MIN_SAMPLES = 5        # Mindest-Beobachtungen bevor Lernen aktiv wird
-PREHEAT_MAX_MINUTES = 60        # maximale Vorheizzeit
+PREHEAT_MAX_MINUTES = 180       # maximale Vorheizzeit
 PREHEAT_MIN_DELTA = 2.0         # °C Differenz ab der Vorheizung ausgelöst wird
 
 # Prognose-Feedback-Loop

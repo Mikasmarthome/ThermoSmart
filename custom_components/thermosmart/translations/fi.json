@@ -42,8 +42,8 @@
           "away_temp": "Poissaololämpötila (automaattisesti kun kaikki ovat lähteneet)",
           "vacation_temp": "Lomalämpötila (pakkassuoja)",
           "eco_temp": "Eco-lämpötila (energiansäästö, yön ja mukavuuden välillä)",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Lämpötilansietokyky – ohjaa TRV:tä vasta tämän poikkeaman jälkeen",
+          "window_open_temp": "Lämpötila ikkuna auki",
+          "temp_tolerance": "Lämpötilansietokyky – kynnysarvo asetuspisteen päivitykselle",
           "schedule_enabled": "Ota aikataulu käyttöön",
           "sched_wd_morning": "Arkipäivä: Mukavuus alkaen",
           "sched_wd_night": "Arkipäivä: Yö alkaen",
@@ -58,8 +58,8 @@
           "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen",
           "away_temp": "Käytetään automaattisesti vain, kun läsnäolon tunnistus on määritetty (Vaihe 3). Voidaan myös asettaa manuaalisesti tilavalitsimen kautta.",
           "eco_temp": "Käytetään, kun tilavalitsin asetetaan manuaalisesti arvoon 'Eco'. Ei aktivoidu automaattisesti.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart säätää TRV:tä vain, kun lämpötila poikkeaa enemmän kuin tämä arvo. 0,5 °C toimii hyvin useimmissa huoneissa. Pienempi = reaktiivisempi, suurempi = vähemmän säätöjä."
+          "window_open_temp": "Tavoitelämpötila, kun ikkuna on auki. Termostaateille, jotka eivät tue erittäin matalia asetuksia, käytä korkeampaa arvoa, kuten 10 °C.",
+          "temp_tolerance": "Lasketun TRV-asetuspisteen vähimmäismuutos ennen kuin ThermoSmart lähettää uuden päivityksen. Vähentää tarpeettomia kirjoituksia termostaattiin. 0,5 °C toimii hyvin useimmissa huoneissa."
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "Poissaololämpötila",
           "vacation_temp": "Lomalämpötila",
           "eco_temp": "Eco-lämpötila",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "Lämpötila ikkuna auki",
           "temp_tolerance": "Lämpötilansietokyky",
           "schedule_enabled": "Ota aikataulu käyttöön",
           "sched_wd_morning": "Arkipäivä: Mukavuus alkaen",
@@ -152,8 +152,8 @@
           "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen",
           "away_temp": "Käytetään automaattisesti vain, kun läsnäolon tunnistus on määritetty (Vaihe 3). Voidaan myös asettaa manuaalisesti tilavalitsimen kautta.",
           "eco_temp": "Käytetään, kun tilavalitsin asetetaan manuaalisesti arvoon 'Eco'. Ei aktivoidu automaattisesti.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart säätää TRV:tä vain, kun lämpötila poikkeaa enemmän kuin tämä arvo. 0,5 °C toimii hyvin useimmissa huoneissa. Pienempi = reaktiivisempi, suurempi = vähemmän säätöjä."
+          "window_open_temp": "Tavoitelämpötila, kun ikkuna on auki. Termostaateille, jotka eivät tue erittäin matalia asetuksia, käytä korkeampaa arvoa, kuten 10 °C.",
+          "temp_tolerance": "Lasketun TRV-asetuspisteen vähimmäismuutos ennen kuin ThermoSmart lähettää uuden päivityksen. Vähentää tarpeettomia kirjoituksia termostaattiin. 0,5 °C toimii hyvin useimmissa huoneissa."
         }
       },
       "presence": {

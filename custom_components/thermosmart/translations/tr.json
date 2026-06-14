@@ -42,8 +42,8 @@
           "away_temp": "Uzakta sıcaklığı (herkes gittiğinde otomatik)",
           "vacation_temp": "Tatil sıcaklığı (don koruması)",
           "eco_temp": "Eco sıcaklığı (enerji tasarrufu, gece ile konfor arası)",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Sıcaklık toleransı – TRV'yi yalnızca bu sapmanın ardından kontrol et",
+          "window_open_temp": "Pencere açık sıcaklığı",
+          "temp_tolerance": "Sıcaklık toleransı – set noktası güncelleme eşiği",
           "schedule_enabled": "Zaman programını etkinleştir",
           "sched_wd_morning": "Hafta içi: Konfor saat",
           "sched_wd_night": "Hafta içi: Gece saat",
@@ -58,8 +58,8 @@
           "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
           "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
+          "window_open_temp": "Pencere açıkken hedef sıcaklık. Çok düşük değerleri desteklemeyen termostatlar için 10 °C gibi daha yüksek bir değer kullanın.",
+          "temp_tolerance": "ThermoSmart'ın yeni bir güncelleme göndermeden önce hesaplanan TRV set noktasındaki minimum değişiklik. Termostata gereksiz yazmaları azaltır. 0,5 °C çoğu oda için iyi çalışır."
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "Uzakta sıcaklığı",
           "vacation_temp": "Tatil sıcaklığı",
           "eco_temp": "Eco sıcaklığı",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "Pencere açık sıcaklığı",
           "temp_tolerance": "Sıcaklık toleransı",
           "schedule_enabled": "Zaman programını etkinleştir",
           "sched_wd_morning": "Hafta içi: Konfor saat",
@@ -152,8 +152,8 @@
           "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
           "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
+          "window_open_temp": "Pencere açıkken hedef sıcaklık. Çok düşük değerleri desteklemeyen termostatlar için 10 °C gibi daha yüksek bir değer kullanın.",
+          "temp_tolerance": "ThermoSmart'ın yeni bir güncelleme göndermeden önce hesaplanan TRV set noktasındaki minimum değişiklik. Termostata gereksiz yazmaları azaltır. 0,5 °C çoğu oda için iyi çalışır."
         }
       },
       "presence": {

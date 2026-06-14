@@ -42,8 +42,8 @@
           "away_temp": "Fraværstemperatur (automatisk når alle er gået)",
           "vacation_temp": "Ferietemperatur (frostbeskyttelse)",
           "eco_temp": "Eco-temperatur (energibesparelse, mellem nat og komfort)",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Temperaturtolerance – styr TRV kun ud over denne afvigelse",
+          "window_open_temp": "Temperatur ved åbent vindue",
+          "temp_tolerance": "Temperaturtolerance – grænse for setpoint-opdatering",
           "schedule_enabled": "Aktivér tidsplan",
           "sched_wd_morning": "Hverdag: Komfort fra",
           "sched_wd_night": "Hverdag: Nat fra",
@@ -58,8 +58,8 @@
           "sched_we_night": "Nattemperaturen gælder fra dette tidspunkt",
           "away_temp": "Anvendes kun automatisk, når tilstedeværelsesgenkendelse er konfigureret (Trin 3). Kan også angives manuelt via tilstandsvælgeren.",
           "eco_temp": "Bruges når tilstandsvælgeren manuelt er sat til 'Eco'. Aktiveres ikke automatisk.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart justerer kun TRV'en, når temperaturen afviger mere end denne værdi. 0,5 °C fungerer godt for de fleste rum. Lavere = mere reaktiv, højere = færre justeringer."
+          "window_open_temp": "Måltemperatur, mens et vindue er åbent. For termostater, der ikke understøtter meget lave indstillinger, brug en højere værdi som f.eks. 10 °C.",
+          "temp_tolerance": "Minimumsændring af det beregnede TRV-indstillingspunkt, før ThermoSmart sender en ny opdatering. Reducerer unødvendige skrivninger til termostaten. 0,5 °C fungerer godt for de fleste rum."
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "Fraværstemperatur",
           "vacation_temp": "Ferietemperatur",
           "eco_temp": "Eco-temperatur",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "Temperatur ved åbent vindue",
           "temp_tolerance": "Temperaturtolerance",
           "schedule_enabled": "Aktivér tidsplan",
           "sched_wd_morning": "Hverdag: Komfort fra",
@@ -152,8 +152,8 @@
           "sched_we_night": "Nattemperaturen gælder fra dette tidspunkt",
           "away_temp": "Anvendes kun automatisk, når tilstedeværelsesgenkendelse er konfigureret (Trin 3). Kan også angives manuelt via tilstandsvælgeren.",
           "eco_temp": "Bruges når tilstandsvælgeren manuelt er sat til 'Eco'. Aktiveres ikke automatisk.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart justerer kun TRV'en, når temperaturen afviger mere end denne værdi. 0,5 °C fungerer godt for de fleste rum. Lavere = mere reaktiv, højere = færre justeringer."
+          "window_open_temp": "Måltemperatur, mens et vindue er åbent. For termostater, der ikke understøtter meget lave indstillinger, brug en højere værdi som f.eks. 10 °C.",
+          "temp_tolerance": "Minimumsændring af det beregnede TRV-indstillingspunkt, før ThermoSmart sender en ny opdatering. Reducerer unødvendige skrivninger til termostaten. 0,5 °C fungerer godt for de fleste rum."
         }
       },
       "presence": {

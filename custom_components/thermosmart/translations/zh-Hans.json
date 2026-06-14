@@ -42,8 +42,8 @@
           "away_temp": "离家温度（所有人离开后自动）",
           "vacation_temp": "假期温度（防冻保护）",
           "eco_temp": "节能温度（节能，介于夜间和舒适之间）",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "温度容差 – 仅在此偏差后控制 TRV",
+          "window_open_temp": "开窗温度",
+          "temp_tolerance": "温度容差 – 设定点更新阈值",
           "schedule_enabled": "启用时间计划",
           "sched_wd_morning": "工作日：舒适从",
           "sched_wd_night": "工作日：夜间从",
@@ -58,8 +58,8 @@
           "sched_we_night": "夜间温度从此时间起生效",
           "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
           "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
+          "window_open_temp": "窗户打开时的目标温度。对于不支持非常低设定点的恒温器，请使用较高值，例如 10 °C。",
+          "temp_tolerance": "在 ThermoSmart 发送新更新之前，计算出的 TRV 设定点的最小变化量。减少对恒温器的不必要写入。0.5 °C 适合大多数房间。"
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "离家温度",
           "vacation_temp": "假期温度",
           "eco_temp": "节能温度",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "开窗温度",
           "temp_tolerance": "温度容差",
           "schedule_enabled": "启用时间计划",
           "sched_wd_morning": "工作日：舒适从",
@@ -152,8 +152,8 @@
           "sched_we_night": "夜间温度从此时间起生效",
           "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
           "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
+          "window_open_temp": "窗户打开时的目标温度。对于不支持非常低设定点的恒温器，请使用较高值，例如 10 °C。",
+          "temp_tolerance": "在 ThermoSmart 发送新更新之前，计算出的 TRV 设定点的最小变化量。减少对恒温器的不必要写入。0.5 °C 适合大多数房间。"
         }
       },
       "presence": {

@@ -42,8 +42,8 @@
           "away_temp": "Temperatura nieobecności (automatycznie gdy wszyscy wyjdą)",
           "vacation_temp": "Temperatura wakacyjna (ochrona przed mrozem)",
           "eco_temp": "Temperatura Eco (oszczędność energii, między nocną a komfortową)",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Tolerancja temperatury – steruj zaworem TRV dopiero po przekroczeniu tego odchylenia",
+          "window_open_temp": "Temperatura przy otwartym oknie",
+          "temp_tolerance": "Tolerancja temperatury – próg aktualizacji wartości zadanej",
           "schedule_enabled": "Włącz harmonogram czasowy",
           "sched_wd_morning": "Dzień roboczy: Komfort od",
           "sched_wd_night": "Dzień roboczy: Noc od",
@@ -58,8 +58,8 @@
           "sched_we_night": "Od tej godziny obowiązuje temperatura nocna",
           "away_temp": "Stosowana automatycznie tylko gdy skonfigurowane jest wykrywanie obecności (Krok 3). Można ją również ustawić ręcznie za pomocą selektora trybu.",
           "eco_temp": "Używana, gdy selektor trybu jest ręcznie ustawiony na 'Eco'. Nie jest aktywowana automatycznie.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart reguluje TRV tylko gdy temperatura odchyla się o więcej niż ta wartość. 0,5 °C sprawdza się dobrze w większości pomieszczeń. Niższy = bardziej reaktywny, wyższy = mniej regulacji."
+          "window_open_temp": "Temperatura docelowa, gdy okno jest otwarte. W przypadku termostatów nieobsługujących bardzo niskich wartości, użyj wyższej wartości, np. 10 °C.",
+          "temp_tolerance": "Minimalna zmiana obliczonej wartości zadanej TRV przed wysłaniem przez ThermoSmart nowej aktualizacji. Ogranicza zbędne zapisy do termostatu. 0,5 °C sprawdza się dobrze w większości pomieszczeń."
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "Temperatura nieobecności",
           "vacation_temp": "Temperatura wakacyjna",
           "eco_temp": "Temperatura Eco",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "Temperatura przy otwartym oknie",
           "temp_tolerance": "Tolerancja temperatury",
           "schedule_enabled": "Włącz harmonogram czasowy",
           "sched_wd_morning": "Dzień roboczy: Komfort od",
@@ -152,8 +152,8 @@
           "sched_we_night": "Od tej godziny obowiązuje temperatura nocna",
           "away_temp": "Stosowana automatycznie tylko gdy skonfigurowane jest wykrywanie obecności (Krok 3). Można ją również ustawić ręcznie za pomocą selektora trybu.",
           "eco_temp": "Używana, gdy selektor trybu jest ręcznie ustawiony na 'Eco'. Nie jest aktywowana automatycznie.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart reguluje TRV tylko gdy temperatura odchyla się o więcej niż ta wartość. 0,5 °C sprawdza się dobrze w większości pomieszczeń. Niższy = bardziej reaktywny, wyższy = mniej regulacji."
+          "window_open_temp": "Temperatura docelowa, gdy okno jest otwarte. W przypadku termostatów nieobsługujących bardzo niskich wartości, użyj wyższej wartości, np. 10 °C.",
+          "temp_tolerance": "Minimalna zmiana obliczonej wartości zadanej TRV przed wysłaniem przez ThermoSmart nowej aktualizacji. Ogranicza zbędne zapisy do termostatu. 0,5 °C sprawdza się dobrze w większości pomieszczeń."
         }
       },
       "presence": {

@@ -42,8 +42,8 @@
           "away_temp": "Távolléti hőmérséklet (automatikusan, ha mindenki elment)",
           "vacation_temp": "Vakációs hőmérséklet (fagyvédelem)",
           "eco_temp": "Eco hőmérséklet (energiatakarékos, éjszakai és kényelmi között)",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Hőmérsékleti tűréshatár – csak ezen eltérés után irányítsa a TRV-t",
+          "window_open_temp": "Hőmérséklet nyitott ablakkal",
+          "temp_tolerance": "Hőmérsékleti tűréshatár – küszöb a beállítási pont frissítéséhez",
           "schedule_enabled": "Időbeli ütemterv engedélyezése",
           "sched_wd_morning": "Hétköznap: Komfort-tól",
           "sched_wd_night": "Hétköznap: Éjszaka-tól",
@@ -58,8 +58,8 @@
           "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
           "away_temp": "Csak akkor kerül automatikusan alkalmazásra, ha a jelenlétérzékelés konfigurálva van (3. lépés). Manuálisan is beállítható az üzemmód-választón keresztül.",
           "eco_temp": "Akkor használatos, ha az üzemmód-választót manuálisan 'Eco'-ra állítják. Nem aktiválódik automatikusan.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "A ThermoSmart csak akkor állítja be a TRV-t, ha a hőmérséklet ennél az értéknél jobban eltér. 0,5 °C a legtöbb szobában jól működik. Alacsonyabb = reaktívabb, magasabb = kevesebb beállítás."
+          "window_open_temp": "Célhőmérséklet, amíg egy ablak nyitva van. Az olyan termosztátokhoz, amelyek nem támogatnak nagyon alacsony értékeket, használjon magasabb értéket, például 10 °C-ot.",
+          "temp_tolerance": "A TRV számított beállítási pontjának minimális változása, mielőtt a ThermoSmart új frissítést küld. Csökkenti a termosztatba való felesleges írásokat. 0,5 °C a legtöbb szobában jól működik."
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "Távolléti hőmérséklet",
           "vacation_temp": "Vakációs hőmérséklet",
           "eco_temp": "Eco hőmérséklet",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "Hőmérséklet nyitott ablakkal",
           "temp_tolerance": "Hőmérsékleti tűréshatár",
           "schedule_enabled": "Időbeli ütemterv engedélyezése",
           "sched_wd_morning": "Hétköznap: Komfort-tól",
@@ -152,8 +152,8 @@
           "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
           "away_temp": "Csak akkor kerül automatikusan alkalmazásra, ha a jelenlétérzékelés konfigurálva van (3. lépés). Manuálisan is beállítható az üzemmód-választón keresztül.",
           "eco_temp": "Akkor használatos, ha az üzemmód-választót manuálisan 'Eco'-ra állítják. Nem aktiválódik automatikusan.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "A ThermoSmart csak akkor állítja be a TRV-t, ha a hőmérséklet ennél az értéknél jobban eltér. 0,5 °C a legtöbb szobában jól működik. Alacsonyabb = reaktívabb, magasabb = kevesebb beállítás."
+          "window_open_temp": "Célhőmérséklet, amíg egy ablak nyitva van. Az olyan termosztátokhoz, amelyek nem támogatnak nagyon alacsony értékeket, használjon magasabb értéket, például 10 °C-ot.",
+          "temp_tolerance": "A TRV számított beállítási pontjának minimális változása, mielőtt a ThermoSmart új frissítést küld. Csökkenti a termosztatba való felesleges írásokat. 0,5 °C a legtöbb szobában jól működik."
         }
       },
       "presence": {

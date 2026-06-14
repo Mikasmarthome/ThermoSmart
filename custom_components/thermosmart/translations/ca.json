@@ -42,8 +42,8 @@
           "away_temp": "Temperatura d'absència (automàticament quan tothom ha marxat)",
           "vacation_temp": "Temperatura de vacances (protecció antigelada)",
           "eco_temp": "Temperatura eco (estalvi d'energia, entre nocturna i confort)",
-          "window_open_temp": "Window open temperature",
-          "temp_tolerance": "Tolerància de temperatura – controlar la TRV només a partir d'aquesta desviació",
+          "window_open_temp": "Temperatura amb finestra oberta",
+          "temp_tolerance": "Tolerancia de temperatura – llindar d'actualització del punt de consigna",
           "schedule_enabled": "Activar horari",
           "sched_wd_morning": "Dia feiner: Confort des de",
           "sched_wd_night": "Dia feiner: Nit des de",
@@ -58,8 +58,8 @@
           "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
           "away_temp": "S'aplica automàticament només si la detecció de presència està configurada (Pas 3). Pot establir-se manualment a través del selector de mode.",
           "eco_temp": "S'utilitza quan el selector de mode s'estableix manualment en 'Eco'. No s'aplica automàticament.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart ajusta la TRV només quan la temperatura es desvia més que aquest valor. 0,5 °C funciona bé per a la majoria d'habitacions. Menor = més reactiu, major = menys ajustos."
+          "window_open_temp": "Temperatura objectiu mentre una finestra és oberta. Per a termostats que no admeten valors molt baixos, useu un valor més alt com ara 10 °C.",
+          "temp_tolerance": "Canvi mínim al punt de consigna TRV calculat abans que ThermoSmart enviï una nova actualització. Redueix les escriptures innecessàries al termòstat. 0,5 °C funciona bé per a la majoria d'habitacions."
         }
       },
       "presence": {
@@ -136,7 +136,7 @@
           "away_temp": "Temperatura d'absència",
           "vacation_temp": "Temperatura de vacances",
           "eco_temp": "Temperatura eco",
-          "window_open_temp": "Window open temperature",
+          "window_open_temp": "Temperatura amb finestra oberta",
           "temp_tolerance": "Tolerància de temperatura",
           "schedule_enabled": "Activar horari",
           "sched_wd_morning": "Dia feiner: Confort des de",
@@ -152,8 +152,8 @@
           "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
           "away_temp": "S'aplica automàticament només si la detecció de presència està configurada (Pas 3). Pot establir-se manualment a través del selector de mode.",
           "eco_temp": "S'utilitza quan el selector de mode s'estableix manualment en 'Eco'. No s'aplica automàticament.",
-          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
-          "temp_tolerance": "ThermoSmart ajusta la TRV només quan la temperatura es desvia més que aquest valor. 0,5 °C funciona bé per a la majoria d'habitacions. Menor = més reactiu, major = menys ajustos."
+          "window_open_temp": "Temperatura objectiu mentre una finestra és oberta. Per a termostats que no admeten valors molt baixos, useu un valor més alt com ara 10 °C.",
+          "temp_tolerance": "Canvi mínim al punt de consigna TRV calculat abans que ThermoSmart enviï una nova actualització. Redueix les escriptures innecessàries al termòstat. 0,5 °C funciona bé per a la majoria d'habitacions."
         }
       },
       "presence": {

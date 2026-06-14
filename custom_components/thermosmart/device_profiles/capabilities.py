@@ -59,3 +59,4 @@ class DeviceProfile:
     allow_temp_source_select: bool = True
     calibration_sync: bool = True
     calibration_plausibility_limit: float = 7.0
+    minimum_setpoint: float | None = None

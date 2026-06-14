@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "Temperatura notturna (riduzione durante il sonno)",
           "away_temp": "Temperatura assenza (automatica quando tutti sono fuori)",
           "vacation_temp": "Temperatura vacanza (protezione dal gelo)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Temperatura Eco (risparmio energetico, tra notte e comfort)",
           "temp_tolerance": "Tolleranza temperatura – controlla la valvola TRV solo oltre questa deviazione",
           "schedule_enabled": "Abilita pianificazione oraria",
@@ -56,6 +57,7 @@
           "sched_we_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
           "sched_we_night": "La temperatura notturna si applica da quest'ora",
           "away_temp": "Applicata automaticamente solo se il rilevamento della presenza è configurato (Passaggio 3). Può essere impostata manualmente tramite il selettore di modalità.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Usata quando il selettore di modalità è impostato manualmente su 'Eco'. Non si attiva automaticamente.",
           "temp_tolerance": "ThermoSmart regola la TRV solo quando la temperatura si discosta di più di questo valore. 0,5 °C funziona bene per la maggior parte delle stanze. Inferiore = più reattivo, superiore = meno regolazioni."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Temperatura notturna",
           "away_temp": "Temperatura assenza",
           "vacation_temp": "Temperatura vacanza",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Temperatura Eco",
           "temp_tolerance": "Tolleranza temperatura",
           "schedule_enabled": "Abilita pianificazione oraria",
@@ -148,6 +151,7 @@
           "sched_we_morning": "La temperatura comfort deve essere raggiunta a quest'ora – ThermoSmart preriscalda automaticamente in anticipo",
           "sched_we_night": "La temperatura notturna si applica da quest'ora",
           "away_temp": "Applicata automaticamente solo se il rilevamento della presenza è configurato (Passaggio 3). Può essere impostata manualmente tramite il selettore di modalità.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Usata quando il selettore di modalità è impostato manualmente su 'Eco'. Non si attiva automaticamente.",
           "temp_tolerance": "ThermoSmart regola la TRV solo quando la temperatura si discosta di più di questo valore. 0,5 °C funziona bene per la maggior parte delle stanze. Inferiore = più reattivo, superiore = meno regolazioni."
         }

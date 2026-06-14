@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "夜间温度（睡眠期间降低）",
           "away_temp": "离家温度（所有人离开后自动）",
           "vacation_temp": "假期温度（防冻保护）",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "节能温度（节能，介于夜间和舒适之间）",
           "temp_tolerance": "温度容差 – 仅在此偏差后控制 TRV",
           "schedule_enabled": "启用时间计划",
@@ -56,6 +57,7 @@
           "sched_we_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
           "sched_we_night": "夜间温度从此时间起生效",
           "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
           "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
         }
@@ -133,6 +135,7 @@
           "night_temp": "夜间温度",
           "away_temp": "离家温度",
           "vacation_temp": "假期温度",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "节能温度",
           "temp_tolerance": "温度容差",
           "schedule_enabled": "启用时间计划",
@@ -148,6 +151,7 @@
           "sched_we_morning": "舒适温度必须在此时间达到——ThermoSmart 会提前自动预热",
           "sched_we_night": "夜间温度从此时间起生效",
           "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
           "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
         }

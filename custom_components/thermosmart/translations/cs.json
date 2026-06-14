@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "Noční teplota (snížení během spánku)",
           "away_temp": "Teplota při nepřítomnosti (automaticky když jsou všichni pryč)",
           "vacation_temp": "Teplota na dovolené (ochrana před mrazem)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco teplota (úspora energie, mezi noční a komfortní)",
           "temp_tolerance": "Tolerance teploty – řídit TRV až po překročení této odchylky",
           "schedule_enabled": "Aktivovat časový plán",
@@ -56,6 +57,7 @@
           "sched_we_morning": "Teplota komfortu by měla být dosažena v tento čas – ThermoSmart předehřívá automaticky předem",
           "sched_we_night": "Noční teplota platí od tohoto času",
           "away_temp": "Použije se automaticky pouze při nakonfigurovaném rozpoznávání přítomnosti (Krok 3). Lze nastavit i ručně přes výběr režimu.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Použije se, když je výběr režimu ručně nastaven na 'Eco'. Neaktivuje se automaticky.",
           "temp_tolerance": "ThermoSmart nastavuje TRV pouze tehdy, když se teplota odchýlí o více než tuto hodnotu. 0,5 °C funguje dobře pro většinu místností. Nižší = reaktivnější, vyšší = méně úprav."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Noční teplota",
           "away_temp": "Teplota při nepřítomnosti",
           "vacation_temp": "Teplota na dovolené",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco teplota",
           "temp_tolerance": "Tolerance teploty",
           "schedule_enabled": "Aktivovat časový plán",
@@ -148,6 +151,7 @@
           "sched_we_morning": "Teplota komfortu by měla být dosažena v tento čas – ThermoSmart předehřívá automaticky předem",
           "sched_we_night": "Noční teplota platí od tohoto času",
           "away_temp": "Použije se automaticky pouze při nakonfigurovaném rozpoznávání přítomnosti (Krok 3). Lze nastavit i ručně přes výběr režimu.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Použije se, když je výběr režimu ručně nastaven na 'Eco'. Neaktivuje se automaticky.",
           "temp_tolerance": "ThermoSmart nastavuje TRV pouze tehdy, když se teplota odchýlí o více než tuto hodnotu. 0,5 °C funguje dobře pro většinu místností. Nižší = reaktivnější, vyšší = méně úprav."
         }

@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "Natttemperatur (sänkning under sömn)",
           "away_temp": "Borta-temperatur (automatiskt när alla har gett sig av)",
           "vacation_temp": "Semestertemperatur (frostskydd)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco-temperatur (energisparande, mellan natt och komfort)",
           "temp_tolerance": "Temperaturtolerans – styr TRV:en först vid denna avvikelse",
           "schedule_enabled": "Aktivera tidsschema",
@@ -56,6 +57,7 @@
           "sched_we_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
           "sched_we_night": "Natttemperaturen gäller från denna tid",
           "away_temp": "Tillämpas automatiskt bara om närvarodetektering är konfigurerad (Steg 3). Kan också ställas in manuellt via lägesväljaren.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Används när lägesväljaren manuellt är satt till 'Eco'. Aktiveras inte automatiskt.",
           "temp_tolerance": "ThermoSmart justerar TRV:n bara när temperaturen avviker mer än detta värde. 0,5 °C fungerar bra för de flesta rum. Lägre = mer reaktiv, högre = färre justeringar."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Natttemperatur",
           "away_temp": "Borta-temperatur",
           "vacation_temp": "Semestertemperatur",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco-temperatur",
           "temp_tolerance": "Temperaturtolerans",
           "schedule_enabled": "Aktivera tidsschema",
@@ -148,6 +151,7 @@
           "sched_we_morning": "Komforttemperaturen ska vara uppnådd vid denna tid – ThermoSmart förvärmer automatiskt i förväg",
           "sched_we_night": "Natttemperaturen gäller från denna tid",
           "away_temp": "Tillämpas automatiskt bara om närvarodetektering är konfigurerad (Steg 3). Kan också ställas in manuellt via lägesväljaren.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Används när lägesväljaren manuellt är satt till 'Eco'. Aktiveras inte automatiskt.",
           "temp_tolerance": "ThermoSmart justerar TRV:n bara när temperaturen avviker mer än detta värde. 0,5 °C fungerar bra för de flesta rum. Lägre = mer reaktiv, högre = färre justeringar."
         }

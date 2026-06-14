@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "Nočna temperatura (znižanje med spanjem)",
           "away_temp": "Temperatura odsotnosti (samodejno ko so vsi odšli)",
           "vacation_temp": "Počitniška temperatura (zaščita pred zmrzovanjem)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco temperatura (varčevanje z energijo, med nočno in udobno)",
           "temp_tolerance": "Temperaturna toleranca – krmilite TRV šele po tem odstopanju",
           "schedule_enabled": "Aktivacija časovnega urnika",
@@ -56,6 +57,7 @@
           "sched_we_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
           "sched_we_night": "Nočna temperatura velja od tega časa",
           "away_temp": "Samodejno se uporabi samo, ko je konfigurirana zaznava prisotnosti (Korak 3). Lahko se nastavi tudi ročno prek izbirnika načina.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Uporablja se, ko je izbirnik načina ročno nastavljen na 'Eco'. Ne aktivira se samodejno.",
           "temp_tolerance": "ThermoSmart prilagodi TRV le, ko se temperatura razlikuje za več kot to vrednost. 0,5 °C deluje dobro za večino sob. Nižja = bolj odzivna, višja = manj prilagoditev."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Nočna temperatura",
           "away_temp": "Temperatura odsotnosti",
           "vacation_temp": "Počitniška temperatura",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco temperatura",
           "temp_tolerance": "Temperaturna toleranca",
           "schedule_enabled": "Aktivacija časovnega urnika",
@@ -148,6 +151,7 @@
           "sched_we_morning": "Temperatura udobja mora biti dosežena do tega časa – ThermoSmart samodejno vnaprej predgreje",
           "sched_we_night": "Nočna temperatura velja od tega časa",
           "away_temp": "Samodejno se uporabi samo, ko je konfigurirana zaznava prisotnosti (Korak 3). Lahko se nastavi tudi ročno prek izbirnika načina.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Uporablja se, ko je izbirnik načina ročno nastavljen na 'Eco'. Ne aktivira se samodejno.",
           "temp_tolerance": "ThermoSmart prilagodi TRV le, ko se temperatura razlikuje za več kot to vrednost. 0,5 °C deluje dobro za večino sob. Nižja = bolj odzivna, višja = manj prilagoditev."
         }

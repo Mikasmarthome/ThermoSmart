@@ -1,4 +1,4 @@
-{
+﻿{
   "config": {
     "step": {
       "user": {
@@ -41,6 +41,7 @@
           "night_temp": "Natttemperatur (senking under søvn)",
           "away_temp": "Fraværstemperatur (automatisk når alle er gått)",
           "vacation_temp": "Ferietemperatur (frostbeskyttelse)",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco-temperatur (energisparing, mellom natt og komfort)",
           "temp_tolerance": "Temperaturtolerance – styr TRV kun utover denne avviket",
           "schedule_enabled": "Aktiver tidsplan",
@@ -56,6 +57,7 @@
           "sched_we_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
           "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet",
           "away_temp": "Brukes automatisk bare når tilstedeværelsesgjenkjenning er konfigurert (Trinn 3). Kan også angis manuelt via modusvelgeren.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Brukes når modusvelgeren manuelt er satt til 'Eco'. Aktiveres ikke automatisk.",
           "temp_tolerance": "ThermoSmart justerer TRV-en bare når temperaturen avviker mer enn denne verdien. 0,5 °C fungerer bra for de fleste rom. Lavere = mer reaktiv, høyere = færre justeringer."
         }
@@ -133,6 +135,7 @@
           "night_temp": "Natttemperatur",
           "away_temp": "Fraværstemperatur",
           "vacation_temp": "Ferietemperatur",
+          "window_open_temp": "Window open temperature",
           "eco_temp": "Eco-temperatur",
           "temp_tolerance": "Temperaturtolerance",
           "schedule_enabled": "Aktiver tidsplan",
@@ -148,6 +151,7 @@
           "sched_we_morning": "Komforttemperaturen skal nås innen dette tidspunktet – ThermoSmart forvarmer automatisk på forhånd",
           "sched_we_night": "Natttemperaturen gjelder fra dette tidspunktet",
           "away_temp": "Brukes automatisk bare når tilstedeværelsesgjenkjenning er konfigurert (Trinn 3). Kan også angis manuelt via modusvelgeren.",
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "eco_temp": "Brukes når modusvelgeren manuelt er satt til 'Eco'. Aktiveres ikke automatisk.",
           "temp_tolerance": "ThermoSmart justerer TRV-en bare når temperaturen avviker mer enn denne verdien. 0,5 °C fungerer bra for de fleste rom. Lavere = mer reaktiv, høyere = færre justeringer."
         }

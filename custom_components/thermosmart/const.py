@@ -72,6 +72,7 @@ TPI_VALVE_BUMP_DELAY  = 5.0    # Sekunden zwischen Bump-Open und Zielwert
 
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
+CONF_WINDOW_OPEN_TEMP  = "window_open_temp"    # TRV-Setpoint bei geöffnetem Fenster (pro Zone)
 CONF_ECO_TEMP          = "eco_temp"            # Eco-Preset Temperatur
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
 CONF_SCHED_WD_NIGHT    = "sched_wd_night"     # Werktag: Nacht      → night_temp

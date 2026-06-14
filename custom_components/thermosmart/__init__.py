@@ -279,4 +279,14 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
 
 async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     if {**entry.data, **entry.options}.get("entry_type") != "system":
-        await hass.config_entries.async_reload(entry.entry_id)
+        _LOGGER.info(
+            "ThermoSmart '%s': Options updated — reloading entry",
+            entry.data.get("name", entry.entry_id),
+        )
+        try:
+            await hass.config_entries.async_reload(entry.entry_id)
+        except Exception as err:
+            _LOGGER.error(
+                "ThermoSmart '%s': Reload after options update failed: %s",
+                entry.data.get("name", entry.entry_id), err,
+            )

@@ -213,7 +213,8 @@
         "name": "Aktiv styrning"
       },
       "learning": { "name": "Inlärningsläge" },
-      "vacation_mode": { "name": "Semesterläge" }
+      "vacation_mode": { "name": "Semesterläge" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

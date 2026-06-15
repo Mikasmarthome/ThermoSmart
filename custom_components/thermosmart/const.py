@@ -87,6 +87,7 @@ VALVE_MAINTENANCE_DURATION_SUMMER_SEC = 8  # Sekunden offen (Sommer – kurze Ü
 
 DOMAIN_GLOBAL_SUMMER   = f"{DOMAIN}_global_summer"
 DOMAIN_GLOBAL_VACATION = f"{DOMAIN}_global_vacation"
+DOMAIN_GLOBAL_DEBUG    = f"{DOMAIN}_global_debug"
 
 # Default values
 DEFAULT_WEATHER_ENTITY = "weather.home"

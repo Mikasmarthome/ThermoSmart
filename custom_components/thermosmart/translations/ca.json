@@ -213,7 +213,8 @@
         "name": "Control actiu"
       },
       "learning": { "name": "Mode aprenentatge" },
-      "vacation_mode": { "name": "Mode vacances" }
+      "vacation_mode": { "name": "Mode vacances" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

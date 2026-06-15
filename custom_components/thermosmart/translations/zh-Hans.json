@@ -213,7 +213,8 @@
         "name": "主动控制"
       },
       "learning": { "name": "学习模式" },
-      "vacation_mode": { "name": "假期模式" }
+      "vacation_mode": { "name": "假期模式" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

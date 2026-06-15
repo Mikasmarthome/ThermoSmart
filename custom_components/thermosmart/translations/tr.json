@@ -213,7 +213,8 @@
         "name": "Aktif kontrol"
       },
       "learning": { "name": "Öğrenme modu" },
-      "vacation_mode": { "name": "Tatil modu" }
+      "vacation_mode": { "name": "Tatil modu" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

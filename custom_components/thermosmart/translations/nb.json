@@ -213,7 +213,8 @@
         "name": "Aktiv styring"
       },
       "learning": { "name": "Læringsmodus" },
-      "vacation_mode": { "name": "Feriemodus" }
+      "vacation_mode": { "name": "Feriemodus" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

@@ -213,7 +213,8 @@
         "name": "Активно управление"
       },
       "learning": { "name": "Режим на учене" },
-      "vacation_mode": { "name": "Режим почивка" }
+      "vacation_mode": { "name": "Режим почивка" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

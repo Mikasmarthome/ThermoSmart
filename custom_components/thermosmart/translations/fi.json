@@ -213,7 +213,8 @@
         "name": "Aktiivinen ohjaus"
       },
       "learning": { "name": "Oppimistila" },
-      "vacation_mode": { "name": "Lomatila" }
+      "vacation_mode": { "name": "Lomatila" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

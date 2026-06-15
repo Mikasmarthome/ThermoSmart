@@ -213,7 +213,8 @@
         "name": "Aktivní řízení"
       },
       "learning": { "name": "Učicí režim" },
-      "vacation_mode": { "name": "Dovolenkový režim" }
+      "vacation_mode": { "name": "Dovolenkový režim" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

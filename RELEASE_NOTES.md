@@ -127,7 +127,7 @@ Manual temperature overrides are now consistently cleared whenever the active mo
 
 ---
 
-**Pre-release** – not marked as Latest. Current stable release remains v1.0.9.
+**Pre-release** – not marked as Latest.
 
 **Test focus for RC.3 observation period:**
 - Open ThermoSmart System options → verify message instead of raw key `system_no_options`

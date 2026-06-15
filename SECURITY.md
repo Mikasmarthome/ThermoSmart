@@ -6,8 +6,7 @@ Security fixes are applied to the latest stable release only.
 
 | Version | Supported |
 |---------|-----------|
-| Latest stable (`v1.0.x`) | ✅ Yes |
-| Latest pre-release (`v1.1.0-rc.x`) | ⚠️ Testing only — best effort |
+| Latest stable (`v1.1.x`) | ✅ Yes |
 | Older versions | ❌ No — please update |
 
 ---

@@ -464,6 +464,29 @@ class TRVControlMixin:
                         self.zone_name, result,
                     )
 
+    # ── Hilfsroutinen ────────────────────────────────────────────────
+
+    @staticmethod
+    def _round_to_step(value: float, step: float) -> float:
+        """Round value to the nearest multiple of step."""
+        return round(round(value / step) * step, 2)
+
+    def _snap_to_device_step(self, entity_id: str, state, value: float) -> float:
+        """Snap value to the TRV's target_temp_step if the attribute is present."""
+        try:
+            step = float(state.attributes.get("target_temp_step", 0))
+            if step > 0:
+                snapped = self._round_to_step(value, step)
+                if snapped != value:
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': %s step-snap %.4f°C → %.2f°C (step=%.2f)",
+                        self.zone_name, entity_id, value, snapped, step,
+                    )
+                return snapped
+        except (TypeError, ValueError):
+            pass
+        return value
+
     # ── Temperatur schreiben ──────────────────────────────────────────
 
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
@@ -498,6 +521,7 @@ class TRVControlMixin:
                             self.zone_name, entity_id, frost_temp, _wp.minimum_setpoint,
                         )
                         frost_temp = _wp.minimum_setpoint
+                    frost_temp = self._snap_to_device_step(entity_id, state, frost_temp)
                     effective_frost = frost_temp  # track clamped value for sensor display
                     try:
                         if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
@@ -551,6 +575,7 @@ class TRVControlMixin:
                     self.zone_name, entity_id, effective_setpoint, _profile.minimum_setpoint,
                 )
                 effective_setpoint = _profile.minimum_setpoint
+            effective_setpoint = self._snap_to_device_step(entity_id, state, effective_setpoint)
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:

@@ -63,6 +63,7 @@ class SeasonMixin:
                     continue
             except (TypeError, ValueError):
                 pass
+            self._last_written_setpoints[entity_id] = TEMP_FROST_PROTECTION
             tasks.append(self.hass.services.async_call(
                 "climate", "set_temperature",
                 {"entity_id": entity_id, "temperature": TEMP_FROST_PROTECTION},

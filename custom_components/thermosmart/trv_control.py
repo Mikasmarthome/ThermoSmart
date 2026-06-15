@@ -515,6 +515,12 @@ class TRVControlMixin:
                     except (TypeError, ValueError):
                         pass
                     _wp = self._device_profiles.get(entity_id)
+                    if _wp is not None and not _wp.is_active:
+                        _LOGGER.debug(
+                            "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
+                            self.zone_name, entity_id,
+                        )
+                        continue
                     if _wp is not None and _wp.minimum_setpoint is not None and _wp.minimum_setpoint > frost_temp:
                         _LOGGER.debug(
                             "ThermoSmart '%s': clamped window-open setpoint for %s"
@@ -523,6 +529,15 @@ class TRVControlMixin:
                         )
                         frost_temp = _wp.minimum_setpoint
                     frost_temp = self._snap_to_device_step(entity_id, state, frost_temp)
+                    # Final clamp: snap must not fall below device or profile minimum
+                    try:
+                        _dev_min = float(state.attributes.get("min_temp", 0))
+                        if 0 < _dev_min <= 30 and _dev_min > frost_temp:
+                            frost_temp = _dev_min
+                    except (TypeError, ValueError):
+                        pass
+                    if _wp is not None and _wp.minimum_setpoint is not None and _wp.minimum_setpoint > frost_temp:
+                        frost_temp = _wp.minimum_setpoint
                     effective_frost = frost_temp  # track clamped value for sensor display
                     try:
                         if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
@@ -559,6 +574,12 @@ class TRVControlMixin:
             if state is None:
                 continue
             _profile = self._device_profiles.get(entity_id)
+            if _profile is not None and not _profile.is_active:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
+                    self.zone_name, entity_id,
+                )
+                continue
             effective_setpoint = trv_setpoint
             try:
                 device_min = float(state.attributes.get("min_temp", 0))
@@ -577,6 +598,15 @@ class TRVControlMixin:
                 )
                 effective_setpoint = _profile.minimum_setpoint
             effective_setpoint = self._snap_to_device_step(entity_id, state, effective_setpoint)
+            # Final clamp: snap must not fall below device or profile minimum
+            try:
+                _dev_min = float(state.attributes.get("min_temp", 0))
+                if 0 < _dev_min <= 30 and _dev_min > effective_setpoint:
+                    effective_setpoint = _dev_min
+            except (TypeError, ValueError):
+                pass
+            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
+                effective_setpoint = _profile.minimum_setpoint
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:

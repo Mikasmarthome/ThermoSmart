@@ -36,6 +36,13 @@ class SeasonMixin:
             self._is_summer = False
 
         if self._is_summer != prev_summer:
+            if self._is_summer and self._override is not None:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clearing manual override due to automatic summer mode",
+                    self.zone_name,
+                )
+                self._override = None
+                self._override_schedule_period = None
             _LOGGER.warning(
                 "ThermoSmart '%s': Saisonwechsel – %s (72h-Ø %.1f°C)",
                 self.zone_name,

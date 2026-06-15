@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Lastni senzorji so natančnejši od vremenske entitete in imajo prednost."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System nima nastavljivih možnosti. Uporabite izbirnik poletnega načina in stikalo za počitnice za krmiljenje vseh con."
     }
   },
   "entity": {

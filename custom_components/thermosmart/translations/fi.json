@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Omat anturit ovat tarkempia kuin sääentiteetti ja niitä suositaan."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart-järjestelmällä ei ole määritettäviä asetuksia. Käytä kesätila-valitsinta ja lomakytkintä kaikkien vyöhykkeiden ohjaamiseen."
     }
   },
   "entity": {

@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Egne sensorer er mer nøyaktige enn værenheten og foretrekkes."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System har ingen konfigurerbare alternativer. Bruk sommermodusvelgeren og feriebyteren til å styre alle soner."
     }
   },
   "entity": {

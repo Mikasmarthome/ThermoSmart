@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Own sensors are more accurate than the weather entity and are preferred."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System has no configurable options. Use the Summer mode select and the Vacation switch to control all zones."
     }
   },
   "entity": {

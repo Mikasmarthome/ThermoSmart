@@ -2,7 +2,7 @@
 
 ## v1.1.0-rc.3 – Release Candidate 3
 
-Adds two fixes and one improvement to RC.2: a missing translation key in the Options Flow, a new global Debug Log switch on the ThermoSmart System entry, and meaningful debug log output across all zones.
+Adds two fixes and two improvements to RC.2: a missing translation key in the Options Flow, a new global Debug Log switch on the ThermoSmart System entry, meaningful debug log output across all zones, and corrected override handling for mode and season transitions.
 
 ---
 
@@ -40,6 +40,17 @@ Meaningful diagnostic output has been added throughout the coordinator and learn
 
 ---
 
+### Fix: Override Handling
+
+Manual temperature overrides are now consistently cleared whenever the active mode changes, ensuring the newly selected mode's configured temperature always takes effect.
+
+- Manual overrides are cleared when switching to any different heating mode (e.g. Comfort → Eco, Night → Comfort)
+- Manual overrides are cleared when Vacation mode activates — prevents a stale override from bypassing frost protection
+- Manual overrides are cleared when Summer Mode becomes active, both via the global switch and via automatic 72 h season detection — prevents stale overrides from reappearing after Summer Mode ends
+- Schedule-slot transitions (Auto mode night ↔ comfort), Presence-away detection, and window-open suppression continue to work as before
+
+---
+
 ### Included from RC.2
 
 - Device-aware setpoint resolution: `target_temp_step` snap with round-half-up before write and store
@@ -66,6 +77,8 @@ Meaningful diagnostic output has been added throughout the coordinator and learn
 - Restart HA with Debug Log ON → verify debug resumes immediately
 - With Debug Log ON: verify per-zone cycle summary appears every update cycle in the log
 - With Debug Log ON and a mode change: verify mode transition log line with reason
+- Set a manual override, then switch mode → verify override is cleared and new mode temp applies
+- Set a manual override, then activate Summer Mode → verify override is cleared
 - All RC.2 test cases remain valid
 
 ---

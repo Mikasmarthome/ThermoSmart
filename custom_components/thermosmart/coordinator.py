@@ -249,6 +249,13 @@ class ThermoSmartCoordinator(
         """
         self._summer_override = value
         if value is True:
+            if self._override is not None:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clearing manual override due to summer mode",
+                    self.zone_name,
+                )
+                self._override = None
+                self._override_schedule_period = None
             self._is_summer = True
         elif value is False:
             self._is_summer = False

@@ -165,6 +165,9 @@ class ThermoSmartCoordinator(
         self._heating_failure_since: datetime | None = None
         self._heating_failure_notified: bool = False
 
+        # Debug-Logging: Modus-Tracking für Wechsel-Erkennung
+        self._last_effective_mode: str | None = None
+
     # ── Eigenschaften ────────────────────────────────────────────────
 
     @property
@@ -514,6 +517,20 @@ class ThermoSmartCoordinator(
 
             presence = self._get_presence_state()
             mode = self._effective_mode(presence)
+            if self._last_effective_mode is not None and mode != self._last_effective_mode:
+                if presence.get("vacation"):
+                    _reason = "vacation"
+                elif self._mode != HEATING_MODE_AUTO:
+                    _reason = "manual"
+                elif presence.get("all_away"):
+                    _reason = "presence"
+                else:
+                    _reason = "schedule"
+                _LOGGER.debug(
+                    "ThermoSmart '%s': effective mode changed %s → %s reason=%s",
+                    self.zone_name, self._last_effective_mode, mode, _reason,
+                )
+            self._last_effective_mode = mode
             recommendation = await self._compute_recommendation(cfg, weather_data, mode)
 
             effective_summer = self._is_summer
@@ -686,6 +703,27 @@ class ThermoSmartCoordinator(
                 self._live_temp = raw_temp
             if indoor_humidity is not None:
                 self._live_humidity = indoor_humidity
+
+            _ct = recommendation.get("current_temp")
+            _et = recommendation.get("effective_target")
+            _at = recommendation.get("adjusted_target")
+            _ts = recommendation.get("trv_setpoint")
+            _LOGGER.debug(
+                "ThermoSmart '%s': cycle summary mode=%s current=%s°C"
+                " target=%s°C adjusted=%s°C trv=%s°C duty=%s%% preheat=%dmin"
+                " window=%s summer=%s active=%s",
+                self.zone_name,
+                mode,
+                f"{_ct:.1f}" if _ct is not None else "n/a",
+                f"{_et:.1f}" if _et is not None else "n/a",
+                f"{_at:.1f}" if _at is not None else "n/a",
+                f"{_ts:.1f}" if _ts is not None else "n/a",
+                f"{recommendation.get('tpi_duty_cycle', 0.0):.0f}",
+                recommendation.get("preheat_minutes", 0),
+                recommendation.get("window_open", False),
+                recommendation.get("is_summer", False),
+                self._active_control,
+            )
 
             return {
                 "weather": weather_data,
@@ -934,6 +972,15 @@ class ThermoSmartCoordinator(
                                 self.zone_name, effective_target, comfort_floor,
                             )
                             effective_target = comfort_floor
+
+                    if biased_suppression < 0.95:
+                        _LOGGER.debug(
+                            "ThermoSmart '%s': forecast/weather correction active "
+                            "raw_target=%.1f°C → effective=%.1f°C correction=%.1f°C suppression=%.0f%%",
+                            self.zone_name, raw_target, effective_target,
+                            effective_target - raw_target,
+                            (1.0 - biased_suppression) * 100,
+                        )
 
                     forecast_high = weather_data.get("forecast_high")
                     if biased_suppression < 0.95 and forecast_high is not None and current_temp is not None:

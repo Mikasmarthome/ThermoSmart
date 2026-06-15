@@ -56,7 +56,7 @@ HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://
 
 ### 2 — Download
 
-HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.1.0` → Download
+HACS → Integrations → find **ThermoSmart** → **Download** → select the latest release → Download
 
 ### 3 — Restart and Add
 
@@ -110,7 +110,7 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 
 ## Device Compatibility
 
-ThermoSmart v1.1.0 introduces a Device Profile system that enables correct behaviour across a wide range of TRVs out of the box. Each profile encodes the device's `target_temp_step`, temperature limits, and any quirks — so ThermoSmart can write precise setpoints without manual calibration.
+ThermoSmart includes a Device Profile system that enables correct behaviour across a wide range of TRVs out of the box. Each profile encodes the device's `target_temp_step`, temperature limits, and any quirks — so ThermoSmart can write precise setpoints without manual calibration.
 
 For devices without a specific profile, ThermoSmart falls back to a generic profile that works with any `climate` entity supporting `set_temperature`.
 
@@ -140,7 +140,7 @@ These devices have a named profile with device-specific handling applied automat
 
 ### Prepared profiles — standard behavior
 
-These devices have a named profile. Autodetection of valve, calibration, and quirk entities runs as normal. No device-specific overrides apply beyond what the hardware exposes.
+These devices have a named profile. Autodetection of valve, calibration, and quirk entities runs as normal. No device-specific overrides apply beyond what the hardware exposes. Dedicated profiles allow future device-specific optimizations and quirks handling while remaining compatible with generic climate devices.
 
 | Device | Protocol |
 |---|---|
@@ -168,8 +168,8 @@ Any `climate` entity supporting `set_temperature` that does not match a named pr
 | Profile | Applies to |
 |---|---|
 | Generic TRV | All unrecognised `climate` entities |
-| Generic Zigbee TRV | Prepared — platform detection not yet active |
-| Generic HomeKit TRV | Prepared — platform detection not yet active |
+| Generic Zigbee TRV | Prepared — platform detection planned |
+| Generic HomeKit TRV | Prepared — platform detection planned |
 
 ### Protocol compatibility
 
@@ -292,27 +292,6 @@ The file is saved to `/config/www/` and can be opened via `/local/<filename>` ap
 - Street addresses or geographic coordinates
 
 **The export is strictly local.** No data is sent anywhere automatically. You can review the file before deciding whether to share it.
-
----
-
-## Breaking Changes
-
-### v1.0.0-rc.1 — Summer mode state values changed to lowercase
-
-The state values of `select.thermosmart_summer_mode` were changed from `Automatic` / `On` / `Off` to `automatic` / `on` / `off`.
-
-**Automations and templates that check these states must be updated.** For example: `state: "Automatic"` → `state: "automatic"`.
-
----
-
-### v1.0.0-beta.23 — Summer mode switch replaced by select
-
-| Removed entity | New entity |
-|---|---|
-| `switch.thermosmart_global_summer` | `select.thermosmart_summer_mode` |
-
-The old entity is automatically removed from the Entity Registry on upgrade. **Dashboards and automations referencing the old entity must be updated manually.**  
-New options: `automatic` · `on` · `off`
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## v1.1.0-rc.3 – Release Candidate 3
 
-Adds two targeted fixes to RC.2: a missing translation key in the Options Flow and a new global Debug Log switch on the ThermoSmart System entry.
+Adds two fixes and one improvement to RC.2: a missing translation key in the Options Flow, a new global Debug Log switch on the ThermoSmart System entry, and meaningful debug log output across all zones.
 
 ---
 
@@ -25,6 +25,18 @@ A new **Debug Log** switch appears on the ThermoSmart System device card. Toggli
 - **YAML logger configuration is preserved:** if `custom_components.thermosmart: debug` is set in `configuration.yaml`, turning the switch off restores that level rather than resetting it
 
 Only the `custom_components.thermosmart` parent logger is modified. All submodule loggers inherit from it. No coordinator, learning engine, or TRV control logic is affected.
+
+---
+
+### Improvement: Debug Logging
+
+Meaningful diagnostic output has been added throughout the coordinator and learning engine so that enabling the Debug Log switch produces actionable log entries during normal operation.
+
+- **Cycle summary:** one compact `DEBUG` line per zone per update cycle with mode, current temp, target, adjusted target, TRV setpoint, TPI duty cycle, preheat minutes, window state, and summer flag
+- **Mode change:** logged whenever the effective heating mode transitions (e.g. `auto → vacation`), including the reason (`vacation`, `manual`, `presence`, or `schedule`)
+- **TRV observation:** logged when the learning engine stores a new observation, including setpoint, indoor temp, target, and heat rate
+- **Forecast/weather correction:** logged when the weather bias actively suppresses the heating target, showing raw vs. effective target and correction magnitude
+- Debug logs now make it easier to understand why ThermoSmart selected a particular target, TRV setpoint, or operating mode
 
 ---
 
@@ -52,6 +64,8 @@ Only the `custom_components.thermosmart` parent logger is modified. All submodul
 - Open ThermoSmart System options → verify message instead of raw key `system_no_options`
 - Toggle Debug Log switch → verify `ThermoSmart System: Debug logging enabled/disabled` in log
 - Restart HA with Debug Log ON → verify debug resumes immediately
+- With Debug Log ON: verify per-zone cycle summary appears every update cycle in the log
+- With Debug Log ON and a mode change: verify mode transition log line with reason
 - All RC.2 test cases remain valid
 
 ---

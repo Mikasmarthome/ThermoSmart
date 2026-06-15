@@ -2,15 +2,13 @@
 
 ## Supported Versions
 
-ThermoSmart is currently in public beta. Security fixes are applied to the latest release only.
+Security fixes are applied to the latest stable release only.
 
 | Version | Supported |
 |---------|-----------|
-| Latest beta (`v1.0.0-beta.x`) | ✅ Yes |
-| Older beta versions | ❌ No — please update |
-| `v1.0.0` and later (stable) | ✅ Yes |
-
-Once `v1.0.0` is released, only the current stable release and the current beta (if active) will receive security fixes.
+| Latest stable (`v1.0.x`) | ✅ Yes |
+| Latest pre-release (`v1.1.0-rc.x`) | ⚠️ Testing only — best effort |
+| Older versions | ❌ No — please update |
 
 ---
 

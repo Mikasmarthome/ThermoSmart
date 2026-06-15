@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Kendi sensörleriniz hava durumu varlığından daha hassastır ve tercih edilir."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System'in yapılandırılabilir seçeneği yoktur. Tüm bölgeleri kontrol etmek için yaz modu seçiciyi ve tatil anahtarını kullanın."
     }
   },
   "entity": {

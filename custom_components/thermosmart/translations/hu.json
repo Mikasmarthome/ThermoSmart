@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "A saját érzékelők pontosabbak az időjárás entitásnál, és előnyt élveznek."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "A ThermoSmart System nem rendelkezik konfigurálható beállításokkal. Használja a nyári mód választót és a vakáció kapcsolót az összes zóna irányításához."
     }
   },
   "entity": {

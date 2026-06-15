@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "I sensori propri sono più accurati dell'entità meteo e vengono preferiti."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System non ha opzioni configurabili. Usa gli interruttori globali per i modi Estate e Vacanza."
     }
   },
   "entity": {

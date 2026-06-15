@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Eigen sensoren zijn nauwkeuriger dan de weer-entiteit en krijgen voorrang."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart Systeem heeft geen configureerbare opties. Gebruik de globale schakelaars voor Zomer- en Vakantiemodus."
     }
   },
   "entity": {

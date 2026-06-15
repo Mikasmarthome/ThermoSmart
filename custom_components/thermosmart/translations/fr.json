@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Les capteurs personnels sont plus précis que l'entité météo et sont préférés."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System n'a pas d'options configurables. Utilisez les interrupteurs globaux pour les modes Été et Vacances."
     }
   },
   "entity": {

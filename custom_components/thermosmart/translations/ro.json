@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Senzorii proprii sunt mai precisi decât entitatea meteo și sunt preferați."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System nu are opțiuni configurabile. Utilizați selectorul modului Vară şi comutatorul de Vacanță pentru a controla toate zonele."
     }
   },
   "entity": {

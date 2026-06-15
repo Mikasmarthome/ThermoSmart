@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Egna sensorer är mer exakta än väderentiteten och prioriteras."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System har inga konfigurerbara alternativ. Använd de globala omkopplarna för Sommar- och Semesterläge."
     }
   },
   "entity": {

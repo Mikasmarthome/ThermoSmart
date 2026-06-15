@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Els sensors propis són més precisos que l'entitat meteorològica i es prefereixen."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System no té opcions configurables. Useu el selector de mode Estiu i l'interruptor de Vacances per controlar totes les zones."
     }
   },
   "entity": {

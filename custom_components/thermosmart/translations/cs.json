@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Vlastní senzory jsou přesnější než entita počasí a mají přednost."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System nemá žádné konfigurovatelné možnosti. Použijte selektor letního režimu a přepínač dovolené pro řízení všech zón."
     }
   },
   "entity": {

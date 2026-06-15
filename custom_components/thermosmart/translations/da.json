@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Egne sensorer er mere præcise end vejrenheden og foretrækkes."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System har ingen konfigurerbare indstillinger. Brug sommertilstandsvælgeren og ferieafbryderen til at styre alle zoner."
     }
   },
   "entity": {

@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "自有传感器比天气实体更精确，优先使用。"
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System 没有可配置选项。请使用夏季模式选择器和假期开关来控制所有区域。"
     }
   },
   "entity": {

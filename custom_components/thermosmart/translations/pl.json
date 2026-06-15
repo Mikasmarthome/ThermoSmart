@@ -184,6 +184,9 @@
           "outdoor_temp_sensor": "Własne czujniki są dokładniejsze niż jednostka pogodowa i są preferowane."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "System ThermoSmart nie ma konfigurowalnych opcji. Użyj globalnych przełączników do trybów Lato i Urlop."
     }
   },
   "entity": {

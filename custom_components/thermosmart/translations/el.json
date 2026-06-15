@@ -213,7 +213,8 @@
         "name": "Ενεργός έλεγχος"
       },
       "learning": { "name": "Λειτουργία εκμάθησης" },
-      "vacation_mode": { "name": "Λειτουργία διακοπών" }
+      "vacation_mode": { "name": "Λειτουργία διακοπών" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

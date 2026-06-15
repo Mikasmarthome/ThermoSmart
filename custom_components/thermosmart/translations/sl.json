@@ -213,7 +213,8 @@
         "name": "Aktivno krmiljenje"
       },
       "learning": { "name": "Način učenja" },
-      "vacation_mode": { "name": "Počitniški način" }
+      "vacation_mode": { "name": "Počitniški način" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

@@ -213,7 +213,8 @@
         "name": "Aktive Steuerung"
       },
       "learning": { "name": "Lernmodus" },
-      "vacation_mode": { "name": "Urlaubsmodus" }
+      "vacation_mode": { "name": "Urlaubsmodus" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

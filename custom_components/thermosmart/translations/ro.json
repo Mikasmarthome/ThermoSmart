@@ -213,7 +213,8 @@
         "name": "Control activ"
       },
       "learning": { "name": "Mod învățare" },
-      "vacation_mode": { "name": "Mod vacanță" }
+      "vacation_mode": { "name": "Mod vacanță" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

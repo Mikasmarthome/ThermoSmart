@@ -213,7 +213,8 @@
         "name": "Actieve bediening"
       },
       "learning": { "name": "Leermodus" },
-      "vacation_mode": { "name": "Vakantiemodus" }
+      "vacation_mode": { "name": "Vakantiemodus" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

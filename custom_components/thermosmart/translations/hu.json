@@ -213,7 +213,8 @@
         "name": "Aktív vezérlés"
       },
       "learning": { "name": "Tanulási mód" },
-      "vacation_mode": { "name": "Vakációs mód" }
+      "vacation_mode": { "name": "Vakációs mód" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

@@ -213,7 +213,8 @@
         "name": "Aktywne sterowanie"
       },
       "learning": { "name": "Tryb uczenia" },
-      "vacation_mode": { "name": "Tryb wakacji" }
+      "vacation_mode": { "name": "Tryb wakacji" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

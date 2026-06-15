@@ -213,7 +213,8 @@
         "name": "Active Control"
       },
       "learning": { "name": "Learning mode" },
-      "vacation_mode": { "name": "Vacation Mode" }
+      "vacation_mode": { "name": "Vacation Mode" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {

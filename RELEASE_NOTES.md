@@ -1,5 +1,61 @@
 # ThermoSmart – Release Notes
 
+## v1.1.0-rc.3 – Release Candidate 3
+
+Adds two targeted fixes to RC.2: a missing translation key in the Options Flow and a new global Debug Log switch on the ThermoSmart System entry.
+
+---
+
+### Fix: Options Flow abort translation (`system_no_options`)
+
+The `ThermoSmartSystemOptionsFlow` calls `async_abort(reason="system_no_options")` when a user opens the options dialog for the System entry (which has no editable options). Home Assistant looks up abort reasons for Options Flow under `options.abort.<reason>` — a separate namespace from `config.abort`. The key existed only in the `config` namespace and was missing from `options`, causing a raw key string to be displayed instead of the user-facing message.
+
+**Fix:** Added `options.abort.system_no_options` to `strings.json` and all 24 locale translation files.
+
+---
+
+### New: Global Debug Log switch
+
+A new **Debug Log** switch appears on the ThermoSmart System device card. Toggling it sets the `custom_components.thermosmart` logger to `DEBUG` at runtime — no Home Assistant restart or `configuration.yaml` edit required.
+
+**Behaviour:**
+- **On:** stores the logger's current level, sets it to `DEBUG`, logs `ThermoSmart System: Debug logging enabled` at INFO (always visible)
+- **Off:** restores the previously stored level (`NOTSET` / inherited, or YAML-configured value), logs `ThermoSmart System: Debug logging disabled` at INFO
+- **HA restart with switch ON:** state is restored via `RestoreEntity`; debug is re-enabled immediately during entity setup
+- **YAML logger configuration is preserved:** if `custom_components.thermosmart: debug` is set in `configuration.yaml`, turning the switch off restores that level rather than resetting it
+
+Only the `custom_components.thermosmart` parent logger is modified. All submodule loggers inherit from it. No coordinator, learning engine, or TRV control logic is affected.
+
+---
+
+### Included from RC.2
+
+- Device-aware setpoint resolution: `target_temp_step` snap with round-half-up before write and store
+- `is_active=False` guard: devices like tado, daikin_climate, netatmo skip `climate.set_temperature`
+- Final clamp after step-snap: re-clamp to `min_temp` / `profile.minimum_setpoint`
+- Summer mode frost setpoint tracking: `_last_written_setpoints` updated before writing 12 °C
+- Debounced TRV observation save: 60-second deferred save replaces threshold-based `% 20` save
+
+### Included from RC.1
+
+- Window open/close delay: exact timing via `async_call_later`
+- TRV setpoint sensor: immediate update on window open
+- Race condition fix: `_handle_trv_change` suppressed during window open
+- Preheat cap raised from 60 → 180 minutes
+- Learning sensor UX: `None` on MEASUREMENT sensors + `data_status: learning` attribute
+
+---
+
+**Pre-release** – not marked as Latest. Current stable release remains v1.0.9.
+
+**Test focus for RC.3 observation period:**
+- Open ThermoSmart System options → verify message instead of raw key `system_no_options`
+- Toggle Debug Log switch → verify `ThermoSmart System: Debug logging enabled/disabled` in log
+- Restart HA with Debug Log ON → verify debug resumes immediately
+- All RC.2 test cases remain valid
+
+---
+
 ## v1.0.8
 
 ### Learning Engine Data Collection

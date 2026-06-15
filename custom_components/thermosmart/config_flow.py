@@ -22,12 +22,14 @@ from .const import (
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
     CONF_VACATION_TEMP,
+    CONF_WINDOW_OPEN_TEMP,
     CONF_ECO_TEMP,
     CONF_VALVE_MAINTENANCE,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
     DEFAULT_LEARNING_ENABLED,
     TEMP_ECO,
+    WINDOW_OPEN_SETPOINT,
 )
 
 
@@ -140,6 +142,10 @@ def _schema_schedule(d: dict) -> vol.Schema:
         vol.Required(CONF_ECO_TEMP, default=d.get(CONF_ECO_TEMP, TEMP_ECO)):
             selector.NumberSelector(selector.NumberSelectorConfig(
                 min=15, max=22, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Required(CONF_WINDOW_OPEN_TEMP, default=d.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=5, max=20, step=0.5, unit_of_measurement="°C", mode=selector.NumberSelectorMode.BOX,
             )),
         vol.Required("temp_tolerance", default=d.get("temp_tolerance", 0.5)):
             selector.NumberSelector(selector.NumberSelectorConfig(

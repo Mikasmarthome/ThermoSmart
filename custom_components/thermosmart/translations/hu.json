@@ -42,7 +42,8 @@
           "away_temp": "Távolléti hőmérséklet (automatikusan, ha mindenki elment)",
           "vacation_temp": "Vakációs hőmérséklet (fagyvédelem)",
           "eco_temp": "Eco hőmérséklet (energiatakarékos, éjszakai és kényelmi között)",
-          "temp_tolerance": "Hőmérsékleti tűréshatár – csak ezen eltérés után irányítsa a TRV-t",
+          "window_open_temp": "Hőmérséklet nyitott ablakkal",
+          "temp_tolerance": "Hőmérsékleti tűréshatár – küszöb a beállítási pont frissítéséhez",
           "schedule_enabled": "Időbeli ütemterv engedélyezése",
           "sched_wd_morning": "Hétköznap: Komfort-tól",
           "sched_wd_night": "Hétköznap: Éjszaka-tól",
@@ -57,7 +58,8 @@
           "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
           "away_temp": "Csak akkor kerül automatikusan alkalmazásra, ha a jelenlétérzékelés konfigurálva van (3. lépés). Manuálisan is beállítható az üzemmód-választón keresztül.",
           "eco_temp": "Akkor használatos, ha az üzemmód-választót manuálisan 'Eco'-ra állítják. Nem aktiválódik automatikusan.",
-          "temp_tolerance": "A ThermoSmart csak akkor állítja be a TRV-t, ha a hőmérséklet ennél az értéknél jobban eltér. 0,5 °C a legtöbb szobában jól működik. Alacsonyabb = reaktívabb, magasabb = kevesebb beállítás."
+          "window_open_temp": "Célhőmérséklet, amíg egy ablak nyitva van. Az olyan termosztátokhoz, amelyek nem támogatnak nagyon alacsony értékeket, használjon magasabb értéket, például 10 °C-ot.",
+          "temp_tolerance": "A TRV számított beállítási pontjának minimális változása, mielőtt a ThermoSmart új frissítést küld. Csökkenti a termosztatba való felesleges írásokat. 0,5 °C a legtöbb szobában jól működik."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Távolléti hőmérséklet",
           "vacation_temp": "Vakációs hőmérséklet",
           "eco_temp": "Eco hőmérséklet",
+          "window_open_temp": "Hőmérséklet nyitott ablakkal",
           "temp_tolerance": "Hőmérsékleti tűréshatár",
           "schedule_enabled": "Időbeli ütemterv engedélyezése",
           "sched_wd_morning": "Hétköznap: Komfort-tól",
@@ -149,7 +152,8 @@
           "sched_we_night": "Az éjszakai hőmérséklet ettől az időponttól érvényes",
           "away_temp": "Csak akkor kerül automatikusan alkalmazásra, ha a jelenlétérzékelés konfigurálva van (3. lépés). Manuálisan is beállítható az üzemmód-választón keresztül.",
           "eco_temp": "Akkor használatos, ha az üzemmód-választót manuálisan 'Eco'-ra állítják. Nem aktiválódik automatikusan.",
-          "temp_tolerance": "A ThermoSmart csak akkor állítja be a TRV-t, ha a hőmérséklet ennél az értéknél jobban eltér. 0,5 °C a legtöbb szobában jól működik. Alacsonyabb = reaktívabb, magasabb = kevesebb beállítás."
+          "window_open_temp": "Célhőmérséklet, amíg egy ablak nyitva van. Az olyan termosztátokhoz, amelyek nem támogatnak nagyon alacsony értékeket, használjon magasabb értéket, például 10 °C-ot.",
+          "temp_tolerance": "A TRV számított beállítási pontjának minimális változása, mielőtt a ThermoSmart új frissítést küld. Csökkenti a termosztatba való felesleges írásokat. 0,5 °C a legtöbb szobában jól működik."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "A saját érzékelők pontosabbak az időjárás entitásnál, és előnyt élveznek."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "A ThermoSmart System nem rendelkezik konfigurálható beállításokkal. Használja a nyári mód választót és a vakáció kapcsolót az összes zóna irányításához."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktív vezérlés"
       },
       "learning": { "name": "Tanulási mód" },
-      "vacation_mode": { "name": "Vakációs mód" }
+      "vacation_mode": { "name": "Vakációs mód" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Célhőmérséklet" },
       "trv_setpoint": { "name": "TRV beállítási pont" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Eredménypontszám" },
+      "outcome_score": {
+        "name": "Eredménypontszám",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
       "preheat_minutes": { "name": "Előmelegítési idő" },
       "confidence": { "name": "Tanulási előrehaladás" },
       "weather_offset": { "name": "Időjárás-korrekció" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Hőmérséklet meredeksége" },
       "temp_ema_1h": { "name": "Hőmérséklet EMA 1h" },
-      "heat_loss": { "name": "Hőveszteség" },
-      "heating_power": { "name": "Fűtési teljesítmény" },
+      "heat_loss": {
+        "name": "Hőveszteség",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
+      "heating_power": {
+        "name": "Fűtési teljesítmény",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
       "sun_intensity": { "name": "Napenergia-nyereség" },
-      "window_cooling_rate": { "name": "Ablakon keresztüli hűtési sebesség" },
+      "window_cooling_rate": {
+        "name": "Ablakon keresztüli hűtési sebesség",
+        "state": {
+          "learning": "Tanulás"
+        }
+      },
       "trv_observations": { "name": "TRV-megfigyelések" }
     }
   }

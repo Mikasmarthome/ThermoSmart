@@ -42,7 +42,8 @@
           "away_temp": "Poissaololämpötila (automaattisesti kun kaikki ovat lähteneet)",
           "vacation_temp": "Lomalämpötila (pakkassuoja)",
           "eco_temp": "Eco-lämpötila (energiansäästö, yön ja mukavuuden välillä)",
-          "temp_tolerance": "Lämpötilansietokyky – ohjaa TRV:tä vasta tämän poikkeaman jälkeen",
+          "window_open_temp": "Lämpötila ikkuna auki",
+          "temp_tolerance": "Lämpötilansietokyky – kynnysarvo asetuspisteen päivitykselle",
           "schedule_enabled": "Ota aikataulu käyttöön",
           "sched_wd_morning": "Arkipäivä: Mukavuus alkaen",
           "sched_wd_night": "Arkipäivä: Yö alkaen",
@@ -57,7 +58,8 @@
           "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen",
           "away_temp": "Käytetään automaattisesti vain, kun läsnäolon tunnistus on määritetty (Vaihe 3). Voidaan myös asettaa manuaalisesti tilavalitsimen kautta.",
           "eco_temp": "Käytetään, kun tilavalitsin asetetaan manuaalisesti arvoon 'Eco'. Ei aktivoidu automaattisesti.",
-          "temp_tolerance": "ThermoSmart säätää TRV:tä vain, kun lämpötila poikkeaa enemmän kuin tämä arvo. 0,5 °C toimii hyvin useimmissa huoneissa. Pienempi = reaktiivisempi, suurempi = vähemmän säätöjä."
+          "window_open_temp": "Tavoitelämpötila, kun ikkuna on auki. Termostaateille, jotka eivät tue erittäin matalia asetuksia, käytä korkeampaa arvoa, kuten 10 °C.",
+          "temp_tolerance": "Lasketun TRV-asetuspisteen vähimmäismuutos ennen kuin ThermoSmart lähettää uuden päivityksen. Vähentää tarpeettomia kirjoituksia termostaattiin. 0,5 °C toimii hyvin useimmissa huoneissa."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Poissaololämpötila",
           "vacation_temp": "Lomalämpötila",
           "eco_temp": "Eco-lämpötila",
+          "window_open_temp": "Lämpötila ikkuna auki",
           "temp_tolerance": "Lämpötilansietokyky",
           "schedule_enabled": "Ota aikataulu käyttöön",
           "sched_wd_morning": "Arkipäivä: Mukavuus alkaen",
@@ -149,7 +152,8 @@
           "sched_we_night": "Yölämpötila on voimassa tästä ajasta alkaen",
           "away_temp": "Käytetään automaattisesti vain, kun läsnäolon tunnistus on määritetty (Vaihe 3). Voidaan myös asettaa manuaalisesti tilavalitsimen kautta.",
           "eco_temp": "Käytetään, kun tilavalitsin asetetaan manuaalisesti arvoon 'Eco'. Ei aktivoidu automaattisesti.",
-          "temp_tolerance": "ThermoSmart säätää TRV:tä vain, kun lämpötila poikkeaa enemmän kuin tämä arvo. 0,5 °C toimii hyvin useimmissa huoneissa. Pienempi = reaktiivisempi, suurempi = vähemmän säätöjä."
+          "window_open_temp": "Tavoitelämpötila, kun ikkuna on auki. Termostaateille, jotka eivät tue erittäin matalia asetuksia, käytä korkeampaa arvoa, kuten 10 °C.",
+          "temp_tolerance": "Lasketun TRV-asetuspisteen vähimmäismuutos ennen kuin ThermoSmart lähettää uuden päivityksen. Vähentää tarpeettomia kirjoituksia termostaattiin. 0,5 °C toimii hyvin useimmissa huoneissa."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Omat anturit ovat tarkempia kuin sääentiteetti ja niitä suositaan."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart-järjestelmällä ei ole määritettäviä asetuksia. Käytä kesätila-valitsinta ja lomakytkintä kaikkien vyöhykkeiden ohjaamiseen."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktiivinen ohjaus"
       },
       "learning": { "name": "Oppimistila" },
-      "vacation_mode": { "name": "Lomatila" }
+      "vacation_mode": { "name": "Lomatila" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Kohdelämpötila" },
       "trv_setpoint": { "name": "TRV-asetusarvo" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Tulospisteet" },
+      "outcome_score": {
+        "name": "Tulospisteet",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
       "preheat_minutes": { "name": "Esilämmitysaika" },
       "confidence": { "name": "Oppimisedistyminen" },
       "weather_offset": { "name": "Sääkorjaus" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Lämpötilan kaltevuus" },
       "temp_ema_1h": { "name": "Lämpötila EMA 1h" },
-      "heat_loss": { "name": "Lämpöhäviö" },
-      "heating_power": { "name": "Lämmitysteho" },
+      "heat_loss": {
+        "name": "Lämpöhäviö",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
+      "heating_power": {
+        "name": "Lämmitysteho",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
       "sun_intensity": { "name": "Aurinkolämpöhyöty" },
-      "window_cooling_rate": { "name": "Ikkunajäähdytysnopeus" },
+      "window_cooling_rate": {
+        "name": "Ikkunajäähdytysnopeus",
+        "state": {
+          "learning": "Oppiminen käynnissä"
+        }
+      },
       "trv_observations": { "name": "TRV-havainnot" }
     }
   }

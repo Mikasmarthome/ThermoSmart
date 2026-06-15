@@ -42,7 +42,8 @@
           "away_temp": "Borta-temperatur (automatiskt när alla har gett sig av)",
           "vacation_temp": "Semestertemperatur (frostskydd)",
           "eco_temp": "Eco-temperatur (energisparande, mellan natt och komfort)",
-          "temp_tolerance": "Temperaturtolerans – styr TRV:en först vid denna avvikelse",
+          "window_open_temp": "Temperatur vid öppet fönster",
+          "temp_tolerance": "Temperaturtolerans – tröskel för börvärdesuppdatering",
           "schedule_enabled": "Aktivera tidsschema",
           "sched_wd_morning": "Vardag: Komfort från",
           "sched_wd_night": "Vardag: Natt från",
@@ -57,7 +58,8 @@
           "sched_we_night": "Natttemperaturen gäller från denna tid",
           "away_temp": "Tillämpas automatiskt bara om närvarodetektering är konfigurerad (Steg 3). Kan också ställas in manuellt via lägesväljaren.",
           "eco_temp": "Används när lägesväljaren manuellt är satt till 'Eco'. Aktiveras inte automatiskt.",
-          "temp_tolerance": "ThermoSmart justerar TRV:n bara när temperaturen avviker mer än detta värde. 0,5 °C fungerar bra för de flesta rum. Lägre = mer reaktiv, högre = färre justeringar."
+          "window_open_temp": "Måltemperatur när ett fönster är öppet. För termostater som inte stödjer mycket låga börvärden, använd ett högre värde som t.ex. 10 °C.",
+          "temp_tolerance": "Minsta förändring av det beräknade TRV-börvärdet innan ThermoSmart skickar en ny uppdatering. Minskar onödiga skrivningar till termostaten. 0,5 °C fungerar bra för de flesta rum."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Borta-temperatur",
           "vacation_temp": "Semestertemperatur",
           "eco_temp": "Eco-temperatur",
+          "window_open_temp": "Temperatur vid öppet fönster",
           "temp_tolerance": "Temperaturtolerans",
           "schedule_enabled": "Aktivera tidsschema",
           "sched_wd_morning": "Vardag: Komfort från",
@@ -149,7 +152,8 @@
           "sched_we_night": "Natttemperaturen gäller från denna tid",
           "away_temp": "Tillämpas automatiskt bara om närvarodetektering är konfigurerad (Steg 3). Kan också ställas in manuellt via lägesväljaren.",
           "eco_temp": "Används när lägesväljaren manuellt är satt till 'Eco'. Aktiveras inte automatiskt.",
-          "temp_tolerance": "ThermoSmart justerar TRV:n bara när temperaturen avviker mer än detta värde. 0,5 °C fungerar bra för de flesta rum. Lägre = mer reaktiv, högre = färre justeringar."
+          "window_open_temp": "Måltemperatur när ett fönster är öppet. För termostater som inte stödjer mycket låga börvärden, använd ett högre värde som t.ex. 10 °C.",
+          "temp_tolerance": "Minsta förändring av det beräknade TRV-börvärdet innan ThermoSmart skickar en ny uppdatering. Minskar onödiga skrivningar till termostaten. 0,5 °C fungerar bra för de flesta rum."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Egna sensorer är mer exakta än väderentiteten och prioriteras."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System har inga konfigurerbara alternativ. Använd de globala omkopplarna för Sommar- och Semesterläge."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktiv styrning"
       },
       "learning": { "name": "Inlärningsläge" },
-      "vacation_mode": { "name": "Semesterläge" }
+      "vacation_mode": { "name": "Semesterläge" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Måltemperatur" },
       "trv_setpoint": { "name": "TRV-börvärde" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Resultatpoäng" },
+      "outcome_score": {
+        "name": "Resultatpoäng",
+        "state": {
+          "learning": "Lär sig"
+        }
+      },
       "preheat_minutes": { "name": "Förvärmingstid" },
       "confidence": { "name": "Inlärningsframsteg" },
       "weather_offset": { "name": "Väderkorrigering" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Temperaturlutning" },
       "temp_ema_1h": { "name": "Temperatur EMA 1h" },
-      "heat_loss": { "name": "Värmeförlust" },
-      "heating_power": { "name": "Värmeeffekt" },
+      "heat_loss": {
+        "name": "Värmeförlust",
+        "state": {
+          "learning": "Lär sig"
+        }
+      },
+      "heating_power": {
+        "name": "Värmeeffekt",
+        "state": {
+          "learning": "Lär sig"
+        }
+      },
       "sun_intensity": { "name": "Solvärmeinflöde" },
-      "window_cooling_rate": { "name": "Avkylningshastighet fönster" },
+      "window_cooling_rate": {
+        "name": "Avkylningshastighet fönster",
+        "state": {
+          "learning": "Lär sig"
+        }
+      },
       "trv_observations": { "name": "TRV-observationer" }
     }
   }

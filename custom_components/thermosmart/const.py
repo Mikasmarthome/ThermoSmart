@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.0.8"
+VERSION = "1.1.0"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -72,6 +72,7 @@ TPI_VALVE_BUMP_DELAY  = 5.0    # Sekunden zwischen Bump-Open und Zielwert
 
 # Zeitplan-Konfiguration (HH:MM Strings)
 CONF_VACATION_TEMP     = "vacation_temp"       # Urlaubstemperatur (Frostschutz)
+CONF_WINDOW_OPEN_TEMP  = "window_open_temp"    # TRV-Setpoint bei geöffnetem Fenster (pro Zone)
 CONF_ECO_TEMP          = "eco_temp"            # Eco-Preset Temperatur
 CONF_SCHED_WD_MORNING  = "sched_wd_morning"   # Werktag: Aufwachen  → comfort_temp
 CONF_SCHED_WD_NIGHT    = "sched_wd_night"     # Werktag: Nacht      → night_temp
@@ -86,6 +87,7 @@ VALVE_MAINTENANCE_DURATION_SUMMER_SEC = 8  # Sekunden offen (Sommer – kurze Ü
 
 DOMAIN_GLOBAL_SUMMER   = f"{DOMAIN}_global_summer"
 DOMAIN_GLOBAL_VACATION = f"{DOMAIN}_global_vacation"
+DOMAIN_GLOBAL_DEBUG    = f"{DOMAIN}_global_debug"
 
 # Default values
 DEFAULT_WEATHER_ENTITY = "weather.home"
@@ -116,7 +118,7 @@ WIND_CHILL_BOOST = 0.5          # °C extra when cold AND windy
 
 # Learning algorithm settings
 LEARNING_MIN_SAMPLES = 5        # Mindest-Beobachtungen bevor Lernen aktiv wird
-PREHEAT_MAX_MINUTES = 60        # maximale Vorheizzeit
+PREHEAT_MAX_MINUTES = 180       # maximale Vorheizzeit
 PREHEAT_MIN_DELTA = 2.0         # °C Differenz ab der Vorheizung ausgelöst wird
 
 # Prognose-Feedback-Loop

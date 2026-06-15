@@ -9,7 +9,7 @@ from homeassistant.helpers.entity import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
-from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_VACATION
+from .const import DOMAIN, VERSION, DOMAIN_GLOBAL_VACATION, DOMAIN_GLOBAL_DEBUG
 from .coordinator import ThermoSmartCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -20,10 +20,13 @@ async def async_setup_entry(
 ) -> None:
     cfg = {**entry.data, **entry.options}
 
-    # System-Entry: nur globaler Urlaubsschalter
+    # System-Entry: globale Schalter
     # (Sommer-Override: select.ThermoSmartGlobalSummerSelect)
     if cfg.get("entry_type") == "system":
-        async_add_entities([ThermoSmartGlobalVacationSwitch(hass, entry)])
+        async_add_entities([
+            ThermoSmartGlobalVacationSwitch(hass, entry),
+            ThermoSmartGlobalDebugSwitch(hass, entry),
+        ])
         return
 
     # Zone-Entry: zone-spezifische Schalter
@@ -210,3 +213,51 @@ class ThermoSmartGlobalVacationSwitch(SwitchEntity, RestoreEntity):
         for coord in _all_coordinators(self._hass):
             coord.set_vacation_override(False)
             await coord.async_request_refresh()
+
+
+_THERMOSMART_LOGGER_NAME = "custom_components.thermosmart"
+
+
+class ThermoSmartGlobalDebugSwitch(SwitchEntity, RestoreEntity):
+    """Global debug-log switch – sets the ThermoSmart logger to DEBUG at runtime."""
+    _attr_has_entity_name = True
+    _attr_translation_key = "debug_log"
+    _attr_icon = "mdi:bug-check"
+    _attr_unique_id = DOMAIN_GLOBAL_DEBUG
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry):
+        self._hass = hass
+        self._attr_device_info = _global_device_info()
+        self._is_on = False
+        self._prev_level: int = logging.NOTSET
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        last = await self.async_get_last_state()
+        if last is not None and last.state == "on":
+            self._is_on = True
+            self._set_debug(True)
+
+    @property
+    def is_on(self) -> bool:
+        return self._is_on
+
+    async def async_turn_on(self, **kwargs) -> None:
+        self._is_on = True
+        self._set_debug(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        self._is_on = False
+        self._set_debug(False)
+        self.async_write_ha_state()
+
+    def _set_debug(self, enable: bool) -> None:
+        ts_logger = logging.getLogger(_THERMOSMART_LOGGER_NAME)
+        if enable:
+            self._prev_level = ts_logger.level
+            ts_logger.setLevel(logging.DEBUG)
+            _LOGGER.info("ThermoSmart System: Debug logging enabled")
+        else:
+            ts_logger.setLevel(self._prev_level)
+            _LOGGER.info("ThermoSmart System: Debug logging disabled")

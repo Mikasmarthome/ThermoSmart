@@ -1,5 +1,146 @@
 # ThermoSmart – Release Notes
 
+## v1.1.0 – Stable
+
+ThermoSmart v1.1.0 is the first stable release of the v1.1.x series. It delivers broad device compatibility improvements, a complete device-profile system, significantly improved window-open handling, consolidated learning data for LE 2.0, a new global Debug Log switch, and a fully consistent manual override lifecycle.
+
+---
+
+### Device Compatibility
+
+ThermoSmart now ships a comprehensive device-profile system that ensures correct behaviour across a wide range of TRVs and climate devices out of the box.
+
+- **Device profiles:** per-device profiles encode `target_temp_step`, `min_temp`, `max_temp`, and `minimum_setpoint` for known TRV models — no manual calibration required for supported devices
+- **Round-half-up rounding:** setpoints are snapped to the device's `target_temp_step` using round-half-up before every write, preventing off-by-one values that some TRVs reject
+- **Final clamp after step-snap:** setpoints are re-clamped to `min_temp` / `profile.minimum_setpoint` after rounding to avoid sending values the device cannot accept
+- **`is_active=False` guard:** devices like tado, daikin_climate, and netatmo that report `is_active=False` are skipped for `climate.set_temperature`, preventing unnecessary service calls on unsupported platforms
+
+---
+
+### Window Open Handling
+
+- **Exact delay timing:** window open and close delays are now scheduled via `async_call_later` so the TRV switches state at the configured delay time, not at the next 5-minute coordinator cycle
+- **TRV setpoint sensor:** updated immediately when a window opens, giving instant feedback in the UI
+- **Race condition fix:** `_handle_trv_change` is suppressed during the window-open delay, preventing the coordinator from ping-ponging between the frost temperature and the normal setpoint
+
+---
+
+### Learning Engine / Learning Data
+
+- **Debounced TRV observation save:** observation data is now saved with a 60-second deferred write, replacing the previous `% 20` threshold — reduces data loss on unexpected HA shutdown
+- **Preheat cap raised:** maximum preheat window extended from 60 → 180 minutes for zones with long heat-up times
+- **Observation context fields:** every observation now carries `active_control`, `window_open`, `control_reason`, `preheat_active`, `heating_failure`, and `schedule_period` — required metadata for Learning Engine 2.0
+- **Learning sensor UX:** sensors report `None` instead of a stale value when no data is available; `data_status: learning` attribute added for automations
+
+---
+
+### Debugging & Support
+
+- **Global Debug Log switch:** new switch on the ThermoSmart System device card enables `DEBUG` logging for the entire integration at runtime — no HA restart or `configuration.yaml` edit required; state is restored across restarts via `RestoreEntity`
+- **Meaningful debug output:** coordinator now emits per-zone cycle summaries, effective mode change logs (with reason), forecast/weather correction logs, and TRV observation logs when debug is enabled
+
+---
+
+### Override Handling
+
+Manual temperature overrides are now consistently cleared whenever the mode context changes:
+
+- Cleared on **manual mode switch** (e.g. Comfort → Eco, Night → Comfort)
+- Cleared on **Vacation mode activation** — prevents a stale override from bypassing frost protection
+- Cleared on **Summer Mode activation**, both via the global switch and automatic 72 h season detection — prevents stale overrides from reappearing when summer ends
+- Schedule-slot transitions (Auto night ↔ comfort), Presence-away detection, and window-open suppression continue to work as before
+
+---
+
+### Translations / UX
+
+- **Options Flow abort fix:** `options.abort.system_no_options` translation key added to `strings.json` and all 24 locale files — the System entry options dialog now shows a proper message instead of a raw key string
+
+---
+
+## v1.1.0-rc.3 – Release Candidate 3
+
+Adds two fixes and two improvements to RC.2: a missing translation key in the Options Flow, a new global Debug Log switch on the ThermoSmart System entry, meaningful debug log output across all zones, and corrected override handling for mode and season transitions.
+
+---
+
+### Fix: Options Flow abort translation (`system_no_options`)
+
+The `ThermoSmartSystemOptionsFlow` calls `async_abort(reason="system_no_options")` when a user opens the options dialog for the System entry (which has no editable options). Home Assistant looks up abort reasons for Options Flow under `options.abort.<reason>` — a separate namespace from `config.abort`. The key existed only in the `config` namespace and was missing from `options`, causing a raw key string to be displayed instead of the user-facing message.
+
+**Fix:** Added `options.abort.system_no_options` to `strings.json` and all 24 locale translation files.
+
+---
+
+### New: Global Debug Log switch
+
+A new **Debug Log** switch appears on the ThermoSmart System device card. Toggling it sets the `custom_components.thermosmart` logger to `DEBUG` at runtime — no Home Assistant restart or `configuration.yaml` edit required.
+
+**Behaviour:**
+- **On:** stores the logger's current level, sets it to `DEBUG`, logs `ThermoSmart System: Debug logging enabled` at INFO (always visible)
+- **Off:** restores the previously stored level (`NOTSET` / inherited, or YAML-configured value), logs `ThermoSmart System: Debug logging disabled` at INFO
+- **HA restart with switch ON:** state is restored via `RestoreEntity`; debug is re-enabled immediately during entity setup
+- **YAML logger configuration is preserved:** if `custom_components.thermosmart: debug` is set in `configuration.yaml`, turning the switch off restores that level rather than resetting it
+
+Only the `custom_components.thermosmart` parent logger is modified. All submodule loggers inherit from it. No coordinator, learning engine, or TRV control logic is affected.
+
+---
+
+### Improvement: Debug Logging
+
+Meaningful diagnostic output has been added throughout the coordinator and learning engine so that enabling the Debug Log switch produces actionable log entries during normal operation.
+
+- **Cycle summary:** one compact `DEBUG` line per zone per update cycle with mode, current temp, target, adjusted target, TRV setpoint, TPI duty cycle, preheat minutes, window state, and summer flag
+- **Mode change:** logged whenever the effective heating mode transitions (e.g. `auto → vacation`), including the reason (`vacation`, `manual`, `presence`, or `schedule`)
+- **TRV observation:** logged when the learning engine stores a new observation, including setpoint, indoor temp, target, and heat rate
+- **Forecast/weather correction:** logged when the weather bias actively suppresses the heating target, showing raw vs. effective target and correction magnitude
+- Debug logs now make it easier to understand why ThermoSmart selected a particular target, TRV setpoint, or operating mode
+
+---
+
+### Fix: Override Handling
+
+Manual temperature overrides are now consistently cleared whenever the active mode changes, ensuring the newly selected mode's configured temperature always takes effect.
+
+- Manual overrides are cleared when switching to any different heating mode (e.g. Comfort → Eco, Night → Comfort)
+- Manual overrides are cleared when Vacation mode activates — prevents a stale override from bypassing frost protection
+- Manual overrides are cleared when Summer Mode becomes active, both via the global switch and via automatic 72 h season detection — prevents stale overrides from reappearing after Summer Mode ends
+- Schedule-slot transitions (Auto mode night ↔ comfort), Presence-away detection, and window-open suppression continue to work as before
+
+---
+
+### Included from RC.2
+
+- Device-aware setpoint resolution: `target_temp_step` snap with round-half-up before write and store
+- `is_active=False` guard: devices like tado, daikin_climate, netatmo skip `climate.set_temperature`
+- Final clamp after step-snap: re-clamp to `min_temp` / `profile.minimum_setpoint`
+- Summer mode frost setpoint tracking: `_last_written_setpoints` updated before writing 12 °C
+- Debounced TRV observation save: 60-second deferred save replaces threshold-based `% 20` save
+
+### Included from RC.1
+
+- Window open/close delay: exact timing via `async_call_later`
+- TRV setpoint sensor: immediate update on window open
+- Race condition fix: `_handle_trv_change` suppressed during window open
+- Preheat cap raised from 60 → 180 minutes
+- Learning sensor UX: `None` on MEASUREMENT sensors + `data_status: learning` attribute
+
+---
+
+**Pre-release** – not marked as Latest. Current stable release remains v1.0.9.
+
+**Test focus for RC.3 observation period:**
+- Open ThermoSmart System options → verify message instead of raw key `system_no_options`
+- Toggle Debug Log switch → verify `ThermoSmart System: Debug logging enabled/disabled` in log
+- Restart HA with Debug Log ON → verify debug resumes immediately
+- With Debug Log ON: verify per-zone cycle summary appears every update cycle in the log
+- With Debug Log ON and a mode change: verify mode transition log line with reason
+- Set a manual override, then switch mode → verify override is cleared and new mode temp applies
+- Set a manual override, then activate Summer Mode → verify override is cleared
+- All RC.2 test cases remain valid
+
+---
+
 ## v1.0.8
 
 ### Learning Engine Data Collection

@@ -23,7 +23,8 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
 
@@ -178,6 +179,8 @@ class LearningEngine:
         # Outcome-Scoring: aktive Heizsitzungen + abgeschlossene Ergebnisse
         self._heating_sessions: dict[str, dict] = {}
         self._outcome_log: dict[str, list[dict]] = defaultdict(list)
+        # Pending handle for debounced TRV-observation save (60 s after last observation)
+        self._debounce_save_cancel: object | None = None
 
     # ── Persistenz ──────────────────────────────────────────────────────
 
@@ -203,7 +206,22 @@ class LearningEngine:
             )
         self._rebuild_confidence()
 
+    def _schedule_debounced_save(self) -> None:
+        """Schedule a deferred save 60 s from now; no-op if one is already pending."""
+        if self._debounce_save_cancel is not None:
+            return
+
+        @callback
+        def _fire(_now):
+            self._debounce_save_cancel = None
+            self._hass.async_create_task(self.async_save())
+
+        self._debounce_save_cancel = async_call_later(self._hass, 60, _fire)
+
     async def async_save(self) -> None:
+        if self._debounce_save_cancel is not None:
+            self._debounce_save_cancel()
+            self._debounce_save_cancel = None
         self._prune_old_observations()
         await self._store.async_save({
             "observations": dict(self._observations),
@@ -532,9 +550,7 @@ class LearningEngine:
         ):
             self._trv_observations[zone_id].append(obs)
         # Kein hartes Limit – Zeit-basiertes Ausdünnen in async_save()
-
-        if sum(len(v) for v in self._trv_observations.values()) % 20 == 0:
-            await self.async_save()
+        self._schedule_debounced_save()
 
     async def async_observe_window_cooling(
         self,

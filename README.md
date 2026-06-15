@@ -56,7 +56,7 @@ HACS → Integrations → **⋮** → **Custom repositories** → URL: `https://
 
 ### 2 — Download
 
-HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.0.8` → Download
+HACS → Integrations → find **ThermoSmart** → **Download** → select `v1.1.0` → Download
 
 ### 3 — Restart and Add
 
@@ -104,6 +104,7 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 |---|---|
 | `select.thermosmart_summer_mode` | Summer mode — `automatic` / `on` / `off` |
 | `switch.thermosmart_vacation_mode` | Vacation mode — all zones → vacation temperature |
+| `switch.thermosmart_global_debug` | Debug Log — enables `DEBUG` logging for the integration at runtime |
 
 ---
 
@@ -325,6 +326,8 @@ Full release history: [RELEASE_NOTES.md](RELEASE_NOTES.md)
 **Features** → [Issues](https://github.com/Mikasmarthome/ThermoSmart/issues/new) with label `enhancement`
 
 **Especially welcome:** Testing with more TRV models · Additional translations · Device quirk patterns
+
+**New device?** If your TRV is not listed above or behaves unexpectedly, open a [GitHub Discussion](https://github.com/Mikasmarthome/ThermoSmart/discussions) with your device model, protocol, and HA log lines — this is the fastest path to getting a dedicated profile added.
 
 [Discussions →](https://github.com/Mikasmarthome/ThermoSmart/discussions)
 

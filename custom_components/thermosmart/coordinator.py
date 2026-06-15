@@ -193,6 +193,13 @@ class ThermoSmartCoordinator(
         )
 
     def set_mode(self, mode: str) -> None:
+        if mode != self._mode and self._override is not None:
+            _LOGGER.debug(
+                "ThermoSmart '%s': clearing manual override due to mode change %s → %s",
+                self.zone_name, self._mode, mode,
+            )
+            self._override = None
+            self._override_schedule_period = None
         self._mode = mode
         # Immediately patch adjusted_target with the preset base temperature so
         # that async_write_ha_state() in climate.py can expose the new target at
@@ -215,6 +222,13 @@ class ThermoSmartCoordinator(
     def set_vacation_override(self, active: bool) -> None:
         """Globaler Urlaubs-Override – speichert/restauriert den bisherigen Modus."""
         if active:
+            if self._override is not None:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clearing manual override due to vacation mode",
+                    self.zone_name,
+                )
+                self._override = None
+                self._override_schedule_period = None
             if self._mode != HEATING_MODE_VACATION:
                 self._pre_vacation_mode = self._mode
             self._mode = HEATING_MODE_VACATION

@@ -42,7 +42,8 @@
           "away_temp": "离家温度（所有人离开后自动）",
           "vacation_temp": "假期温度（防冻保护）",
           "eco_temp": "节能温度（节能，介于夜间和舒适之间）",
-          "temp_tolerance": "温度容差 – 仅在此偏差后控制 TRV",
+          "window_open_temp": "开窗温度",
+          "temp_tolerance": "温度容差 – 设定点更新阈值",
           "schedule_enabled": "启用时间计划",
           "sched_wd_morning": "工作日：舒适从",
           "sched_wd_night": "工作日：夜间从",
@@ -57,7 +58,8 @@
           "sched_we_night": "夜间温度从此时间起生效",
           "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
           "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
-          "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
+          "window_open_temp": "窗户打开时的目标温度。对于不支持非常低设定点的恒温器，请使用较高值，例如 10 °C。",
+          "temp_tolerance": "在 ThermoSmart 发送新更新之前，计算出的 TRV 设定点的最小变化量。减少对恒温器的不必要写入。0.5 °C 适合大多数房间。"
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "离家温度",
           "vacation_temp": "假期温度",
           "eco_temp": "节能温度",
+          "window_open_temp": "开窗温度",
           "temp_tolerance": "温度容差",
           "schedule_enabled": "启用时间计划",
           "sched_wd_morning": "工作日：舒适从",
@@ -149,7 +152,8 @@
           "sched_we_night": "夜间温度从此时间起生效",
           "away_temp": "仅在配置了存在检测时自动应用（步骤 3）。也可通过模式选择器手动设置。",
           "eco_temp": "当模式选择器手动设置为 'Eco' 时使用。不会自动激活。",
-          "temp_tolerance": "ThermoSmart 仅在温度偏差超过此值时才调节 TRV。0.5 °C 适合大多数房间。越低 = 越灵敏，越高 = 调节越少。"
+          "window_open_temp": "窗户打开时的目标温度。对于不支持非常低设定点的恒温器，请使用较高值，例如 10 °C。",
+          "temp_tolerance": "在 ThermoSmart 发送新更新之前，计算出的 TRV 设定点的最小变化量。减少对恒温器的不必要写入。0.5 °C 适合大多数房间。"
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "自有传感器比天气实体更精确，优先使用。"
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System 没有可配置选项。请使用夏季模式选择器和假期开关来控制所有区域。"
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "主动控制"
       },
       "learning": { "name": "学习模式" },
-      "vacation_mode": { "name": "假期模式" }
+      "vacation_mode": { "name": "假期模式" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "目标温度" },
       "trv_setpoint": { "name": "TRV 设定值" },
       "tpi_duty_cycle": { "name": "TPI 占空比" },
-      "outcome_score": { "name": "结果评分" },
+      "outcome_score": {
+        "name": "结果评分",
+        "state": {
+          "learning": "学习中"
+        }
+      },
       "preheat_minutes": { "name": "预热时间" },
       "confidence": { "name": "学习进度" },
       "weather_offset": { "name": "天气修正" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "温度斜率" },
       "temp_ema_1h": { "name": "温度 EMA 1小时" },
-      "heat_loss": { "name": "热量损失" },
-      "heating_power": { "name": "供暖功率" },
+      "heat_loss": {
+        "name": "热量损失",
+        "state": {
+          "learning": "学习中"
+        }
+      },
+      "heating_power": {
+        "name": "供暖功率",
+        "state": {
+          "learning": "学习中"
+        }
+      },
       "sun_intensity": { "name": "太阳热增益" },
-      "window_cooling_rate": { "name": "窗户冷却速率" },
+      "window_cooling_rate": {
+        "name": "窗户冷却速率",
+        "state": {
+          "learning": "学习中"
+        }
+      },
       "trv_observations": { "name": "TRV 观测值" }
     }
   }

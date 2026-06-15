@@ -42,7 +42,8 @@
           "away_temp": "Uzakta sıcaklığı (herkes gittiğinde otomatik)",
           "vacation_temp": "Tatil sıcaklığı (don koruması)",
           "eco_temp": "Eco sıcaklığı (enerji tasarrufu, gece ile konfor arası)",
-          "temp_tolerance": "Sıcaklık toleransı – TRV'yi yalnızca bu sapmanın ardından kontrol et",
+          "window_open_temp": "Pencere açık sıcaklığı",
+          "temp_tolerance": "Sıcaklık toleransı – set noktası güncelleme eşiği",
           "schedule_enabled": "Zaman programını etkinleştir",
           "sched_wd_morning": "Hafta içi: Konfor saat",
           "sched_wd_night": "Hafta içi: Gece saat",
@@ -57,7 +58,8 @@
           "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
           "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
-          "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
+          "window_open_temp": "Pencere açıkken hedef sıcaklık. Çok düşük değerleri desteklemeyen termostatlar için 10 °C gibi daha yüksek bir değer kullanın.",
+          "temp_tolerance": "ThermoSmart'ın yeni bir güncelleme göndermeden önce hesaplanan TRV set noktasındaki minimum değişiklik. Termostata gereksiz yazmaları azaltır. 0,5 °C çoğu oda için iyi çalışır."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Uzakta sıcaklığı",
           "vacation_temp": "Tatil sıcaklığı",
           "eco_temp": "Eco sıcaklığı",
+          "window_open_temp": "Pencere açık sıcaklığı",
           "temp_tolerance": "Sıcaklık toleransı",
           "schedule_enabled": "Zaman programını etkinleştir",
           "sched_wd_morning": "Hafta içi: Konfor saat",
@@ -149,7 +152,8 @@
           "sched_we_night": "Gece sıcaklığı bu saatten itibaren geçerlidir",
           "away_temp": "Yalnızca varlık algılama yapılandırıldığında (Adım 3) otomatik olarak uygulanır. Mod seçici aracılığıyla da manuel olarak ayarlanabilir.",
           "eco_temp": "Mod seçici 'Eco' olarak manuel ayarlandığında kullanılır. Otomatik olarak etkinleştirilmez.",
-          "temp_tolerance": "ThermoSmart, TRV'yi yalnızca sıcaklık bu değerden fazla saptığında ayarlar. 0,5 °C çoğu oda için iyi çalışır. Daha düşük = daha reaktif, daha yüksek = daha az ayarlama."
+          "window_open_temp": "Pencere açıkken hedef sıcaklık. Çok düşük değerleri desteklemeyen termostatlar için 10 °C gibi daha yüksek bir değer kullanın.",
+          "temp_tolerance": "ThermoSmart'ın yeni bir güncelleme göndermeden önce hesaplanan TRV set noktasındaki minimum değişiklik. Termostata gereksiz yazmaları azaltır. 0,5 °C çoğu oda için iyi çalışır."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Kendi sensörleriniz hava durumu varlığından daha hassastır ve tercih edilir."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System'in yapılandırılabilir seçeneği yoktur. Tüm bölgeleri kontrol etmek için yaz modu seçiciyi ve tatil anahtarını kullanın."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktif kontrol"
       },
       "learning": { "name": "Öğrenme modu" },
-      "vacation_mode": { "name": "Tatil modu" }
+      "vacation_mode": { "name": "Tatil modu" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Hedef sıcaklık" },
       "trv_setpoint": { "name": "TRV ayar noktası" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Sonuç puanı" },
+      "outcome_score": {
+        "name": "Sonuç puanı",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
       "preheat_minutes": { "name": "Ön ısıtma süresi" },
       "confidence": { "name": "Öğrenme ilerlemesi" },
       "weather_offset": { "name": "Hava durumu düzeltmesi" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Sıcaklık eğimi" },
       "temp_ema_1h": { "name": "Sıcaklık EMA 1s" },
-      "heat_loss": { "name": "Isı kaybı" },
-      "heating_power": { "name": "Isıtma gücü" },
+      "heat_loss": {
+        "name": "Isı kaybı",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
+      "heating_power": {
+        "name": "Isıtma gücü",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
       "sun_intensity": { "name": "Güneş ısı kazancı" },
-      "window_cooling_rate": { "name": "Pencereden soğuma hızı" },
+      "window_cooling_rate": {
+        "name": "Pencereden soğuma hızı",
+        "state": {
+          "learning": "Öğreniyor"
+        }
+      },
       "trv_observations": { "name": "TRV gözlemleri" }
     }
   }

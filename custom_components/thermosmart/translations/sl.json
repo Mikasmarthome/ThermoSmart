@@ -42,7 +42,8 @@
           "away_temp": "Temperatura odsotnosti (samodejno ko so vsi odšli)",
           "vacation_temp": "Počitniška temperatura (zaščita pred zmrzovanjem)",
           "eco_temp": "Eco temperatura (varčevanje z energijo, med nočno in udobno)",
-          "temp_tolerance": "Temperaturna toleranca – krmilite TRV šele po tem odstopanju",
+          "window_open_temp": "Temperatura pri odprtem oknu",
+          "temp_tolerance": "Temperaturna toleranca – prag za posodobitev nastavitvene točke",
           "schedule_enabled": "Aktivacija časovnega urnika",
           "sched_wd_morning": "Delavnik: Udobje od",
           "sched_wd_night": "Delavnik: Noč od",
@@ -57,7 +58,8 @@
           "sched_we_night": "Nočna temperatura velja od tega časa",
           "away_temp": "Samodejno se uporabi samo, ko je konfigurirana zaznava prisotnosti (Korak 3). Lahko se nastavi tudi ročno prek izbirnika načina.",
           "eco_temp": "Uporablja se, ko je izbirnik načina ročno nastavljen na 'Eco'. Ne aktivira se samodejno.",
-          "temp_tolerance": "ThermoSmart prilagodi TRV le, ko se temperatura razlikuje za več kot to vrednost. 0,5 °C deluje dobro za večino sob. Nižja = bolj odzivna, višja = manj prilagoditev."
+          "window_open_temp": "Ciljna temperatura, ko je okno odprto. Za termostate, ki ne podpirajo zelo nizkih vrednosti, uporabite višjo vrednost, npr. 10 °C.",
+          "temp_tolerance": "Minimalna sprememba izračunane nastavitvene točke TRV, preden ThermoSmart pošlje novo posodobitev. Zmanjša nepotrebno pisanje v termostat. 0,5 °C deluje dobro za večino sob."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Temperatura odsotnosti",
           "vacation_temp": "Počitniška temperatura",
           "eco_temp": "Eco temperatura",
+          "window_open_temp": "Temperatura pri odprtem oknu",
           "temp_tolerance": "Temperaturna toleranca",
           "schedule_enabled": "Aktivacija časovnega urnika",
           "sched_wd_morning": "Delavnik: Udobje od",
@@ -149,7 +152,8 @@
           "sched_we_night": "Nočna temperatura velja od tega časa",
           "away_temp": "Samodejno se uporabi samo, ko je konfigurirana zaznava prisotnosti (Korak 3). Lahko se nastavi tudi ročno prek izbirnika načina.",
           "eco_temp": "Uporablja se, ko je izbirnik načina ročno nastavljen na 'Eco'. Ne aktivira se samodejno.",
-          "temp_tolerance": "ThermoSmart prilagodi TRV le, ko se temperatura razlikuje za več kot to vrednost. 0,5 °C deluje dobro za večino sob. Nižja = bolj odzivna, višja = manj prilagoditev."
+          "window_open_temp": "Ciljna temperatura, ko je okno odprto. Za termostate, ki ne podpirajo zelo nizkih vrednosti, uporabite višjo vrednost, npr. 10 °C.",
+          "temp_tolerance": "Minimalna sprememba izračunane nastavitvene točke TRV, preden ThermoSmart pošlje novo posodobitev. Zmanjša nepotrebno pisanje v termostat. 0,5 °C deluje dobro za večino sob."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Lastni senzorji so natančnejši od vremenske entitete in imajo prednost."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System nima nastavljivih možnosti. Uporabite izbirnik poletnega načina in stikalo za počitnice za krmiljenje vseh con."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktivno krmiljenje"
       },
       "learning": { "name": "Način učenja" },
-      "vacation_mode": { "name": "Počitniški način" }
+      "vacation_mode": { "name": "Počitniški način" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Ciljna temperatura" },
       "trv_setpoint": { "name": "Nastavitvena vrednost TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Rezultatna ocena" },
+      "outcome_score": {
+        "name": "Rezultatna ocena",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
       "preheat_minutes": { "name": "Čas predgrevanja" },
       "confidence": { "name": "Napredek učenja" },
       "weather_offset": { "name": "Vremenski odmik" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Naklon temperature" },
       "temp_ema_1h": { "name": "Temperatura EMA 1h" },
-      "heat_loss": { "name": "Toplotne izgube" },
-      "heating_power": { "name": "Moč ogrevanja" },
+      "heat_loss": {
+        "name": "Toplotne izgube",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
+      "heating_power": {
+        "name": "Moč ogrevanja",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
       "sun_intensity": { "name": "Solarni toplotni dobitek" },
-      "window_cooling_rate": { "name": "Hitrost ohlajanja skozi okno" },
+      "window_cooling_rate": {
+        "name": "Hitrost ohlajanja skozi okno",
+        "state": {
+          "learning": "Učenje"
+        }
+      },
       "trv_observations": { "name": "Opazovanja TRV" }
     }
   }

@@ -42,7 +42,8 @@
           "away_temp": "Temperatura d'absència (automàticament quan tothom ha marxat)",
           "vacation_temp": "Temperatura de vacances (protecció antigelada)",
           "eco_temp": "Temperatura eco (estalvi d'energia, entre nocturna i confort)",
-          "temp_tolerance": "Tolerància de temperatura – controlar la TRV només a partir d'aquesta desviació",
+          "window_open_temp": "Temperatura amb finestra oberta",
+          "temp_tolerance": "Tolerancia de temperatura – llindar d'actualització del punt de consigna",
           "schedule_enabled": "Activar horari",
           "sched_wd_morning": "Dia feiner: Confort des de",
           "sched_wd_night": "Dia feiner: Nit des de",
@@ -57,7 +58,8 @@
           "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
           "away_temp": "S'aplica automàticament només si la detecció de presència està configurada (Pas 3). Pot establir-se manualment a través del selector de mode.",
           "eco_temp": "S'utilitza quan el selector de mode s'estableix manualment en 'Eco'. No s'aplica automàticament.",
-          "temp_tolerance": "ThermoSmart ajusta la TRV només quan la temperatura es desvia més que aquest valor. 0,5 °C funciona bé per a la majoria d'habitacions. Menor = més reactiu, major = menys ajustos."
+          "window_open_temp": "Temperatura objectiu mentre una finestra és oberta. Per a termostats que no admeten valors molt baixos, useu un valor més alt com ara 10 °C.",
+          "temp_tolerance": "Canvi mínim al punt de consigna TRV calculat abans que ThermoSmart enviï una nova actualització. Redueix les escriptures innecessàries al termòstat. 0,5 °C funciona bé per a la majoria d'habitacions."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Temperatura d'absència",
           "vacation_temp": "Temperatura de vacances",
           "eco_temp": "Temperatura eco",
+          "window_open_temp": "Temperatura amb finestra oberta",
           "temp_tolerance": "Tolerància de temperatura",
           "schedule_enabled": "Activar horari",
           "sched_wd_morning": "Dia feiner: Confort des de",
@@ -149,7 +152,8 @@
           "sched_we_night": "La temperatura nocturna s'aplica a partir d'aquesta hora",
           "away_temp": "S'aplica automàticament només si la detecció de presència està configurada (Pas 3). Pot establir-se manualment a través del selector de mode.",
           "eco_temp": "S'utilitza quan el selector de mode s'estableix manualment en 'Eco'. No s'aplica automàticament.",
-          "temp_tolerance": "ThermoSmart ajusta la TRV només quan la temperatura es desvia més que aquest valor. 0,5 °C funciona bé per a la majoria d'habitacions. Menor = més reactiu, major = menys ajustos."
+          "window_open_temp": "Temperatura objectiu mentre una finestra és oberta. Per a termostats que no admeten valors molt baixos, useu un valor més alt com ara 10 °C.",
+          "temp_tolerance": "Canvi mínim al punt de consigna TRV calculat abans que ThermoSmart enviï una nova actualització. Redueix les escriptures innecessàries al termòstat. 0,5 °C funciona bé per a la majoria d'habitacions."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Els sensors propis són més precisos que l'entitat meteorològica i es prefereixen."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System no té opcions configurables. Useu el selector de mode Estiu i l'interruptor de Vacances per controlar totes les zones."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Control actiu"
       },
       "learning": { "name": "Mode aprenentatge" },
-      "vacation_mode": { "name": "Mode vacances" }
+      "vacation_mode": { "name": "Mode vacances" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Temperatura objectiu" },
       "trv_setpoint": { "name": "Consigna TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Puntuació de resultat" },
+      "outcome_score": {
+        "name": "Puntuació de resultat",
+        "state": {
+          "learning": "S'aprèn"
+        }
+      },
       "preheat_minutes": { "name": "Temps de preescalfament" },
       "confidence": { "name": "Progrés d'aprenentatge" },
       "weather_offset": { "name": "Correcció meteorològica" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Pendent de temperatura" },
       "temp_ema_1h": { "name": "Temperatura EMA 1h" },
-      "heat_loss": { "name": "Pèrdua de calor" },
-      "heating_power": { "name": "Potència de calefacció" },
+      "heat_loss": {
+        "name": "Pèrdua de calor",
+        "state": {
+          "learning": "S'aprèn"
+        }
+      },
+      "heating_power": {
+        "name": "Potència de calefacció",
+        "state": {
+          "learning": "S'aprèn"
+        }
+      },
       "sun_intensity": { "name": "Guany solar" },
-      "window_cooling_rate": { "name": "Taxa de refredament per finestra" },
+      "window_cooling_rate": {
+        "name": "Taxa de refredament per finestra",
+        "state": {
+          "learning": "S'aprèn"
+        }
+      },
       "trv_observations": { "name": "Observacions TRV" }
     }
   }

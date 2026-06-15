@@ -42,7 +42,8 @@
           "away_temp": "Temperatura nieobecności (automatycznie gdy wszyscy wyjdą)",
           "vacation_temp": "Temperatura wakacyjna (ochrona przed mrozem)",
           "eco_temp": "Temperatura Eco (oszczędność energii, między nocną a komfortową)",
-          "temp_tolerance": "Tolerancja temperatury – steruj zaworem TRV dopiero po przekroczeniu tego odchylenia",
+          "window_open_temp": "Temperatura przy otwartym oknie",
+          "temp_tolerance": "Tolerancja temperatury – próg aktualizacji wartości zadanej",
           "schedule_enabled": "Włącz harmonogram czasowy",
           "sched_wd_morning": "Dzień roboczy: Komfort od",
           "sched_wd_night": "Dzień roboczy: Noc od",
@@ -57,7 +58,8 @@
           "sched_we_night": "Od tej godziny obowiązuje temperatura nocna",
           "away_temp": "Stosowana automatycznie tylko gdy skonfigurowane jest wykrywanie obecności (Krok 3). Można ją również ustawić ręcznie za pomocą selektora trybu.",
           "eco_temp": "Używana, gdy selektor trybu jest ręcznie ustawiony na 'Eco'. Nie jest aktywowana automatycznie.",
-          "temp_tolerance": "ThermoSmart reguluje TRV tylko gdy temperatura odchyla się o więcej niż ta wartość. 0,5 °C sprawdza się dobrze w większości pomieszczeń. Niższy = bardziej reaktywny, wyższy = mniej regulacji."
+          "window_open_temp": "Temperatura docelowa, gdy okno jest otwarte. W przypadku termostatów nieobsługujących bardzo niskich wartości, użyj wyższej wartości, np. 10 °C.",
+          "temp_tolerance": "Minimalna zmiana obliczonej wartości zadanej TRV przed wysłaniem przez ThermoSmart nowej aktualizacji. Ogranicza zbędne zapisy do termostatu. 0,5 °C sprawdza się dobrze w większości pomieszczeń."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Temperatura nieobecności",
           "vacation_temp": "Temperatura wakacyjna",
           "eco_temp": "Temperatura Eco",
+          "window_open_temp": "Temperatura przy otwartym oknie",
           "temp_tolerance": "Tolerancja temperatury",
           "schedule_enabled": "Włącz harmonogram czasowy",
           "sched_wd_morning": "Dzień roboczy: Komfort od",
@@ -149,7 +152,8 @@
           "sched_we_night": "Od tej godziny obowiązuje temperatura nocna",
           "away_temp": "Stosowana automatycznie tylko gdy skonfigurowane jest wykrywanie obecności (Krok 3). Można ją również ustawić ręcznie za pomocą selektora trybu.",
           "eco_temp": "Używana, gdy selektor trybu jest ręcznie ustawiony na 'Eco'. Nie jest aktywowana automatycznie.",
-          "temp_tolerance": "ThermoSmart reguluje TRV tylko gdy temperatura odchyla się o więcej niż ta wartość. 0,5 °C sprawdza się dobrze w większości pomieszczeń. Niższy = bardziej reaktywny, wyższy = mniej regulacji."
+          "window_open_temp": "Temperatura docelowa, gdy okno jest otwarte. W przypadku termostatów nieobsługujących bardzo niskich wartości, użyj wyższej wartości, np. 10 °C.",
+          "temp_tolerance": "Minimalna zmiana obliczonej wartości zadanej TRV przed wysłaniem przez ThermoSmart nowej aktualizacji. Ogranicza zbędne zapisy do termostatu. 0,5 °C sprawdza się dobrze w większości pomieszczeń."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Własne czujniki są dokładniejsze niż jednostka pogodowa i są preferowane."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "System ThermoSmart nie ma konfigurowalnych opcji. Użyj globalnych przełączników do trybów Lato i Urlop."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktywne sterowanie"
       },
       "learning": { "name": "Tryb uczenia" },
-      "vacation_mode": { "name": "Tryb wakacji" }
+      "vacation_mode": { "name": "Tryb wakacji" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Temperatura docelowa" },
       "trv_setpoint": { "name": "Nastawa TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Wynik sesji" },
+      "outcome_score": {
+        "name": "Wynik sesji",
+        "state": {
+          "learning": "Trwa uczenie"
+        }
+      },
       "preheat_minutes": { "name": "Czas podgrzewania wstępnego" },
       "confidence": { "name": "Postęp uczenia" },
       "weather_offset": { "name": "Korekta pogodowa" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Nachylenie temperatury" },
       "temp_ema_1h": { "name": "Temperatura EMA 1h" },
-      "heat_loss": { "name": "Straty ciepła" },
-      "heating_power": { "name": "Moc grzewcza" },
+      "heat_loss": {
+        "name": "Straty ciepła",
+        "state": {
+          "learning": "Trwa uczenie"
+        }
+      },
+      "heating_power": {
+        "name": "Moc grzewcza",
+        "state": {
+          "learning": "Trwa uczenie"
+        }
+      },
       "sun_intensity": { "name": "Zysk słoneczny" },
-      "window_cooling_rate": { "name": "Szybkość chłodzenia przez okno" },
+      "window_cooling_rate": {
+        "name": "Szybkość chłodzenia przez okno",
+        "state": {
+          "learning": "Trwa uczenie"
+        }
+      },
       "trv_observations": { "name": "Obserwacje TRV" }
     }
   }

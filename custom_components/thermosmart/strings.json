@@ -42,7 +42,8 @@
           "away_temp": "Away temperature (automatically when everyone is gone)",
           "vacation_temp": "Vacation temperature (frost protection)",
           "eco_temp": "Eco temperature (energy saving, between night and comfort)",
-          "temp_tolerance": "Temperature tolerance – only control TRV beyond this offset",
+          "window_open_temp": "Window open temperature",
+          "temp_tolerance": "Temperature tolerance – setpoint write threshold",
           "schedule_enabled": "Enable time schedule",
           "sched_wd_morning": "Weekday: Comfort from",
           "sched_wd_night": "Weekday: Night from",
@@ -57,7 +58,8 @@
           "sched_we_night": "Night temperature applies from this time",
           "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
-          "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
+          "temp_tolerance": "Minimum change in the calculated TRV setpoint before ThermoSmart sends a new update. This reduces unnecessary writes to the thermostat. 0.5 °C works well for most rooms."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Away temperature",
           "vacation_temp": "Vacation temperature",
           "eco_temp": "Eco temperature",
+          "window_open_temp": "Window open temperature",
           "temp_tolerance": "Temperature tolerance",
           "schedule_enabled": "Enable time schedule",
           "sched_wd_morning": "Weekday: Comfort from",
@@ -149,7 +152,8 @@
           "sched_we_night": "Night temperature applies from this time",
           "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
-          "temp_tolerance": "ThermoSmart only adjusts the TRV when the temperature deviates by more than this value. Default 0.5 °C works well for most rooms. Lower = more reactive, higher = fewer adjustments."
+          "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
+          "temp_tolerance": "Minimum change in the calculated TRV setpoint before ThermoSmart sends a new update. This reduces unnecessary writes to the thermostat. 0.5 °C works well for most rooms."
         }
       },
       "presence": {
@@ -180,9 +184,17 @@
           "outdoor_temp_sensor": "Own sensors are more accurate than the weather entity and are preferred."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System has no configurable options. Use the Summer mode select and the Vacation switch to control all zones."
     }
   },
   "entity": {
+    "button": {
+      "export_learning_data": {
+        "name": "Export learning data"
+      }
+    },
     "climate": {
       "zone": {
         "state_attributes": {
@@ -201,7 +213,8 @@
         "name": "Active Control"
       },
       "learning": { "name": "Learning mode" },
-      "vacation_mode": { "name": "Vacation Mode" }
+      "vacation_mode": { "name": "Vacation Mode" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -228,7 +241,12 @@
       "adjusted_target": { "name": "Target temperature" },
       "trv_setpoint": { "name": "TRV setpoint" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Outcome Score" },
+      "outcome_score": {
+        "name": "Outcome Score",
+        "state": {
+          "learning": "Learning"
+        }
+      },
       "preheat_minutes": { "name": "Preheat time" },
       "confidence": { "name": "Learning progress" },
       "weather_offset": { "name": "Weather correction" },
@@ -251,10 +269,25 @@
       },
       "temp_slope": { "name": "Temperature slope" },
       "temp_ema_1h": { "name": "Temperature EMA 1h" },
-      "heat_loss": { "name": "Heat loss" },
-      "heating_power": { "name": "Heating power" },
+      "heat_loss": {
+        "name": "Heat loss",
+        "state": {
+          "learning": "Learning"
+        }
+      },
+      "heating_power": {
+        "name": "Heating power",
+        "state": {
+          "learning": "Learning"
+        }
+      },
       "sun_intensity": { "name": "Solar heat gain" },
-      "window_cooling_rate": { "name": "Window cooling rate" },
+      "window_cooling_rate": {
+        "name": "Window cooling rate",
+        "state": {
+          "learning": "Learning"
+        }
+      },
       "trv_observations": { "name": "TRV observations" }
     }
   }

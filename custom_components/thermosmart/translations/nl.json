@@ -42,7 +42,8 @@
           "away_temp": "Afwezigheidstemperatuur (automatisch als iedereen weg is)",
           "vacation_temp": "Vakantietemperatuur (vorstbeveiliging)",
           "eco_temp": "Eco-temperatuur (energiezuinig, tussen nacht en comfort)",
-          "temp_tolerance": "Temperatuurtolerantie – TRV pas aansturen bij deze afwijking",
+          "window_open_temp": "Temperatuur bij open raam",
+          "temp_tolerance": "Temperatuurtolerantie – drempel voor TRV-setpoint-updates",
           "schedule_enabled": "Tijdschema inschakelen",
           "sched_wd_morning": "Werkdag: Comfort vanaf",
           "sched_wd_night": "Werkdag: Nacht vanaf",
@@ -57,7 +58,8 @@
           "sched_we_night": "Vanaf dit tijdstip geldt de nachttemperatuur",
           "away_temp": "Wordt automatisch toegepast alleen als aanwezigheidsdetectie is geconfigureerd (Stap 3). Kan ook handmatig worden ingesteld via de modusselectie.",
           "eco_temp": "Wordt gebruikt wanneer de modusselectie handmatig op 'Eco' wordt gezet. Wordt niet automatisch geactiveerd.",
-          "temp_tolerance": "ThermoSmart past de TRV alleen aan wanneer de temperatuur meer afwijkt dan deze waarde. 0,5 °C werkt goed voor de meeste kamers. Lager = reactiever, hoger = minder aanpassingen."
+          "window_open_temp": "Doeltemperatuur wanneer een raam open is. Voor thermostaten die geen zeer lage instellingen ondersteunen, gebruik een hogere waarde zoals 10 °C.",
+          "temp_tolerance": "Minimale wijziging van het berekende TRV-setpoint voordat ThermoSmart een nieuwe update stuurt. Vermindert onnodige schrijfacties naar de thermostaat. 0,5 °C werkt goed voor de meeste kamers."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Afwezigheidstemperatuur",
           "vacation_temp": "Vakantietemperatuur",
           "eco_temp": "Eco-temperatuur",
+          "window_open_temp": "Temperatuur bij open raam",
           "temp_tolerance": "Temperatuurtolerantie",
           "schedule_enabled": "Tijdschema inschakelen",
           "sched_wd_morning": "Werkdag: Comfort vanaf",
@@ -149,7 +152,8 @@
           "sched_we_night": "Vanaf dit tijdstip geldt de nachttemperatuur",
           "away_temp": "Wordt automatisch toegepast alleen als aanwezigheidsdetectie is geconfigureerd (Stap 3). Kan ook handmatig worden ingesteld via de modusselectie.",
           "eco_temp": "Wordt gebruikt wanneer de modusselectie handmatig op 'Eco' wordt gezet. Wordt niet automatisch geactiveerd.",
-          "temp_tolerance": "ThermoSmart past de TRV alleen aan wanneer de temperatuur meer afwijkt dan deze waarde. 0,5 °C werkt goed voor de meeste kamers. Lager = reactiever, hoger = minder aanpassingen."
+          "window_open_temp": "Doeltemperatuur wanneer een raam open is. Voor thermostaten die geen zeer lage instellingen ondersteunen, gebruik een hogere waarde zoals 10 °C.",
+          "temp_tolerance": "Minimale wijziging van het berekende TRV-setpoint voordat ThermoSmart een nieuwe update stuurt. Vermindert onnodige schrijfacties naar de thermostaat. 0,5 °C werkt goed voor de meeste kamers."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Eigen sensoren zijn nauwkeuriger dan de weer-entiteit en krijgen voorrang."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart Systeem heeft geen configureerbare opties. Gebruik de globale schakelaars voor Zomer- en Vakantiemodus."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Actieve bediening"
       },
       "learning": { "name": "Leermodus" },
-      "vacation_mode": { "name": "Vakantiemodus" }
+      "vacation_mode": { "name": "Vakantiemodus" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Doeltemperatuur" },
       "trv_setpoint": { "name": "TRV-instelpunt" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Resultaatscore" },
+      "outcome_score": {
+        "name": "Resultaatscore",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
       "preheat_minutes": { "name": "Voorverwarmingstijd" },
       "confidence": { "name": "Leervoortgang" },
       "weather_offset": { "name": "Weercorrectie" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Temperatuurhelling" },
       "temp_ema_1h": { "name": "Temperatuur EMA 1u" },
-      "heat_loss": { "name": "Warmteverlies" },
-      "heating_power": { "name": "Verwarmingsvermogen" },
+      "heat_loss": {
+        "name": "Warmteverlies",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
+      "heating_power": {
+        "name": "Verwarmingsvermogen",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
       "sun_intensity": { "name": "Zonnewinst" },
-      "window_cooling_rate": { "name": "Afkoelsnelheid raam" },
+      "window_cooling_rate": {
+        "name": "Afkoelsnelheid raam",
+        "state": {
+          "learning": "Aan het leren"
+        }
+      },
       "trv_observations": { "name": "TRV-observaties" }
     }
   }

@@ -7,7 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/github/v/release/Mikasmarthome/ThermoSmart?color=blue&label=version" alt="Version"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/github/v/release/Mikasmarthome/ThermoSmart" alt="GitHub Release"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -110,9 +110,20 @@ Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cy
 
 ## Device Compatibility
 
-ThermoSmart includes prepared compatibility profiles for a range of common TRV families. Where device behaviour is known, profile-specific logic is applied automatically — no manual configuration needed. For devices without a specific profile, ThermoSmart falls back to a generic profile that works with any `climate` entity supporting `set_temperature`.
+ThermoSmart v1.1.0 introduces a Device Profile system that enables correct behaviour across a wide range of TRVs out of the box. Each profile encodes the device's `target_temp_step`, temperature limits, and any quirks — so ThermoSmart can write precise setpoints without manual calibration.
 
-> Feedback from real devices is very welcome. [Open an issue](https://github.com/Mikasmarthome/ThermoSmart/issues/new) to share your experience with a model not listed here.
+For devices without a specific profile, ThermoSmart falls back to a generic profile that works with any `climate` entity supporting `set_temperature`.
+
+### Confirmed working
+
+Real-world tested with active ThermoSmart control:
+
+| Device | Protocol | Notes |
+|---|---|---|
+| SONOFF TRVZB | Zigbee (Z2M) | Fully tested — external temperature, valve control, motor-protection |
+| Eve Thermo (SEA80x) | HomeKit | Fully tested — observation mode, read-only valve sensor |
+
+**Using a different TRV?** Open a [GitHub Discussion](https://github.com/Mikasmarthome/ThermoSmart/discussions) with your device model and protocol — real-world feedback is the fastest path to a dedicated profile.
 
 ### Actively supported — profile-specific behavior
 

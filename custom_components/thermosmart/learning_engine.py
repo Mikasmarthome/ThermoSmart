@@ -549,6 +549,15 @@ class LearningEngine:
             window_min=60, temp_tol=2.0, delta_tol=0.8,
         ):
             self._trv_observations[zone_id].append(obs)
+            _LOGGER.debug(
+                "ThermoSmart %s: TRV observation stored setpoint=%.1f°C"
+                " indoor=%.1f°C target=%.1f°C heat_rate=%s",
+                zone_id,
+                obs["trv_setpoint"],
+                obs["indoor_temp"],
+                obs["target"],
+                f"{obs['heat_rate']:.4f}K/min" if "heat_rate" in obs else "n/a",
+            )
         # Kein hartes Limit – Zeit-basiertes Ausdünnen in async_save()
         self._schedule_debounced_save()
 

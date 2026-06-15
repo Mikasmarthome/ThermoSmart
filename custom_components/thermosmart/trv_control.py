@@ -3,10 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 
-from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 
+from .device_profiles import DeviceProfile, get_profile, VALVE_MAX_LIMIT, SETPOINT_HVAC_FIRST
 from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERNS,
@@ -17,6 +19,7 @@ from .const import (
     CONF_CALIBRATION_INVERT,
     CONF_MANAGE_TEMP_SOURCE,
     CONF_QUIRK_ENTITIES,
+    CONF_WINDOW_OPEN_TEMP,
     TEMP_SOURCE_SENSOR_GRACE_SECONDS,
     WINDOW_OPEN_SETPOINT,
     TPI_VALVE_BUMP_PCT,
@@ -48,6 +51,20 @@ class TRVControlMixin:
 
         if not device_to_climate:
             return
+
+        # ── Device profile detection ──────────────────────────────────────────
+        dev_reg = dr.async_get(self.hass)
+        profile_map: dict[str, DeviceProfile] = {}
+        for device_id, climate_id in device_to_climate.items():
+            dev_entry = dev_reg.async_get(device_id)
+            manufacturer = dev_entry.manufacturer if dev_entry else None
+            model = dev_entry.model if dev_entry else None
+            profile = get_profile(model, manufacturer)
+            profile_map[climate_id] = profile
+            _LOGGER.debug(
+                "ThermoSmart '%s': device profile → %s (entity=%s, manufacturer=%r, model=%r)",
+                self.zone_name, profile.identifier, climate_id, manufacturer, model,
+            )
 
         quirks: list[str] = []
         cal_map: dict[str, str] = {}
@@ -136,6 +153,7 @@ class TRVControlMixin:
                 self.zone_name, temp_source_map,
             )
 
+        self._device_profiles = profile_map
         await self._reset_valve_opening_degree()
 
         self._auto_quirk_entities = quirks
@@ -177,6 +195,10 @@ class TRVControlMixin:
 
         retry_needed = False
         for device_id in device_to_climate:
+            climate_id = device_to_climate[device_id]
+            _profile = getattr(self, "_device_profiles", {}).get(climate_id)
+            if _profile is not None and _profile.valve_semantics != VALVE_MAX_LIMIT:
+                continue
             for entry in er.async_entries_for_device(ent_reg, device_id):
                 if entry.entity_id.split(".")[0] != "number":
                     continue
@@ -264,6 +286,14 @@ class TRVControlMixin:
             if state is None:
                 continue
 
+            _profile = self._device_profiles.get(entity_id)
+            if _profile is not None and not _profile.hvac_watchdog:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Watchdog skipped for %s – profile '%s' has hvac_watchdog=False",
+                    self.zone_name, entity_id, _profile.identifier,
+                )
+                continue
+
             if state.state not in self._UNWANTED_MODES:
                 continue  # TRV ist in 'heat' – alles gut
 
@@ -310,6 +340,14 @@ class TRVControlMixin:
             if not cal_entity:
                 continue
 
+            _cal_profile = self._device_profiles.get(climate_id)
+            if _cal_profile is not None and not _cal_profile.calibration_sync:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': calibration skipped for %s – profile '%s' has calibration_sync=False",
+                    self.zone_name, climate_id, _cal_profile.identifier,
+                )
+                continue
+
             # Skip calibration write when the TRV is confirmed to be using its
             # external temperature source – the offset is ignored by the firmware
             # in that mode, so writing it would be a no-op at best.
@@ -346,11 +384,25 @@ class TRVControlMixin:
 
             raw_offset = room_temp - trv_temp
 
-            # Kalibrierungs-Inversion (z.B. ME167 invertiert das Offset-Vorzeichen)
-            if cfg.get(CONF_CALIBRATION_INVERT, False):
+            # Inversion priority:
+            #   1. Key present in cfg → user made an explicit choice; use it as-is.
+            #      (key present + False means user consciously disabled inversion)
+            #   2. Key absent (old ConfigEntry pre-dating the field) → use profile default.
+            #      This is safe: old entries without the key never had user-configured
+            #      inversion, so applying the profile default cannot reverse a user setting.
+            _invert = (
+                cfg[CONF_CALIBRATION_INVERT]
+                if CONF_CALIBRATION_INVERT in cfg
+                else (_cal_profile.calibration_inverted if _cal_profile is not None else False)
+            )
+            if _invert:
                 raw_offset = -raw_offset
 
-            if abs(raw_offset) > 7.0:
+            _plaus_limit = (
+                _cal_profile.calibration_plausibility_limit
+                if _cal_profile is not None else 7.0
+            )
+            if abs(raw_offset) > _plaus_limit:
                 _LOGGER.warning(
                     "ThermoSmart '%s': Kalibrierungs-Offset %.1f°C für %s unplausibel – übersprungen",
                     self.zone_name, raw_offset, cal_entity,
@@ -413,6 +465,29 @@ class TRVControlMixin:
                         self.zone_name, result,
                     )
 
+    # ── Hilfsroutinen ────────────────────────────────────────────────
+
+    @staticmethod
+    def _round_to_step(value: float, step: float) -> float:
+        """Round value to the nearest multiple of step (round half up)."""
+        return round(math.floor(value / step + 0.5) * step, 2)
+
+    def _snap_to_device_step(self, entity_id: str, state, value: float) -> float:
+        """Snap value to the TRV's target_temp_step if the attribute is present."""
+        try:
+            step = float(state.attributes.get("target_temp_step", 0))
+            if step > 0:
+                snapped = self._round_to_step(value, step)
+                if snapped != value:
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': %s step-snap %.4f°C → %.2f°C (step=%.2f)",
+                        self.zone_name, entity_id, value, snapped, step,
+                    )
+                return snapped
+        except (TypeError, ValueError):
+            pass
+        return value
+
     # ── Temperatur schreiben ──────────────────────────────────────────
 
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
@@ -422,11 +497,12 @@ class TRVControlMixin:
         if target is None:
             if recommendation.get("window_open"):
                 tasks = []
+                effective_frost = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
                 for entity_id in cfg.get("climate_entities", []):
                     state = self._get_trv_state(entity_id)
                     if state is None:
                         continue
-                    frost_temp = WINDOW_OPEN_SETPOINT
+                    frost_temp = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
                     try:
                         device_min = float(state.attributes.get("min_temp", 0))
                         if 0 < device_min <= 30 and device_min > frost_temp:
@@ -438,6 +514,31 @@ class TRVControlMixin:
                             frost_temp = device_min
                     except (TypeError, ValueError):
                         pass
+                    _wp = self._device_profiles.get(entity_id)
+                    if _wp is not None and not _wp.is_active:
+                        _LOGGER.debug(
+                            "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
+                            self.zone_name, entity_id,
+                        )
+                        continue
+                    if _wp is not None and _wp.minimum_setpoint is not None and _wp.minimum_setpoint > frost_temp:
+                        _LOGGER.debug(
+                            "ThermoSmart '%s': clamped window-open setpoint for %s"
+                            " from %.1f°C to %.1f°C due to profile minimum_setpoint",
+                            self.zone_name, entity_id, frost_temp, _wp.minimum_setpoint,
+                        )
+                        frost_temp = _wp.minimum_setpoint
+                    frost_temp = self._snap_to_device_step(entity_id, state, frost_temp)
+                    # Final clamp: snap must not fall below device or profile minimum
+                    try:
+                        _dev_min = float(state.attributes.get("min_temp", 0))
+                        if 0 < _dev_min <= 30 and _dev_min > frost_temp:
+                            frost_temp = _dev_min
+                    except (TypeError, ValueError):
+                        pass
+                    if _wp is not None and _wp.minimum_setpoint is not None and _wp.minimum_setpoint > frost_temp:
+                        frost_temp = _wp.minimum_setpoint
+                    effective_frost = frost_temp  # track clamped value for sensor display
                     try:
                         if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
                             continue
@@ -451,6 +552,10 @@ class TRVControlMixin:
                     ))
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
+                # Immediately reflect the written frost temp in the sensor display.
+                # Without this, the display fallback (which runs before _apply_temperature)
+                # would show the stale pre-window-open setpoint for one full cycle.
+                recommendation["trv_setpoint"] = effective_frost
             return
 
         if not (5.0 <= target <= 30.0):
@@ -468,6 +573,13 @@ class TRVControlMixin:
             state = self._get_trv_state(entity_id)
             if state is None:
                 continue
+            _profile = self._device_profiles.get(entity_id)
+            if _profile is not None and not _profile.is_active:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
+                    self.zone_name, entity_id,
+                )
+                continue
             effective_setpoint = trv_setpoint
             try:
                 device_min = float(state.attributes.get("min_temp", 0))
@@ -479,6 +591,22 @@ class TRVControlMixin:
                     effective_setpoint = device_min
             except (TypeError, ValueError):
                 pass
+            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C due to profile minimum_setpoint",
+                    self.zone_name, entity_id, effective_setpoint, _profile.minimum_setpoint,
+                )
+                effective_setpoint = _profile.minimum_setpoint
+            effective_setpoint = self._snap_to_device_step(entity_id, state, effective_setpoint)
+            # Final clamp: snap must not fall below device or profile minimum
+            try:
+                _dev_min = float(state.attributes.get("min_temp", 0))
+                if 0 < _dev_min <= 30 and _dev_min > effective_setpoint:
+                    effective_setpoint = _dev_min
+            except (TypeError, ValueError):
+                pass
+            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
+                effective_setpoint = _profile.minimum_setpoint
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:
@@ -491,11 +619,43 @@ class TRVControlMixin:
                 self.zone_name, entity_id, effective_setpoint, target, effective_setpoint - target,
             )
             self._last_written_setpoints[entity_id] = effective_setpoint
-            tasks.append(self.hass.services.async_call(
-                "climate", "set_temperature",
-                {"entity_id": entity_id, "temperature": effective_setpoint},
-                blocking=True,
-            ))
+
+            if _profile is not None and _profile.setpoint_method == SETPOINT_HVAC_FIRST:
+                # Sequential write: set HVAC mode first, wait, then write setpoint.
+                # Required for TRVs that silently ignore climate.set_temperature unless
+                # they are already in the correct HVAC mode (e.g. Eurotronic Spirit).
+                mode = _profile.hvac_mode_before_write or "heat"
+                if state.state != mode:
+                    try:
+                        await self.hass.services.async_call(
+                            "climate", "set_hvac_mode",
+                            {"entity_id": entity_id, "hvac_mode": mode},
+                            blocking=True,
+                        )
+                    except Exception as err:
+                        _LOGGER.warning(
+                            "ThermoSmart '%s': HVAC mode pre-write failed for %s: %s",
+                            self.zone_name, entity_id, err,
+                        )
+                    if _profile.setpoint_delay_seconds > 0.0:
+                        await asyncio.sleep(_profile.setpoint_delay_seconds)
+                try:
+                    await self.hass.services.async_call(
+                        "climate", "set_temperature",
+                        {"entity_id": entity_id, "temperature": effective_setpoint},
+                        blocking=True,
+                    )
+                except Exception as err:
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': HVAC_FIRST setpoint failed for %s: %s",
+                        self.zone_name, entity_id, err,
+                    )
+            else:
+                tasks.append(self.hass.services.async_call(
+                    "climate", "set_temperature",
+                    {"entity_id": entity_id, "temperature": effective_setpoint},
+                    blocking=True,
+                ))
 
         if tasks:
             results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -558,10 +718,12 @@ class TRVControlMixin:
             except (TypeError, ValueError):
                 current_pct = None
 
+            _profile = self._device_profiles.get(climate_id)
             # Valve-Bump: beim Schließen kurz öffnen dann schließen
             # Verhindert TRVZB-Motor-Sticking bei kleinen Schließbewegungen
             if (
-                current_pct is not None
+                (_profile is None or _profile.valve_bump_on_close)
+                and current_pct is not None
                 and target_pct < current_pct
                 and (current_pct - target_pct) >= 5
             ):
@@ -621,6 +783,9 @@ class TRVControlMixin:
             return
 
         for climate_id in cfg.get("climate_entities", []):
+            _profile = self._device_profiles.get(climate_id)
+            if _profile is not None and not _profile.allow_external_temp_input:
+                continue
             ext_entity = ext_map.get(climate_id)
             if not ext_entity:
                 continue
@@ -697,6 +862,14 @@ class TRVControlMixin:
         for climate_id in cfg.get("climate_entities", []):
             select_entity = temp_source_map.get(climate_id)
             if not select_entity:
+                continue
+
+            _profile = self._device_profiles.get(climate_id)
+            if _profile is not None and not _profile.allow_temp_source_select:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': temp source select skipped for %s – profile '%s' has allow_temp_source_select=False",
+                    self.zone_name, climate_id, _profile.identifier,
+                )
                 continue
 
             # ── Readiness guards ─────────────────────────────────────

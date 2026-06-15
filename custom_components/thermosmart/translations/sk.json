@@ -42,7 +42,8 @@
           "away_temp": "Teplota neprítomnosti (automaticky keď všetci odišli)",
           "vacation_temp": "Dovolenkový teplota (ochrana pred mrazom)",
           "eco_temp": "Eco teplota (úspora energie, medzi nočnou a komfortnou)",
-          "temp_tolerance": "Teplotná tolerancia – ovládajte TRV až po tejto odchýlke",
+          "window_open_temp": "Teplota pri otvorenom okne",
+          "temp_tolerance": "Teplotná tolerancia – prah aktualizácie žiadanej hodnoty",
           "schedule_enabled": "Aktivovať časový plán",
           "sched_wd_morning": "Pracovný deň: Komfort od",
           "sched_wd_night": "Pracovný deň: Noc od",
@@ -57,7 +58,8 @@
           "sched_we_night": "Nočná teplota platí od tohto času",
           "away_temp": "Použije sa automaticky len pri nakonfigurovanom rozpoznávaní prítomnosti (Krok 3). Možno nastaviť aj ručne prostredníctvom výberu režimu.",
           "eco_temp": "Použije sa, keď je výber režimu ručne nastavený na 'Eco'. Neaktivuje sa automaticky.",
-          "temp_tolerance": "ThermoSmart nastavuje TRV len vtedy, keď sa teplota odchýli o viac ako túto hodnotu. 0,5 °C funguje dobre pre väčšinu miestností. Nižší = reaktívnejší, vyšší = menej nastavení."
+          "window_open_temp": "Cieľová teplota, keď je okno otvorené. Pre termostaty, ktoré nepodporujú veľmi nízke hodnoty, použite vyššiu hodnotu, napríklad 10 °C.",
+          "temp_tolerance": "Minimálna zmena vypočítanej žiadanej hodnoty TRV pred odoslaním novej aktualizácie ThermoSmartom. Znižuje zbytočné zápisy do termostatu. 0,5 °C funguje dobre pre väčšinu miestností."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Teplota neprítomnosti",
           "vacation_temp": "Dovolenkový teplota",
           "eco_temp": "Eco teplota",
+          "window_open_temp": "Teplota pri otvorenom okne",
           "temp_tolerance": "Teplotná tolerancia",
           "schedule_enabled": "Aktivovať časový plán",
           "sched_wd_morning": "Pracovný deň: Komfort od",
@@ -149,7 +152,8 @@
           "sched_we_night": "Nočná teplota platí od tohto času",
           "away_temp": "Použije sa automaticky len pri nakonfigurovanom rozpoznávaní prítomnosti (Krok 3). Možno nastaviť aj ručne prostredníctvom výberu režimu.",
           "eco_temp": "Použije sa, keď je výber režimu ručne nastavený na 'Eco'. Neaktivuje sa automaticky.",
-          "temp_tolerance": "ThermoSmart nastavuje TRV len vtedy, keď sa teplota odchýli o viac ako túto hodnotu. 0,5 °C funguje dobre pre väčšinu miestností. Nižší = reaktívnejší, vyšší = menej nastavení."
+          "window_open_temp": "Cieľová teplota, keď je okno otvorené. Pre termostaty, ktoré nepodporujú veľmi nízke hodnoty, použite vyššiu hodnotu, napríklad 10 °C.",
+          "temp_tolerance": "Minimálna zmena vypočítanej žiadanej hodnoty TRV pred odoslaním novej aktualizácie ThermoSmartom. Znižuje zbytočné zápisy do termostatu. 0,5 °C funguje dobre pre väčšinu miestností."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Vlastné senzory sú presnejšie ako entita počasia a majú prednosť."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System nemá konfigurovatelné možnosti. Použite selektor letného režimu a prepínač dovolenky na ovládanie všetkých zón."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Aktívne ovládanie"
       },
       "learning": { "name": "Režim učenia" },
-      "vacation_mode": { "name": "Dovolenkový režim" }
+      "vacation_mode": { "name": "Dovolenkový režim" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Cieľová teplota" },
       "trv_setpoint": { "name": "Nastavená hodnota TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Skóre výsledku" },
+      "outcome_score": {
+        "name": "Skóre výsledku",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
       "preheat_minutes": { "name": "Čas predohrevu" },
       "confidence": { "name": "Pokrok učenia" },
       "weather_offset": { "name": "Korekcia počasia" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Sklon teploty" },
       "temp_ema_1h": { "name": "Teplota EMA 1h" },
-      "heat_loss": { "name": "Tepelné straty" },
-      "heating_power": { "name": "Výkon vykurovania" },
+      "heat_loss": {
+        "name": "Tepelné straty",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
+      "heating_power": {
+        "name": "Výkon vykurovania",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
       "sun_intensity": { "name": "Solárny tepelný zisk" },
-      "window_cooling_rate": { "name": "Rýchlosť ochladzovania cez okno" },
+      "window_cooling_rate": {
+        "name": "Rýchlosť ochladzovania cez okno",
+        "state": {
+          "learning": "Prebieha učenie"
+        }
+      },
       "trv_observations": { "name": "Pozorovania TRV" }
     }
   }

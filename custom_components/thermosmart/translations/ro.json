@@ -42,7 +42,8 @@
           "away_temp": "Temperatură de absență (automat când toți au plecat)",
           "vacation_temp": "Temperatură de vacanță (protecție la îngheț)",
           "eco_temp": "Temperatură Eco (economie de energie, între noapte și confort)",
-          "temp_tolerance": "Toleranță temperatură – controlați TRV-ul doar după această abatere",
+          "window_open_temp": "Temperatură fereastră deschisă",
+          "temp_tolerance": "Toleranță temperatură – prag de actualizare a punctului de reglaj",
           "schedule_enabled": "Activare program orar",
           "sched_wd_morning": "Zi lucrătoare: Confort de la",
           "sched_wd_night": "Zi lucrătoare: Noapte de la",
@@ -57,7 +58,8 @@
           "sched_we_night": "Temperatura de noapte se aplică de la această oră",
           "away_temp": "Aplicată automat doar când detectarea prezenței este configurată (Pasul 3). Poate fi setată și manual prin selectorul de mod.",
           "eco_temp": "Folosită când selectorul de mod este setat manual pe 'Eco'. Nu se activează automat.",
-          "temp_tolerance": "ThermoSmart ajustează TRV-ul doar când temperatura se abate mai mult decât această valoare. 0,5 °C funcționează bine pentru majoritatea camerelor. Mai mic = mai reactiv, mai mare = mai puține ajustări."
+          "window_open_temp": "Temperatura țintă cât timp o fereastră este deschisă. Pentru termostatele care nu acceptă valori foarte mici, utilizați o valoare mai ridicată, cum ar fi 10 °C.",
+          "temp_tolerance": "Modificare minimă a punctului de reglaj TRV calculat înainte ca ThermoSmart să trimită o nouă actualizare. Reduce scrierile inutile în termostat. 0,5 °C funcționează bine pentru majoritatea camerelor."
         }
       },
       "presence": {
@@ -134,6 +136,7 @@
           "away_temp": "Temperatură de absență",
           "vacation_temp": "Temperatură de vacanță",
           "eco_temp": "Temperatură Eco",
+          "window_open_temp": "Temperatură fereastră deschisă",
           "temp_tolerance": "Toleranță temperatură",
           "schedule_enabled": "Activare program orar",
           "sched_wd_morning": "Zi lucrătoare: Confort de la",
@@ -149,7 +152,8 @@
           "sched_we_night": "Temperatura de noapte se aplică de la această oră",
           "away_temp": "Aplicată automat doar când detectarea prezenței este configurată (Pasul 3). Poate fi setată și manual prin selectorul de mod.",
           "eco_temp": "Folosită când selectorul de mod este setat manual pe 'Eco'. Nu se activează automat.",
-          "temp_tolerance": "ThermoSmart ajustează TRV-ul doar când temperatura se abate mai mult decât această valoare. 0,5 °C funcționează bine pentru majoritatea camerelor. Mai mic = mai reactiv, mai mare = mai puține ajustări."
+          "window_open_temp": "Temperatura țintă cât timp o fereastră este deschisă. Pentru termostatele care nu acceptă valori foarte mici, utilizați o valoare mai ridicată, cum ar fi 10 °C.",
+          "temp_tolerance": "Modificare minimă a punctului de reglaj TRV calculat înainte ca ThermoSmart să trimită o nouă actualizare. Reduce scrierile inutile în termostat. 0,5 °C funcționează bine pentru majoritatea camerelor."
         }
       },
       "presence": {
@@ -180,6 +184,9 @@
           "outdoor_temp_sensor": "Senzorii proprii sunt mai precisi decât entitatea meteo și sunt preferați."
         }
       }
+    },
+    "abort": {
+      "system_no_options": "ThermoSmart System nu are opțiuni configurabile. Utilizați selectorul modului Vară şi comutatorul de Vacanță pentru a controla toate zonele."
     }
   },
   "entity": {
@@ -206,7 +213,8 @@
         "name": "Control activ"
       },
       "learning": { "name": "Mod învățare" },
-      "vacation_mode": { "name": "Mod vacanță" }
+      "vacation_mode": { "name": "Mod vacanță" },
+      "debug_log": { "name": "Debug Log" }
     },
     "select": {
       "mode": {
@@ -233,7 +241,12 @@
       "adjusted_target": { "name": "Temperatură țintă" },
       "trv_setpoint": { "name": "Punct de reglaj TRV" },
       "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
-      "outcome_score": { "name": "Scor de rezultat" },
+      "outcome_score": {
+        "name": "Scor de rezultat",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
       "preheat_minutes": { "name": "Timp de preîncălzire" },
       "confidence": { "name": "Progres de învățare" },
       "weather_offset": { "name": "Corecție meteo" },
@@ -256,10 +269,25 @@
       },
       "temp_slope": { "name": "Pantă temperatură" },
       "temp_ema_1h": { "name": "Temperatură EMA 1h" },
-      "heat_loss": { "name": "Pierdere de căldură" },
-      "heating_power": { "name": "Putere de încălzire" },
+      "heat_loss": {
+        "name": "Pierdere de căldură",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
+      "heating_power": {
+        "name": "Putere de încălzire",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
       "sun_intensity": { "name": "Câștig termic solar" },
-      "window_cooling_rate": { "name": "Rată de răcire ferestră" },
+      "window_cooling_rate": {
+        "name": "Rată de răcire ferestră",
+        "state": {
+          "learning": "Învaţă"
+        }
+      },
       "trv_observations": { "name": "Observații TRV" }
     }
   }

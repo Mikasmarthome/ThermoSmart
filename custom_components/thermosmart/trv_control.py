@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -468,8 +469,8 @@ class TRVControlMixin:
 
     @staticmethod
     def _round_to_step(value: float, step: float) -> float:
-        """Round value to the nearest multiple of step."""
-        return round(round(value / step) * step, 2)
+        """Round value to the nearest multiple of step (round half up)."""
+        return round(math.floor(value / step + 0.5) * step, 2)
 
     def _snap_to_device_step(self, entity_id: str, state, value: float) -> float:
         """Snap value to the TRV's target_temp_step if the attribute is present."""

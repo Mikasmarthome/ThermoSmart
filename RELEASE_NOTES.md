@@ -6,6 +6,14 @@ ThermoSmart v1.1.0 is the first stable release of the v1.1.x series. It delivers
 
 ---
 
+### Post-release correction: Weather Correction during active Comfort window
+
+A negative weather offset could pull the effective heating target below the configured Comfort temperature while the room had not yet reached it, in AUTO mode during an active comfort window. This could silently stall active heating just below the configured target (e.g. Comfort target 21 °C, room at 20 °C, weather offset −1 °C → effective target converged to 20 °C, no further heating).
+
+**Fix:** a negative weather offset is now suppressed while `current_temp < base_target` in this scenario. Positive weather boost is unaffected, and negative offsets still apply once the configured target has been reached. Forecast suppression and the comfort floor in the night/transition window are unchanged.
+
+---
+
 ### Device Compatibility
 
 ThermoSmart now ships a comprehensive device-profile system that ensures correct behaviour across a wide range of TRVs and climate devices out of the box.

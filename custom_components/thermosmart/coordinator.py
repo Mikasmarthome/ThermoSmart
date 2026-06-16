@@ -949,6 +949,25 @@ class ThermoSmartCoordinator(
             adjusted_target = override
             override_active = True
         elif not window_open:
+            # Guard: a negative weather offset must not pull the effective target
+            # below the configured comfort temperature while the room hasn't
+            # reached it yet — otherwise the corrected target can converge with
+            # current_temp and stall active heating during an active comfort
+            # window. Positive offsets (boost) remain unaffected; negative
+            # offsets are still allowed once current_temp >= base_target.
+            if (
+                mode == HEATING_MODE_AUTO
+                and base_target >= comfort_temp
+                and weather_offset < 0
+                and current_temp is not None
+                and current_temp < base_target
+            ):
+                _LOGGER.debug(
+                    "ThermoSmart '%s': negative weather offset %.1f°C suppressed – "
+                    "comfort target %.1f°C not yet reached (current=%.1f°C)",
+                    self.zone_name, weather_offset, base_target, current_temp,
+                )
+                weather_offset = 0.0
             raw_target = round(base_target + weather_offset, 1)
             if mode == HEATING_MODE_AUTO:
                 if preheat_active:

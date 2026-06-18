@@ -1,5 +1,37 @@
 # ThermoSmart – Release Notes
 
+## v1.1.1 – Patch
+
+Patch release for v1.1.0. No new features, no configuration changes, no migration required.
+
+---
+
+### Fix: Summer mode TRV setpoint display
+
+When summer mode was active, ThermoSmart correctly wrote the frost-protection setpoint (12 °C) to TRVs via `_apply_frost_protection`. However, `recommendation["trv_setpoint"]` was populated by the display fallback before `_apply_frost_protection` ran, so the fallback picked up the last heating setpoint from `_last_written_setpoints` (e.g. 28 °C) and exposed it as the sensor value.
+
+**Result:** the TRV, climate entity, and card were inconsistent — the TRV received 12 °C but the `trv_setpoint` sensor showed the previous heating value.
+
+**Fix:** the display fallback in `coordinator.py` now detects an active summer mode (`recommendation["is_summer"]`) and sets `trv_setpoint = TEMP_FROST_PROTECTION` (12 °C) directly, bypassing `_last_written_setpoints`.
+
+After this fix, all three values are consistent in every operating mode:
+
+| Mode | Climate target | TRV setpoint | Sensor / Card |
+|------|---------------|--------------|---------------|
+| Normal | configured | TPI/boost value | TPI/boost value |
+| Window open | configured | 5 °C | 5 °C |
+| Summer mode | configured | 12 °C | 12 °C |
+| Vacation | frost temp | frost temp | frost temp |
+
+Window open handling, vacation mode, away mode, learning engine, device profiles, and all other control paths are unchanged.
+
+### Upgrade
+
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+No configuration changes required. Learning data is preserved.
+
+---
+
 ## v1.1.0 – Stable
 
 ThermoSmart v1.1.0 is the first stable release of the v1.1.x series. It delivers broad device compatibility improvements, a complete device-profile system, significantly improved window-open handling, consolidated learning data for LE 2.0, a new global Debug Log switch, and a fully consistent manual override lifecycle.

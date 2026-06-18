@@ -635,22 +635,28 @@ class ThermoSmartCoordinator(
             # the sensor does not show Unknown after restart. Does not affect control logic,
             # TPI, learning, or boost tracking.
             if "trv_setpoint" not in recommendation:
-                for _eid in cfg.get("climate_entities", []):
-                    _last = self._last_written_setpoints.get(_eid)
-                    if _last is not None:
-                        recommendation["trv_setpoint"] = _last
-                        break
-                if "trv_setpoint" not in recommendation:
+                if recommendation.get("is_summer"):
+                    # In summer mode the frost-protection value is always sent to the TRV.
+                    # Use it directly so the sensor reflects the actually applied setpoint
+                    # rather than a stale heating value from _last_written_setpoints.
+                    recommendation["trv_setpoint"] = TEMP_FROST_PROTECTION
+                else:
                     for _eid in cfg.get("climate_entities", []):
-                        _st = self.hass.states.get(_eid)
-                        if _st is not None:
-                            try:
-                                _t = float(_st.attributes.get("temperature", 0))
-                                if _t > 0:
-                                    recommendation["trv_setpoint"] = _t
-                                    break
-                            except (TypeError, ValueError):
-                                pass
+                        _last = self._last_written_setpoints.get(_eid)
+                        if _last is not None:
+                            recommendation["trv_setpoint"] = _last
+                            break
+                    if "trv_setpoint" not in recommendation:
+                        for _eid in cfg.get("climate_entities", []):
+                            _st = self.hass.states.get(_eid)
+                            if _st is not None:
+                                try:
+                                    _t = float(_st.attributes.get("temperature", 0))
+                                    if _t > 0:
+                                        recommendation["trv_setpoint"] = _t
+                                        break
+                                except (TypeError, ValueError):
+                                    pass
 
             # Nach trv_setpoint-Berechnung: Heizungsausfall-Erkennung
             self._check_heating_failure(recommendation)
@@ -705,6 +711,7 @@ class ThermoSmartCoordinator(
             elif self._active_control and effective_summer:
                 await self._async_apply_quirks(cfg)
                 await self._apply_frost_protection(cfg)
+                recommendation["trv_setpoint"] = TEMP_FROST_PROTECTION
 
             # Valve maintenance runs in summer mode or observation mode.
             # Must be called outside the active-control blocks — the function

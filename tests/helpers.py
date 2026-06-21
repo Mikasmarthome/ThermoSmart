@@ -1,7 +1,61 @@
 """Shared test helpers and mock factories for ThermoSmart tests."""
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
+
+
+def make_state(value, attributes: dict | None = None) -> MagicMock:
+    """Return a minimal mock HA State object."""
+    state = MagicMock()
+    state.state = str(value)
+    state.attributes = attributes or {}
+    return state
+
+
+def set_hass_states(coordinator, states_dict: dict) -> None:
+    """Configure coordinator.hass.states.get() to return mock states from a dict."""
+    coordinator.hass.states.get.side_effect = lambda eid: states_dict.get(eid)
+
+
+def make_coordinator(zone_cfg_overrides: dict | None = None):
+    """Create a ThermoSmartCoordinator with mocked dependencies for unit testing.
+
+    Uses MagicMock hass – suitable for testing pure logic methods without HA
+    fixtures. Compatible with Windows (no fcntl/homeassistant.runner needed).
+
+    DataUpdateCoordinator.__init__ calls homeassistant.helpers.frame.report_usage()
+    which requires an active HA event loop.  We patch it to a no-op so the
+    coordinator can be instantiated in plain pytest without a full HA runtime.
+    """
+    from unittest.mock import patch as _patch
+    from custom_components.thermosmart.coordinator import ThermoSmartCoordinator
+
+    hass = make_mock_hass()
+
+    entry = MagicMock()
+    entry.entry_id = "test_zone_001"
+    entry.options = {}
+    entry.data = make_zone_config(**(zone_cfg_overrides or {}))
+
+    weather_engine = MagicMock()
+    weather_engine.compute_temperature_offset.return_value = 0.0
+    weather_engine.compute_forecast_suppression.return_value = 1.0
+    weather_engine.async_get_data = AsyncMock(return_value={"temperature": 10.0})
+
+    learning_engine = MagicMock()
+    learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
+    learning_engine.async_get_preheat_minutes = AsyncMock(return_value=0)
+    learning_engine.get_forecast_bias.return_value = 1.0
+    learning_engine.get_confidence.return_value = 0.5
+    learning_engine.get_tpi_coefficients.return_value = (0.6, 0.01)
+    learning_engine.get_boost_factor.return_value = 1.0
+    learning_engine.async_observe = AsyncMock()
+    learning_engine.evaluate_forecast_decisions = MagicMock()
+    learning_engine.update_heating_session = MagicMock()
+    learning_engine.record_forecast_decision = MagicMock()
+
+    with _patch("homeassistant.helpers.frame.report_usage"):
+        return ThermoSmartCoordinator(hass, entry, weather_engine, learning_engine)
 
 
 def make_zone_config(**overrides) -> dict:

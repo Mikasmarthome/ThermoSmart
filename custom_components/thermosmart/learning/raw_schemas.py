@@ -27,11 +27,14 @@ from .contracts import (
 
 
 class RawTrackName(Enum):
-    """Stable raw track identifiers used by the (later) registry/storage."""
+    """Stable raw track identifiers used by the (later) registry/storage.
+
+    Window cooling is intentionally absent: it is exclusively a materialised
+    episode (``EpisodeType.WINDOW_COOLING``), never a raw record track.
+    """
 
     ROOM = "room"
     TRV = "trv"
-    WINDOW_COOLING = "window_cooling"
     HEATING_DRIVE_END = "heating_drive_end"
     FORECAST_DECISION = "forecast_decision"
     FORECAST_EVALUATION = "forecast_evaluation"

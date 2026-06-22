@@ -81,6 +81,8 @@ class PredictionType(Enum):
     FORECAST_BIAS = "forecast_bias"
     CORRECTED_FORECAST = "corrected_forecast"
     BOOST_FACTOR = "boost_factor"
+    BOOST_DURATION = "boost_duration"
+    BOOST_OUTCOME = "boost_outcome"
     OUTCOME_SCORE = "outcome_score"
     OUTCOME_QUALITY = "outcome_quality"
     COMFORT_QUALITY = "comfort_quality"

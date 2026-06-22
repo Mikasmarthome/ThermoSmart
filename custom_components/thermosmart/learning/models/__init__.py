@@ -46,6 +46,23 @@ from .afterheat import (
     AfterheatUpdateContext,
     afterheat_model_definition,
 )
+from .boost import (
+    EVALUATION_VERSION,
+    BoostBucket,
+    BoostDiagnostics,
+    BoostEffect,
+    BoostEvaluation,
+    BoostModel,
+    BoostParameters,
+    BoostPredictionContext,
+    BoostRebuildItem,
+    BoostRecommendation,
+    BoostRejection,
+    BoostSample,
+    BoostState,
+    BoostUpdateContext,
+    boost_model_definition,
+)
 from .forecast import (
     ForecastBucket,
     ForecastDiagnostics,

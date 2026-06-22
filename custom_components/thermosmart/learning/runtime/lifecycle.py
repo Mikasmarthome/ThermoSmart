@@ -103,6 +103,7 @@ class RuntimeHealth:
     storage_warnings: int
     model_update_total: int = 0
     prediction_snapshots: int = 0
+    model_update_counts: Mapping[str, int] = field(default_factory=dict)
 
 
 class _ZoneRuntime:
@@ -341,7 +342,15 @@ class LearningRuntime:
             storage_warnings=len(self._persistence.warnings) if self._persistence else 0,
             model_update_total=sum(sum(z.model_update_counts.values())
                                    for z in self._zones.values()),
-            prediction_snapshots=sum(z.ledger.size for z in self._zones.values()))
+            prediction_snapshots=sum(z.ledger.size for z in self._zones.values()),
+            model_update_counts=self._aggregate_model_update_counts())
+
+    def _aggregate_model_update_counts(self) -> dict:
+        out: dict[str, int] = {}
+        for z in self._zones.values():
+            for name, count in z.model_update_counts.items():
+                out[name] = out.get(name, 0) + count
+        return out
 
 
 class CoordinatorBridge:

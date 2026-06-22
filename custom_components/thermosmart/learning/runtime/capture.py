@@ -90,6 +90,8 @@ class RuntimeCycleInput:
     indoor_temp: Optional[Measurement] = None
     schedule: Optional[ScheduleTarget] = None
     mode: Optional[str] = None
+    controller_demand: Optional[bool] = None     # controller calling for heat (if known)
+    tpi_on: Optional[bool] = None
     controller_decision: ControllerDecisionInput = field(
         default_factory=ControllerDecisionInput)
     trv_setpoints: Mapping[str, float] = field(default_factory=dict)  # binding -> setpoint
@@ -137,6 +139,8 @@ class CapturedSnapshot:
     indoor_temp: Optional[Measurement]
     indoor_temp_quality: DataQuality
     decision_type: DecisionType
+    controller_demand: Optional[bool]
+    tpi_on: Optional[bool]
     boost_active: bool
     preheat_active: bool
     fallback_active: bool
@@ -310,6 +314,7 @@ class CaptureCoordinator:
             zone_id=self._zone, ts=inp.ts, decision_id=decision_id, target_c=inp.target_c,
             trv_setpoint_c=inp.trv_setpoint_c, indoor_temp=inp.indoor_temp,
             indoor_temp_quality=quality, decision_type=d.decision_type,
+            controller_demand=inp.controller_demand, tpi_on=inp.tpi_on,
             boost_active=d.boost_active, preheat_active=d.preheat_active,
             fallback_active=d.fallback_active, window_open=inp.window_open,
             heating_failure=inp.heating_failure,

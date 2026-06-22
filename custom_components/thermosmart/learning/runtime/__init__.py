@@ -20,6 +20,8 @@ from .capture import (
     make_decision_id,
 )
 from .evidence import EvidenceItem, EvidenceMaterializer, MaterializedEvidence
+from .pipeline import CompletedEpisode, PipelineCycleResult, RuntimePipeline
+from .prediction_ledger import PredictionSnapshot, PredictionSnapshotLedger
 from .orchestration import ModelOrchestrator, OrchestrationResult, build_zone_models
 from .persistence import (
     AsyncStore,
@@ -59,6 +61,8 @@ __all__ = [
     "ManualCorrectionObservation", "RuntimeCycleInput", "ScheduleTarget", "SentCommand",
     "make_decision_id",
     "EvidenceItem", "EvidenceMaterializer", "MaterializedEvidence",
+    "CompletedEpisode", "PipelineCycleResult", "RuntimePipeline",
+    "PredictionSnapshot", "PredictionSnapshotLedger",
     "ModelOrchestrator", "OrchestrationResult", "build_zone_models",
     "AsyncStore", "PersistenceOrchestrator", "SavePolicy", "SaveTrigger",
     "SHADOW_SCHEMA_VERSION", "ComparisonType", "PreheatParameters", "PreheatPlan",

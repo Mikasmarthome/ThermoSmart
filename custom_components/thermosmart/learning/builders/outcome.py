@@ -113,6 +113,7 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
         from .base import BUILDER_VERSION
         episode = OutcomeEpisode(
             episode_id=self._episode_id, learning_zone_id=self._zone,
+            decision_id=self._extra["decision_id"],
             episode_schema_version=1, builder_version=BUILDER_VERSION,
             classifier_version=inp.regime.classifier_version if inp.regime else 1,
             start_ts=self._start_ts, end_ts=inp.ts, regime=Regime.ACTIVE_HEATING,

@@ -80,6 +80,9 @@ class PredictionType(Enum):
     FORECAST_TRUST = "forecast_trust"
     BOOST_FACTOR = "boost_factor"
     OUTCOME_SCORE = "outcome_score"
+    OUTCOME_QUALITY = "outcome_quality"
+    COMFORT_QUALITY = "comfort_quality"
+    CONTROLLER_QUALITY = "controller_quality"
     HEATING_EFFORT = "heating_effort"
 
 

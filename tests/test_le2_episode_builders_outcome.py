@@ -115,6 +115,36 @@ class TestOutcomeLifecycle:
         assert "trajectory_capped" in r.reason_codes
 
 
+class TestDecisionId:
+    def test_episode_carries_decision_id_from_context(self):
+        builder = b()
+        builder.process(BuilderInput(ts=at(0), indoor_temp=18.0, decision_start=decision()))
+        r = cont(builder, 100, 19.0)
+        assert r.episode.decision_id == "d1"
+
+    def test_decision_id_stable_across_open_continue_close(self):
+        builder = b()
+        d = DecisionContext(decision_id="dec_42", target=21.0, comfort_tolerance_at_start=0.5,
+                            controller=ControllerKind.THERMOSMART, start_temp=18.0)
+        builder.process(BuilderInput(ts=at(0), indoor_temp=18.0, decision_start=d))
+        cont(builder, 5, 20.0)
+        r = cont(builder, 5, 19.0, decision_superseded=True)
+        assert r.episode.decision_id == "dec_42"
+
+    def test_new_decision_after_supersede_uses_new_id(self):
+        builder = b()
+        d1 = DecisionContext(decision_id="old", target=21.0, comfort_tolerance_at_start=0.5,
+                             controller=ControllerKind.THERMOSMART, start_temp=18.0)
+        builder.process(BuilderInput(ts=at(0), indoor_temp=18.0, decision_start=d1))
+        sup = cont(builder, 5, 19.0, decision_superseded=True)
+        assert sup.episode.decision_id == "old"
+        d2 = DecisionContext(decision_id="new", target=22.0, comfort_tolerance_at_start=0.5,
+                             controller=ControllerKind.THERMOSMART, start_temp=19.0)
+        builder.process(BuilderInput(ts=at(6), indoor_temp=19.0, decision_start=d2))
+        r = cont(builder, 110, 19.5)
+        assert r.episode.decision_id == "new"
+
+
 class TestSnapshotRestore:
     def test_restore_continues(self):
         a = b()
@@ -125,3 +155,14 @@ class TestSnapshotRestore:
         restored.restore_state(snap)
         r = cont(restored, 100, 19.0)
         assert r.action is BuilderAction.CLOSED
+
+    def test_snapshot_restore_preserves_decision_id(self):
+        a = b()
+        d = DecisionContext(decision_id="dec_snap", target=21.0, comfort_tolerance_at_start=0.5,
+                            controller=ControllerKind.THERMOSMART, start_temp=18.0)
+        a.process(BuilderInput(ts=at(0), indoor_temp=18.0, decision_start=d))
+        cont(a, 5, 20.0)
+        restored = OutcomeEpisodeBuilder("lz_1")
+        restored.restore_state(a.snapshot_state())
+        r = cont(restored, 100, 19.0)
+        assert r.episode.decision_id == "dec_snap"

@@ -158,7 +158,7 @@ class TestOutcomeEpisode:
         ep = OutcomeEpisode(**_common(
             regime=Regime.ACTIVE_HEATING, start_temp=18.0, end_temp=21.0, target=21.0,
             comfort_tolerance_at_start=0.5, reason=EpisodeReason.REACHED,
-            controller=ControllerKind.THERMOSMART, trajectory=_traj(),
+            controller=ControllerKind.THERMOSMART, trajectory=_traj(), decision_id="d1",
         ))
         # outcome score and peak temp are derived, not stored
         assert not hasattr(ep, "outcome_score")
@@ -170,14 +170,22 @@ class TestOutcomeEpisode:
             OutcomeEpisode(**_common(
                 regime=Regime.ACTIVE_HEATING, start_temp=18.0, end_temp=21.0, target=21.0,
                 comfort_tolerance_at_start=0.5, reason=EpisodeReason.REACHED,
-                controller=ControllerKind.THERMOSMART,
+                controller=ControllerKind.THERMOSMART, decision_id="d1",
+            ))
+
+    def test_requires_decision_id(self):
+        with pytest.raises((ValueError, TypeError)):
+            OutcomeEpisode(**_common(
+                regime=Regime.ACTIVE_HEATING, start_temp=18.0, end_temp=21.0, target=21.0,
+                comfort_tolerance_at_start=0.5, reason=EpisodeReason.REACHED,
+                controller=ControllerKind.THERMOSMART, trajectory=_traj(), decision_id="",
             ))
 
     def test_stores_tolerance_not_band(self):
         ep = OutcomeEpisode(**_common(
             regime=Regime.ACTIVE_HEATING, start_temp=18.0, end_temp=21.0, target=21.0,
             comfort_tolerance_at_start=0.5, reason=EpisodeReason.REACHED,
-            controller=ControllerKind.THERMOSMART, trajectory=_traj(),
+            controller=ControllerKind.THERMOSMART, trajectory=_traj(), decision_id="d1",
         ))
         assert ep.comfort_tolerance_at_start == 0.5
         assert not hasattr(ep, "comfort_band")
@@ -226,5 +234,5 @@ def test_outcome_episode_accepts_all_reasons():
         ep = OutcomeEpisode(**_common(
             regime=Regime.ACTIVE_HEATING, start_temp=18.0, end_temp=21.0, target=21.0,
             comfort_tolerance_at_start=0.5, reason=reason,
-            controller=ControllerKind.THERMOSMART, trajectory=_traj()))
+            controller=ControllerKind.THERMOSMART, trajectory=_traj(), decision_id="d1"))
         assert ep.reason is reason

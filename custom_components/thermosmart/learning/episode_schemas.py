@@ -18,6 +18,7 @@ from typing import Optional
 
 from .contracts import (
     DataQuality,
+    DecisionId,
     Measurement,
     Regime,
     require_nonempty,
@@ -263,10 +264,17 @@ class OutcomeEpisode:
     is stored (not a comfort band) so later config changes cannot distort the
     historical evaluation. ``legacy_peak_temp`` exists only for migrated records
     that lack a trajectory and stays ``None`` for v2-native episodes.
+
+    ``decision_id`` is the authoritative, stable reference to the single
+    controller decision this outcome scores. It is taken from the typed
+    ``DecisionContext`` at open and stays constant across continue / snapshot /
+    restore / materialisation. It uses the central :data:`DecisionId` identity
+    alias (no second free string semantics) and carries no entity name.
     """
 
     episode_id: str
     learning_zone_id: str
+    decision_id: DecisionId
     episode_schema_version: int
     builder_version: int
     classifier_version: int
@@ -292,6 +300,7 @@ class OutcomeEpisode:
         )
         object.__setattr__(self, "start_ts", s)
         object.__setattr__(self, "end_ts", e)
+        require_nonempty(self.decision_id, "decision_id")
         if not isinstance(self.reason, EpisodeReason):
             raise ValueError("reason must be an EpisodeReason")
         if not isinstance(self.controller, ControllerKind):

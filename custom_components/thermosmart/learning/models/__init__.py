@@ -46,6 +46,24 @@ from .afterheat import (
     AfterheatUpdateContext,
     afterheat_model_definition,
 )
+from .outcome import (
+    SCORING_VERSION,
+    DimensionStatus,
+    OutcomeBucket,
+    OutcomeDiagnostics,
+    OutcomeDimensions,
+    OutcomeEvaluation,
+    OutcomeModel,
+    OutcomeParameters,
+    OutcomePredictionContext,
+    OutcomeRebuildItem,
+    OutcomeRejection,
+    OutcomeSample,
+    OutcomeScore,
+    OutcomeState,
+    OutcomeUpdateContext,
+    outcome_model_definition,
+)
 
 __all__ = [
     "MODEL_VERSION", "PARAMETER_VERSION",
@@ -61,4 +79,8 @@ __all__ = [
     "AfterheatPrediction", "AfterheatPredictionContext", "AfterheatRebuildItem",
     "AfterheatRejection", "AfterheatSample", "AfterheatState", "AfterheatUpdateContext",
     "afterheat_model_definition",
+    "SCORING_VERSION", "DimensionStatus", "OutcomeBucket", "OutcomeDiagnostics",
+    "OutcomeDimensions", "OutcomeEvaluation", "OutcomeModel", "OutcomeParameters",
+    "OutcomePredictionContext", "OutcomeRebuildItem", "OutcomeRejection", "OutcomeSample",
+    "OutcomeScore", "OutcomeState", "OutcomeUpdateContext", "outcome_model_definition",
 ]

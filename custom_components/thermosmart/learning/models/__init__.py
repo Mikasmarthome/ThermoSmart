@@ -19,6 +19,19 @@ from .heat_rate import (
     HeatRateUpdateContext,
     heat_rate_model_definition,
 )
+from .heat_loss import (
+    HeatLossBucket,
+    HeatLossDiagnostics,
+    HeatLossModel,
+    HeatLossParameters,
+    HeatLossPredictionContext,
+    HeatLossRebuildItem,
+    HeatLossRejection,
+    HeatLossSample,
+    HeatLossState,
+    HeatLossUpdateContext,
+    heat_loss_model_definition,
+)
 
 __all__ = [
     "MODEL_VERSION", "PARAMETER_VERSION",
@@ -26,4 +39,8 @@ __all__ = [
     "HeatRatePredictionContext", "HeatRateRebuildItem", "HeatRateRejection",
     "HeatRateSample", "HeatRateState", "HeatRateUpdateContext",
     "heat_rate_model_definition",
+    "HeatLossBucket", "HeatLossDiagnostics", "HeatLossModel", "HeatLossParameters",
+    "HeatLossPredictionContext", "HeatLossRebuildItem", "HeatLossRejection",
+    "HeatLossSample", "HeatLossState", "HeatLossUpdateContext",
+    "heat_loss_model_definition",
 ]

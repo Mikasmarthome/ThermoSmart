@@ -63,6 +63,27 @@ from .boost import (
     BoostUpdateContext,
     boost_model_definition,
 )
+from .manual_correction import (
+    CorrectionAttribution,
+    CorrectionDirection,
+    CorrectionIntent,
+    CorrectionPrediction,
+    CorrectionRecommendation,
+    CorrectionSourceClass,
+    ManualCorrectionBucket,
+    ManualCorrectionDiagnostics,
+    ManualCorrectionEvaluation,
+    ManualCorrectionModel,
+    ManualCorrectionParameters,
+    ManualCorrectionPattern,
+    ManualCorrectionPredictionContext,
+    ManualCorrectionRebuildItem,
+    ManualCorrectionRejection,
+    ManualCorrectionSample,
+    ManualCorrectionState,
+    ManualCorrectionUpdateContext,
+    manual_correction_model_definition,
+)
 from .forecast import (
     ForecastBucket,
     ForecastDiagnostics,

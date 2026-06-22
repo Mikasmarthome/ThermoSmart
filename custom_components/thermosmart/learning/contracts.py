@@ -83,6 +83,8 @@ class PredictionType(Enum):
     BOOST_FACTOR = "boost_factor"
     BOOST_DURATION = "boost_duration"
     BOOST_OUTCOME = "boost_outcome"
+    MANUAL_PREFERENCE_BIAS = "manual_preference_bias"
+    CONTROLLER_CALIBRATION = "controller_calibration"
     OUTCOME_SCORE = "outcome_score"
     OUTCOME_QUALITY = "outcome_quality"
     COMFORT_QUALITY = "comfort_quality"

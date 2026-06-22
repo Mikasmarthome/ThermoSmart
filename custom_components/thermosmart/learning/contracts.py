@@ -328,17 +328,40 @@ class ModelRebuildResult:
 
 @dataclass(frozen=True)
 class ConfidenceContribution:
-    """A single model's contribution to the authoritative confidence."""
+    """A single model's contribution to the authoritative confidence.
+
+    The trailing optional fields exist so the :class:`ConfidenceAggregator`
+    (Phase 12) can combine contributions without re-deriving model internals.
+    They default to backwards-compatible values, so a model that only sets
+    ``value``/``evidence_count``/``reasons`` keeps working unchanged. The
+    aggregator is the single authoritative place that combines these.
+    """
 
     value: float
     evidence_count: int = 0
     reasons: tuple[str, ...] = ()
     cap_reasons: tuple[str, ...] = ()
+    component: Optional[str] = None
+    reliability: Optional[float] = None
+    evidence_domains: tuple[str, ...] = ()
+    source_count: int = 0
+    prior_fraction: Optional[float] = None
+    learned_fraction: Optional[float] = None
+    is_required: Optional[bool] = None
+    fallback_used: bool = False
+    freshness: Optional[float] = None
+    status: Optional[str] = None
 
     def __post_init__(self) -> None:
         _check_unit_interval("value", self.value)
         if self.evidence_count < 0:
             raise ValueError("evidence_count must be >= 0")
+        if self.source_count < 0:
+            raise ValueError("source_count must be >= 0")
+        for name in ("reliability", "prior_fraction", "learned_fraction", "freshness"):
+            v = getattr(self, name)
+            if v is not None:
+                _check_unit_interval(name, v)
 
 
 # -- model protocol -----------------------------------------------------------

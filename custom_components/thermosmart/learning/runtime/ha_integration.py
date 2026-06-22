@@ -18,7 +18,10 @@ from typing import Any, Mapping, Optional
 
 from ...const import TPI_MAX_BOOST_CELSIUS
 from ..contracts import DataQuality, Measurement
+from ..confidence import ConfidencePurpose
+from ..contracts import PredictionType
 from .capture import ControllerDecisionInput, DecisionType, RuntimeCycleInput, ScheduleTarget
+from .control import ControlContext, ControlFeature
 from .ha_store import HomeAssistantStoreAdapter
 from .lifecycle import (
     CoordinatorBridge,
@@ -164,6 +167,51 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("cycle", err)
 
+    @property
+    def control_enabled(self) -> bool:
+        return self._enabled and self._runtime.control_enabled
+
+    def adjust_recommendation_safe(self, recommendation: dict, *,
+                                   boost_runtime_limit: Optional[float] = None) -> None:
+        """In CONTROL mode only, conservatively adjust the dispatched recommendation.
+
+        Baseline-first + single authority: the existing controller still applies
+        and guards the value. Phase 18 only *reduces* an existing additive boost
+        offset within clamps (the safest in-band adjustment). Never raises; a
+        no-op in any non-CONTROL mode (so SHADOW stays byte-identical).
+        """
+        if not self.control_enabled:
+            return
+        try:
+            target = recommendation.get("effective_target")
+            if target is None:
+                target = recommendation.get("adjusted_target")
+            setpoint = recommendation.get("trv_setpoint")
+            if target is None or setpoint is None:
+                return
+            baseline_offset = max(0.0, float(setpoint) - float(target))
+            if baseline_offset <= 0.0:
+                return  # no existing boost to adjust
+            zr = self._runtime._zone(self._zone)
+            boost_pred = zr.last_predictions.get(PredictionType.BOOST_FACTOR)
+            proposed = boost_pred.values.get("boost_factor") if boost_pred else None
+            ctx = ControlContext(
+                window_open=bool(recommendation.get("window_open")),
+                heating_failure=bool(recommendation.get("heating_failure")),
+                boost_runtime_limit=boost_runtime_limit)
+            decision = self._runtime.control_decision(
+                self._zone, ControlFeature.BOOST_OFFSET, baseline_offset, proposed,
+                ConfidencePurpose.BOOST, context=ctx, unit="celsius_offset",
+                model_version=getattr(boost_pred, "model_version", None),
+                parameter_version=getattr(boost_pred, "parameter_version", None))
+            # only ever reduce an existing boost in Phase 18
+            if decision.applied and decision.final_value is not None \
+                    and decision.final_value < baseline_offset:
+                recommendation["trv_setpoint"] = round(float(target) + decision.final_value, 4)
+                recommendation["le2_boost_adjusted"] = True
+        except Exception as err:
+            self._record_error("control", err)
+
     async def async_save_if_due(self) -> None:
         if not self._enabled:
             return
@@ -195,6 +243,11 @@ class LearningShadowController:
             "model_update_counts": dict(h.model_update_counts),
             "prediction_snapshots": h.prediction_snapshots,
             "learning_errors": self._errors, "enabled": self._enabled,
+            "control_enabled": h.control_enabled,
+            "control_policy_version": h.control_policy_version,
+            "control_applied": h.control_applied, "control_fallback": h.control_fallback,
+            "control_rejections": dict(h.control_rejections),
+            "reversion_count": h.reversion_count,
         }
 
     def _record_error(self, kind: str, err: Exception) -> None:

@@ -705,6 +705,18 @@ class ThermoSmartCoordinator(
             # Must run after effective_summer is resolved so recommendation["is_summer"] is set.
             await self._async_manage_temp_source(cfg, recommendation)
 
+            # ── LE 2.0 controlled adjustment (CONTROL mode only) ────────
+            # Runs BEFORE apply so any adjusted value flows through the existing
+            # device guards and the single existing dispatch path. A strict no-op
+            # unless the shadow runtime is explicitly in CONTROL mode, so SHADOW
+            # (the default) stays byte-identical. Never raises into heating.
+            if self._le2_shadow is not None and not effective_summer:
+                try:
+                    self._le2_shadow.adjust_recommendation_safe(
+                        recommendation, boost_runtime_limit=TPI_MAX_BOOST_CELSIUS)
+                except Exception:
+                    pass
+
             if self._active_control and not effective_summer:
                 await self._async_apply_quirks(cfg)
                 await self._watchdog_hvac(cfg, recommendation)

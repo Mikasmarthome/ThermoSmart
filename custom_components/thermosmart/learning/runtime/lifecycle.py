@@ -22,6 +22,15 @@ from .orchestration import ModelOrchestrator
 from .persistence import PersistenceOrchestrator, SavePolicy, SaveTrigger
 from .pipeline import RuntimePipeline
 from .prediction_ledger import PredictionSnapshot, PredictionSnapshotLedger
+from .control import (
+    ControlApplicationLedger,
+    ControlContext,
+    ControlDecision,
+    ControlFeature,
+    ControlledPrediction,
+    ControlPolicy,
+    ControlPolicyParameters,
+)
 from .shadow import (
     ComparisonType,
     PreheatParameters,
@@ -35,6 +44,8 @@ class LearningRuntimeMode(Enum):
     INACTIVE = "inactive"
     CAPTURE_ONLY = "capture_only"
     SHADOW = "shadow"
+    ADVISORY = "advisory"   # predictions visible in diagnostics; no control effect
+    CONTROL = "control"     # explicitly-released prediction paths may adjust control
 
 
 @dataclass(frozen=True)
@@ -45,6 +56,7 @@ class LearningRuntimeConfig:
     preheat_params: PreheatParameters = field(default_factory=PreheatParameters)
     startup_grace_cycles: int = 1
     max_open_comparisons: int = 200
+    control_policy: ControlPolicyParameters = field(default_factory=ControlPolicyParameters)
 
 
 @dataclass(frozen=True)
@@ -104,6 +116,12 @@ class RuntimeHealth:
     model_update_total: int = 0
     prediction_snapshots: int = 0
     model_update_counts: Mapping[str, int] = field(default_factory=dict)
+    control_policy_version: int = 0
+    control_enabled: bool = False
+    control_applied: int = 0
+    control_fallback: int = 0
+    control_rejections: Mapping[str, int] = field(default_factory=dict)
+    reversion_count: int = 0
 
 
 class _ZoneRuntime:
@@ -121,6 +139,11 @@ class _ZoneRuntime:
         self.model_update_counts: dict[str, int] = {}
         self.cycles = 0
         self.last_cycle_ts: Optional[str] = None
+        self.last_predictions: Mapping[Any, Any] = {}
+        self.last_confidence: Mapping[str, Any] = {}
+        self.last_preheat_plan: Any = None
+        self.last_decision_id: Optional[str] = None
+        self.control_ledger = ControlApplicationLedger()
 
     def serialize(self) -> dict:
         return {"capture": self.capture.serialize(),
@@ -166,10 +189,57 @@ class LearningRuntime:
         self._clock = clock or (lambda: datetime.now(timezone.utc).isoformat())
         self._initialized = False
         self._last_cycle_ts: Optional[str] = None
+        self._mode = self._config.mode
+        self._reversion_count = 0
+        self._policy = ControlPolicy(
+            self._config.control_policy,
+            runtime_is_control=self._mode is LearningRuntimeMode.CONTROL)
 
     @property
     def mode(self) -> LearningRuntimeMode:
-        return self._config.mode
+        return self._mode
+
+    @property
+    def control_enabled(self) -> bool:
+        return self._mode is LearningRuntimeMode.CONTROL
+
+    def set_mode(self, mode: LearningRuntimeMode) -> None:
+        """Switch runtime mode in-place (e.g. CONTROL<->SHADOW) with no state loss.
+
+        Learning/builder/ledger state is preserved; only the control authority of
+        the policy changes. A switch away from CONTROL counts as a reversion.
+        """
+        if mode is not LearningRuntimeMode.CONTROL and self._mode is LearningRuntimeMode.CONTROL:
+            self._reversion_count += 1
+        self._mode = mode
+        self._policy = ControlPolicy(
+            self._config.control_policy,
+            runtime_is_control=mode is LearningRuntimeMode.CONTROL)
+
+    def control_decision(self, zone_id: str, feature: ControlFeature,
+                         baseline_value: Optional[float], proposed_value: Optional[float],
+                         purpose: ConfidencePurpose, *, context: Optional[ControlContext] = None,
+                         unit: str = "", model_version: Optional[int] = None,
+                         parameter_version: Optional[int] = None,
+                         ts: Optional[str] = None) -> ControlDecision:
+        """Resolve one control feature from the last cycle's confidence result.
+
+        Baseline-first: returns the baseline unchanged unless the policy applies.
+        Records every attempt in the per-zone control ledger. No dispatch.
+        """
+        zr = self._zone(zone_id)
+        cr = zr.last_confidence.get(purpose.value)
+        prediction = None
+        if proposed_value is not None and cr is not None:
+            prediction = ControlledPrediction(
+                feature=feature, value=float(proposed_value), unit=unit,
+                confidence_result=cr, model_version=model_version,
+                parameter_version=parameter_version)
+        decision = self._policy.resolve(feature, baseline_value, prediction,
+                                        context=context, unit=unit)
+        zr.control_ledger.record(zone_id, zr.last_decision_id or "?", decision,
+                                 ts or self._clock())
+        return decision
 
     @property
     def initialized(self) -> bool:
@@ -185,7 +255,7 @@ class LearningRuntime:
     # -- core cycle (pure-ish; mutates only LE2 state) ------------------
 
     def run_cycle(self, inp: RuntimeCycleInput) -> RuntimeCycleResult:
-        mode = self._config.mode
+        mode = self._mode
         if mode is LearningRuntimeMode.INACTIVE:
             return RuntimeCycleResult(zone_id=inp.zone_id, ts=inp.ts, mode=mode.value,
                                       decision_id=None, captured=False)
@@ -219,7 +289,8 @@ class LearningRuntime:
         comparisons: list = []
         model_errors: tuple[str, ...] = ()
 
-        if mode is LearningRuntimeMode.SHADOW:
+        if mode in (LearningRuntimeMode.SHADOW, LearningRuntimeMode.ADVISORY,
+                    LearningRuntimeMode.CONTROL):
             result = zr.orchestrator.run()
             predictions = dict(result.predictions)
             confidence_results = dict(result.confidence_results)
@@ -258,6 +329,12 @@ class LearningRuntime:
             if len(zr.open_comparisons) > self._config.max_open_comparisons:
                 zr.open_comparisons = zr.open_comparisons[-self._config.max_open_comparisons:]
 
+        # expose the latest predictions/confidence for an optional CONTROL resolver
+        zr.last_predictions = predictions
+        zr.last_confidence = confidence_results
+        zr.last_preheat_plan = preheat_plan
+        zr.last_decision_id = snapshot.decision_id
+
         if authoritative_change and self._persistence is not None:
             self._persistence.mark_dirty(inp.ts)
 
@@ -275,7 +352,7 @@ class LearningRuntime:
         except Exception as err:
             return RuntimeCycleResult(
                 zone_id=getattr(inp, "zone_id", "?"), ts=getattr(inp, "ts", ""),
-                mode=self._config.mode.value, decision_id=None, captured=False,
+                mode=self._mode.value, decision_id=None, captured=False,
                 errors=(RuntimeError("cycle_failed", getattr(inp, "zone_id", "?"),
                                      type(err).__name__),))
 
@@ -331,7 +408,7 @@ class LearningRuntime:
 
     def health(self) -> RuntimeHealth:
         return RuntimeHealth(
-            mode=self._config.mode.value, zones=len(self._zones), initialized=self._initialized,
+            mode=self._mode.value, zones=len(self._zones), initialized=self._initialized,
             dirty=self._persistence.dirty if self._persistence else False,
             last_cycle_ts=self._last_cycle_ts,
             last_save=self._persistence.health()["last_save"] if self._persistence else None,
@@ -343,13 +420,28 @@ class LearningRuntime:
             model_update_total=sum(sum(z.model_update_counts.values())
                                    for z in self._zones.values()),
             prediction_snapshots=sum(z.ledger.size for z in self._zones.values()),
-            model_update_counts=self._aggregate_model_update_counts())
+            model_update_counts=self._aggregate_model_update_counts(),
+            control_policy_version=self._config.control_policy.policy_version,
+            control_enabled=self.control_enabled,
+            control_applied=sum(sum(z.control_ledger.summary()["applied_counts"].values())
+                                for z in self._zones.values()),
+            control_fallback=sum(z.control_ledger.summary()["fallback_count"]
+                                 for z in self._zones.values()),
+            control_rejections=self._aggregate_control_rejections(),
+            reversion_count=self._reversion_count)
 
     def _aggregate_model_update_counts(self) -> dict:
         out: dict[str, int] = {}
         for z in self._zones.values():
             for name, count in z.model_update_counts.items():
                 out[name] = out.get(name, 0) + count
+        return out
+
+    def _aggregate_control_rejections(self) -> dict:
+        out: dict[str, int] = {}
+        for z in self._zones.values():
+            for reason, count in z.control_ledger.summary()["rejection_counts"].items():
+                out[reason] = out.get(reason, 0) + count
         return out
 
 

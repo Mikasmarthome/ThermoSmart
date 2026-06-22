@@ -292,6 +292,36 @@ class UpdateEligibilityResult:
 # -- confidence contribution --------------------------------------------------
 
 @dataclass(frozen=True)
+class ModelRebuildResult:
+    """Model-agnostic, structured outcome of a ``rebuild``.
+
+    No model-specific fields live here; a model may additionally expose a richer
+    detail type. Counts are non-negative and obey accepted+rejected==processed.
+    """
+
+    processed_count: int
+    accepted_count: int
+    rejected_count: int
+    duplicate_count: int = 0
+    error_count: int = 0
+    rejection_counts: Mapping[str, int] = field(default_factory=dict)
+    started_from_prior: bool = True
+    deterministic: bool = True
+
+    def __post_init__(self) -> None:
+        for name in ("processed_count", "accepted_count", "rejected_count",
+                     "duplicate_count", "error_count"):
+            if getattr(self, name) < 0:
+                raise ValueError(f"{name} must be >= 0")
+        if self.accepted_count + self.rejected_count != self.processed_count:
+            raise ValueError("accepted_count + rejected_count must equal processed_count")
+        if self.duplicate_count > self.rejected_count:
+            raise ValueError("duplicate_count must not exceed rejected_count")
+        if self.error_count > self.rejected_count:
+            raise ValueError("error_count must not exceed rejected_count")
+
+
+@dataclass(frozen=True)
 class ConfidenceContribution:
     """A single model's contribution to the authoritative confidence."""
 
@@ -356,7 +386,7 @@ class Model(Protocol):
     def reset(self) -> None:
         ...
 
-    def rebuild(self, raw: Any, episodes: Any) -> None:
+    def rebuild(self, raw: Any, episodes: Any) -> "ModelRebuildResult":
         ...
 
     def serialize_state(self) -> Mapping[str, Any]:

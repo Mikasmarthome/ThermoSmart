@@ -192,3 +192,27 @@ class TestModelProtocol:
             model_name = "x"
 
         assert not isinstance(NotAModel(), Model)
+
+
+class TestModelRebuildResult:
+    def test_valid(self):
+        from custom_components.thermosmart.learning.contracts import ModelRebuildResult
+        r = ModelRebuildResult(processed_count=5, accepted_count=4, rejected_count=1,
+                               duplicate_count=1)
+        assert r.processed_count == 5 and r.started_from_prior is True
+
+    def test_sum_invariant_enforced(self):
+        from custom_components.thermosmart.learning.contracts import ModelRebuildResult
+        with pytest.raises(ValueError):
+            ModelRebuildResult(processed_count=5, accepted_count=2, rejected_count=2)
+
+    def test_negative_rejected(self):
+        from custom_components.thermosmart.learning.contracts import ModelRebuildResult
+        with pytest.raises(ValueError):
+            ModelRebuildResult(processed_count=-1, accepted_count=0, rejected_count=0)
+
+    def test_duplicate_not_exceeding_rejected(self):
+        from custom_components.thermosmart.learning.contracts import ModelRebuildResult
+        with pytest.raises(ValueError):
+            ModelRebuildResult(processed_count=2, accepted_count=2, rejected_count=0,
+                               duplicate_count=1)

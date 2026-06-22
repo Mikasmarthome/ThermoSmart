@@ -156,7 +156,13 @@ class HeatingEpisode:
 
 @dataclass(frozen=True)
 class AfterheatEpisode:
-    """Residual warming after the heat drive ended (functions without valve%)."""
+    """Residual warming after the heat drive ended (functions without valve%).
+
+    ``start_ts`` IS the heating-drive-end timestamp, and ``indoor_temp_at_close``
+    is the indoor temperature at that heating drive end (i.e. at episode start) —
+    not at episode end. The authoritative residual rise is
+    ``peak − temperature_at_heating_drive_end``.
+    """
 
     episode_id: str
     learning_zone_id: str

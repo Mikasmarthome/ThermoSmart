@@ -32,6 +32,20 @@ from .heat_loss import (
     HeatLossUpdateContext,
     heat_loss_model_definition,
 )
+from .afterheat import (
+    AfterheatBucket,
+    AfterheatDiagnostics,
+    AfterheatModel,
+    AfterheatParameters,
+    AfterheatPrediction,
+    AfterheatPredictionContext,
+    AfterheatRebuildItem,
+    AfterheatRejection,
+    AfterheatSample,
+    AfterheatState,
+    AfterheatUpdateContext,
+    afterheat_model_definition,
+)
 
 __all__ = [
     "MODEL_VERSION", "PARAMETER_VERSION",
@@ -43,4 +57,8 @@ __all__ = [
     "HeatLossPredictionContext", "HeatLossRebuildItem", "HeatLossRejection",
     "HeatLossSample", "HeatLossState", "HeatLossUpdateContext",
     "heat_loss_model_definition",
+    "AfterheatBucket", "AfterheatDiagnostics", "AfterheatModel", "AfterheatParameters",
+    "AfterheatPrediction", "AfterheatPredictionContext", "AfterheatRebuildItem",
+    "AfterheatRejection", "AfterheatSample", "AfterheatState", "AfterheatUpdateContext",
+    "afterheat_model_definition",
 ]

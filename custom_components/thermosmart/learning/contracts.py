@@ -74,6 +74,7 @@ class PredictionType(Enum):
     HEAT_LOSS_RATE = "heat_loss_rate"
     COOLING_MINUTES = "cooling_minutes"
     EXPECTED_OVERSHOOT = "expected_overshoot"
+    AFTERHEAT_TIME_TO_PEAK = "afterheat_time_to_peak"
     AFTERHEAT_DURATION = "afterheat_duration"
     RECOMMENDED_EARLY_CUTOFF = "recommended_early_cutoff"
     FORECAST_TRUST = "forecast_trust"

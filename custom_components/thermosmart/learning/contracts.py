@@ -78,6 +78,8 @@ class PredictionType(Enum):
     AFTERHEAT_DURATION = "afterheat_duration"
     RECOMMENDED_EARLY_CUTOFF = "recommended_early_cutoff"
     FORECAST_TRUST = "forecast_trust"
+    FORECAST_BIAS = "forecast_bias"
+    CORRECTED_FORECAST = "corrected_forecast"
     BOOST_FACTOR = "boost_factor"
     OUTCOME_SCORE = "outcome_score"
     OUTCOME_QUALITY = "outcome_quality"

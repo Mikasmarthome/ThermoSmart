@@ -105,9 +105,13 @@ class PersistenceOrchestrator:
         await self._do_save(now_iso, payload_builder)
         return trigger
 
-    async def flush(self, now_iso: str, payload_builder) -> bool:
-        """Unconditional flush (unload/reload/shutdown); isolated on failure."""
-        if not self._s.dirty:
+    async def flush(self, now_iso: str, payload_builder, *, force: bool = False) -> bool:
+        """Flush pending state (unload/reload/shutdown); isolated on failure.
+
+        With ``force`` the current state is persisted even when not dirty, so open
+        builder snapshots survive a graceful reload/restart.
+        """
+        if not self._s.dirty and not force:
             return False
         return await self._do_save(now_iso, payload_builder)
 

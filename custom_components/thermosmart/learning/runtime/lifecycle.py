@@ -20,6 +20,8 @@ from .capture import CaptureCoordinator, RuntimeCycleInput
 from .evidence import EvidenceMaterializer
 from .orchestration import ModelOrchestrator
 from .persistence import PersistenceOrchestrator, SavePolicy, SaveTrigger
+from .pipeline import RuntimePipeline
+from .prediction_ledger import PredictionSnapshot, PredictionSnapshotLedger
 from .shadow import (
     ComparisonType,
     PreheatParameters,
@@ -99,6 +101,8 @@ class RuntimeHealth:
     open_comparisons: int
     model_errors: int
     storage_warnings: int
+    model_update_total: int = 0
+    prediction_snapshots: int = 0
 
 
 class _ZoneRuntime:
@@ -106,17 +110,23 @@ class _ZoneRuntime:
         self.zone_id = zone_id
         self.capture = CaptureCoordinator(zone_id)
         self.evidence = EvidenceMaterializer()
+        self.pipeline = RuntimePipeline(zone_id)
         self.orchestrator = ModelOrchestrator(zone_id)
         self.shadow = ShadowOrchestrator(preheat_params=config.preheat_params,
                                          max_open_comparisons=config.max_open_comparisons)
+        self.ledger = PredictionSnapshotLedger()
         self.open_comparisons: list = []
         self.outcomes: list = []
+        self.model_update_counts: dict[str, int] = {}
         self.cycles = 0
         self.last_cycle_ts: Optional[str] = None
 
     def serialize(self) -> dict:
         return {"capture": self.capture.serialize(),
+                "pipeline": self.pipeline.serialize(),
                 "models": self.orchestrator.serialize_models(),
+                "ledger": self.ledger.serialize(),
+                "model_update_counts": dict(self.model_update_counts),
                 "cycles": self.cycles, "last_cycle_ts": self.last_cycle_ts}
 
     def restore(self, data: Mapping[str, Any]) -> tuple[str, ...]:
@@ -126,8 +136,16 @@ class _ZoneRuntime:
                 self.capture.restore(data["capture"])
             except Exception as err:
                 errors.append(f"capture:restore:{type(err).__name__}")
+        if "pipeline" in data:
+            errors += tuple(self.pipeline.restore(data["pipeline"]))
         if "models" in data:
             errors.extend(self.orchestrator.restore_models(data["models"]))
+        if "ledger" in data:
+            try:
+                self.ledger.restore(data["ledger"])
+            except Exception as err:
+                errors.append(f"ledger:restore:{type(err).__name__}")
+        self.model_update_counts = dict(data.get("model_update_counts", {}))
         self.cycles = data.get("cycles", 0)
         self.last_cycle_ts = data.get("last_cycle_ts")
         return tuple(errors)
@@ -179,14 +197,19 @@ class LearningRuntime:
 
         evidence = zr.evidence.materialize(snapshot)
         authoritative_change = False
-
-        # event-driven learning (manual corrections) — gated, isolated
         startup_ok = zr.cycles > self._config.startup_grace_cycles
-        if startup_ok:
-            for mc_ctx in evidence.manual_correction_contexts:
-                # the raw event is rebuilt by the capture layer; here we only have
-                # the context, so this is the integration hook (no synthetic event).
-                authoritative_change = True
+
+        # cross-cycle episode pipeline -> completed authoritative episodes -> updates.
+        # Transaction: completed episodes are fully materialised by the builders
+        # before any model update; each update is eligibility-gated and isolated.
+        pipe_result = zr.pipeline.process(snapshot)
+        if startup_ok and not pipe_result.disturbed and not pipe_result.deduplicated:
+            for ce in pipe_result.completed:
+                ok = zr.orchestrator.apply_update(ce.model_name, ce.episode)
+                if ok:
+                    authoritative_change = True
+                    zr.model_update_counts[ce.model_name] = \
+                        zr.model_update_counts.get(ce.model_name, 0) + 1
 
         predictions: dict = {}
         confidence_results: dict = {}
@@ -202,6 +225,20 @@ class LearningRuntime:
             model_errors = result.model_errors
             shadow_predictions = tuple(
                 zr.shadow.shadow_predictions(snapshot.decision_id, predictions))
+            # snapshot the predictions available at this decision (bounded, dedup)
+            for sp in shadow_predictions:
+                if sp.values:
+                    key, value = next(iter(sp.values.items()))
+                    zr.ledger.record(PredictionSnapshot(
+                        decision_id=sp.decision_id, learning_zone_id=inp.zone_id,
+                        prediction_type=sp.prediction_type, value=float(value),
+                        unit=sp.units.get(key, ""), confidence=sp.confidence,
+                        reliability=sp.reliability, fallback_used=sp.fallback_used,
+                        prior_contribution=sp.prior_contribution,
+                        learned_contribution=sp.learned_contribution, bucket=None,
+                        model_version=sp.model_version, parameter_version=sp.parameter_version,
+                        created_ts=inp.ts,
+                        target_ts=snapshot.schedule_comfort_time_utc))
             preheat_plan = zr.shadow.build_preheat_plan(snapshot, predictions)
             preheat_conf = _purpose_value(confidence_results, ConfidencePurpose.PREHEAT)
             cmp = zr.shadow.compare_preheat(snapshot, preheat_plan,
@@ -273,7 +310,8 @@ class LearningRuntime:
     async def async_flush(self) -> bool:
         if self._persistence is None:
             return False
-        return await self._persistence.flush(self._clock(), self._build_payload)
+        # graceful flush persists open builder snapshots even if not strictly dirty
+        return await self._persistence.flush(self._clock(), self._build_payload, force=True)
 
     async def async_unload(self) -> bool:
         flushed = await self.async_flush()
@@ -300,7 +338,10 @@ class LearningRuntime:
                                if z.capture.open_decision is not None),
             open_comparisons=sum(len(z.open_comparisons) for z in self._zones.values()),
             model_errors=0,
-            storage_warnings=len(self._persistence.warnings) if self._persistence else 0)
+            storage_warnings=len(self._persistence.warnings) if self._persistence else 0,
+            model_update_total=sum(sum(z.model_update_counts.values())
+                                   for z in self._zones.values()),
+            prediction_snapshots=sum(z.ledger.size for z in self._zones.values()))
 
 
 class CoordinatorBridge:

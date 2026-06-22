@@ -90,6 +90,7 @@ class PredictionType(Enum):
     COMFORT_QUALITY = "comfort_quality"
     CONTROLLER_QUALITY = "controller_quality"
     HEATING_EFFORT = "heating_effort"
+    ONSET_DELAY = "onset_delay"       # delay between TRV command and measurable room response
 
 
 class ExportScope(Enum):

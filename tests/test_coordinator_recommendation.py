@@ -281,12 +281,11 @@ class TestRecommendationPreheat:
         assert result["preheat_active"] is False
 
     async def test_preheat_raises_base_target_to_comfort_temp(self):
-        """Pre-heat raises night base_target to comfort_temp during pre-heat window."""
+        """Deterministic baseline preheat raises night base_target to comfort_temp."""
         coord = make_coordinator()
-        coord.learning_engine.async_get_preheat_minutes = AsyncMock(return_value=60)
-        # base_target < comfort_temp → pre-heat eligible
+        # Provide indoor temp so deterministic baseline can compute (deficit=3.0°C → baseline>0)
+        set_hass_states(coord, {"sensor.test_temp": make_state("18.0")})
         coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.0)
-        # Mock _minutes_until_next_comfort to return a value within the preheat window
         with patch.object(coord, "_minutes_until_next_comfort", return_value=30):
             result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_AUTO)
         assert result["preheat_active"] is True

@@ -1,9 +1,21 @@
 """LE 2.0 concrete learning models (pure Python).
 
-Phase 8 contains only the HeatRateModel. Models depend on no Home Assistant,
-storage, coordinator or other concrete model; they consume episodes and features
-and produce typed predictions.
+Models depend on no Home Assistant, storage, coordinator or other concrete model;
+they consume episodes and features and produce typed predictions.
 """
+from .onset_delay import (
+    OnsetDelayBucket,
+    OnsetDelayDiagnostics,
+    OnsetDelayModel,
+    OnsetDelayParameters,
+    OnsetDelayPredictionContext,
+    OnsetDelayRebuildItem,
+    OnsetDelayRejection,
+    OnsetDelaySample,
+    OnsetDelayState,
+    OnsetDelayUpdateContext,
+    onset_delay_model_definition,
+)
 from .heat_rate import (
     MODEL_VERSION,
     PARAMETER_VERSION,
@@ -118,6 +130,10 @@ from .outcome import (
 )
 
 __all__ = [
+    "OnsetDelayBucket", "OnsetDelayDiagnostics", "OnsetDelayModel", "OnsetDelayParameters",
+    "OnsetDelayPredictionContext", "OnsetDelayRebuildItem", "OnsetDelayRejection",
+    "OnsetDelaySample", "OnsetDelayState", "OnsetDelayUpdateContext",
+    "onset_delay_model_definition",
     "MODEL_VERSION", "PARAMETER_VERSION",
     "HeatRateBucket", "HeatRateDiagnostics", "HeatRateModel", "HeatRateParameters",
     "HeatRatePredictionContext", "HeatRateRebuildItem", "HeatRateRejection",

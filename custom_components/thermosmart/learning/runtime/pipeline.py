@@ -51,6 +51,7 @@ class PipelineCycleResult:
 
 _BUILDER_MODEL = (
     ("heat_rate", "heating"),
+    ("onset_delay", "heating"),   # same builder, separate model: no learning overlap
     ("heat_loss", "cooling"),
     ("afterheat", "afterheat"),
     ("outcome", "outcome"),

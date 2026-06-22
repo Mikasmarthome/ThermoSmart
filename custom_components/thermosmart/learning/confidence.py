@@ -37,6 +37,7 @@ class ConfidencePurpose(Enum):
     MANUAL_CORRECTION = "manual_correction"
     CONTROL_DECISION = "control_decision"
     ADVISORY = "advisory"
+    ONSET_DELAY = "onset_delay"       # TRV command → measurable room temperature response
 
 
 class ComponentKind(Enum):
@@ -53,6 +54,7 @@ class ComponentKind(Enum):
     DATA_QUALITY = "data_quality"
     BUCKET_SUPPORT = "bucket_support"
     PREHEAT_PRIOR = "preheat_prior"
+    ONSET_DELAY = "onset_delay"       # latency component: TRV→room
 
 
 class EvidenceDomain(Enum):

@@ -162,6 +162,11 @@ class LearningEngine:
 
     def __init__(self, hass: HomeAssistant) -> None:
         self._hass = hass
+        # Phase 19A-B: LE 2.0 is the single active learning engine. When frozen, this
+        # legacy engine performs NO state mutation and NO store write — it is read-only.
+        # Its persisted store is never deleted or migrated. Off by default so the engine
+        # remains usable in isolation tests; production wiring calls freeze().
+        self._frozen = False
         self._zone_enabled: dict[str, bool] = {}  # zone_id → Lernmodus an/aus
         self._store: Store = ThermoSmartStore(hass, STORAGE_VERSION, STORAGE_KEY)
         self._observations: dict[str, list[dict]] = defaultdict(list)
@@ -206,8 +211,21 @@ class LearningEngine:
             )
         self._rebuild_confidence()
 
+    def freeze(self) -> None:
+        """Make this legacy engine read-only: no further learning, no store writes."""
+        self._frozen = True
+        if self._debounce_save_cancel is not None:
+            self._debounce_save_cancel()
+            self._debounce_save_cancel = None
+
+    @property
+    def frozen(self) -> bool:
+        return self._frozen
+
     def _schedule_debounced_save(self) -> None:
         """Schedule a deferred save 60 s from now; no-op if one is already pending."""
+        if self._frozen:
+            return
         if self._debounce_save_cancel is not None:
             return
 
@@ -219,6 +237,8 @@ class LearningEngine:
         self._debounce_save_cancel = async_call_later(self._hass, 60, _fire)
 
     async def async_save(self) -> None:
+        if self._frozen:
+            return  # read-only: never write the legacy store
         if self._debounce_save_cancel is not None:
             self._debounce_save_cancel()
             self._debounce_save_cancel = None
@@ -271,6 +291,8 @@ class LearningEngine:
         Wird beim Start einmalig aufgerufen – bereinigt alte Test-Zonen und
         umbenannte Einträge automatisch und speichert die Datei sofort.
         """
+        if self._frozen:
+            return  # read-only: never mutate or write the legacy store
         if not active_zone_ids:
             return  # Sicherheit: nie alles löschen wenn keine aktiven Zonen
 
@@ -367,6 +389,8 @@ class LearningEngine:
         schedule_period: str | None = None,
     ) -> None:
         """Beobachtung aufzeichnen – alle verfügbaren Bedingungen speichern."""
+        if self._frozen:
+            return
         if not self._is_enabled(zone_id):
             return
 
@@ -490,6 +514,8 @@ class LearningEngine:
         Lernt: setpoint_efficiency = heat_rate / (trv_setpoint - indoor_temp)
         Ermöglicht: beim Übernehmen direkt den richtigen Setpoint zu verwenden.
         """
+        if self._frozen:
+            return
         if not self._is_enabled(zone_id):
             return
         excess = trv_setpoint - indoor_temp
@@ -573,6 +599,8 @@ class LearningEngine:
 
         Lernt: Abkühlrate (°C/min) in Abhängigkeit von Außenbedingungen.
         """
+        if self._frozen:
+            return
         if duration_min < 1.0:
             return
         temp_drop = temp_at_open - temp_at_close
@@ -627,6 +655,8 @@ class LearningEngine:
           - Unterbrechung: Fenster offen (target=None) oder Modus geändert
         """
         now = dt_util.now()
+        if self._frozen:
+            return
         session = self._heating_sessions.get(zone_id)
         controller = "ts" if is_active_control else "obs"
 
@@ -1009,6 +1039,8 @@ class LearningEngine:
         outdoor_temp: float | None,
     ) -> None:
         """Prognose-Entscheidung aufzeichnen – wird nach FORECAST_EVAL_HOURS ausgewertet."""
+        if self._frozen:
+            return
         if not self._is_enabled(zone_id):
             return
         now = dt_util.now()
@@ -1051,6 +1083,8 @@ class LearningEngine:
           - Ziel deutlich überschritten     → Prognose war konservativ     → Bias leicht erhöhen
           - Ziel im Toleranzbereich         → Prognose war korrekt          → Bias leicht erhöhen
         """
+        if self._frozen:
+            return
         if current_temp is None:
             return
         now = dt_util.now()
@@ -1115,6 +1149,8 @@ class LearningEngine:
         Überschießen → Faktor reduzieren (Ventil war zu weit auf).
         Zu langsam    → Faktor erhöhen (Ventil öffnet zu wenig).
         """
+        if self._frozen:
+            return
         if not self._is_enabled(zone_id):
             return
         factor = self._boost_factors.get(zone_id, 1.0)

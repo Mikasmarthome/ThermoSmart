@@ -207,3 +207,24 @@ class TestTopology:
 def test_episode_types_stable():
     assert EpisodeType.AFTERHEAT.value == "afterheat"
     assert EpisodeType.OUTCOME.value == "outcome"
+
+
+def test_episode_reason_values_stable_and_roundtrip():
+    # all reasons (incl. the Phase-6 additions) have stable string values that
+    # reconstruct losslessly via EpisodeReason(value).
+    expected = {
+        "reached", "timeout", "interrupted", "manual_correction",
+        "superseded", "mode_change", "disturbed", "insufficient_data",
+    }
+    assert {r.value for r in EpisodeReason} == expected
+    for reason in EpisodeReason:
+        assert EpisodeReason(reason.value) is reason
+
+
+def test_outcome_episode_accepts_all_reasons():
+    for reason in EpisodeReason:
+        ep = OutcomeEpisode(**_common(
+            regime=Regime.ACTIVE_HEATING, start_temp=18.0, end_temp=21.0, target=21.0,
+            comfort_tolerance_at_start=0.5, reason=reason,
+            controller=ControllerKind.THERMOSMART, trajectory=_traj()))
+        assert ep.reason is reason

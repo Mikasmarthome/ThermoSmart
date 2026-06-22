@@ -75,7 +75,7 @@ class WindowMixin:
         if current_temp is None:
             return getattr(self, "_slope_window_active", False)
 
-        slope_now = getattr(self, "_indoor_temp_slope", 0.0)
+        slope_now = getattr(self, "_indoor_temp_slope", 0.0) or 0.0
 
         # EMA der Slope aktualisieren
         if self._slope_win_ema is None:

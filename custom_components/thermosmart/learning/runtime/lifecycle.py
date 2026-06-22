@@ -143,6 +143,7 @@ class _ZoneRuntime:
         self.last_confidence: Mapping[str, Any] = {}
         self.last_preheat_plan: Any = None
         self.last_decision_id: Optional[str] = None
+        self.last_regime: Optional[str] = None
         self.control_ledger = ControlApplicationLedger()
 
     def serialize(self) -> dict:
@@ -274,6 +275,7 @@ class LearningRuntime:
         # Transaction: completed episodes are fully materialised by the builders
         # before any model update; each update is eligibility-gated and isolated.
         pipe_result = zr.pipeline.process(snapshot)
+        zr.last_regime = pipe_result.regime
         if startup_ok and not pipe_result.disturbed and not pipe_result.deduplicated:
             for ce in pipe_result.completed:
                 ok = zr.orchestrator.apply_update(ce.model_name, ce.episode)

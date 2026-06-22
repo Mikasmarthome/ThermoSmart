@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections import deque
 from datetime import datetime, timedelta
 
@@ -57,6 +58,16 @@ _LOGGER = logging.getLogger(__name__)
 # valve_opening_degree recovery is retried across the first N coordinator refreshes
 # to handle slow Zigbee2MQTT startup on full HA restart.
 _VALVE_RESET_MAX_ATTEMPTS = 3
+
+# LE 2.0 forecast bias application gates
+_FORECAST_BIAS_MIN_TRUST = 0.35        # minimum trust to apply the °C bias correction
+_FORECAST_BIAS_MIN_APPLY_C = 0.05     # noise floor – ignore sub-threshold corrections
+_FORECAST_BIAS_CORRECTION_MAX_C = 2.0  # hard cap matching ForecastParameters.bias_correction_max_c
+
+# LE 2.0 early cutoff application gates
+_EARLY_CUTOFF_MIN_RESIDUAL_C = 0.15   # noise floor for residual rise (below → no cutoff)
+_EARLY_CUTOFF_MAX_C = 3.0             # hard maximum (mirrors AfterheatParameters.early_cutoff_max_c)
+_EARLY_CUTOFF_HOLD_TIMEOUT_SECS: float = 1800.0  # 30-min max afterheat window before forced release
 
 
 class ThermoSmartCoordinator(
@@ -153,7 +164,7 @@ class ThermoSmartCoordinator(
 
         # Temperatur-Trend
         self._indoor_temp_prev: tuple[datetime, float] | None = None
-        self._indoor_temp_slope: float = 0.0
+        self._indoor_temp_slope: float | None = None
         self._ema_1h: float | None = None
 
         # Slope-basierte Fenstererkennung (genutzt von WindowMixin._check_window_slope)
@@ -170,6 +181,18 @@ class ThermoSmartCoordinator(
 
         # LE 2.0 passive shadow controller (attached at setup; never controls)
         self._le2_shadow = None
+
+        # LE 2.0 Early Cutoff hold state (transient, never persisted; safe on HA restart)
+        # Once early cutoff is applied, the hold maintains the reduced effective_target
+        # through the coasting phase so afterheat is not disrupted by a re-heat impulse.
+        self._ec_hold_active: bool = False
+        self._ec_hold_cut_target: float = 0.0
+        self._ec_hold_comfort_temp: float = 0.0
+        self._ec_hold_period: str = ""
+        self._ec_hold_started: float = 0.0   # time.monotonic() when hold was started
+        self._ec_state: str = "inactive"
+        self._ec_episode_failed: bool = False  # True after temp-falling/timeout release
+        self._ec_failed_cut_target: float = 0.0  # cut_target of the failed episode
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
@@ -593,12 +616,6 @@ class ThermoSmartCoordinator(
 
             recommendation["is_summer"] = effective_summer
 
-            self.learning_engine.evaluate_forecast_decisions(
-                self.zone_id,
-                recommendation.get("current_temp"),
-                weather_data.get("temperature"),
-            )
-
             # Use effective_target (weather-adjusted) for TPI/TRV calculations.
             # adjusted_target is only the display value.
             target = recommendation.get("effective_target")
@@ -714,6 +731,14 @@ class ThermoSmartCoordinator(
                 try:
                     self._le2_shadow.adjust_recommendation_safe(
                         recommendation, boost_runtime_limit=TPI_MAX_BOOST_CELSIUS)
+                except Exception:
+                    pass
+            # Run the full decision pipeline read-only for this cycle (SHADOW trace).
+            # No dispatch sink => never sends; existing path below is the only dispatch.
+            if self._le2_shadow is not None:
+                try:
+                    self._le2_shadow.compute_decision_trace_safe(
+                        recommendation, active_control=self._active_control)
                 except Exception:
                     pass
 
@@ -938,9 +963,26 @@ class ThermoSmartCoordinator(
         if mode == HEATING_MODE_AUTO:
             weather_offset = self.weather_engine.compute_temperature_offset(weather_data)
 
-        preheat_minutes = await self.learning_engine.async_get_preheat_minutes(
-            self.zone_id, comfort_temp, current_temp, weather_data
-        )
+        # ── Preheat duration: LE 2.0 is the sole adaptive source ────────────
+        # LE v1 is NEVER read for preheat; the frozen LE v1 store is historical.
+        # When LE 2.0 has no evidence, the deterministic baseline is used.
+        # Onset delay is separate from HeatRate learning (never folded in).
+        from .learning.runtime.ha_integration import LearningShadowController
+        if self._le2_shadow is not None:
+            preheat_minutes, preheat_status = self._le2_shadow.read_preheat_minutes_safe(
+                current_temp, comfort_temp,
+                outdoor_temp=weather_data.get("temperature") if weather_data else None,
+            )
+            _onset_delay_min, _onset_delay_status = self._le2_shadow.read_onset_delay_safe()
+        else:
+            # No shadow: deterministic baseline (1.5 °C/h prior; onset prior 5 min).
+            preheat_minutes, preheat_status = (
+                LearningShadowController.compute_deterministic_preheat_baseline(
+                    current_temp, comfort_temp
+                )
+            )
+            _onset_delay_min = LearningShadowController._ONSET_DELAY_PRIOR_MIN
+            _onset_delay_status = "cold_start_prior"
 
         preheat_active = False
         if mode == HEATING_MODE_AUTO and preheat_minutes > 0 and base_target < comfort_temp:
@@ -949,8 +991,8 @@ class ThermoSmartCoordinator(
                 base_target = comfort_temp
                 preheat_active = True
                 _LOGGER.debug(
-                    "ThermoSmart '%s': Vorheizen – %d min bis Komfortphase, %d min Aufheizzeit",
-                    self.zone_name, mins_until_comfort, preheat_minutes,
+                    "ThermoSmart '%s': Vorheizen – %d min bis Komfortphase, %.1f min Aufheizzeit [%s]",
+                    self.zone_name, mins_until_comfort, preheat_minutes, preheat_status,
                 )
 
         if self._override is not None and self._override_schedule_period is not None:
@@ -979,7 +1021,26 @@ class ThermoSmartCoordinator(
             self._override_schedule_period = None
 
         override = self.get_override()
+
+        # Hard-release any active Early Cutoff hold on window open or manual override:
+        # both are structural safety events that take absolute priority.
+        if self._ec_hold_active and (window_open or override is not None):
+            self._ec_hold_active = False
+            self._ec_episode_failed = False
+            self._ec_state = (
+                "released_window_open" if window_open else "released_manual_override"
+            )
+
         biased_suppression = 1.0
+        # LE 2.0 forecast state – defaults represent "no evidence" (not "full trust")
+        le2_forecast_trust = 0.0
+        le2_forecast_bias_c = 0.0
+        le2_forecast_trust_status = "not_available"
+        le2_forecast_used = False
+        # LE 2.0 early cutoff state
+        le2_early_cutoff_c = 0.0
+        le2_early_cutoff_status = "not_available"
+        le2_early_cutoff_applied = False
 
         # ── Effective target (internal) ────────────────────────────────────────
         # Incorporates weather offset + forecast suppression.
@@ -1035,8 +1096,22 @@ class ThermoSmartCoordinator(
                     raw_suppression = self.weather_engine.compute_forecast_suppression(
                         weather_data, raw_target, night_temp_cfg
                     )
-                    forecast_bias = self.learning_engine.get_forecast_bias(self.zone_id)
-                    biased_suppression = 1.0 - (1.0 - raw_suppression) * forecast_bias
+                    # LE 2.0: read FORECAST_TRUST and FORECAST_BIAS separately via Read Gate.
+                    # Trust gates suppression strength; Bias corrects the °C target independently.
+                    # Only bias reads when trust is "valid" (real evidence, not cold-start/stale).
+                    if self._le2_shadow is not None:
+                        le2_forecast_trust, le2_forecast_trust_status = (
+                            self._le2_shadow.read_forecast_trust_safe())
+                        if le2_forecast_trust_status == "valid":
+                            le2_forecast_bias_c = self._le2_shadow.read_forecast_bias_safe()
+                            le2_forecast_used = True
+                    biased_suppression = 1.0 - (1.0 - raw_suppression) * le2_forecast_trust
+                    # Bias correction: only when trust is sufficient and correction clears noise floor
+                    if (le2_forecast_trust >= _FORECAST_BIAS_MIN_TRUST
+                            and abs(le2_forecast_bias_c) >= _FORECAST_BIAS_MIN_APPLY_C):
+                        _correction = max(-_FORECAST_BIAS_CORRECTION_MAX_C,
+                                          min(_FORECAST_BIAS_CORRECTION_MAX_C, le2_forecast_bias_c))
+                        raw_target = round(raw_target + _correction, 1)
 
                     if current_temp is not None:
                         delta = raw_target - current_temp
@@ -1068,14 +1143,139 @@ class ThermoSmartCoordinator(
                             (1.0 - biased_suppression) * 100,
                         )
 
-                    forecast_high = weather_data.get("forecast_high")
-                    if biased_suppression < 0.95 and forecast_high is not None and current_temp is not None:
-                        self.learning_engine.record_forecast_decision(
-                            self.zone_id, effective_target, raw_target, forecast_high,
-                            current_temp, biased_suppression, weather_data.get("temperature"),
-                        )
             else:
                 effective_target = raw_target
+
+            # ── LE 2.0 Early Cutoff Lifecycle ──────────────────────────────────
+            # Applies in BOTH preheat and active comfort-window branches; never in
+            # the night/transition branch and never in non-AUTO modes.
+            # adjusted_target (user-visible schedule temp) is NEVER changed here;
+            # only effective_target (internal heating drive) is reduced.
+            #
+            # Hold semantics: once a cutoff is applied, _ec_hold_active=True maintains
+            # the reduced effective_target through the coasting phase. Without a hold,
+            # effective_target would revert to comfort_temp as soon as current_temp
+            # reached the cut threshold, causing a re-heat impulse that defeats the
+            # purpose of the cutoff and leads to overshoot.
+            #
+            # Structural safety guards (guaranteed by outer if/elif structure):
+            #   • window_open: released above; we are inside `elif not window_open:`
+            #   • override: released above; override=None guaranteed here
+            # Additional guards in _ec_eligible and the state machine below.
+            if mode == HEATING_MODE_AUTO:
+                _heating_to_target = preheat_active or base_target >= comfort_temp
+                _current_period = self._current_schedule_period()
+                # Require explicit trend evidence: slope=None (no measurement) must NOT
+                # allow a new hold — unavailable trend means unavailable evidence, not
+                # "neutral".  Flat-or-rising (>= 0.0) with a real measurement is fine.
+                _temp_rising = (self._indoor_temp_slope is not None
+                                and self._indoor_temp_slope >= 0.0)
+                _ec_eligible = (
+                    _heating_to_target
+                    and current_temp is not None
+                    and self._le2_shadow is not None
+                )
+                # Regime gate: new hold only when the LE 2.0 regime classifier confirms
+                # active heating.  UNKNOWN / AFTERHEAT / COOLING / None → no new hold.
+                # "keine zweite parallele Regime-Heuristik": regime comes exclusively
+                # from the shadow runtime pipeline (ThermalRegimeClassifier), never from
+                # a coordinator-local heuristic.
+                _ec_regime = (self._le2_shadow.read_regime_safe()
+                              if self._le2_shadow is not None else None)
+
+                # Episode change: different comfort target or schedule period → reset.
+                if (self._ec_hold_active or self._ec_episode_failed) and (
+                    self._ec_hold_comfort_temp != comfort_temp
+                    or self._ec_hold_period != _current_period
+                ):
+                    self._ec_hold_active = False
+                    self._ec_episode_failed = False
+                    self._ec_failed_cut_target = 0.0
+                    self._ec_state = "inactive"
+
+                if self._ec_hold_active:
+                    # ── Validate ongoing hold ─────────────────────────────────
+                    # Hold is governed by episode binding, temperature evidence and
+                    # safety gates.  A stale/missing prediction after hold-start must
+                    # NOT trigger immediate reheat (Prediction quality is a pre-start
+                    # gate only; the applied cut threshold is frozen for the duration).
+                    _hold_age = time.monotonic() - self._ec_hold_started
+                    _release = None
+
+                    if not _ec_eligible:
+                        _release = "released_ineligible"
+                    elif current_temp >= comfort_temp:
+                        _release = "released_target_reached"
+                    elif _hold_age > _EARLY_CUTOFF_HOLD_TIMEOUT_SECS:
+                        _release = "released_timeout"
+                    elif (current_temp < self._ec_hold_cut_target
+                          and self._indoor_temp_slope is not None
+                          and self._indoor_temp_slope < 0.0):
+                        # Below cut threshold AND actively falling → re-heat needed
+                        _release = "released_temperature_falling"
+                    # No prediction re-validation here: frozen threshold, real evidence.
+
+                    if _release is not None:
+                        self._ec_hold_active = False
+                        self._ec_state = _release
+                        if _release in ("released_temperature_falling", "released_timeout"):
+                            self._ec_episode_failed = True
+                            self._ec_failed_cut_target = self._ec_hold_cut_target
+                        le2_early_cutoff_applied = False
+                    else:
+                        # Hold continues: maintain frozen cut target
+                        effective_target = max(self._ec_hold_cut_target, night_temp_cfg)
+                        le2_early_cutoff_applied = True
+                        le2_early_cutoff_c = round(
+                            comfort_temp - self._ec_hold_cut_target, 1)
+                        self._ec_state = (
+                            "coasting_hold"
+                            if current_temp >= self._ec_hold_cut_target
+                            else "cutoff_applied"
+                        )
+
+                elif (_ec_eligible and not self._ec_episode_failed and _temp_rising
+                      and _ec_regime == "active_heating"):
+                    # ── Evaluate new cutoff (regime gate: active_heating only) ─
+                    le2_early_cutoff_c, le2_early_cutoff_status = (
+                        self._le2_shadow.read_early_cutoff_safe())
+                    if le2_early_cutoff_c >= _EARLY_CUTOFF_MIN_RESIDUAL_C:
+                        capped_c = min(le2_early_cutoff_c, _EARLY_CUTOFF_MAX_C)
+                        cut_target = round(effective_target - capped_c, 1)
+                        if cut_target > current_temp:
+                            effective_target = max(cut_target, night_temp_cfg)
+                            le2_early_cutoff_applied = True
+                            self._ec_hold_active = True
+                            self._ec_hold_cut_target = effective_target
+                            self._ec_hold_comfort_temp = comfort_temp
+                            self._ec_hold_period = _current_period
+                            self._ec_hold_started = time.monotonic()
+                            self._ec_state = "cutoff_applied"
+                    else:
+                        self._ec_state = "eligible"
+                else:
+                    # Recovery: room dropped well below the failed cut target, is now
+                    # rising, AND the ThermalRegimeClassifier confirms "active_heating".
+                    # Passive warming (solar, neighbours, internal loads) keeps the regime
+                    # at UNKNOWN / AFTERHEAT / COOLING and must NOT reset episode_failed.
+                    if (self._ec_episode_failed
+                            and self._indoor_temp_slope is not None
+                            and self._indoor_temp_slope >= 0.0
+                            and current_temp is not None
+                            and current_temp < self._ec_failed_cut_target - 1.0
+                            and _ec_regime == "active_heating"):
+                        self._ec_episode_failed = False
+                        self._ec_failed_cut_target = 0.0
+                    self._ec_state = (
+                        "inactive" if not self._ec_episode_failed else "episode_failed"
+                    )
+            else:
+                # Non-AUTO mode: release any active hold
+                if self._ec_hold_active:
+                    self._ec_hold_active = False
+                    self._ec_state = "released_mode_change"
+                    self._ec_episode_failed = False
+
             # Display: always show the configured base temperature (no offsets)
             adjusted_target = base_target
             override_active = False
@@ -1088,6 +1288,15 @@ class ThermoSmartCoordinator(
             suppression_pct = round((1.0 - biased_suppression) * 100)
         else:
             suppression_pct = 0
+
+        # Phase 19A-B: combined learning confidence from LE 2.0 only (display value).
+        # Guarded: a learning failure must never become a heating failure -> neutral 0.0.
+        learning_confidence = 0.0
+        if self._le2_shadow is not None:
+            try:
+                learning_confidence = float(self._le2_shadow.confidence_display())
+            except Exception:
+                learning_confidence = 0.0
 
         return {
             "zone_name": self.zone_name,
@@ -1102,8 +1311,25 @@ class ThermoSmartCoordinator(
             "override_temp": override,
             "preheat_minutes": preheat_minutes,
             "preheat_active": preheat_active,
+            "preheat_status": preheat_status,
+            # Onset delay and baseline for DecisionTrace (computed once above)
+            "onset_delay_min": _onset_delay_min,
+            "onset_delay_status": _onset_delay_status,
+            "preheat_baseline_minutes": LearningShadowController.compute_deterministic_preheat_baseline(
+                current_temp, comfort_temp)[0],
+            "temperature_gap_c": ((comfort_temp - current_temp)
+                                  if current_temp is not None else None),
             "forecast_suppression": suppression_pct,
-            "learning_confidence": self.learning_engine.get_confidence(self.zone_id),
+            "forecast_trust": le2_forecast_trust,
+            "forecast_bias_c": le2_forecast_bias_c,
+            "forecast_used": le2_forecast_used,
+            "forecast_trust_status": le2_forecast_trust_status,
+            "early_cutoff_applied": le2_early_cutoff_applied,
+            "early_cutoff_c": le2_early_cutoff_c,
+            "early_cutoff_status": le2_early_cutoff_status,
+            "early_cutoff_state": self._ec_state,
+            "early_cutoff_hold_active": self._ec_hold_active,
+            "learning_confidence": learning_confidence,
             "outdoor_temp": weather_data.get("temperature"),
             "forecast_high": weather_data.get("forecast_high"),
             "weather_condition": weather_data.get("condition"),
@@ -1259,7 +1485,7 @@ class ThermoSmartCoordinator(
         is_heating_commanded = (trv_setpoint - current_temp) >= HEATING_FAILURE_CMD_DELTA
         slope = self._indoor_temp_slope
 
-        if is_heating_commanded and slope < HEATING_FAILURE_SLOPE_THRESH:
+        if is_heating_commanded and (slope is None or slope < HEATING_FAILURE_SLOPE_THRESH):
             if self._heating_failure_since is None:
                 self._heating_failure_since = dt_util.now()
                 _LOGGER.debug(

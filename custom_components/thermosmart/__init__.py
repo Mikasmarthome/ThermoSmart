@@ -152,6 +152,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "learning_engine" not in hass.data[DOMAIN]:
         learning_engine = LearningEngine(hass)
         await learning_engine.async_load()
+        # Phase 19A-B: LE 2.0 is the single active learning engine. The legacy engine
+        # is frozen immediately after load — read-only, no further state mutation and no
+        # store write (store is never deleted or migrated). Its loaded values may still
+        # be READ by not-yet-transferred truths until each read is transferred to LE 2.0.
+        learning_engine.freeze()
 
         # Veraltete Zonen bereinigen (nicht mehr in Config-Entries vorhanden)
         active_zone_ids = {

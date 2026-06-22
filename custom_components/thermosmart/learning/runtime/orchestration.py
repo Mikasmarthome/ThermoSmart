@@ -33,6 +33,8 @@ from ..models import (
     HeatRatePredictionContext,
     ManualCorrectionModel,
     ManualCorrectionPredictionContext,
+    OnsetDelayModel,
+    OnsetDelayPredictionContext,
     OutcomeModel,
     OutcomePredictionContext,
 )
@@ -42,6 +44,7 @@ def build_zone_models(zone_id: str) -> dict[str, Any]:
     """Instantiate the per-zone model set (all optional models included)."""
     return {
         "heat_rate": HeatRateModel(zone_id),
+        "onset_delay": OnsetDelayModel(zone_id),
         "heat_loss": HeatLossModel(zone_id),
         "afterheat": AfterheatModel(zone_id),
         "outcome": OutcomeModel(zone_id),
@@ -53,6 +56,7 @@ def build_zone_models(zone_id: str) -> dict[str, Any]:
 
 _PREDICT_CONTEXT = {
     "heat_rate": HeatRatePredictionContext,
+    "onset_delay": OnsetDelayPredictionContext,
     "heat_loss": HeatLossPredictionContext,
     "afterheat": AfterheatPredictionContext,
     "outcome": OutcomePredictionContext,
@@ -63,6 +67,7 @@ _PREDICT_CONTEXT = {
 
 _COMPONENT_KIND = {
     "heat_rate": ComponentKind.HEAT_RATE,
+    "onset_delay": ComponentKind.ONSET_DELAY,
     "heat_loss": ComponentKind.HEAT_LOSS,
     "afterheat": ComponentKind.AFTERHEAT,
     "outcome": ComponentKind.OUTCOME,
@@ -73,6 +78,7 @@ _COMPONENT_KIND = {
 
 _COMPONENT_DOMAINS = {
     "heat_rate": (EvidenceDomain.THERMAL_TRAJECTORY,),
+    "onset_delay": (EvidenceDomain.THERMAL_TRAJECTORY,),
     "heat_loss": (EvidenceDomain.THERMAL_TRAJECTORY,),
     "afterheat": (EvidenceDomain.THERMAL_TRAJECTORY,),
     "outcome": (EvidenceDomain.OUTCOME_HISTORY,),
@@ -158,6 +164,7 @@ class ModelOrchestrator:
         if purposes is None:
             purposes = {
                 ConfidencePurpose.HEAT_RATE: ("heat_rate",),
+                ConfidencePurpose.ONSET_DELAY: ("onset_delay",),
                 ConfidencePurpose.PREHEAT: ("heat_rate", "heat_loss", "afterheat", "outcome"),
                 ConfidencePurpose.AFTERHEAT: ("afterheat",),
                 ConfidencePurpose.OUTCOME_QUALITY: ("outcome",),

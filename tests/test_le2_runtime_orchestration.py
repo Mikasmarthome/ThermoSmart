@@ -27,8 +27,8 @@ class _BadModel:
 class TestOrchestration:
     def test_build_zone_models(self):
         models = build_zone_models("lr")
-        assert set(models) == {"heat_rate", "heat_loss", "afterheat", "outcome", "forecast",
-                               "boost", "manual_correction"}
+        assert set(models) == {"heat_rate", "onset_delay", "heat_loss", "afterheat", "outcome",
+                               "forecast", "boost", "manual_correction"}
 
     def test_collect_predictions(self):
         o = ModelOrchestrator("lr")

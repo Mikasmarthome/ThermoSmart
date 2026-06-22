@@ -349,7 +349,8 @@ def _default_policies() -> dict[ConfidencePurpose, PurposePolicy]:
         P.FORECAST: PurposePolicy(
             P.FORECAST, required=(K.FORECAST,), optional=(K.OUTDOOR, K.DATA_QUALITY)),
         P.BOOST: PurposePolicy(
-            P.BOOST, required=(K.HEAT_RATE,), optional=(K.OUTCOME, K.DATA_QUALITY)),
+            P.BOOST, required=(K.HEAT_RATE,), optional=(K.OUTCOME, K.DATA_QUALITY),
+            control_relevant=True),
         P.MANUAL_CORRECTION: PurposePolicy(
             P.MANUAL_CORRECTION, required=(K.MANUAL_CORRECTION,), optional=(K.OUTCOME,)),
         P.CONTROL_DECISION: PurposePolicy(

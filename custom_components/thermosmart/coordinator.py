@@ -168,7 +168,14 @@ class ThermoSmartCoordinator(
         # Debug-Logging: Modus-Tracking für Wechsel-Erkennung
         self._last_effective_mode: str | None = None
 
+        # LE 2.0 passive shadow controller (attached at setup; never controls)
+        self._le2_shadow = None
+
     # ── Eigenschaften ────────────────────────────────────────────────
+
+    def attach_le2_shadow(self, shadow) -> None:
+        """Attach the passive LE 2.0 shadow controller (diagnostics only)."""
+        self._le2_shadow = shadow
 
     @property
     def zone_id(self) -> str:
@@ -752,6 +759,26 @@ class ThermoSmartCoordinator(
                 recommendation.get("is_summer", False),
                 self._active_control,
             )
+
+            # ── LE 2.0 passive shadow observation ───────────────────────
+            # Runs AFTER the control decision is fully determined and applied.
+            # Purely passive (diagnostics only); doubly guarded so a learning
+            # failure can never become a heating failure or an UpdateFailed.
+            if self._le2_shadow is not None:
+                try:
+                    _sched_time = _sched_temp = None
+                    _comfort_min = self._minutes_until_next_comfort(cfg)
+                    if _comfort_min is not None:
+                        _sched_time = (dt_util.utcnow()
+                                       + timedelta(minutes=_comfort_min)).isoformat()
+                        _sched_temp = cfg.get("comfort_temp", 21.0)
+                    self._le2_shadow.observe_safe(
+                        recommendation, weather=weather_data,
+                        schedule_comfort_time_utc=_sched_time,
+                        schedule_comfort_temperature_c=_sched_temp,
+                        heating_failure=self._heating_failure_since is not None)
+                except Exception:  # never let LE 2.0 affect the heating path
+                    pass
 
             return {
                 "weather": weather_data,

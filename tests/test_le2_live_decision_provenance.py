@@ -580,13 +580,16 @@ class TestSameCycleConsistency:
 class TestLastLiveDecisionLifecycle:
     """_last_live_decision must be reset each cycle; stale/cross-cycle/cross-zone leaks forbidden."""
 
-    async def test_no_shadow_record_is_none(self):
-        """No LE2 shadow → _last_live_decision stays None after cycle."""
+    async def test_no_shadow_baseline_record_built(self):
+        """No LE2 shadow → _last_live_decision is still built (baseline-only, decision_id=None)."""
         from tests.helpers_ha_runtime import make_recording_coordinator
         coord = make_recording_coordinator(indoor="19.0")
         coord._active_control = True
         await coord._async_update_data()
-        assert coord._last_live_decision is None
+        rec = coord._last_live_decision
+        assert rec is not None, "Baseline record must be built even without LE2 shadow"
+        assert rec.decision_id is None, "Without LE2, decision_id is not enriched"
+        assert rec.zone_id == coord.zone_id
 
     async def test_shadow_present_record_is_set(self):
         """With LE2 shadow → _last_live_decision is not None after cycle."""
@@ -599,7 +602,7 @@ class TestLastLiveDecisionLifecycle:
         assert coord._last_live_decision is not None
 
     async def test_record_reset_at_cycle_start(self):
-        """_last_live_decision from cycle N must not survive into cycle N+1."""
+        """_last_live_decision is rebuilt each cycle; it reflects the current cycle's decision."""
         from tests.helpers_ha_runtime import make_recording_coordinator, attach_shadow
         coord = make_recording_coordinator(indoor="19.0")
         coord._active_control = True
@@ -608,17 +611,15 @@ class TestLastLiveDecisionLifecycle:
         await coord._async_update_data()
         record_cycle1 = coord._last_live_decision
         assert record_cycle1 is not None
-        # Force build to fail on next cycle → record stays None
-        original_build = sh.build_live_decision_pre_dispatch
-        sh.build_live_decision_pre_dispatch = lambda *a, **kw: (_ for _ in ()).throw(
-            RuntimeError("build fail"))
+        # Second cycle: baseline builder still runs (coordinator-owned), produces a new record.
         await coord._async_update_data()
-        # Must be None — previous record must NOT persist
-        assert coord._last_live_decision is None
-        sh.build_live_decision_pre_dispatch = original_build
+        record_cycle2 = coord._last_live_decision
+        # The record must not be the same object from cycle 1 (it's rebuilt each cycle).
+        assert record_cycle2 is not record_cycle1
+        assert record_cycle2 is not None
 
-    async def test_shadow_removed_no_stale_record(self):
-        """Shadow removed between cycles → no stale record in coordinator."""
+    async def test_shadow_removed_baseline_still_built(self):
+        """Shadow removed between cycles → baseline record still built (coordinator-owned)."""
         from tests.helpers_ha_runtime import make_recording_coordinator, attach_shadow
         coord = make_recording_coordinator(indoor="19.0")
         coord._active_control = True
@@ -626,10 +627,13 @@ class TestLastLiveDecisionLifecycle:
         await sh.async_setup()
         await coord._async_update_data()
         assert coord._last_live_decision is not None
-        # Detach shadow
+
+        # Detach shadow — baseline builder still runs; decision_id goes back to None
         coord._le2_shadow = None
         await coord._async_update_data()
-        assert coord._last_live_decision is None
+        rec = coord._last_live_decision
+        assert rec is not None, "Baseline record must still be built without shadow"
+        assert rec.decision_id is None, "Without shadow, decision_id is None (not enriched)"
 
     async def test_summer_mode_no_dispatch_in_record(self):
         """Summer mode → dispatch_attempted=False, record still built."""
@@ -715,7 +719,7 @@ class TestProductionLiveRecordGuard:
             "Production coordinator must always pass live_record — legacy resolver path must not run"
 
     async def test_no_live_record_no_trace_published(self):
-        """When build_live_decision_pre_dispatch fails, clear_last_trace() is called."""
+        """When baseline builder fails, clear_last_trace() is called — no stale trace."""
         from tests.helpers_ha_runtime import make_recording_coordinator, attach_shadow
         coord = make_recording_coordinator(indoor="19.0")
         coord._active_control = True
@@ -724,9 +728,8 @@ class TestProductionLiveRecordGuard:
         # First cycle: establish a valid trace
         await coord._async_update_data()
         assert sh.last_decision_trace is not None
-        # Force build to fail on second cycle
-        sh.build_live_decision_pre_dispatch = lambda *a, **kw: (_ for _ in ()).throw(
-            RuntimeError("build fail"))
+        # Force the coordinator's baseline builder to return None
+        coord._build_baseline_live_decision = lambda *a, **kw: None
         await coord._async_update_data()
         # Stale trace from prior cycle must be cleared, not silently published
         assert sh.last_decision_trace is None, \

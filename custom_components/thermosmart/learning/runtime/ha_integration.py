@@ -733,6 +733,51 @@ class LearningShadowController:
             self._record_error("live_decision_record", err)
             return None
 
+    def enrich_live_decision_pre_dispatch(
+        self,
+        record: Any,
+        recommendation: Mapping[str, Any],
+    ) -> Optional[Any]:
+        """Enrich a coordinator-built baseline LiveDecisionRecord with LE2-specific fields.
+
+        Adds ``decision_id`` from the zone lifecycle and ``onset_delay`` from LE2
+        predictions.  Returns the enriched record (via ``dataclasses.replace``), or
+        the original record unchanged if enrichment fails.  Never raises.
+        """
+        if not self._enabled or record is None:
+            return record
+        try:
+            import dataclasses as _dc
+            from ..contracts import PredictionType as _PT
+            zr = self._runtime._zone(self._zone)
+            decision_id = getattr(zr, "last_decision_id", None)
+            onset_delay_min: Optional[float] = None
+            onset_delay_source: Optional[str] = None
+            try:
+                _last_preds = getattr(zr, "last_predictions", {}) or {}
+                _od_pred = _last_preds.get(_PT.ONSET_DELAY)
+                if _od_pred is not None:
+                    _od_fb = getattr(_od_pred, "fallback_used", True)
+                    _od_conf = float(getattr(_od_pred, "confidence", 0.0) or 0.0)
+                    if not _od_fb and _od_conf >= self._PREHEAT_MIN_CONFIDENCE:
+                        onset_delay_min = float(
+                            _od_pred.values.get("onset_delay_minutes", 0.0) or 0.0)
+                        onset_delay_source = "valid"
+                    else:
+                        onset_delay_min = self._ONSET_DELAY_PRIOR_MIN
+                        onset_delay_source = "cold_start_prior"
+            except Exception:
+                pass
+            return _dc.replace(
+                record,
+                decision_id=decision_id,
+                onset_delay_min=onset_delay_min,
+                onset_delay_source=onset_delay_source,
+            )
+        except Exception as err:
+            self._record_error("enrich_live_decision", err)
+            return record  # return original record, not None
+
     def _build_trace_from_live_record(
         self,
         record: Any,

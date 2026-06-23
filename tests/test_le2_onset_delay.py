@@ -448,9 +448,10 @@ class TestHeatRateSeparation:
             PredictionType.ONSET_DELAY: od_pred,
         }
         minutes, status = sh.read_preheat_minutes_safe(19.0, 21.0)
-        assert status == "valid"
-        # room_heat = 2.0/2.4*60 = 50 min; onset = 5 min; total ≈ 55
-        assert 40 <= minutes <= 75
+        # No HL prediction injected → uses _HEAT_LOSS_PRIOR_C_PER_H; status is valid_hl_prior.
+        assert status == "valid_hl_prior"
+        # room_heat = 2.0/max(2.4-0.3,0.2)*60 ≈ 57 min; onset = 5 min; total ≈ 62
+        assert 40 <= minutes <= 80
         # Onset must not double-count into heat rate
         delay, d_status = sh.read_onset_delay_safe()
         assert delay == pytest.approx(5.0)

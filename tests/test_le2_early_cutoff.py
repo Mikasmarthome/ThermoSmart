@@ -399,7 +399,8 @@ class TestCoordinatorEarlyCutoffBlocked:
         coord = make_coordinator()
         coord.attach_le2_shadow(_mock_cutoff_shadow(cutoff_c=0.5))
         coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.5)
-        # No preheat setup → preheat_active=False
+        # No comfort window within reach → preheat_active stays False.
+        coord._minutes_until_next_comfort = MagicMock(return_value=None)
         rec = await _rec(coord, indoor="17.0")
         assert rec["preheat_active"] is False
         assert rec["early_cutoff_applied"] is False

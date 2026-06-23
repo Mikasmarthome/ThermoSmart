@@ -1144,29 +1144,7 @@ class LearningEngine:
             self._hass.async_create_task(self.async_save())
 
     def update_boost_factor(self, zone_id: str, overshot: bool, slow: bool = False) -> None:
-        """Boost-Faktor nach Heizzyklus anpassen.
-
-        Überschießen → Faktor reduzieren (Ventil war zu weit auf).
-        Zu langsam    → Faktor erhöhen (Ventil öffnet zu wenig).
-        """
-        if self._frozen:
-            return
-        if not self._is_enabled(zone_id):
-            return
-        factor = self._boost_factors.get(zone_id, 1.0)
-        if overshot:
-            factor = max(0.5, round(factor * 0.92, 3))
-            _LOGGER.info(
-                "LearningEngine [%s] Boost-Faktor reduziert → %.3f (Überschießen)",
-                zone_id, factor,
-            )
-        elif slow:
-            factor = min(2.0, round(factor * 1.05, 3))
-            _LOGGER.info(
-                "LearningEngine [%s] Boost-Faktor erhöht → %.3f (langsames Heizen)",
-                zone_id, factor,
-            )
-        self._boost_factors[zone_id] = factor
+        """No-op: LE v1 boost factor superseded by LE 2.0 BoostModel."""
 
     def get_stats(self, zone_id: str) -> dict:
         obs = self._observations[zone_id]

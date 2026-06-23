@@ -83,6 +83,12 @@ class ZoneRuntimeInput:
     temperature_gap_c: Optional[float] = None        # comfort_temp - current_temp
     target_temperature_c: Optional[float] = None
     context_time_bucket: Optional[str] = None        # schedule period for onset-delay matching
+    # Boost eligibility context (set by runtime; None = unknown → conservative fallback)
+    boost_eligible: Optional[bool] = None            # explicit eligibility override from coordinator
+    has_effective_onset: Optional[bool] = None       # whether heating onset has been detected
+    boost_deficit_threshold_c: float = 0.5          # below this gap → no boost needed
+    # TPI topology: True → direct valve TRV (duty % is control, °C offset does not apply)
+    tpi_valve_direct: bool = False
 
     def __post_init__(self) -> None:
         if not self.zone_id:
@@ -246,6 +252,31 @@ class DecisionTrace:
     fallback_source: Optional[str] = None          # which fallback level was used
     early_cutoff_contribution_c: Optional[float] = None
     preheat_fallback_used: bool = False
+    # Boost diagnostics: internal truth, compat adapter, adaptive cap, lifecycle
+    boost_offset_c_applied: Optional[float] = None   # internal additive °C (0.0 = neutral)
+    boost_factor_compat: Optional[float] = None       # public attr (1.0 = neutral, compat adapter)
+    boost_adaptive_cap_c: Optional[float] = None      # LE 2.0 adaptive cap in effect this cycle
+    boost_lifecycle_state: Optional[str] = None       # current lifecycle state string
+    # TPI authority chain: typed fields for no-double-apply verification
+    tpi_duty_percent: Optional[float] = None          # TPI duty [0–100 %] this cycle
+    tpi_baseline_setpoint_c: Optional[float] = None  # TPI setpoint before any LE2 boost
+    boost_offset_requested_c: Optional[float] = None  # raw LE2 prediction (pre-gate)
+    boost_rejected_reason: Optional[str] = None       # why boost was not applied (e.g. "direct_valve_control")
+    # Deescalation trace fields (populated by compute_decision_trace_safe via lifecycle state)
+    boost_release_reason: Optional[str] = None           # lifecycle release reason string
+    boost_deescalation_type: Optional[str] = None        # "hard" or "soft" release category
+    remaining_temperature_gap_c: Optional[float] = None  # deficit at deescalation check
+    predicted_time_to_target_without_boost_min: Optional[float] = None
+    remaining_time_to_target_min: Optional[float] = None  # schedule remaining time
+    tpi_sufficiency_safety_margin_min: Optional[float] = None  # versioned TPI safety margin
+    afterheat_prediction_c: Optional[float] = None       # LE2 EXPECTED_OVERSHOOT residual rise
+    afterheat_prediction_status: Optional[str] = None    # "learned", "cold_start", "unavailable"
+    afterheat_confidence: Optional[float] = None         # EXPECTED_OVERSHOOT prediction confidence
+    boost_outcome_overshoot_risk: Optional[bool] = None  # BOOST_OUTCOME overshoot history flag
+    expected_afterheat_c: Optional[float] = None         # alias: same as afterheat_prediction_c
+    boost_previous_offset_c: Optional[float] = None      # applied offset before this cycle
+    boost_new_offset_c: Optional[float] = None           # applied offset after this cycle
+    final_device_setpoint_c: Optional[float] = None      # trv_setpoint after all authority
 
     def support_dict(self) -> dict:
         """Privacy-safe view: no entity names / internal ids."""
@@ -272,6 +303,30 @@ class DecisionTrace:
             "fallback_source": self.fallback_source,
             "early_cutoff_contribution_c": self.early_cutoff_contribution_c,
             "preheat_fallback_used": self.preheat_fallback_used,
+            "boost_offset_c_applied": self.boost_offset_c_applied,
+            "boost_factor_compat": self.boost_factor_compat,
+            "boost_adaptive_cap_c": self.boost_adaptive_cap_c,
+            "boost_lifecycle_state": self.boost_lifecycle_state,
+            # TPI authority chain (explicit typed fields for audit)
+            "tpi_duty_percent": self.tpi_duty_percent,
+            "tpi_baseline_setpoint_c": self.tpi_baseline_setpoint_c,
+            "boost_offset_requested_c": self.boost_offset_requested_c,
+            "boost_rejected_reason": self.boost_rejected_reason,
+            # Deescalation fields
+            "boost_release_reason": self.boost_release_reason,
+            "boost_deescalation_type": self.boost_deescalation_type,
+            "remaining_temperature_gap_c": self.remaining_temperature_gap_c,
+            "predicted_time_to_target_without_boost_min": self.predicted_time_to_target_without_boost_min,
+            "remaining_time_to_target_min": self.remaining_time_to_target_min,
+            "tpi_sufficiency_safety_margin_min": self.tpi_sufficiency_safety_margin_min,
+            "afterheat_prediction_c": self.afterheat_prediction_c,
+            "afterheat_prediction_status": self.afterheat_prediction_status,
+            "afterheat_confidence": self.afterheat_confidence,
+            "boost_outcome_overshoot_risk": self.boost_outcome_overshoot_risk,
+            "expected_afterheat_c": self.expected_afterheat_c,
+            "boost_previous_offset_c": self.boost_previous_offset_c,
+            "boost_new_offset_c": self.boost_new_offset_c,
+            "final_device_setpoint_c": self.final_device_setpoint_c,
             "baseline_setpoint_c": self.baseline_setpoint_c,
             "final_setpoint_c": self.final_setpoint_c, "applied_any": self.applied_any,
             "features": [

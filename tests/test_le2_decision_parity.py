@@ -33,11 +33,12 @@ class TestCharacterizationParity:
 
     @pytest.mark.parametrize("name,recommendation", SCENARIOS)
     def test_control_locked_scenarios_keep_baseline(self, name, recommendation):
-        # safety/lock scenarios must keep the baseline even in CONTROL with predictions
+        # Safety-locked scenarios must keep the baseline even in CONTROL with predictions.
+        # LE 2.0 full authority: only hard safety locks (window, summer, frost, absence)
+        # prevent boost application; normal heating and target-reached are eligible.
         t, _ = run(DecisionMode.CONTROL, recommendation=recommendation,
                    predictions=preds(boost=1.0))
-        if name in ("window_open", "summer", "frost", "absence", "target_reached",
-                    "normal_heating"):
+        if name in ("window_open", "summer", "frost", "absence"):
             assert t.final_setpoint_c == recommendation["trv_setpoint"]
 
     def test_baseline_command_quantized(self):

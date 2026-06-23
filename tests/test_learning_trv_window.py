@@ -173,31 +173,30 @@ class TestObserveWindowCooling:
 # ── update_boost_factor ──────────────────────────────────────────────────────
 
 class TestUpdateBoostFactor:
-    def test_overshoot_reduces_factor(self, monkeypatch):
+    def test_update_boost_factor_is_noop(self, monkeypatch):
+        # update_boost_factor superseded by LE 2.0 BoostModel — now a no-op
         e = make_engine(monkeypatch)
         e.update_boost_factor("z", overshot=True)
-        # 1.0 * 0.92 = 0.92
-        assert e.get_boost_factor("z") == pytest.approx(0.92, abs=1e-6)
+        assert e.get_boost_factor("z") == pytest.approx(1.0)  # unchanged
 
-    def test_slow_increases_factor(self, monkeypatch):
+    def test_update_noop_slow_too(self, monkeypatch):
         e = make_engine(monkeypatch)
         e.update_boost_factor("z", overshot=False, slow=True)
-        # 1.0 * 1.05 = 1.05
-        assert e.get_boost_factor("z") == pytest.approx(1.05, abs=1e-6)
+        assert e.get_boost_factor("z") == pytest.approx(1.0)  # unchanged
 
-    def test_overshoot_floor(self, monkeypatch):
+    def test_noop_does_not_modify_stored_value(self, monkeypatch):
         e = make_engine(monkeypatch)
         e._boost_factors["z"] = 0.52
         e.update_boost_factor("z", overshot=True)
-        # 0.52*0.92 = 0.4784 → floored to 0.5
-        assert e.get_boost_factor("z") == 0.5
+        # no-op: stored value unchanged
+        assert e.get_boost_factor("z") == pytest.approx(0.52)
 
-    def test_slow_cap(self, monkeypatch):
+    def test_noop_stored_high_value_unchanged(self, monkeypatch):
         e = make_engine(monkeypatch)
         e._boost_factors["z"] = 1.96
         e.update_boost_factor("z", overshot=False, slow=True)
-        # 1.96*1.05 = 2.058 → capped to 2.0
-        assert e.get_boost_factor("z") == 2.0
+        # no-op: stored value unchanged
+        assert e.get_boost_factor("z") == pytest.approx(1.96)
 
     def test_neither_flag_leaves_factor(self, monkeypatch):
         e = make_engine(monkeypatch)

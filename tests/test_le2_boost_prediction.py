@@ -49,9 +49,10 @@ class TestFactor:
         assert rec.boost_offset_c == BoostParameters().default_boost_offset_c
 
     def test_device_prior(self):
+        # device_prior is a cold-start hint subject to adaptive cap (0.5°C at cold start)
         rec = m().predict_boost_factor(ctx(device_prior_offset_c=2.5))
         assert rec.fallback_used and rec.bucket == "device_prior"
-        assert rec.boost_offset_c == 2.5
+        assert rec.boost_offset_c == pytest.approx(0.5)  # cold-start adaptive cap applies
 
     def test_factor_clamped(self):
         rec = m().predict_boost_factor(ctx(device_prior_offset_c=99.0))

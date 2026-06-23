@@ -117,6 +117,27 @@ class BoostSourceKind(Enum):
     UNKNOWN = "unknown"
 
 
+class BoostLifecycle(Enum):
+    """Transient per-episode boost lifecycle state (not persisted)."""
+    INACTIVE = "inactive"
+    ELIGIBLE = "eligible"
+    APPLIED = "applied"
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    RELEASED_TARGET_REACHED = "released_target_reached"
+    RELEASED_TIMEOUT = "released_timeout"
+    RELEASED_WINDOW_OPEN = "released_window_open"
+    RELEASED_MANUAL_OVERRIDE = "released_manual_override"
+    RELEASED_MODE_CHANGE = "released_mode_change"
+    # Deescalation: boost released mid-episode because normal heating is sufficient
+    RELEASED_TPI_SUFFICIENT = "released_tpi_sufficient"
+    RELEASED_OVERSHOOT_RISK = "released_overshoot_risk"
+    RELEASED_AFTERHEAT_SUFFICIENT = "released_afterheat_sufficient"
+    FAILED_NO_RESPONSE = "failed_no_response"
+    FAILED_OVERSHOOT = "failed_overshoot"
+    COOLDOWN = "cooldown"
+
+
 @dataclass(frozen=True)
 class BoostParameters:
     max_boost_offset_c: float = _MAX_BOOST_OFFSET_C
@@ -139,10 +160,62 @@ class BoostParameters:
     full_confidence_samples: float = 20.0
     cold_start_confidence_cap: float = 0.35
     partial_weight_factor: float = 0.5
-    default_boost_offset_c: float = 1.5    # existing ThermoSmart safe default
+    default_boost_offset_c: float = 0.0    # neutral prior: no automatic boost without evidence
     default_boost_duration_s: float = 1800.0
     min_duration_pred_s: float = 300.0
     max_duration_pred_s: float = 7200.0
+    # Adaptive control limits (separate from technical 8°C TPI maximum)
+    # 3°C: conservative LE 2.0 cap — even a well-learned boost rarely exceeds this in residential
+    adaptive_max_boost_c: float = 3.0
+    # Mirrors ControlPolicy.min_control_confidence: used for adaptive cap tiering
+    min_control_confidence: float = 0.55
+    # Lifecycle durations — derived from domain logic, not arbitrary defaults:
+    #   max_boost_duration_s = 3600 (1h):
+    #     Hard lifecycle safety cap — NOT the expected boost duration. In normal operation
+    #     the lifecycle releases via target_reached (current_temp >= target), which terminates
+    #     boost exactly when the additional offset ceases to provide measurable benefit. The
+    #     1h cap only fires when the target is never reached (severe under-heating, TRV fault)
+    #     and prevents indefinite boost application in stuck/failed episodes. Slow rooms
+    #     (floor heating, large post-setback deficits, onset delays up to 30 min) may
+    #     legitimately need 45–60 min of heating; the cap accommodates that worst case.
+    #     max_duration_pred_s = 7200 (model upper bound); 3600 is the hard lifecycle cap.
+    #   failure_detection_window_s = 1200 (20 min):
+    #     Starts AFTER effective onset. Slow rooms with ≥ 1°C/h heat rate may take
+    #     20 min to show a detectable temperature rise above noise. 15 min was too
+    #     aggressive for cold rooms with low heat rates.
+    #   cooldown_duration_s = 300 (5 min): normal/external release — minimum guard against
+    #     rapid re-application in the same scheduler cycle.
+    #   failure_cooldown_duration_s = 900 (15 min): failure releases — TRV may need time to
+    #     recover from overshoot or unresponsive state before another attempt is safe.
+    max_boost_duration_s: float = 3600.0
+    failure_detection_window_s: float = 1200.0
+    cooldown_duration_s: float = 300.0
+    failure_cooldown_duration_s: float = 900.0
+    # Deescalation thresholds: when to release an active boost mid-episode.
+    # released_tpi_sufficient: LE2 heat-rate projection shows TPI closes gap without boost.
+    # High TPI duty alone proves high demand, NOT sufficiency; duty threshold is not used.
+    deescalation_tpi_heat_rate_min_confidence: float = 0.35  # gate cold-start hr predictions
+    deescalation_tpi_max_remaining_c: float = 1.0    # only release if deficit is small
+    deescalation_tpi_safety_horizon_min: float = 20.0  # hr must close gap in ≤ this time
+    # released_overshoot_risk: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise) as primary,
+    # or safety heuristic (fallback: remaining ≤ deficit_c AND slope > 0 AND age ≥ min_active).
+    # BOOST_OUTCOME is NOT the authority here — it measures historical boost quality, not residual rise.
+    deescalation_overshoot_min_confidence: float = 0.30   # gate for LE2 EXPECTED_OVERSHOOT path
+    deescalation_overshoot_safety_buffer_c: float = 0.05  # remaining ≤ expected + buffer
+    deescalation_overshoot_deficit_c: float = 0.3         # near-target threshold (LE2 + heuristic)
+    deescalation_overshoot_min_active_s: float = 600.0    # heuristic age gate
+    # released_afterheat_sufficient: requires LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise).
+    # BOOST_OUTCOME must NOT be used — it is historical boost outcome quality, not physical afterheat.
+    # Current slope is supporting evidence; AfterheatModel prediction is the authoritative source.
+    deescalation_afterheat_min_confidence: float = 0.35   # prediction must be confident
+    deescalation_afterheat_safety_margin_c: float = 0.1   # residual_rise ≥ remaining + margin
+    deescalation_afterheat_slope_c_per_min: float = 0.05  # min slope supporting evidence
+    # Soft deescalation step-down: reduces active boost offset by this amount per cycle
+    # (rather than immediately zeroing). Prevents abrupt setpoint changes during soft release.
+    deescalation_soft_step_c: float = 0.5
+    # TPI sufficiency: when comfort target time is known, the safety margin ensures TPI
+    # has enough headroom to actually reach target within the schedule window.
+    deescalation_tpi_safety_margin_min: float = 5.0
     parameter_version: int = PARAMETER_VERSION
 
 
@@ -226,6 +299,8 @@ class BoostRecommendation:
     reason_codes: tuple[str, ...]
     model_version: int = MODEL_VERSION
     parameter_version: int = PARAMETER_VERSION
+    # Current LE 2.0 adaptive cap applied (separate from 8°C technical TPI max)
+    adaptive_cap_c: float = 3.0
 
     def __post_init__(self) -> None:
         if not is_finite(self.boost_offset_c):
@@ -424,6 +499,25 @@ class BoostState:
     model_version: int = MODEL_VERSION
     parameter_version: int = PARAMETER_VERSION
     evaluation_version: int = EVALUATION_VERSION
+    # Runtime lifecycle (not persisted; reset on restore)
+    lifecycle: BoostLifecycle = BoostLifecycle.INACTIVE
+    current_episode_id: Optional[str] = None
+    applied_offset_c: float = 0.0
+    cooldown_until_ts: Optional[str] = None
+    # Episode binding (runtime only, not persisted; reset on deserialize)
+    lifecycle_start_ts: Optional[str] = None
+    lifecycle_base_target_c: Optional[float] = None
+    lifecycle_user_target_c: Optional[float] = None
+    lifecycle_max_duration_s: float = 1800.0
+    lifecycle_release_reason: Optional[str] = None
+    # Failed-episode binding: ID of the last episode that ended in a failure reason.
+    # Blocks re-application of the same episode even after cooldown expires.
+    # Cleared on clean episode change (schedule/mode/target change).
+    last_failed_episode_id: Optional[str] = None
+    # Completed-episode binding: ID of the last successfully completed episode.
+    # Blocks same episode from re-boosting in the next cycle (0s cooldown loophole).
+    # Cleared on clean episode change (schedule/mode/target change).
+    last_completed_episode_id: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -480,6 +574,22 @@ def _bucket_key(deficit: Optional[float], decision_type: Optional[str],
     if ib is not None:
         parts.append(f"int{ib}")
     return "|".join(parts) if parts else None
+
+
+def boost_offset_c_to_compat_factor(offset_c: float,
+                                    max_boost_c: float = _MAX_BOOST_OFFSET_C) -> float:
+    """Convert internal additive °C offset to legacy 1.0-neutral multiplier for public attribute.
+
+    The historical LE v1 boost_factor was a decorative multiplier (1.0 = neutral, range [1.0, 2.0])
+    that was never applied to TRV control. This adapter keeps the public attribute backward-compatible:
+    automations that relied on 1.0 = neutral continue to work correctly.
+
+    Mapping: 0.0°C → 1.0 (neutral); max_boost_c → 2.0 (linear). Never returns 0.0.
+    The formula is documented and intentional; it does NOT drive any control decision.
+    """
+    if offset_c <= 0.0:
+        return 1.0
+    return round(1.0 + clamp(offset_c / max(max_boost_c, 1.0), 0.0, 1.0), 4)
 
 
 # -- model --------------------------------------------------------------------
@@ -909,13 +1019,19 @@ class BoostModel:
         if duration is not None:
             duration = clamp(duration, p.min_duration_pred_s, p.max_duration_pred_s)
         conf = self._confidence_value(eff, fallback)
+        adap_cap = self.adaptive_cap_c()
+        # Adaptive cap applies to ALL predictions including device_prior.
+        # device_prior is a cold-start hint (prior), NOT a user override command.
+        # The safety hierarchy is: user_prior → adaptive_cap → confidence_gate → device_clamp.
+        # Only the absolute device clamp (in DeviceAdapter) may override operator intent.
+        offset = clamp(offset, 0.0, adap_cap)
         return BoostRecommendation(
             boost_offset_c=round(offset, 4), recommended_duration_s=duration,
             confidence=conf, reliability=clamp(eff / p.full_confidence_samples, 0.0, 1.0),
             fallback_used=fallback, prior_contribution=1.0 - learned,
             learned_contribution=learned, evidence_count=int(eff), bucket=bkey,
             missing_evidence=() if not fallback else ("boost_history",),
-            reason_codes=reasons)
+            reason_codes=reasons, adaptive_cap_c=adap_cap)
 
     def predict_boost_duration(self, context: BoostPredictionContext) -> BoostRecommendation:
         return self.predict_boost_factor(context)
@@ -974,6 +1090,170 @@ class BoostModel:
             return None
         vals = [s.attribution_reliability for s in self._state.recent_samples]
         return sum(vals) / len(vals)
+
+    def adaptive_cap_c(self) -> float:
+        """Confidence- and outcome-adjusted LE 2.0 control cap, separate from technical 8°C limit.
+
+        Tiers (derived from BoostParameters, mirroring ControlPolicy thresholds):
+          < cold_start_confidence_cap (0.35): cap = 0.5°C  — cold start, very conservative
+          < min_control_confidence   (0.55): cap = 1.0°C  — marginal confidence, cautious
+          < 0.75:                            cap = 2.0°C  — moderate confidence
+          >= 0.75:                           cap = adaptive_max_boost_c (3.0°C default)
+        Overshoot penalty: if overshoot_rate > 0.3, cap *= 0.7 (outcomes mandate caution).
+        Always bounded by [0, max_boost_offset_c] (technical TPI limit stays as backstop).
+        """
+        p = self._params
+        conf = self._confidence_value(self._state.general.effective_factor.effective_n,
+                                       not self._state.general.has_evidence)
+        overshoot_rate = self._rate(self._state.overshoot_count) or 0.0
+        if conf < p.cold_start_confidence_cap:
+            cap = 0.5
+        elif conf < p.min_control_confidence:
+            cap = 1.0
+        elif conf < 0.75:
+            cap = min(2.0, p.adaptive_max_boost_c)
+        else:
+            cap = p.adaptive_max_boost_c
+        if overshoot_rate > 0.3:
+            cap *= 0.7
+        return round(clamp(cap, 0.0, p.max_boost_offset_c), 4)
+
+    # -- lifecycle (runtime only, not persisted) --------------------------------
+
+    def apply_lifecycle(self, episode_id: str, applied_offset_c: float,
+                        base_target_c: float, ts: str,
+                        user_target_c: Optional[float] = None,
+                        max_duration_s: Optional[float] = None) -> bool:
+        """Transition lifecycle to APPLIED after boost is dispatched to TRV.
+
+        Returns False (no-op) when episode binding blocks re-application of a failed episode.
+        Returns True when the lifecycle was successfully applied.
+        """
+        # Episode binding: block same-episode retry after failure or successful completion.
+        # Cleared only by clean episode change (schedule/mode/target change).
+        if episode_id and episode_id == self._state.last_failed_episode_id:
+            return False
+        if episode_id and episode_id == self._state.last_completed_episode_id:
+            return False
+        max_dur = max_duration_s if max_duration_s is not None else self._params.max_boost_duration_s
+        self._state = replace(
+            self._state,
+            lifecycle=BoostLifecycle.APPLIED,
+            current_episode_id=episode_id,
+            applied_offset_c=applied_offset_c,
+            lifecycle_start_ts=ts,
+            lifecycle_base_target_c=base_target_c,
+            lifecycle_user_target_c=user_target_c,
+            lifecycle_max_duration_s=max_dur,
+            lifecycle_release_reason=None,
+            cooldown_until_ts=None)
+        return True
+
+    def release_lifecycle(self, reason: str, ts: str) -> None:
+        """Transition lifecycle to a terminal released/failed state and start cooldown.
+
+        Cooldown is reason-specific:
+        - target_reached / mode_change / schedule_change / early_cutoff → 0s
+          (clean termination; new episode can boost immediately)
+        - no_response / overshoot / heating_failure → failure_cooldown_duration_s (900s)
+          (TRV may need time to recover; prevents rapid retry-pendling)
+        - window_open / manual_override / timeout → cooldown_duration_s (300s)
+          (external/neutral cause; short guard against same-cycle re-apply)
+        """
+        _release_map = {
+            "target_reached": BoostLifecycle.RELEASED_TARGET_REACHED,
+            "timeout": BoostLifecycle.RELEASED_TIMEOUT,
+            "window_open": BoostLifecycle.RELEASED_WINDOW_OPEN,
+            "manual_override": BoostLifecycle.RELEASED_MANUAL_OVERRIDE,
+            "mode_change": BoostLifecycle.RELEASED_MODE_CHANGE,
+            "schedule_change": BoostLifecycle.RELEASED_MODE_CHANGE,
+            "early_cutoff": BoostLifecycle.RELEASED_MODE_CHANGE,
+            "target_change": BoostLifecycle.RELEASED_MODE_CHANGE,
+            "released_tpi_sufficient": BoostLifecycle.RELEASED_TPI_SUFFICIENT,
+            "released_overshoot_risk": BoostLifecycle.RELEASED_OVERSHOOT_RISK,
+            "released_afterheat_sufficient": BoostLifecycle.RELEASED_AFTERHEAT_SUFFICIENT,
+        }
+        _fail_map = {
+            "no_response": BoostLifecycle.FAILED_NO_RESPONSE,
+            "overshoot": BoostLifecycle.FAILED_OVERSHOOT,
+            "heating_failure": BoostLifecycle.FAILED_NO_RESPONSE,
+        }
+        # 0s cooldown: clean termination, new episode can boost immediately.
+        # "target_reached" is NOT in _CLEAN_CONTEXT_REASONS: it sets completed binding.
+        _CLEAN_CONTEXT_REASONS = frozenset({
+            "mode_change", "schedule_change", "early_cutoff", "target_change"})
+        _NO_COOLDOWN_REASONS = frozenset({
+            "target_reached", "mode_change", "schedule_change", "early_cutoff",
+            "target_change"})
+        _FAILURE_REASONS = frozenset({"no_response", "overshoot", "heating_failure"})
+        # Deescalation reasons: successful mid-episode release (boost did its job).
+        _DEESCALATION_REASONS = frozenset({
+            "released_tpi_sufficient", "released_overshoot_risk", "released_afterheat_sufficient"})
+        # Reasons that set completed-episode binding (block same episode from re-boosting).
+        # manual_override: user intervened mid-episode; no automatic re-boost in same episode.
+        _COMPLETED_REASONS = frozenset({"target_reached", "manual_override"}) | _DEESCALATION_REASONS
+
+        lc = _release_map.get(reason) or _fail_map.get(reason) or BoostLifecycle.COMPLETED
+        cooldown_until: Optional[str] = None
+        try:
+            from datetime import datetime, timedelta, timezone
+            base_ts = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            if reason in _NO_COOLDOWN_REASONS or reason in _DEESCALATION_REASONS:
+                cooldown_secs = 0.0
+            elif reason in _FAILURE_REASONS:
+                cooldown_secs = self._params.failure_cooldown_duration_s
+            else:
+                cooldown_secs = self._params.cooldown_duration_s
+            if cooldown_secs > 0:
+                cooldown_until = (base_ts + timedelta(seconds=cooldown_secs)).isoformat()
+        except Exception:
+            pass
+        # Episode binding: track failed/completed episode IDs to block same-episode retry.
+        # Clean context changes (schedule/mode/early-cutoff) clear both bindings.
+        last_failed = self._state.last_failed_episode_id
+        last_completed = self._state.last_completed_episode_id
+        if reason in _FAILURE_REASONS:
+            last_failed = self._state.current_episode_id
+        elif reason in _CLEAN_CONTEXT_REASONS:
+            last_failed = None
+        if reason in _COMPLETED_REASONS:
+            last_completed = self._state.current_episode_id
+        elif reason in _CLEAN_CONTEXT_REASONS:
+            last_completed = None
+        self._state = replace(
+            self._state, lifecycle=lc, lifecycle_release_reason=reason,
+            cooldown_until_ts=cooldown_until,
+            last_failed_episode_id=last_failed,
+            last_completed_episode_id=last_completed)
+
+    def reset_lifecycle(self) -> None:
+        """Return lifecycle to INACTIVE (after cooldown expires or on clean restart)."""
+        self._state = replace(
+            self._state, lifecycle=BoostLifecycle.INACTIVE, current_episode_id=None,
+            applied_offset_c=0.0, lifecycle_start_ts=None, lifecycle_base_target_c=None,
+            lifecycle_user_target_c=None,
+            lifecycle_max_duration_s=self._params.max_boost_duration_s,
+            lifecycle_release_reason=None, cooldown_until_ts=None,
+            last_failed_episode_id=None,
+            last_completed_episode_id=None)
+
+    def update_deescalation_offset(self, new_offset_c: float) -> None:
+        """Reduce applied_offset_c in-place during soft step-down deescalation.
+
+        Called exclusively by the soft deescalation path in adjust_recommendation_safe.
+        Does NOT change lifecycle state — the lifecycle remains in RELEASED_xxx during
+        step-down so episode binding continues to block new boosts.
+        """
+        self._state = replace(self._state, applied_offset_c=max(0.0, float(new_offset_c)))
+
+    def cooldown_active(self, current_ts: str) -> bool:
+        """True if the cooldown period following the last release is still running."""
+        if not self._state.cooldown_until_ts:
+            return False
+        try:
+            return current_ts < self._state.cooldown_until_ts
+        except Exception:
+            return False
 
     def confidence(self) -> ConfidenceContribution:
         g = self._state.general

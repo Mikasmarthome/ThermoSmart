@@ -120,8 +120,6 @@ class ThermoSmartCoordinator(
         # Cancel functions for scheduled delay-expiry refreshes (one slot per sensor)
         self._window_delay_cancel: dict[str, Callable[[], None]] = {}
 
-        # Boost-Tracking (genutzt von TRVControlMixin)
-        self._boost_active: dict[str, dict] = {}
         self._last_written_setpoints: dict[str, float] = {}
 
         # Kalibrierung (genutzt von TRVControlMixin)
@@ -561,8 +559,6 @@ class ThermoSmartCoordinator(
                         )
                     self._valve_reset_done = True
 
-            self._check_boost_outcome(cfg)
-
             weather_data = await self.weather_engine.async_get_data()
             self._update_summer_mode(weather_data)
 
@@ -646,9 +642,28 @@ class ThermoSmartCoordinator(
                     # TRV ohne Ventilsteuerung: Duty-Cycle → Boost-Setpoint
                     trv_setpoint = duty_to_setpoint(target, duty_cycle, TPI_MAX_BOOST_CELSIUS)
 
-                boost_factor = self.learning_engine.get_boost_factor(self.zone_id)
                 recommendation["trv_setpoint"] = trv_setpoint
-                recommendation["boost_factor"] = round(boost_factor, 3)
+                # boost_factor from LE 2.0 (additive °C offset, 0.0 = neutral).
+                # LE v1 multiplier (default 1.0) is no longer read or applied.
+                le2_boost = 0.0
+                if self._le2_shadow is not None:
+                    try:
+                        from custom_components.thermosmart.learning.contracts import (
+                            PredictionType)
+                        zr = self._le2_shadow.runtime._zone(self.zone_id)
+                        bp = getattr(zr, "last_predictions", {}).get(
+                            PredictionType.BOOST_FACTOR)
+                        if bp is not None:
+                            le2_boost = bp.values.get("boost_factor", 0.0) or 0.0
+                    except Exception:
+                        pass
+                # boost_offset_c: internal LE 2.0 additive truth (0.0 = neutral)
+                recommendation["boost_offset_c"] = round(le2_boost, 3)
+                # boost_factor: backward-compat attribute (1.0 = neutral, legacy multiplier range)
+                from custom_components.thermosmart.learning.models.boost import (
+                    boost_offset_c_to_compat_factor)
+                recommendation["boost_factor"] = boost_offset_c_to_compat_factor(
+                    le2_boost, TPI_MAX_BOOST_CELSIUS)
                 recommendation["tpi_duty_cycle"] = round(duty_cycle, 1)
                 recommendation["tpi_coef_int"] = round(coef_int, 3)
                 recommendation["tpi_coef_ext"] = round(coef_ext, 4)
@@ -1422,38 +1437,6 @@ class ThermoSmartCoordinator(
         self._sensor_noise_count[sensor_id] = 0
         self._sensor_ema[sensor_id] = NOISE_FILTER_EMA_ALPHA * raw + (1 - NOISE_FILTER_EMA_ALPHA) * ema
         return round(self._sensor_ema[sensor_id], 1)
-
-    # ── Boost-Tracking ───────────────────────────────────────────────
-
-    def _check_boost_outcome(self, cfg: dict) -> None:
-        """Überschießen oder zu langsames Heizen erkennen und Boost-Faktor anpassen."""
-        if self.zone_id not in self._boost_active:
-            return
-        current = self._read_avg_sensor(cfg.get("temp_sensors", []))
-        if current is None:
-            return
-        entry = self._boost_active[self.zone_id]
-        prev_target = entry["target"]
-        tolerance = cfg.get("temp_tolerance", 0.5)
-        if current > prev_target + tolerance:
-            self.learning_engine.update_boost_factor(self.zone_id, overshot=True)
-            _LOGGER.info(
-                "ThermoSmart '%s': Boost-Überschießen %.1f°C > %.1f°C – Faktor reduziert",
-                self.zone_name, current, prev_target,
-            )
-            self._boost_active.pop(self.zone_id)
-        elif current >= prev_target - tolerance * 0.5:
-            self._boost_active.pop(self.zone_id)
-        else:
-            started = entry.get("started")
-            if started and (dt_util.now() - started).total_seconds() > 1800:
-                if current < prev_target - 1.0:
-                    self.learning_engine.update_boost_factor(self.zone_id, overshot=False, slow=True)
-                    _LOGGER.info(
-                        "ThermoSmart '%s': Langsames Heizen nach 30 min %.1f°C < %.1f°C – Faktor erhöht",
-                        self.zone_name, current, prev_target,
-                    )
-                self._boost_active.pop(self.zone_id)
 
     # ── Heizungsausfall-Erkennung ─────────────────────────────────────
 

@@ -468,6 +468,9 @@ class TestRecommendationForecastAttributes:
         coord = make_coordinator()
         sh = _shadow_with_preds(coord, trust_pred=_trust_pred(0.5, fallback=True))
         coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.5)
+        # Prevent preheat activation so coordinator stays in the night branch
+        # where read_forecast_trust_safe() is called.
+        coord._minutes_until_next_comfort = MagicMock(return_value=None)
         rec = await _rec(coord)
         assert rec["forecast_trust"] == pytest.approx(0.0)
         assert rec["forecast_trust_status"] == "cold_start"
@@ -515,6 +518,8 @@ class TestNoSuppressionWithoutForecast:
         sh = attach_shadow(coord, store=FakeStore())  # no predictions injected
         coord.weather_engine.compute_forecast_suppression.return_value = 0.6
         coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.5)
+        # Prevent preheat activation so coordinator stays in the night branch.
+        coord._minutes_until_next_comfort = MagicMock(return_value=None)
         rec = await _rec(coord)
         assert rec["forecast_suppression"] == 0
         assert rec["forecast_trust_status"] == "missing"

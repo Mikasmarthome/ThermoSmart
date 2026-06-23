@@ -1017,6 +1017,13 @@ class LearningShadowController:
     # warm ON TIME even for sluggish systems.  More aggressive than 0 (LE v1 cold
     # start), but NEVER invented — it's a principled physical prior.
     _DETERMINISTIC_HEAT_RATE_C_PER_H: float = 1.5
+    # Safe heat-loss prior used when HEAT_LOSS_RATE prediction is absent, stale,
+    # fallback-only, or low-confidence.  Choosing 0.0 would silently assume perfect
+    # insulation (net_rate = heat_rate), systematically underestimating preheat
+    # duration.  0.3 °C/h is a lower-bound physical prior: even well-insulated rooms
+    # lose heat; using it makes the preheat estimate safer while remaining sub-linear
+    # relative to the deterministic baseline net-rate (1.5 °C/h).
+    _HEAT_LOSS_PRIOR_C_PER_H: float = 0.3
     # Absolute maximum preheat allowed from LE2 (prevents runaway early starts).
     _PREHEAT_MAX_MIN: float = 180.0
     # Minimum temperature deficit that justifies a preheat command (°C).
@@ -1149,8 +1156,19 @@ class LearningShadowController:
             if confidence < self._PREHEAT_MIN_CONFIDENCE:
                 return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
-            heat_loss_c_per_h = float(
-                hl_pred.values.get("heat_loss_rate", 0.0) if hl_pred else 0.0) or 0.0
+            # HEAT_LOSS_RATE gate: absent / fallback / stale / low-confidence prediction
+            # must NOT be treated as 0.0 (which would imply perfect insulation).
+            # Use the versioned safe prior instead so preheat is never under-estimated.
+            _hl_valid = (
+                hl_pred is not None
+                and not getattr(hl_pred, "fallback_used", True)
+                and float(getattr(hl_pred, "confidence", 0.0) or 0.0) >= self._PREHEAT_MIN_CONFIDENCE
+            )
+            heat_loss_c_per_h = (
+                float(hl_pred.values.get("heat_loss_rate", 0.0) or 0.0)
+                if _hl_valid
+                else self._HEAT_LOSS_PRIOR_C_PER_H
+            )
             afterheat_c = float(
                 af_pred.values.get("expected_overshoot", 0.0) if af_pred else 0.0) or 0.0
 
@@ -1180,7 +1198,11 @@ class LearningShadowController:
             total_min = room_heating_min + onset_delay
             total_min = min(total_min, self._PREHEAT_MAX_MIN)
 
-            return round(total_min, 1), "valid"
+            # "valid" requires both HR and HL from learned LE 2.0 predictions.
+            # "valid_hl_prior" signals that HR is learned but HL uses the safe prior.
+            # A fallback must never be labelled as "valid".
+            _status = "valid" if _hl_valid else "valid_hl_prior"
+            return round(total_min, 1), _status
         except Exception as err:
             self._record_error("preheat_read", err)
         return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)

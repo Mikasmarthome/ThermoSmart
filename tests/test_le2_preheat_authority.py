@@ -269,7 +269,8 @@ class TestPreheatMinutes:
         # Very high heat rate would give huge preheat; should be capped.
         sh = _shadow_with_preds(coord, hr=_hr_pred(0.3, confidence=0.45))
         minutes, status = sh.read_preheat_minutes_safe(15.0, 21.0)
-        assert status == "valid"
+        # No HL prediction → uses safe prior; status is valid_hl_prior (not "valid")
+        assert status == "valid_hl_prior"
         assert minutes <= LearningShadowController._PREHEAT_MAX_MIN
 
     def test_max_minutes_clamp(self):

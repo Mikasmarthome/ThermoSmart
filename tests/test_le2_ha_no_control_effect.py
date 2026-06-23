@@ -28,6 +28,8 @@ _SHADOW_STATUS_KEYS = frozenset({
     # Control output (trv_setpoint, tpi_coef_int, tpi_coef_ext) is unchanged.
     "tpi_coef_source", "tpi_hl_rate",
     "tpi_coef_int", "tpi_coef_ext", "tpi_coef_diag",
+    # Phase B1: boost provenance keys written only when shadow is attached.
+    "_boost_rejection_reason", "_boost_candidate_c", "_boost_applied_c",
 })
 
 

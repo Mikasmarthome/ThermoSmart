@@ -1,6 +1,7 @@
 """ThermoSmart Coordinator – Hauptkoordinator für eine Heizzone."""
 from __future__ import annotations
 
+import dataclasses
 import logging
 import time
 from collections import deque
@@ -192,6 +193,9 @@ class ThermoSmartCoordinator(
 
         # LE 2.0 passive shadow controller (attached at setup; never controls)
         self._le2_shadow = None
+        # Authoritative live decision record for the last completed cycle (Phase B1).
+        # Built pre-dispatch and completed post-dispatch; consumed by compute_decision_trace_safe().
+        self._last_live_decision: object = None
 
         # TPI coef_int step-limiting state (transient, per zone, resets on restart).
         # _tpi_coef_int_smoothed: last used coef_int; initialized to deterministic default
@@ -560,6 +564,9 @@ class ThermoSmartCoordinator(
 
     async def _async_update_data(self) -> dict:
         try:
+            # Reset per-cycle live decision record — prevents cross-cycle staleness
+            # when the shadow is absent or removed between cycles.
+            self._last_live_decision = None
             cfg = self.zone_cfg
 
             # Safety-net for full HA restart: valve_opening_degree recovery is also
@@ -838,29 +845,94 @@ class ThermoSmartCoordinator(
                         recommendation, boost_runtime_limit=TPI_MAX_BOOST_CELSIUS)
                 except Exception:
                     pass
-            # Run the full decision pipeline read-only for this cycle (SHADOW trace).
-            # No dispatch sink => never sends; existing path below is the only dispatch.
+            # Build pre-dispatch LiveDecisionRecord from recommendation (Phase B1).
+            # Must run AFTER adjust_recommendation_safe() so boost fields are populated.
+            _live_dec_pre = None
             if self._le2_shadow is not None:
                 try:
-                    self._le2_shadow.compute_decision_trace_safe(
-                        recommendation, active_control=self._active_control)
+                    _live_dec_pre = self._le2_shadow.build_live_decision_pre_dispatch(
+                        recommendation, ts=dt_util.utcnow().isoformat())
                 except Exception:
                     pass
 
+            # duty must be defined for record completion even when dispatch is skipped.
+            duty = 0.0
+            # Captured dispatch exception (None = success or not attempted).
+            # We capture without immediate re-raise so provenance can be recorded first.
+            _disp_exc_obj = None
             if self._active_control and not effective_summer:
                 await self._async_apply_quirks(cfg)
                 await self._watchdog_hvac(cfg, recommendation)
                 await self._async_calibrate_trvs(cfg, recommendation)
-                await self._apply_temperature(cfg, recommendation)
-                # Direkte Ventilsteuerung nach Setpoint-Schreiben
-                duty = recommendation.get("tpi_duty_cycle", 0.0)
-                if recommendation.get("window_open"):
-                    duty = 0.0
-                await self._async_set_valve_percent(cfg, duty)
+                try:
+                    await self._apply_temperature(cfg, recommendation)
+                    # Direkte Ventilsteuerung nach Setpoint-Schreiben
+                    duty = recommendation.get("tpi_duty_cycle", 0.0)
+                    if recommendation.get("window_open"):
+                        duty = 0.0
+                    await self._async_set_valve_percent(cfg, duty)
+                except Exception as _exc:
+                    _disp_exc_obj = _exc
             elif self._active_control and effective_summer:
                 await self._async_apply_quirks(cfg)
                 await self._apply_frost_protection(cfg)
                 recommendation["trv_setpoint"] = TEMP_FROST_PROTECTION
+
+            # Complete LiveDecisionRecord with dispatch result, then derive trace (Phase B1).
+            # Runs AFTER dispatch (and after any captured dispatch exception) so the record
+            # captures the actual dispatch outcome before provenance is published.
+            if self._le2_shadow is not None:
+                _disp_err_str = repr(_disp_exc_obj) if _disp_exc_obj is not None else None
+                try:
+                    if _live_dec_pre is not None:
+                        _disp_attempted = self._active_control and not effective_summer
+                        if _disp_attempted:
+                            _disp_path = ("direct_valve"
+                                          if recommendation.get("tpi_valve_direct")
+                                          else "setpoint")
+                            _live_dec_complete = dataclasses.replace(
+                                _live_dec_pre,
+                                dispatch_attempted=True,
+                                dispatch_path=_disp_path,
+                                dispatch_setpoint_c=(
+                                    float(recommendation["trv_setpoint"])
+                                    if recommendation.get("trv_setpoint") is not None
+                                    else None),
+                                dispatch_duty_pct=(
+                                    float(duty)
+                                    if _disp_path == "direct_valve" else None),
+                                dispatch_succeeded=(_disp_exc_obj is None),
+                                dispatch_failure_reason=_disp_err_str,
+                                dispatch_ts=dt_util.utcnow().isoformat(),
+                            )
+                        else:
+                            _live_dec_complete = dataclasses.replace(
+                                _live_dec_pre,
+                                dispatch_attempted=False,
+                                dispatch_path="none",
+                            )
+                        self._last_live_decision = _live_dec_complete
+                    else:
+                        self._last_live_decision = None
+                except Exception:
+                    self._last_live_decision = None
+                # Derive trace only from authoritative live record.
+                # When no live record is available, clear the cached trace so a stale
+                # trace from a prior cycle is never read as current-cycle provenance.
+                if self._last_live_decision is not None:
+                    try:
+                        self._le2_shadow.compute_decision_trace_safe(
+                            recommendation,
+                            active_control=self._active_control,
+                            live_record=self._last_live_decision)
+                    except Exception:
+                        pass
+                else:
+                    self._le2_shadow.clear_last_trace()
+
+            # Re-raise any captured dispatch exception AFTER provenance is recorded.
+            if _disp_exc_obj is not None:
+                raise _disp_exc_obj
 
             # Valve maintenance runs in summer mode or observation mode.
             # Must be called outside the active-control blocks — the function

@@ -1,9 +1,13 @@
-"""Single dispatch boundary (Phase 19A, pure Python).
+"""Shadow-mode dispatch recorder (Phase 19A, pure Python).
 
-Exactly one place may turn a ``DeviceControlCommand`` into a real device write.
-This module does NOT call Home Assistant; it enforces the single-path invariant and
-records what would be sent. The live coordinator remains the only actual dispatcher
-and is wired to go through this boundary. ``shadow_only`` commands are never sent.
+Records what a ``DeviceControlCommand`` would send without calling Home Assistant.
+Used by the trace pipeline (``compute_decision_trace_safe``) to validate the
+resolved command in SHADOW mode.
+
+NOTE (Phase B1): The live coordinator dispatches via
+``trv_control._apply_temperature`` and ``_async_set_valve_percent`` directly —
+not through this class. ``SingleDispatcher`` has no sink in the trace pipeline
+and never performs a real HA service call. ``shadow_only`` commands are never sent.
 """
 from __future__ import annotations
 

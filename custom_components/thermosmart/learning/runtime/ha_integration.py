@@ -750,7 +750,10 @@ class LearningShadowController:
             import dataclasses as _dc
             from ..contracts import PredictionType as _PT
             zr = self._runtime._zone(self._zone)
-            decision_id = getattr(zr, "last_decision_id", None)
+            _le2_decision_id = getattr(zr, "last_decision_id", None)
+            # Only override the coordinator's baseline decision_id when LE2 has generated one.
+            # Overwriting with None would lose the coordinator-generated ID.
+            decision_id = _le2_decision_id if _le2_decision_id is not None else record.decision_id
             onset_delay_min: Optional[float] = None
             onset_delay_source: Optional[str] = None
             try:

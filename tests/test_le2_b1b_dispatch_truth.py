@@ -144,14 +144,14 @@ class TestNormalizeDispatchError:
 
 class TestBaselineProvenance:
     async def test_no_shadow_builds_baseline_record(self):
-        """Without LE2 shadow, coordinator still builds a baseline LiveDecisionRecord."""
+        """Without LE2 shadow, coordinator builds a baseline LiveDecisionRecord with decision_id."""
         from tests.helpers_ha_runtime import make_recording_coordinator
         coord = make_recording_coordinator(indoor="19.0")
         coord._active_control = True
         await _run_cycle(coord)
         rec = coord._last_live_decision
         assert rec is not None
-        assert rec.decision_id is None
+        assert rec.decision_id is not None, "Baseline record must have a coordinator-generated decision_id"
         assert rec.zone_id == coord.zone_id
         assert rec.mode == "control"
 
@@ -753,6 +753,249 @@ class TestSensorAggregationRegression:
         coord = make_recording_coordinator(indoor="19.0")
         result = coord._read_avg_sensor([])
         assert result is None
+
+
+# ─── Decision-ID without LE2 ─────────────────────────────────────────────────
+
+class TestBaselineDecisionId:
+    """Coordinator must generate a stable decision_id even without LE2 shadow."""
+
+    async def test_no_shadow_record_has_decision_id(self):
+        """Without LE2, LiveDecisionRecord must have a non-None decision_id."""
+        from tests.helpers_ha_runtime import make_recording_coordinator
+        coord = make_recording_coordinator(indoor="19.0")
+        coord._active_control = True
+        await coord._async_update_data()
+        rec = coord._last_live_decision
+        assert rec is not None
+        assert rec.decision_id is not None, "Baseline record must have a coordinator-generated decision_id"
+
+    async def test_no_shadow_decision_id_is_stable_across_cycles(self):
+        """Same decision type + same target → same decision_id across cycles."""
+        from tests.helpers_ha_runtime import make_recording_coordinator
+        coord = make_recording_coordinator(indoor="19.0")
+        coord._active_control = True
+        await coord._async_update_data()
+        id1 = coord._last_live_decision.decision_id
+        await coord._async_update_data()
+        id2 = coord._last_live_decision.decision_id
+        assert id1 == id2, "decision_id must be stable when decision hasn't materially changed"
+
+    async def test_no_shadow_decision_id_is_zone_scoped(self):
+        """Two zones generate different decision_ids even at the same timestamp."""
+        from tests.helpers_ha_runtime import make_recording_coordinator
+        from tests.helpers import make_coordinator as _mc
+        from unittest.mock import patch as _patch
+        coord1 = make_recording_coordinator(indoor="19.0")
+        coord2 = make_recording_coordinator(indoor="19.0")
+        # Ensure different zone IDs
+        coord1._zone_id = "zone_a"
+        coord2._zone_id = "zone_b"
+        coord1._active_control = True
+        coord2._active_control = True
+        await coord1._async_update_data()
+        await coord2._async_update_data()
+        id1 = coord1._last_live_decision.decision_id
+        id2 = coord2._last_live_decision.decision_id
+        assert id1 != id2, "Different zones must not share decision_ids"
+
+    async def test_no_shadow_decision_id_format(self):
+        """decision_id from coordinator must follow the dec_<hex16> format."""
+        from tests.helpers_ha_runtime import make_recording_coordinator
+        coord = make_recording_coordinator(indoor="19.0")
+        coord._active_control = True
+        await coord._async_update_data()
+        did = coord._last_live_decision.decision_id
+        assert isinstance(did, str)
+        assert did.startswith("dec_"), f"decision_id must start with 'dec_', got: {did!r}"
+        assert len(did) == 20, f"decision_id must be 'dec_' + 16 hex chars, got: {did!r}"
+
+    async def test_le2_shadow_enriches_decision_id(self):
+        """With LE2 shadow, record's decision_id comes from LE2 enrichment."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, attach_shadow
+        coord = make_recording_coordinator(indoor="19.0")
+        sh = attach_shadow(coord)
+        await sh.async_setup()
+        coord._active_control = True
+        await coord._async_update_data()
+        rec = coord._last_live_decision
+        assert rec is not None
+        assert rec.decision_id is not None, "LE2-enriched record must have decision_id"
+
+    async def test_enrichment_failure_falls_back_to_coord_decision_id(self):
+        """If LE2 enrichment raises, coordinator's baseline decision_id remains."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, attach_shadow
+        coord = make_recording_coordinator(indoor="19.0")
+        sh = attach_shadow(coord)
+        await sh.async_setup()
+        coord._active_control = True
+        sh.enrich_live_decision_pre_dispatch = lambda *a, **kw: (_ for _ in ()).throw(
+            RuntimeError("enrich boom"))
+        await coord._async_update_data()
+        rec = coord._last_live_decision
+        assert rec is not None
+        assert rec.decision_id is not None, "Baseline decision_id must survive enrichment failure"
+
+
+# ─── Temperature fallback chain ───────────────────────────────────────────────
+
+class TestTemperatureFallbackChain:
+    """Full temperature source priority: external sensors → TRV internal → None."""
+
+    def _make_coord_with_ext_sensors(self, sensor_states, trv_states=None, cfg_override=None):
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        zone_cfg = {"temp_sensors": list(sensor_states.keys())}
+        if trv_states:
+            zone_cfg["climate_entities"] = list(trv_states.keys())
+        if cfg_override:
+            zone_cfg.update(cfg_override)
+        coord = make_recording_coordinator(zone_cfg_overrides=zone_cfg, indoor="17.0")
+        states = {}
+        for eid, val in sensor_states.items():
+            states[eid] = _ms(val)
+        if trv_states:
+            for eid, val in trv_states.items():
+                from homeassistant.core import State
+                if isinstance(val, (int, float)):
+                    states[eid] = State(eid, "heat", attributes={"current_temperature": val})
+                else:
+                    states[eid] = _ms(str(val))
+        set_hass_states(coord, states)
+        return coord
+
+    async def test_all_external_valid_average(self):
+        """3/3 external sensors valid → correct average."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={"temp_sensors": ["sensor.t1", "sensor.t2", "sensor.t3"]},
+            indoor="17.0")
+        set_hass_states(coord, {
+            "sensor.t1": _ms("19.0"), "sensor.t2": _ms("21.0"), "sensor.t3": _ms("20.0"),
+        })
+        temp = coord._read_avg_sensor(["sensor.t1", "sensor.t2", "sensor.t3"])
+        assert temp == 20.0
+
+    async def test_two_valid_one_unavailable_average(self):
+        """2/3 valid, 1 unavailable → average of two valid."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={"temp_sensors": ["sensor.t1", "sensor.t2", "sensor.t3"]},
+            indoor="17.0")
+        set_hass_states(coord, {
+            "sensor.t1": _ms("20.0"), "sensor.t2": _ms("22.0"), "sensor.t3": _ms("unavailable"),
+        })
+        temp = coord._read_avg_sensor(["sensor.t1", "sensor.t2", "sensor.t3"])
+        assert temp == 21.0
+
+    async def test_one_valid_returns_that_value(self):
+        """1 valid sensor → that value used directly."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={"temp_sensors": ["sensor.t1", "sensor.t2"]}, indoor="17.0")
+        set_hass_states(coord, {
+            "sensor.t1": _ms("21.5"), "sensor.t2": _ms("unknown"),
+        })
+        temp = coord._read_avg_sensor(["sensor.t1", "sensor.t2"])
+        assert temp == 21.5
+
+    async def test_all_external_fail_trv_fallback(self):
+        """All external sensors unavailable → TRV internal temperature used."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        from homeassistant.core import State
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={
+                "temp_sensors": ["sensor.t1"],
+                "climate_entities": ["climate.trv1"],
+            }, indoor="17.0")
+        set_hass_states(coord, {
+            "sensor.t1": _ms("unavailable"),
+            "climate.trv1": State("climate.trv1", "heat",
+                                  attributes={"current_temperature": 19.5}),
+        })
+        # _compute_recommendation falls back to TRV internal
+        ext = coord._read_avg_sensor(["sensor.t1"])
+        assert ext is None
+        trv = coord._read_trv_avg_temp(["climate.trv1"])
+        assert trv == 19.5
+
+    async def test_all_external_fail_multiple_trvs_average(self):
+        """All external sensors fail → TRV internal average across multiple TRVs."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        from homeassistant.core import State
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={
+                "temp_sensors": ["sensor.t1"],
+                "climate_entities": ["climate.trv1", "climate.trv2"],
+            }, indoor="17.0")
+        set_hass_states(coord, {
+            "sensor.t1": _ms("unavailable"),
+            "climate.trv1": State("climate.trv1", "heat", attributes={"current_temperature": 20.0}),
+            "climate.trv2": State("climate.trv2", "heat", attributes={"current_temperature": 22.0}),
+        })
+        ext = coord._read_avg_sensor(["sensor.t1"])
+        assert ext is None
+        trv = coord._read_trv_avg_temp(["climate.trv1", "climate.trv2"])
+        assert trv == 21.0
+
+    async def test_no_external_no_trv_returns_none(self):
+        """No usable temperature source → _read_avg_sensor returns None."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={"temp_sensors": ["sensor.t1"]}, indoor="17.0")
+        set_hass_states(coord, {"sensor.t1": _ms("unavailable")})
+        temp = coord._read_avg_sensor(["sensor.t1"])
+        assert temp is None
+
+    async def test_fallback_chain_in_compute_recommendation(self):
+        """_compute_recommendation uses external first, then TRV fallback."""
+        from homeassistant.core import State
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={
+                "temp_sensors": ["sensor.t1"],
+                "climate_entities": ["climate.trv1"],
+            }, indoor="17.0")
+        set_hass_states(coord, {
+            "sensor.t1": _ms("unavailable"),
+            "climate.trv1": State("climate.trv1", "heat", attributes={"current_temperature": 18.5}),
+        })
+        # _read_avg_sensor should fail; _read_trv_avg_temp should succeed
+        ext = coord._read_avg_sensor(["sensor.t1"])
+        trv = coord._read_trv_avg_temp(["climate.trv1"])
+        assert ext is None
+        assert trv == 18.5, "TRV fallback must produce a usable temperature"
+
+    async def test_sensor_recovery_resumes_external(self):
+        """Sensor that comes back online is immediately included again."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={"temp_sensors": ["sensor.t1", "sensor.t2"]}, indoor="17.0")
+        # t2 unavailable
+        set_hass_states(coord, {"sensor.t1": _ms("20.0"), "sensor.t2": _ms("unavailable")})
+        assert coord._read_avg_sensor(["sensor.t1", "sensor.t2"]) == 20.0
+        # t2 recovers
+        set_hass_states(coord, {"sensor.t1": _ms("20.0"), "sensor.t2": _ms("22.0")})
+        assert coord._read_avg_sensor(["sensor.t1", "sensor.t2"]) == 21.0
+
+    async def test_zone_available_during_partial_sensor_failure(self):
+        """Zone coordinator returns valid data when only one sensor fails."""
+        from tests.helpers_ha_runtime import make_recording_coordinator, set_hass_states
+        from tests.helpers import make_state as _ms
+        coord = make_recording_coordinator(
+            zone_cfg_overrides={"temp_sensors": ["sensor.t1", "sensor.t2"]}, indoor="17.0")
+        coord._active_control = True
+        set_hass_states(coord, {"sensor.t1": _ms("20.0"), "sensor.t2": _ms("unavailable")})
+        result = await coord._async_update_data()
+        assert result is not None, "Zone must remain available during partial sensor failure"
 
 
 # ─── async helper ────────────────────────────────────────────────────────────

@@ -588,7 +588,7 @@ class TestLastLiveDecisionLifecycle:
         await coord._async_update_data()
         rec = coord._last_live_decision
         assert rec is not None, "Baseline record must be built even without LE2 shadow"
-        assert rec.decision_id is None, "Without LE2, decision_id is not enriched"
+        assert rec.decision_id is not None, "Coordinator generates baseline decision_id without LE2"
         assert rec.zone_id == coord.zone_id
 
     async def test_shadow_present_record_is_set(self):
@@ -628,12 +628,12 @@ class TestLastLiveDecisionLifecycle:
         await coord._async_update_data()
         assert coord._last_live_decision is not None
 
-        # Detach shadow — baseline builder still runs; decision_id goes back to None
+        # Detach shadow — baseline builder still runs; coordinator keeps generating decision_id
         coord._le2_shadow = None
         await coord._async_update_data()
         rec = coord._last_live_decision
         assert rec is not None, "Baseline record must still be built without shadow"
-        assert rec.decision_id is None, "Without shadow, decision_id is None (not enriched)"
+        assert rec.decision_id is not None, "Coordinator-generated decision_id persists after shadow detach"
 
     async def test_summer_mode_no_dispatch_in_record(self):
         """Summer mode → dispatch_attempted=False, record still built."""

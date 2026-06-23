@@ -66,8 +66,8 @@ class TestLearningFreeze:
         e.prune_orphaned_zones({"active"})
         assert "orphan" in e._observations  # untouched
 
-    def test_isolation_engine_still_learns(self):
-        # NOT frozen => legacy engine still works for its own unit tests
+    def test_isolation_engine_boost_factor_noop(self):
+        # update_boost_factor is now a no-op: LE v1 boost_factor superseded by LE 2.0
         e = _engine(); e.set_zone_enabled("z", True)
         e.update_boost_factor("z", overshot=True)
-        assert e._boost_factors  # learned
+        assert not e._boost_factors  # no-op: _boost_factors stays empty

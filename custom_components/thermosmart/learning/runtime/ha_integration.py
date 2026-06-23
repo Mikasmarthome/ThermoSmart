@@ -46,6 +46,19 @@ def _utcnow_iso() -> str:
     return dt_util.utcnow().isoformat()
 
 
+def _is_celsius_unit(unit: str) -> bool:
+    """Return True when the unit string represents Celsius temperature.
+
+    Accepts only forms actually produced by LE2 model contracts:
+      "C"       — AfterheatModel, HeatRate, HeatLoss (short form)
+      "celsius" — ForecastModel, ManualCorrection, BoostOutcome (long form)
+
+    Rejects "K", "%", "min", empty string, or any unknown unit.
+    Never performs Kelvin conversion; missing unit → conservative False.
+    """
+    return unit in ("C", "celsius")
+
+
 def _decision_type(recommendation: Mapping[str, Any]) -> DecisionType:
     try:
         if recommendation.get("preheat_minutes", 0) and recommendation.get("preheat_minutes", 0) > 0:
@@ -139,6 +152,12 @@ class LearningShadowController:
         self._pipeline = DecisionPipeline(
             resolver=FinalResolver(boost_runtime_limit=TPI_MAX_BOOST_CELSIUS))
         self._last_trace: Optional[dict] = None
+        # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
+        # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
+        self._last_comfort_time_utc: Optional[str] = None
+        # Context snapshot at boost-apply time: compared each cycle to detect schedule transitions.
+        # A change in comfort_time (same target, new period) triggers a hard schedule_change release.
+        self._boost_applied_comfort_time_utc: Optional[str] = None
 
     @property
     def runtime(self) -> LearningRuntime:
@@ -164,6 +183,8 @@ class LearningShadowController:
         """Run one passive shadow cycle. Never raises, never controls."""
         if not self._enabled:
             return
+        # Cache comfort time for TPI-sufficiency check in next adjust_recommendation_safe call.
+        self._last_comfort_time_utc = schedule_comfort_time_utc
         try:
             inp = build_runtime_cycle_input(
                 self._zone, recommendation, weather=weather,
@@ -178,14 +199,257 @@ class LearningShadowController:
     def control_enabled(self) -> bool:
         return self._enabled and self._runtime.control_enabled
 
+    def _boost_model(self):
+        """Return the BoostModel for this zone, or None if unavailable."""
+        try:
+            zr = self._runtime._zone(self._zone)
+            return zr.orchestrator.models.get("boost")
+        except Exception:
+            return None
+
+    def _release_boost_lifecycle_safe(self, reason: str) -> None:
+        """Release active boost lifecycle with the given reason. Never raises."""
+        try:
+            model = self._boost_model()
+            if model is None:
+                return
+            from ..models.boost import BoostLifecycle
+            lc = model._state.lifecycle
+            if lc in (BoostLifecycle.APPLIED, BoostLifecycle.ACTIVE):
+                model.release_lifecycle(reason, _utcnow_iso())
+        except Exception as err:
+            self._record_error("lifecycle_release", err)
+
+    def _check_lifecycle_timeout_safe(self) -> None:
+        """Release lifecycle if max_boost_duration_s has elapsed since apply. Never raises."""
+        try:
+            model = self._boost_model()
+            if model is None:
+                return
+            from ..models.boost import BoostLifecycle
+            s = model._state
+            if s.lifecycle not in (BoostLifecycle.APPLIED, BoostLifecycle.ACTIVE):
+                return
+            if not s.lifecycle_start_ts:
+                return
+            from datetime import datetime, timezone
+            start = datetime.fromisoformat(s.lifecycle_start_ts.replace("Z", "+00:00"))
+            now = datetime.now(timezone.utc)
+            elapsed = (now - start).total_seconds()
+            if elapsed >= s.lifecycle_max_duration_s:
+                model.release_lifecycle("timeout", _utcnow_iso())
+        except Exception as err:
+            self._record_error("lifecycle_timeout", err)
+
+    def _get_le2_predictions_for_zone(self) -> dict:
+        """Return last_predictions dict for the current zone. Isolated for testing."""
+        try:
+            zr = self._runtime._zone(self._zone)
+            return getattr(zr, "last_predictions", {}) or {}
+        except Exception:
+            return {}
+
+    def _check_lifecycle_deescalation_safe(self, recommendation: dict) -> None:
+        """Release active boost early when real-time data shows heating is self-sufficient.
+
+        Three ordered checks (early return on first match):
+        1. released_tpi_sufficient: LE2 HEAT_RATE projection shows TPI closes gap alone,
+           within the actual schedule remaining time (or fallback horizon when no schedule).
+           High TPI duty alone does NOT prove sufficiency — high duty proves high demand.
+        2. released_overshoot_risk: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise)
+           covers remaining gap near target (≤ 0.3°C). Safety heuristic (remaining ≤ 0.3°C
+           AND slope > 0 AND active ≥ 600s) fires as fallback when prediction unavailable.
+        3. released_afterheat_sufficient: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual
+           rise = learned physical afterheat) covers remaining deficit with safety margin.
+           BOOST_OUTCOME must NOT be used here — it measures historical boost quality,
+           not physical residual rise after heating stops.
+
+        Authority map (no parallel thermal logic):
+          TPI sufficient    → HEAT_RATE + remaining deficit + schedule remaining time
+          Overshoot risk    → EXPECTED_OVERSHOOT (AfterheatModel) primary + heuristic fallback
+          Afterheat suff.   → EXPECTED_OVERSHOOT (AfterheatModel), authoritative
+
+        The 3600s timeout in _check_lifecycle_timeout_safe remains the absolute safety cap.
+        Never raises.
+        """
+        try:
+            model = self._boost_model()
+            if model is None:
+                return
+            from ..models.boost import BoostLifecycle
+            s = model._state
+            if s.lifecycle not in (BoostLifecycle.APPLIED, BoostLifecycle.ACTIVE):
+                return
+            # Coordinator writes current_temp (not current_temperature) in the rec dict
+            current_temp = recommendation.get("current_temp")
+            target = (recommendation.get("effective_target")
+                      or recommendation.get("adjusted_target"))
+            if current_temp is None or target is None:
+                return
+            try:
+                current_f = float(current_temp)
+                target_f = float(target)
+            except (TypeError, ValueError):
+                return
+            remaining = target_f - current_f
+            if remaining <= 0:
+                return  # target already reached; handled by target_reached check
+            slope = recommendation.get("temp_slope")  # °C/min from coordinator
+            ts = _utcnow_iso()
+            params = model._params
+
+            # Compute active duration since lifecycle start
+            active_dur_s = 0.0
+            if s.lifecycle_start_ts:
+                try:
+                    from datetime import datetime
+                    t0 = datetime.fromisoformat(s.lifecycle_start_ts.replace("Z", "+00:00"))
+                    now_dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    active_dur_s = max(0.0, (now_dt - t0).total_seconds())
+                except Exception:
+                    pass
+
+            # Compute remaining time to comfort schedule target (for TPI sufficiency gate)
+            remaining_time_to_target_min: Optional[float] = None
+            if self._last_comfort_time_utc:
+                try:
+                    from datetime import datetime
+                    comfort_dt = datetime.fromisoformat(
+                        self._last_comfort_time_utc.replace("Z", "+00:00"))
+                    now_dt2 = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                    rem_s = (comfort_dt - now_dt2).total_seconds()
+                    if rem_s > 0:
+                        remaining_time_to_target_min = rem_s / 60.0
+                except Exception:
+                    pass
+
+            # Read LE2 predictions for thermal authority (never raises)
+            heat_rate_c_per_h: Optional[float] = None
+            # AfterheatModel residual rise: authoritative for overshoot risk AND afterheat
+            afterheat_rise_c: Optional[float] = None
+            afterheat_confidence: float = 0.0
+            afterheat_valid: bool = False
+            try:
+                from ..contracts import PredictionType
+                le2_preds = self._get_le2_predictions_for_zone()
+
+                # HEAT_RATE: authoritative for TPI sufficiency projection
+                hr_pred = le2_preds.get(PredictionType.HEAT_RATE)
+                if hr_pred is not None and not getattr(hr_pred, "fallback_used", True):
+                    hr_conf = float(getattr(hr_pred, "confidence", 0.0) or 0.0)
+                    if hr_conf >= params.deescalation_tpi_heat_rate_min_confidence:
+                        hr_val = hr_pred.values.get("heat_rate", 0.0)
+                        if hr_val is not None:
+                            hr_float = float(hr_val)
+                            if hr_float > 0.0:
+                                heat_rate_c_per_h = hr_float
+
+                # EXPECTED_OVERSHOOT (from AfterheatModel): authoritative for overshoot risk
+                # and afterheat sufficiency. Values key: "expected_overshoot" (unit: °C).
+                # BOOST_OUTCOME is NOT used here — it is historical boost outcome quality.
+                # Validity gates (all must pass before prediction is used for control):
+                #   1. fallback_used=False  — non-cold-start learned prediction only
+                #   2. unit must be "C" or "CELSIUS"  — physical sanity check
+                #   3. no "stale"/"superseded" in warnings  — prediction currency
+                #   4. source_episode_id matches current episode (if both known)
+                #   5. confidence >= minimum threshold (checked in release checks below)
+                eo_pred = le2_preds.get(PredictionType.EXPECTED_OVERSHOOT)
+                if eo_pred is not None and not getattr(eo_pred, "fallback_used", True):
+                    # Gate 2: unit — use central contract normalizer (see _is_celsius_unit)
+                    _eo_units = getattr(eo_pred, "units", {}) or {}
+                    _eo_unit = _eo_units.get("expected_overshoot", "")
+                    if _is_celsius_unit(_eo_unit):
+                        # Gate 3: stale / superseded
+                        _eo_warns = getattr(eo_pred, "warnings", ()) or ()
+                        if "stale" not in _eo_warns and "superseded" not in _eo_warns:
+                            # Gate 4: episode binding
+                            _eo_episode = getattr(eo_pred, "source_episode_id", None)
+                            _cur_episode = s.current_episode_id
+                            _episode_ok = (
+                                not _eo_episode or not _cur_episode
+                                or _eo_episode == _cur_episode)
+                            if _episode_ok:
+                                eo_conf = float(getattr(eo_pred, "confidence", 0.0) or 0.0)
+                                eo_val = eo_pred.values.get("expected_overshoot")
+                                if eo_val is not None and eo_conf > 0.0:
+                                    afterheat_rise_c = float(max(0.0, eo_val))
+                                    afterheat_confidence = eo_conf
+                                    afterheat_valid = True
+            except Exception:
+                pass
+
+            # 1. TPI sufficient: LE2 heat-rate shows TPI closes gap within the effective horizon.
+            # Effective horizon: remaining_time_to_target - safety_margin (when schedule known),
+            # or fallback fixed horizon (when no schedule available — conservative).
+            if (heat_rate_c_per_h is not None
+                    and remaining <= params.deescalation_tpi_max_remaining_c):
+                try:
+                    heat_rate_per_min = heat_rate_c_per_h / 60.0
+                    predicted_min = remaining / heat_rate_per_min
+                    if remaining_time_to_target_min is not None:
+                        # Use actual remaining time minus safety margin
+                        effective_horizon = (remaining_time_to_target_min
+                                             - params.deescalation_tpi_safety_margin_min)
+                    else:
+                        # No schedule available: use conservative fixed fallback horizon
+                        effective_horizon = params.deescalation_tpi_safety_horizon_min
+                    slope_ok = (slope is None or float(slope) > 0.0)
+                    if predicted_min <= effective_horizon and effective_horizon > 0 and slope_ok:
+                        model.release_lifecycle("released_tpi_sufficient", ts)
+                        return
+                except (TypeError, ValueError, ZeroDivisionError):
+                    pass
+
+            # 2. Overshoot risk: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise) as primary.
+            # Only fires near-target (remaining ≤ overshoot_deficit_c = 0.3°C) to ensure
+            # separation from the wider-gap afterheat check (Check 3).
+            if (afterheat_valid
+                    and afterheat_confidence >= params.deescalation_overshoot_min_confidence
+                    and afterheat_rise_c is not None
+                    and remaining <= params.deescalation_overshoot_deficit_c):
+                try:
+                    if (remaining <= afterheat_rise_c + params.deescalation_overshoot_safety_buffer_c
+                            and (slope is None or float(slope) > 0.0)):
+                        model.release_lifecycle("released_overshoot_risk", ts)
+                        return
+                except (TypeError, ValueError):
+                    pass
+            # Heuristic fallback: only after min active time and rising slope. No prediction needed.
+            if slope is not None and active_dur_s >= params.deescalation_overshoot_min_active_s:
+                try:
+                    if (remaining <= params.deescalation_overshoot_deficit_c
+                            and float(slope) > 0.0):
+                        model.release_lifecycle("released_overshoot_risk", ts)
+                        return
+                except (TypeError, ValueError):
+                    pass
+
+            # 3. Afterheat sufficient: AfterheatModel residual rise covers remaining gap.
+            # Authority: PredictionType.EXPECTED_OVERSHOOT (not BOOST_OUTCOME).
+            # No valid non-cold-start prediction → no release (slope alone is not afterheat).
+            if (afterheat_valid
+                    and afterheat_confidence >= params.deescalation_afterheat_min_confidence
+                    and afterheat_rise_c is not None):
+                try:
+                    covers_gap = (
+                        afterheat_rise_c >= remaining + params.deescalation_afterheat_safety_margin_c)
+                    slope_supporting = (slope is None or float(slope) > 0.0)
+                    if covers_gap and slope_supporting:
+                        model.release_lifecycle("released_afterheat_sufficient", ts)
+                        return
+                except (TypeError, ValueError):
+                    pass
+        except Exception as err:
+            self._record_error("lifecycle_deescalation", err)
+
     def adjust_recommendation_safe(self, recommendation: dict, *,
                                    boost_runtime_limit: Optional[float] = None) -> None:
-        """In CONTROL mode only, conservatively adjust the dispatched recommendation.
+        """In CONTROL mode only, apply LE 2.0 boost authority to the dispatched recommendation.
 
-        Baseline-first + single authority: the existing controller still applies
-        and guards the value. Phase 18 only *reduces* an existing additive boost
-        offset within clamps (the safest in-band adjustment). Never raises; a
-        no-op in any non-CONTROL mode (so SHADOW stays byte-identical).
+        Full authority: LE 2.0 determines the final boost offset (both increases and
+        decreases). The existing TPI setpoint is the baseline; LE 2.0 may increase or
+        reduce it, subject to confidence gate and device clamps. Never raises; a no-op
+        in any non-CONTROL mode (SHADOW stays byte-identical).
         """
         if not self.control_enabled:
             return
@@ -196,12 +460,129 @@ class LearningShadowController:
             setpoint = recommendation.get("trv_setpoint")
             if target is None or setpoint is None:
                 return
-            baseline_offset = max(0.0, float(setpoint) - float(target))
-            if baseline_offset <= 0.0:
-                return  # no existing boost to adjust
+            # Direct valve TRVs: setpoint is always target; heating authority is valve %.
+            # An additive °C offset does not apply — skip boost authority for these.
+            if recommendation.get("tpi_valve_direct"):
+                return
+            # Block during safety conditions; release lifecycle if currently applied
+            if recommendation.get("window_open"):
+                self._release_boost_lifecycle_safe("window_open")
+                return
+            if recommendation.get("heating_failure"):
+                self._release_boost_lifecycle_safe("heating_failure")
+                return
+            # Release on mode change (non-heating mode ends boost context)
+            mode = recommendation.get("mode") or recommendation.get("hvac_mode")
+            if mode is not None and str(mode).lower() not in ("heat", "auto", "heat_cool"):
+                self._release_boost_lifecycle_safe("mode_change")
+                return
+            # Hard release: manual override — user explicitly changed temperature during boost.
+            # Outcome is marked as manually influenced; no automatic counter-correction against user.
+            if recommendation.get("override_active"):
+                self._release_boost_lifecycle_safe("manual_override")
+                return
+            # Hard release: effective target changed — old episode no longer matches context.
+            # Prevents carrying a stale boost offset into a new schedule slot or target.
+            try:
+                _bm_tc = self._boost_model()
+                if _bm_tc is not None and _bm_tc._state.lifecycle_base_target_c is not None:
+                    if abs(float(_bm_tc._state.lifecycle_base_target_c) - float(target)) > 0.1:
+                        self._release_boost_lifecycle_safe("target_change")
+                        return
+            except Exception:
+                pass
+            # Hard release: schedule/comfort-time context changed with target unchanged.
+            # comfort_time_utc is the clearest stable context identifier: it changes when
+            # the schedule period transitions (new slot, preheat→comfort, setback shift, etc.).
+            # One cycle lag (from observe_safe) is acceptable — same lag as TPI sufficiency.
+            try:
+                _bm_ctx = self._boost_model()
+                if _bm_ctx is not None:
+                    _lc_ctx = (_bm_ctx._state.lifecycle.value
+                               if hasattr(_bm_ctx._state.lifecycle, "value")
+                               else str(_bm_ctx._state.lifecycle))
+                    if _lc_ctx in ("applied", "active"):
+                        # At least one side must be non-None (both None = no schedule, no change)
+                        if (self._boost_applied_comfort_time_utc is not None
+                                or self._last_comfort_time_utc is not None):
+                            if self._last_comfort_time_utc != self._boost_applied_comfort_time_utc:
+                                self._release_boost_lifecycle_safe("schedule_change")
+                                return
+            except Exception:
+                pass
+            # Release on lifecycle timeout (max_boost_duration_s elapsed)
+            self._check_lifecycle_timeout_safe()
+            # Hard releases must run BEFORE soft deescalation so they always take priority.
+            # Hard release: early cutoff / coasting hold — Boost + EarlyCutoff must not overlap.
+            early_cutoff_state = recommendation.get("early_cutoff_state")
+            if early_cutoff_state in ("cutoff_applied", "coasting_hold"):
+                self._release_boost_lifecycle_safe("early_cutoff")
+                return  # Hard release: no boost applied this cycle
+            # Hard release: target already reached — no boost benefit remaining.
+            # Coordinator key is "current_temp" (not "current_temperature")
+            current_temp = recommendation.get("current_temp")
+            if current_temp is not None:
+                try:
+                    if float(current_temp) >= float(target):
+                        self._release_boost_lifecycle_safe("target_reached")
+                        return
+                except (TypeError, ValueError):
+                    pass
+            # Soft deescalation: release active boost mid-episode when TPI or thermal evidence
+            # shows the boost is no longer needed. Only fires after all hard releases above.
+            self._check_lifecycle_deescalation_safe(recommendation)
+            # Deescalation dispatch: hard or soft, depending on the reason.
+            # Hard deesc (overshoot/afterheat): boost is physically overfluous — immediate 0,
+            #   same cycle. No step-down; TPI takes over as sole heating authority.
+            # Soft deesc (TPI sufficient): controlled step-down per cycle; abrupt removal
+            #   not required because TPI *will* close the gap within the schedule window.
+            try:
+                _bm_soft = self._boost_model()
+                if _bm_soft is not None:
+                    _slc = (_bm_soft._state.lifecycle.value
+                            if hasattr(_bm_soft._state.lifecycle, "value")
+                            else str(_bm_soft._state.lifecycle))
+                    _HARD_DEESC = frozenset({
+                        "released_overshoot_risk",
+                        "released_afterheat_sufficient",
+                    })
+                    _SOFT_DEESC = frozenset({"released_tpi_sufficient"})
+                    if _slc in _HARD_DEESC:
+                        return  # hard: boost fully removed in this cycle, no step-down
+                    if _slc in _SOFT_DEESC:
+                        _cur_off = _bm_soft._state.applied_offset_c or 0.0
+                        _step = getattr(_bm_soft._params, "deescalation_soft_step_c", 0.5)
+                        _new_off = max(0.0, _cur_off - _step)
+                        if _new_off > 0.0:
+                            _bm_soft.update_deescalation_offset(_new_off)
+                            recommendation["tpi_baseline_setpoint"] = float(setpoint)
+                            recommendation["trv_setpoint"] = round(
+                                float(setpoint) + _new_off, 4)
+                            recommendation["le2_boost_adjusted"] = True
+                        return  # no further boost during soft deescalation
+            except Exception as err:
+                self._record_error("soft_deescalation", err)
+            # Cooldown guard: skip boost application during active cooldown period
+            _model_cooldown = self._boost_model()
+            if _model_cooldown is not None and _model_cooldown.cooldown_active(_utcnow_iso()):
+                return
+            # Baseline = currently applied le2 boost (not TPI offset reconstruction).
+            # Anti-chatter compares against this: 0.0 when no boost active.
+            baseline_offset = 0.0
+            try:
+                _bm = self._boost_model()
+                if _bm is not None:
+                    _lc = _bm._state.lifecycle.value if hasattr(
+                        _bm._state.lifecycle, "value") else str(_bm._state.lifecycle)
+                    if _lc in ("applied", "active"):
+                        baseline_offset = float(_bm._state.applied_offset_c)
+            except Exception:
+                baseline_offset = max(0.0, float(setpoint) - float(target))
             zr = self._runtime._zone(self._zone)
             boost_pred = zr.last_predictions.get(PredictionType.BOOST_FACTOR)
             proposed = boost_pred.values.get("boost_factor") if boost_pred else None
+            if proposed is None:
+                return
             ctx = ControlContext(
                 window_open=bool(recommendation.get("window_open")),
                 heating_failure=bool(recommendation.get("heating_failure")),
@@ -211,11 +592,37 @@ class LearningShadowController:
                 ConfidencePurpose.BOOST, context=ctx, unit="celsius_offset",
                 model_version=getattr(boost_pred, "model_version", None),
                 parameter_version=getattr(boost_pred, "parameter_version", None))
-            # only ever reduce an existing boost in Phase 18
-            if decision.applied and decision.final_value is not None \
-                    and decision.final_value < baseline_offset:
-                recommendation["trv_setpoint"] = round(float(target) + decision.final_value, 4)
-                recommendation["le2_boost_adjusted"] = True
+            # Full authority: apply any LE 2.0 decision (increase or decrease)
+            if decision.applied and decision.final_value is not None:
+                # Wire lifecycle: transition to APPLIED for episode tracking.
+                # apply_lifecycle() returns False when episode binding blocks retry
+                # (same episode that previously failed). In that case, skip the setpoint
+                # update — the failed episode must not boost again in this context.
+                _lifecycle_applied = False
+                try:
+                    model = self._boost_model()
+                    if model is not None:
+                        episode_id = str(getattr(zr, "last_decision_id", None) or "")
+                        _lifecycle_applied = model.apply_lifecycle(
+                            episode_id=episode_id,
+                            applied_offset_c=decision.final_value,
+                            base_target_c=float(target),
+                            ts=_utcnow_iso())
+                    else:
+                        _lifecycle_applied = True  # no model → no binding check → allow
+                except Exception as err:
+                    self._record_error("lifecycle_apply", err)
+                    _lifecycle_applied = True  # error path → allow (fail open for heating)
+                if _lifecycle_applied:
+                    # Record context at boost-apply time for schedule-change detection.
+                    # Updated every cycle boost is applied; compared next cycle to detect transitions.
+                    self._boost_applied_comfort_time_utc = self._last_comfort_time_utc
+                    # TPI authority: final = tpi_baseline_setpoint + le2_boost_offset.
+                    # Preserve original TPI baseline for audit before overwriting.
+                    recommendation["tpi_baseline_setpoint"] = float(setpoint)
+                    recommendation["trv_setpoint"] = round(
+                        float(setpoint) + decision.final_value, 4)
+                    recommendation["le2_boost_adjusted"] = True
         except Exception as err:
             self._record_error("control", err)
 
@@ -244,7 +651,133 @@ class LearningShadowController:
                 self._zone, ts or _utcnow_iso(), recommendation, preds, mode=mode,
                 active_control=active_control,
                 decision_id=getattr(zr, "last_decision_id", None))
-            self._last_trace = trace.support_dict()
+            trace_dict = trace.support_dict()
+            # Enrich trace with TPI authority chain fields (for audit/debug)
+            # These allow verification that LE 2.0 setpoint and TPI baseline are not mixed.
+            # tpi_baseline_setpoint_c: written by adjust_recommendation_safe before boost.
+            # Falls back to trv_setpoint in shadow mode (no boost → not overwritten).
+            trace_dict.update({
+                "comfort_target_c": recommendation.get("effective_target"),
+                "tpi_duty_c": recommendation.get("tpi_duty_cycle"),
+                "tpi_baseline_setpoint_c": (recommendation.get("tpi_baseline_setpoint")
+                                            or recommendation.get("trv_setpoint")),
+                "tpi_valve_direct": bool(recommendation.get("tpi_valve_direct", False)),
+            })
+            # Enrich trace with lifecycle diagnostics from BoostModel (not available in resolver)
+            try:
+                boost_model = self._boost_model()
+                if boost_model is not None:
+                    s = boost_model._state
+                    ts_now = ts or _utcnow_iso()
+                    active_dur: Optional[float] = None
+                    cooldown_rem: Optional[float] = None
+                    from ..models.boost import BoostLifecycle
+                    from datetime import datetime, timezone, timedelta
+                    if s.lifecycle in (BoostLifecycle.APPLIED, BoostLifecycle.ACTIVE) \
+                            and s.lifecycle_start_ts:
+                        try:
+                            start = datetime.fromisoformat(
+                                s.lifecycle_start_ts.replace("Z", "+00:00"))
+                            now_dt = datetime.fromisoformat(ts_now.replace("Z", "+00:00"))
+                            active_dur = round((now_dt - start).total_seconds(), 1)
+                        except Exception:
+                            pass
+                    if s.cooldown_until_ts:
+                        try:
+                            until_dt = datetime.fromisoformat(
+                                s.cooldown_until_ts.replace("Z", "+00:00"))
+                            now_dt2 = datetime.fromisoformat(ts_now.replace("Z", "+00:00"))
+                            rem = (until_dt - now_dt2).total_seconds()
+                            cooldown_rem = round(max(0.0, rem), 1)
+                        except Exception:
+                            pass
+                    # Classify deescalation type from release reason.
+                    # Overshoot/afterheat deescalation are HARD (immediate 0, same cycle).
+                    # Only TPI sufficient is soft (step-down per cycle).
+                    _release_reason = s.lifecycle_release_reason
+                    _hard_reasons = frozenset({
+                        "window_open", "heating_failure", "mode_change",
+                        "early_cutoff", "target_reached", "manual_override",
+                        "schedule_change", "timeout", "no_response", "overshoot",
+                        "target_change",
+                        "released_overshoot_risk", "released_afterheat_sufficient"})
+                    _soft_reasons = frozenset({"released_tpi_sufficient"})
+                    _deesc_type = None
+                    if _release_reason in _hard_reasons:
+                        _deesc_type = "hard"
+                    elif _release_reason in _soft_reasons:
+                        _deesc_type = "soft"
+                    # Read afterheat prediction for trace enrichment
+                    _afterheat_c: Optional[float] = None
+                    _afterheat_status: Optional[str] = None
+                    _afterheat_conf: Optional[float] = None
+                    _boost_outcome_risk: Optional[bool] = None
+                    try:
+                        from ..contracts import PredictionType as _PT
+                        _le2p = self._get_le2_predictions_for_zone()
+                        _eo_pred = _le2p.get(_PT.EXPECTED_OVERSHOOT)
+                        if _eo_pred is not None:
+                            _afterheat_c = float(max(0.0,
+                                _eo_pred.values.get("expected_overshoot", 0.0) or 0.0))
+                            _afterheat_conf = float(getattr(_eo_pred, "confidence", 0.0) or 0.0)
+                            _afterheat_status = (
+                                "cold_start" if getattr(_eo_pred, "fallback_used", True)
+                                else "learned")
+                        else:
+                            _afterheat_status = "unavailable"
+                        _bo_pred = _le2p.get(_PT.BOOST_OUTCOME)
+                        if _bo_pred is not None and not getattr(_bo_pred, "fallback_used", True):
+                            _bo_ov = _bo_pred.values.get("expected_overshoot")
+                            if _bo_ov is not None:
+                                _boost_outcome_risk = float(_bo_ov) > 0.0
+                    except Exception:
+                        pass
+                    # Remaining time to target from cached comfort_time_utc
+                    _remaining_tgt_min: Optional[float] = None
+                    if self._last_comfort_time_utc:
+                        try:
+                            from datetime import datetime
+                            _c_dt = datetime.fromisoformat(
+                                self._last_comfort_time_utc.replace("Z", "+00:00"))
+                            _n_dt = datetime.fromisoformat(ts_now.replace("Z", "+00:00"))
+                            _rem_s2 = (_c_dt - _n_dt).total_seconds()
+                            if _rem_s2 > 0:
+                                _remaining_tgt_min = round(_rem_s2 / 60.0, 1)
+                        except Exception:
+                            pass
+                    # Current and new offset for trace
+                    _new_off_c = float(recommendation.get("trv_setpoint", 0.0) or 0.0) - \
+                        float(recommendation.get("tpi_baseline_setpoint") or
+                              recommendation.get("trv_setpoint") or 0.0)
+                    _params_soft = boost_model._params
+                    trace_dict.update({
+                        "boost_lifecycle_state": s.lifecycle.value,
+                        "boost_episode_id": s.current_episode_id,
+                        "boost_active_duration_s": active_dur,
+                        "boost_max_duration_s": s.lifecycle_max_duration_s,
+                        "boost_cooldown_remaining_s": cooldown_rem,
+                        "boost_release_reason": _release_reason,
+                        "boost_applied_offset_c": s.applied_offset_c,
+                        "boost_failed_episode_id": s.last_failed_episode_id,
+                        "boost_completed_episode_id": s.last_completed_episode_id,
+                        "boost_deescalation_type": _deesc_type,
+                        "boost_previous_offset_c": s.applied_offset_c,
+                        "boost_new_offset_c": max(0.0, _new_off_c) if _new_off_c > 0 else 0.0,
+                        "final_device_setpoint_c": recommendation.get("trv_setpoint"),
+                        # Afterheat authority (EXPECTED_OVERSHOOT from AfterheatModel)
+                        "afterheat_prediction_c": _afterheat_c,
+                        "afterheat_prediction_status": _afterheat_status,
+                        "afterheat_confidence": _afterheat_conf,
+                        "expected_afterheat_c": _afterheat_c,  # alias
+                        "boost_outcome_overshoot_risk": _boost_outcome_risk,
+                        # TPI sufficiency time fields
+                        "remaining_time_to_target_min": _remaining_tgt_min,
+                        "tpi_sufficiency_safety_margin_min": getattr(
+                            _params_soft, "deescalation_tpi_safety_margin_min", 5.0),
+                    })
+            except Exception:
+                pass
+            self._last_trace = trace_dict
         except Exception as err:
             self._record_error("decision_trace", err)
 

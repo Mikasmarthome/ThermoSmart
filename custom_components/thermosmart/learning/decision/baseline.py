@@ -27,10 +27,13 @@ def baseline_from_recommendation(zone_id: str, rec: Mapping,
                                  *, active_control: bool = False) -> ControllerBaselineDecision:
     """Build the typed baseline from an existing recommendation dict (read-only)."""
     target = _f(rec, "effective_target", "adjusted_target", "target")
-    setpoint = _f(rec, "trv_setpoint")
-    boost_offset = 0.0
-    if target is not None and setpoint is not None:
-        boost_offset = max(0.0, setpoint - target)
+    # Prefer tpi_baseline_setpoint (written by adjust_recommendation_safe before boost).
+    # Falls back to trv_setpoint in shadow mode where the original TPI value is unchanged.
+    setpoint = _f(rec, "tpi_baseline_setpoint", "trv_setpoint")
+    # Use the coordinator's pre-computed le2 boost offset directly (not reconstructed).
+    # boost_offset_c = 0.0 when no LE2 boost is active; positive when boost is applied.
+    # This replaces the previous max(0, setpoint-target) which conflated TPI duty with le2.
+    boost_offset = _f(rec, "boost_offset_c") or 0.0
     return ControllerBaselineDecision(
         zone_id=zone_id,
         target_c=target,
@@ -66,6 +69,7 @@ def zone_input_from_recommendation(zone_id: str, ts: str, rec: Mapping,
         outdoor_temp_c=_f(rec, "outdoor_temperature", "outdoor_temp"),
         forecast_high_c=_f(rec, "forecast_high"),
         early_cutoff_state=rec.get("early_cutoff_state"),
+        tpi_valve_direct=bool(rec.get("tpi_valve_direct", False)),
         preheat_minutes_le2=_f(rec, "preheat_minutes") if rec.get("preheat_status") not in (None, "not_available", "unavailable") else None,
         preheat_status=rec.get("preheat_status"),
         deterministic_baseline_preheat_min=_f(rec, "preheat_baseline_minutes"),

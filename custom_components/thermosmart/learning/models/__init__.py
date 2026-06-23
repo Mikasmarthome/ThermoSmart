@@ -64,6 +64,7 @@ from .boost import (
     BoostDiagnostics,
     BoostEffect,
     BoostEvaluation,
+    BoostLifecycle,
     BoostModel,
     BoostParameters,
     BoostPredictionContext,
@@ -74,6 +75,7 @@ from .boost import (
     BoostState,
     BoostUpdateContext,
     boost_model_definition,
+    boost_offset_c_to_compat_factor,
 )
 from .manual_correction import (
     CorrectionAttribution,

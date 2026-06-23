@@ -10,11 +10,14 @@ from tests.helpers_decision import pipeline, preds, rec
 class TestMultiZone:
     def test_independent_zones(self):
         p = pipeline()
-        ta, _ = p.run("zoneA", "2025-01-01T07:00:00+00:00", rec(target=21.0, setpoint=23.0),
+        # zoneA: TPI baseline=23°C, existing le2 boost=2.0°C, predicts 1.5°C → reduce
+        ta, _ = p.run("zoneA", "2025-01-01T07:00:00+00:00",
+                      rec(target=21.0, setpoint=23.0, boost_offset_c=2.0),
                       preds("zoneA", boost=1.5), mode=DecisionMode.CONTROL, active_control=True)
         tb, _ = p.run("zoneB", "2025-01-01T07:00:00+00:00", rec(target=20.0, setpoint=20.0),
                       preds("zoneB", boost=None), mode=DecisionMode.CONTROL, active_control=True)
-        assert ta.zone_id == "zoneA" and ta.final_setpoint_c == 22.5 and ta.applied_any
+        # zoneA: baseline=2.0, proposed=1.5 → final_offset=1.5; sp = 23 + 1.5 = 24.5
+        assert ta.zone_id == "zoneA" and ta.final_setpoint_c == pytest.approx(24.5) and ta.applied_any
         assert tb.zone_id == "zoneB" and tb.final_setpoint_c == 20.0 and not tb.applied_any
 
     def test_zone_id_propagated(self):

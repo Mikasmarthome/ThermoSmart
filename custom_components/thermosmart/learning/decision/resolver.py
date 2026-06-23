@@ -16,6 +16,7 @@ from __future__ import annotations
 from typing import Optional
 
 from ..confidence import ConfidencePurpose
+from ..models.boost import boost_offset_c_to_compat_factor
 from ..runtime.control import (
     ControlContext, ControlFeature, ControlledPrediction, ControlPolicy)
 from .contracts import (
@@ -81,14 +82,37 @@ class FinalResolver:
                 confidence=conf, clamp_applied=clamp))
             reason_codes.add(reason)
 
-        # ---- boost-offset (the setpoint-affecting feature in 19A; reduce-only) ----
+        # ---- boost-offset (full LE 2.0 authority for setpoint) ----
+        # Correctness invariant: final_setpoint = tpi_baseline_setpoint + le2_boost_offset.
+        # base.trv_setpoint_c is the TPI-computed baseline; dec.final_value is the additive
+        # offset. Never: target_c + boost (that would discard the TPI baseline entirely).
         boost = preds.get("boost_offset")
+        boost_ineligible_reason: Optional[str] = None
+        if lock is None and boost is not None and base.trv_setpoint_c is not None:
+            # Direct valve TRVs: heating authority is duty % alone; °C setpoint offset
+            # does not apply. Boost is trace-only for these devices.
+            if zin.tpi_valve_direct:
+                boost_ineligible_reason = "direct_valve_control"
+            elif base.target_c is None:
+                # No comfort target available: cannot determine deficit → block boost.
+                boost_ineligible_reason = "no_target"
+            elif zin.boost_eligible is False:
+                boost_ineligible_reason = "boost_not_eligible"
+            elif zin.early_cutoff_state in ("cutoff_applied", "coasting_hold"):
+                boost_ineligible_reason = "early_cutoff_hold"
+            elif (zin.temperature_gap_c is not None
+                  and zin.temperature_gap_c <= zin.boost_deficit_threshold_c):
+                boost_ineligible_reason = "deficit_too_small"
+
         if lock is not None:
             add("boost_offset", base.boost_offset_c, boost.value if boost else None,
                 base.boost_offset_c, False, lock, fb.value, None, 0.0)
-        elif boost is None or base.target_c is None:
+        elif boost is None or base.trv_setpoint_c is None:
             add("boost_offset", base.boost_offset_c, None, base.boost_offset_c, False,
                 "baseline", FallbackReason.NO_PREDICTION.value, None, 0.0)
+        elif boost_ineligible_reason is not None:
+            add("boost_offset", base.boost_offset_c, boost.value, base.boost_offset_c, False,
+                boost_ineligible_reason, FallbackReason.GUARD_BLOCKED.value, None, 0.0)
         else:
             cr = preds.confidence_results.get(ConfidencePurpose.BOOST.value)
             cp = (ControlledPrediction(_BOOST[0], boost.value, boost.unit, cr,
@@ -96,11 +120,14 @@ class FinalResolver:
                   if cr is not None else None)
             dec = self.policy.resolve(_BOOST[0], base.boost_offset_c, cp, context=ctx,
                                       unit=boost.unit)
-            # reduce-only safety in 19A
+            # Full LE 2.0 authority: apply when CONTROL mode and confidence gate passed.
+            # Both increases and decreases are allowed (no reduce-only constraint).
             apply = (mode is DecisionMode.CONTROL and dec.applied
-                     and dec.final_value is not None and dec.final_value < base.boost_offset_c)
+                     and dec.final_value is not None)
             if apply:
-                cand = base.target_c + dec.final_value
+                # TPI authority: boost is ADDITIVE on top of the TPI baseline setpoint.
+                # cand = tpi_baseline_setpoint + le2_boost_offset (never comfort_target + boost)
+                cand = base.trv_setpoint_c + dec.final_value
                 guard = self.guards.check_setpoint(baseline_sp, cand)
                 if guard.allowed:
                     final_sp = guard.final_value
@@ -160,6 +187,18 @@ class FinalResolver:
         _preheat_fallback = _preheat_status in ("deterministic_baseline", "low_confidence")
         _selected = _le2_total  # selected == le2 value (baseline already folded in by shadow)
 
+        # Boost trace fields: derive internal offset from final setpoint delta
+        _boost_entry = next((e for e in entries if e.feature == "boost_offset"), None)
+        _boost_offset_applied = (
+            _boost_entry.final_value if _boost_entry and _boost_entry.applied else None)
+        _boost_factor_compat = (
+            boost_offset_c_to_compat_factor(_boost_offset_applied)
+            if _boost_offset_applied is not None else None)
+        # TPI authority chain: explicitly typed fields for no-double-apply audit
+        _boost_rejection_reason = (
+            _boost_entry.reason if _boost_entry and not _boost_entry.applied else None)
+        _boost_requested_c = boost.value if boost is not None else None
+
         trace = DecisionTrace(
             zone_id=zin.zone_id, ts=zin.ts, mode=mode.value, decision_id=zin.decision_id,
             baseline_setpoint_c=baseline_sp, final_setpoint_c=command.trv_setpoint_c,
@@ -187,6 +226,12 @@ class FinalResolver:
             fallback_source=_preheat_status if _preheat_fallback else None,
             early_cutoff_contribution_c=_ec_contribution,
             preheat_fallback_used=_preheat_fallback,
+            boost_offset_c_applied=_boost_offset_applied,
+            boost_factor_compat=_boost_factor_compat,
+            tpi_duty_percent=base.duty_cycle,
+            tpi_baseline_setpoint_c=baseline_sp,
+            boost_offset_requested_c=_boost_requested_c,
+            boost_rejected_reason=_boost_rejection_reason,
         )
         dispatch = DispatchResult(
             zone_id=zin.zone_id, dispatched=applied_any and mode is DecisionMode.CONTROL,

@@ -29,9 +29,15 @@ class TestZoneRuntimeInput:
 
 
 class TestBaselineAdapter:
-    def test_boost_offset_derived(self):
-        base = baseline_from_recommendation("z", rec(target=21.0, setpoint=23.0))
-        assert base.boost_offset_c == 2.0
+    def test_boost_offset_from_rec_key(self):
+        # boost_offset_c is read directly from rec["boost_offset_c"] (coordinator sets this).
+        # No reconstruction from setpoint-target (that was removed: it conflated TPI with le2).
+        base = baseline_from_recommendation("z", rec(target=21.0, setpoint=23.0,
+                                                     boost_offset_c=2.0))
+        assert base.boost_offset_c == pytest.approx(2.0)
+        # Without boost_offset_c key: defaults to 0.0 (no active le2 boost)
+        base_fresh = baseline_from_recommendation("z", rec(target=21.0, setpoint=23.0))
+        assert base_fresh.boost_offset_c == pytest.approx(0.0)
 
     def test_no_negative_boost(self):
         base = baseline_from_recommendation("z", rec(target=21.0, setpoint=20.0))
@@ -46,8 +52,9 @@ class TestBaselineAdapter:
         assert base.active_control
 
     def test_reads_alternate_keys(self):
-        base = baseline_from_recommendation("z", {"adjusted_target": 20.0, "trv_setpoint": 21.0})
-        assert base.target_c == 20.0 and base.boost_offset_c == 1.0
+        base = baseline_from_recommendation("z", {"adjusted_target": 20.0, "trv_setpoint": 21.0,
+                                                  "boost_offset_c": 1.0})
+        assert base.target_c == pytest.approx(20.0) and base.boost_offset_c == pytest.approx(1.0)
 
 
 class TestLearningPredictionSet:

@@ -197,6 +197,14 @@ class ThermoSmartCoordinator(
         # Built pre-dispatch and completed post-dispatch; consumed by compute_decision_trace_safe().
         self._last_live_decision: object = None
 
+        # Coordinator-level decision identity (baseline, LE2-independent).
+        # Stable across cycles as long as the decision type and effective target don't
+        # change materially (> 0.05 °C); resets on Reload/Unload (correct: new session).
+        # Uses make_decision_id() from capture.py as the single ID authority.
+        self._coord_decision_id: object = None      # Optional[DecisionId]
+        self._coord_decision_target: object = None   # Optional[float]
+        self._coord_decision_type: object = None     # Optional[str]
+
         # TPI coef_int step-limiting state (transient, per zone, resets on restart).
         # _tpi_coef_int_smoothed: last used coef_int; initialized to deterministic default
         # so the first cycle starts from a known safe state regardless of LE2 predictions.
@@ -562,6 +570,51 @@ class ThermoSmartCoordinator(
 
     # ── Authoritative Live Decision Builder ──────────────────────────
 
+    def _get_coord_decision_id(self, recommendation, *, ts: str) -> object:
+        """Return a stable coordinator-level decision_id for the current cycle.
+
+        Uses the canonical ``make_decision_id()`` from the capture module — the same
+        function that LE2's CaptureCoordinator uses — so there is exactly one ID
+        authority.  The ID is stable across successive cycles as long as the decision
+        type and effective target don't change materially (>0.05 °C threshold mirrors
+        CaptureCoordinator._decision_changed).  It resets on Reload/Unload, which is
+        correct: a new HA session starts a new decision lineage.
+
+        When LE2 is present, enrich_live_decision_pre_dispatch() will replace this ID
+        with the LE2-generated one (which may be the same or a continuation).  Without
+        LE2, this ID is authoritative for the Record, Trace and any future Outcome binding.
+        """
+        try:
+            from .learning.runtime.capture import make_decision_id, DecisionType
+        except ImportError:
+            return None
+        target = recommendation.get("effective_target")
+        # Map coordinator state to DecisionType for ID stability domain
+        if recommendation.get("preheat_status") in ("heating", "preheating"):
+            dec_type = DecisionType.PREHEAT
+            dtype_str = "preheat"
+        elif recommendation.get("le2_boost_adjusted"):
+            dec_type = DecisionType.BOOST
+            dtype_str = "boost"
+        else:
+            dec_type = DecisionType.NORMAL
+            dtype_str = "normal"
+        target_f = float(target) if target is not None else None
+        # A new decision opens when type or target changes materially.
+        # For no-target decisions (summer, window-open, absence) the type change is enough.
+        type_changed = (dtype_str != self._coord_decision_type)
+        target_changed = (
+            self._coord_decision_id is None
+            or target_f is None
+            or self._coord_decision_target is None
+            or abs(target_f - self._coord_decision_target) > 0.05
+        )
+        if self._coord_decision_id is None or type_changed or target_changed:
+            self._coord_decision_id = make_decision_id(self.zone_id, dec_type, ts)
+            self._coord_decision_target = target_f
+            self._coord_decision_type = dtype_str
+        return self._coord_decision_id
+
     def _build_baseline_live_decision(self, recommendation, *, ts, mode_str):
         """Create authoritative LiveDecisionRecord from coordinator recommendation dict.
 
@@ -580,7 +633,7 @@ class ThermoSmartCoordinator(
             )
             _tpi_diag = recommendation.get("tpi_coef_diag") or {}
             return LiveDecisionRecord(
-                decision_id=None,           # enriched by shadow if available
+                decision_id=self._get_coord_decision_id(recommendation, ts=ts),
                 zone_id=self.zone_id,
                 ts=ts,
                 mode=mode_str,

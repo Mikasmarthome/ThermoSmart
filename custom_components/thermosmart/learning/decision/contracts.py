@@ -279,6 +279,7 @@ class DecisionTrace:
     final_device_setpoint_c: Optional[float] = None      # trv_setpoint after all authority
 
     def support_dict(self) -> dict:
+
         """Privacy-safe view: no entity names / internal ids."""
         return {
             "mode": self.mode,
@@ -337,3 +338,52 @@ class DecisionTrace:
                 for e in self.entries],
             "reason_codes": sorted(self.reason_codes), "schema_version": self.schema_version,
         }
+
+
+@dataclass(frozen=True)
+class LiveDecisionRecord:
+    """Authoritative record of one live coordinator decision cycle.
+
+    Built incrementally during the real coordinator path (pre- and post-dispatch)
+    via ``dataclasses.replace()``. ``DecisionTrace`` is derived from this record
+    by ``compute_decision_trace_safe()`` — the resolver is never re-run for
+    trace purposes.  ``decision_id`` links this record to any outcome captured
+    later in the same episode.
+    """
+    decision_id: Optional[str]
+    zone_id: str
+    ts: str                                     # ISO 8601 UTC — snapshot at decision time
+    mode: str                                   # "control" | "shadow"
+
+    # ── baseline (TPI output, before LE2 adjustment) ─────────────────────
+    baseline_setpoint_c: Optional[float]        # TPI setpoint before any LE2 boost
+    final_setpoint_c: Optional[float]           # recommendation["trv_setpoint"] after boost
+
+    # ── LE2 boost decision ────────────────────────────────────────────────
+    boost_applied: bool                         # True when LE2 boost was applied this cycle
+    boost_candidate_c: Optional[float]          # raw LE2 proposal (pre-guard), °C offset
+    boost_applied_c: Optional[float]            # offset actually applied (None = not applied)
+    boost_rejected_reason: Optional[str]        # gate that blocked boost; None = not in scope
+
+    # ── preheat ──────────────────────────────────────────────────────────
+    preheat_minutes: float                      # command_lead_time_min (A = onset + room)
+    preheat_status: Optional[str]               # "valid"|"valid_hl_prior"|"deterministic_baseline"…
+
+    # ── early cutoff ─────────────────────────────────────────────────────
+    early_cutoff_state: Optional[str]           # "cutoff_applied"|"coasting_hold"|"inactive"|None
+
+    # ── thermal rates (from TPI authority chain) ─────────────────────────
+    heat_rate_c_per_h: Optional[float]
+    heat_rate_confidence: Optional[float]
+    heat_rate_source: Optional[str]             # "learned"|"deterministic_baseline"|…
+    onset_delay_min: Optional[float]
+    onset_delay_source: Optional[str]           # "valid"|"cold_start_prior"|…
+
+    # ── dispatch result (completed after dispatch via dataclasses.replace()) ─
+    dispatch_attempted: bool = False
+    dispatch_path: Optional[str] = None         # "setpoint"|"direct_valve"|"none"
+    dispatch_setpoint_c: Optional[float] = None # coordinator-level setpoint (pre-per-entity-clamp)
+    dispatch_duty_pct: Optional[float] = None
+    dispatch_succeeded: bool = False            # True when dispatch awaited without exception
+    dispatch_failure_reason: Optional[str] = None  # repr(exc) if dispatch raised; None = success
+    dispatch_ts: Optional[str] = None

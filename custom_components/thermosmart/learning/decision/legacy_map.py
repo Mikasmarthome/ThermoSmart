@@ -64,7 +64,10 @@ LEGACY_INVENTORY: tuple[LegacyEntry, ...] = (
                 note="mirrored by decision.guards.GuardLayer + decision.device.DeviceAdapter"),
     LegacyEntry("dispatch_path", "trv_control._apply_temperature/_async_set_valve_percent",
                 Disposition.MOVE,
-                note="single path funnelled through decision.dispatch.SingleDispatcher"),
+                note="live HA dispatch remains in trv_control; SingleDispatcher is a "
+                     "shadow-only recorder with no sink — not the live dispatch boundary. "
+                     "Phase B1 introduced LiveDecisionRecord to bind provenance without "
+                     "routing dispatch through SingleDispatcher."),
     LegacyEntry("recommendation_dict", "coordinator._compute_recommendation", Disposition.MOVE,
                 note="adapted to ZoneRuntimeInput/ControllerBaselineDecision at the edge"),
 

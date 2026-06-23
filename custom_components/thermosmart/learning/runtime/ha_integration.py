@@ -451,7 +451,15 @@ class LearningShadowController:
         decreases). The existing TPI setpoint is the baseline; LE 2.0 may increase or
         reduce it, subject to confidence gate and device clamps. Never raises; a no-op
         in any non-CONTROL mode (SHADOW stays byte-identical).
+
+        Side-effects on ``recommendation`` (Phase B1 provenance tracking):
+          ``_boost_rejection_reason`` — gate that blocked boost, or None when applied.
+          ``_boost_candidate_c``     — raw LE2 °C proposal (pre-guard); None = no proposal.
+          ``_boost_applied_c``       — °C offset actually written; None when not applied.
         """
+        recommendation["_boost_rejection_reason"] = None
+        recommendation["_boost_candidate_c"] = None
+        recommendation["_boost_applied_c"] = None
         if not self.control_enabled:
             return
         try:
@@ -460,27 +468,33 @@ class LearningShadowController:
                 target = recommendation.get("adjusted_target")
             setpoint = recommendation.get("trv_setpoint")
             if target is None or setpoint is None:
+                recommendation["_boost_rejection_reason"] = "no_target"
                 return
             # Direct valve TRVs: setpoint is always target; heating authority is valve %.
             # An additive °C offset does not apply — skip boost authority for these.
             if recommendation.get("tpi_valve_direct"):
+                recommendation["_boost_rejection_reason"] = "direct_valve"
                 return
             # Block during safety conditions; release lifecycle if currently applied
             if recommendation.get("window_open"):
                 self._release_boost_lifecycle_safe("window_open")
+                recommendation["_boost_rejection_reason"] = "window_open"
                 return
             if recommendation.get("heating_failure"):
                 self._release_boost_lifecycle_safe("heating_failure")
+                recommendation["_boost_rejection_reason"] = "heating_failure"
                 return
             # Release on mode change (non-heating mode ends boost context)
             mode = recommendation.get("mode") or recommendation.get("hvac_mode")
             if mode is not None and str(mode).lower() not in ("heat", "auto", "heat_cool"):
                 self._release_boost_lifecycle_safe("mode_change")
+                recommendation["_boost_rejection_reason"] = "mode_change"
                 return
             # Hard release: manual override — user explicitly changed temperature during boost.
             # Outcome is marked as manually influenced; no automatic counter-correction against user.
             if recommendation.get("override_active"):
                 self._release_boost_lifecycle_safe("manual_override")
+                recommendation["_boost_rejection_reason"] = "manual_override"
                 return
             # Hard release: effective target changed — old episode no longer matches context.
             # Prevents carrying a stale boost offset into a new schedule slot or target.
@@ -489,6 +503,7 @@ class LearningShadowController:
                 if _bm_tc is not None and _bm_tc._state.lifecycle_base_target_c is not None:
                     if abs(float(_bm_tc._state.lifecycle_base_target_c) - float(target)) > 0.1:
                         self._release_boost_lifecycle_safe("target_change")
+                        recommendation["_boost_rejection_reason"] = "target_change"
                         return
             except Exception:
                 pass
@@ -508,6 +523,7 @@ class LearningShadowController:
                                 or self._last_comfort_time_utc is not None):
                             if self._last_comfort_time_utc != self._boost_applied_comfort_time_utc:
                                 self._release_boost_lifecycle_safe("schedule_change")
+                                recommendation["_boost_rejection_reason"] = "schedule_change"
                                 return
             except Exception:
                 pass
@@ -518,6 +534,7 @@ class LearningShadowController:
             early_cutoff_state = recommendation.get("early_cutoff_state")
             if early_cutoff_state in ("cutoff_applied", "coasting_hold"):
                 self._release_boost_lifecycle_safe("early_cutoff")
+                recommendation["_boost_rejection_reason"] = "early_cutoff"
                 return  # Hard release: no boost applied this cycle
             # Hard release: target already reached — no boost benefit remaining.
             # Coordinator key is "current_temp" (not "current_temperature")
@@ -526,6 +543,7 @@ class LearningShadowController:
                 try:
                     if float(current_temp) >= float(target):
                         self._release_boost_lifecycle_safe("target_reached")
+                        recommendation["_boost_rejection_reason"] = "target_reached"
                         return
                 except (TypeError, ValueError):
                     pass
@@ -549,6 +567,7 @@ class LearningShadowController:
                     })
                     _SOFT_DEESC = frozenset({"released_tpi_sufficient"})
                     if _slc in _HARD_DEESC:
+                        recommendation["_boost_rejection_reason"] = "deescalation_hard"
                         return  # hard: boost fully removed in this cycle, no step-down
                     if _slc in _SOFT_DEESC:
                         _cur_off = _bm_soft._state.applied_offset_c or 0.0
@@ -559,13 +578,17 @@ class LearningShadowController:
                             recommendation["tpi_baseline_setpoint"] = float(setpoint)
                             recommendation["trv_setpoint"] = round(
                                 float(setpoint) + _new_off, 4)
+                            recommendation["_boost_applied_c"] = _new_off
                             recommendation["le2_boost_adjusted"] = True
+                        else:
+                            recommendation["_boost_rejection_reason"] = "deescalation_soft"
                         return  # no further boost during soft deescalation
             except Exception as err:
                 self._record_error("soft_deescalation", err)
             # Cooldown guard: skip boost application during active cooldown period
             _model_cooldown = self._boost_model()
             if _model_cooldown is not None and _model_cooldown.cooldown_active(_utcnow_iso()):
+                recommendation["_boost_rejection_reason"] = "cooldown_active"
                 return
             # Baseline = currently applied le2 boost (not TPI offset reconstruction).
             # Anti-chatter compares against this: 0.0 when no boost active.
@@ -583,7 +606,9 @@ class LearningShadowController:
             boost_pred = zr.last_predictions.get(PredictionType.BOOST_FACTOR)
             proposed = boost_pred.values.get("boost_factor") if boost_pred else None
             if proposed is None:
+                recommendation["_boost_rejection_reason"] = "no_prediction"
                 return
+            recommendation["_boost_candidate_c"] = float(proposed)
             ctx = ControlContext(
                 window_open=bool(recommendation.get("window_open")),
                 heating_failure=bool(recommendation.get("heating_failure")),
@@ -623,35 +648,235 @@ class LearningShadowController:
                     recommendation["tpi_baseline_setpoint"] = float(setpoint)
                     recommendation["trv_setpoint"] = round(
                         float(setpoint) + decision.final_value, 4)
+                    recommendation["_boost_applied_c"] = decision.final_value
                     recommendation["le2_boost_adjusted"] = True
+                else:
+                    recommendation["_boost_rejection_reason"] = "lifecycle_blocked"
+            else:
+                recommendation["_boost_rejection_reason"] = "guard_rejected"
         except Exception as err:
             self._record_error("control", err)
 
+    def build_live_decision_pre_dispatch(
+        self,
+        recommendation: Mapping[str, Any],
+        *,
+        ts: Optional[str] = None,
+    ) -> Optional[Any]:
+        """Create pre-dispatch LiveDecisionRecord from the current recommendation.
+
+        Called after ``adjust_recommendation_safe()`` but before actual HA dispatch.
+        Returns an immutable record; the caller must add dispatch fields via
+        ``dataclasses.replace()`` after dispatch and then pass the completed record
+        to ``compute_decision_trace_safe()``.  Returns None if the shadow is disabled
+        or an internal error occurs — never raises.
+        """
+        if not self._enabled:
+            return None
+        try:
+            from ..decision.contracts import LiveDecisionRecord
+            from ..contracts import PredictionType as _PT
+            zr = self._runtime._zone(self._zone)
+            decision_id = getattr(zr, "last_decision_id", None)
+            _tpi_diag = recommendation.get("tpi_coef_diag") or {}
+            boost_applied = bool(recommendation.get("le2_boost_adjusted"))
+            baseline_sp = (
+                recommendation.get("tpi_baseline_setpoint")
+                if boost_applied
+                else recommendation.get("trv_setpoint")
+            )
+            mode_str = "control" if self._runtime.control_enabled else "shadow"
+            # Onset delay — read from current predictions (same source as resolver path)
+            onset_delay_min: Optional[float] = None
+            onset_delay_source: Optional[str] = None
+            try:
+                _last_preds = getattr(zr, "last_predictions", {}) or {}
+                _od_pred = _last_preds.get(_PT.ONSET_DELAY)
+                if _od_pred is not None:
+                    _od_fb = getattr(_od_pred, "fallback_used", True)
+                    _od_conf = float(getattr(_od_pred, "confidence", 0.0) or 0.0)
+                    if not _od_fb and _od_conf >= self._PREHEAT_MIN_CONFIDENCE:
+                        onset_delay_min = float(
+                            _od_pred.values.get("onset_delay_minutes", 0.0) or 0.0)
+                        onset_delay_source = "valid"
+                    else:
+                        onset_delay_min = self._ONSET_DELAY_PRIOR_MIN
+                        onset_delay_source = "cold_start_prior"
+            except Exception:
+                pass
+            return LiveDecisionRecord(
+                decision_id=decision_id,
+                zone_id=self._zone,
+                ts=ts or _utcnow_iso(),
+                mode=mode_str,
+                baseline_setpoint_c=(float(baseline_sp) if baseline_sp is not None else None),
+                final_setpoint_c=(float(recommendation["trv_setpoint"])
+                                  if recommendation.get("trv_setpoint") is not None else None),
+                boost_applied=boost_applied,
+                boost_candidate_c=(float(recommendation["_boost_candidate_c"])
+                                   if recommendation.get("_boost_candidate_c") is not None
+                                   else None),
+                boost_applied_c=(float(recommendation["_boost_applied_c"])
+                                 if recommendation.get("_boost_applied_c") is not None
+                                 else None),
+                boost_rejected_reason=recommendation.get("_boost_rejection_reason"),
+                preheat_minutes=float(recommendation.get("preheat_minutes") or 0.0),
+                preheat_status=recommendation.get("preheat_status"),
+                early_cutoff_state=recommendation.get("early_cutoff_state"),
+                heat_rate_c_per_h=_tpi_diag.get("heat_rate_c_per_h"),
+                heat_rate_confidence=_tpi_diag.get("hr_confidence"),
+                heat_rate_source=recommendation.get("tpi_coef_source"),
+                onset_delay_min=onset_delay_min,
+                onset_delay_source=onset_delay_source,
+            )
+        except Exception as err:
+            self._record_error("live_decision_record", err)
+            return None
+
+    def _build_trace_from_live_record(
+        self,
+        record: Any,
+        recommendation: Mapping[str, Any],
+        *,
+        ts: Optional[str] = None,
+    ) -> Any:
+        """Derive DecisionTrace from the authoritative live record — no resolver re-run."""
+        from ..decision.contracts import (
+            DecisionTrace, DecisionTraceEntry,
+            DecisionReason, FallbackReason, DecisionMode,
+        )
+
+        boost_applied = record.boost_applied
+        boost_applied_c = record.boost_applied_c or 0.0
+        boost_candidate = record.boost_candidate_c
+        boost_rejected = record.boost_rejected_reason
+
+        boost_entry = DecisionTraceEntry(
+            feature="boost_offset",
+            baseline_value=0.0,
+            le2_value=boost_candidate,
+            final_value=boost_applied_c if boost_applied else 0.0,
+            applied=boost_applied,
+            reason=(DecisionReason.LE2_APPLIED.value if boost_applied
+                    else (boost_rejected or DecisionReason.BASELINE.value)),
+            fallback_reason=(FallbackReason.NONE.value if boost_applied
+                             else FallbackReason.GUARD_BLOCKED.value),
+            confidence=None,
+            clamp_applied=0.0,
+        )
+
+        preheat_min = record.preheat_minutes
+        preheat_status = record.preheat_status
+        preheat_is_le2 = preheat_status in ("valid", "valid_hl_prior")
+        preheat_entry = DecisionTraceEntry(
+            feature="preheat_start",
+            baseline_value=recommendation.get("preheat_baseline_minutes"),
+            le2_value=preheat_min if preheat_is_le2 else None,
+            final_value=preheat_min,
+            applied=preheat_min > 0.0,
+            reason=("le2_applied" if preheat_is_le2 else "deterministic_baseline"),
+            fallback_reason=("none" if preheat_is_le2 else "shadow_mode"),
+            confidence=record.heat_rate_confidence,
+            clamp_applied=0.0,
+        )
+
+        ec_state = record.early_cutoff_state
+        ec_active = ec_state in ("cutoff_applied", "coasting_hold")
+        ec_contribution = recommendation.get("early_cutoff_contribution_c")
+        ec_entry = DecisionTraceEntry(
+            feature="early_cutoff",
+            baseline_value=None,
+            le2_value=ec_contribution,
+            final_value=ec_contribution if ec_active else None,
+            applied=ec_active,
+            reason=("le2_applied" if ec_active else DecisionReason.BASELINE.value),
+            fallback_reason=(FallbackReason.NONE.value if ec_active
+                             else FallbackReason.GUARD_BLOCKED.value),
+            confidence=None,
+            clamp_applied=0.0,
+        )
+
+        reason_codes: list[str] = []
+        if boost_applied:
+            reason_codes.append(DecisionReason.LE2_APPLIED.value)
+        if boost_rejected:
+            reason_codes.append(boost_rejected)
+        if not boost_applied and not boost_rejected:
+            reason_codes.append(DecisionReason.BASELINE.value)
+
+        mode_str = (DecisionMode.CONTROL.value if self._runtime.control_enabled
+                    else DecisionMode.SHADOW.value)
+
+        onset_delay = record.onset_delay_min
+        room_heat_dur: Optional[float] = None
+        if onset_delay is not None:
+            room_heat_dur = max(0.0, preheat_min - onset_delay)
+
+        return DecisionTrace(
+            zone_id=record.zone_id,
+            ts=ts or record.ts,
+            mode=mode_str,
+            decision_id=record.decision_id,
+            baseline_setpoint_c=record.baseline_setpoint_c,
+            final_setpoint_c=record.final_setpoint_c,
+            applied_any=boost_applied or ec_active,
+            entries=(boost_entry, preheat_entry, ec_entry),
+            reason_codes=tuple(sorted(set(reason_codes))),
+            preheat_minutes_le2=preheat_min if preheat_is_le2 else None,
+            preheat_status=preheat_status,
+            preheat_baseline_minutes=recommendation.get("preheat_baseline_minutes"),
+            selected_preheat_min=preheat_min,
+            heat_rate_c_per_h=record.heat_rate_c_per_h,
+            heat_rate_confidence=record.heat_rate_confidence,
+            heat_rate_status=record.heat_rate_source,
+            effective_onset_delay_min=onset_delay or 0.0,
+            onset_delay_source=record.onset_delay_source,
+            onset_delay_status=record.onset_delay_source,
+            effective_room_heating_duration_min=room_heat_dur,
+            preheat_command_lead_time_min=preheat_min,
+            early_cutoff_state=ec_state,
+            early_cutoff_hold_active=ec_active,
+            boost_offset_c_applied=boost_applied_c if boost_applied else None,
+            boost_offset_requested_c=boost_candidate,
+            boost_rejected_reason=boost_rejected,
+            final_device_setpoint_c=(record.dispatch_setpoint_c
+                                      if record.dispatch_setpoint_c is not None
+                                      else record.final_setpoint_c),
+        )
+
     def compute_decision_trace_safe(self, recommendation: Mapping[str, Any], *,
                                     active_control: bool = False,
-                                    ts: Optional[str] = None) -> None:
-        """Run the full decision pipeline read-only for this real cycle.
+                                    ts: Optional[str] = None,
+                                    live_record: Optional[Any] = None) -> None:
+        """Produce a DecisionTrace for this coordinator cycle.
 
-        Builds the real ZoneRuntimeInput + ControllerBaselineDecision + LE-2.0
-        LearningPredictionSet and runs the FinalResolver/GuardLayer/DeviceAdapter to
-        produce a DecisionTrace. The pipeline has NO dispatch sink, so it never sends
-        a command — the existing coordinator dispatch stays the only real path and
-        SHADOW remains byte-identical. Never raises into the heating cycle.
+        When ``live_record`` (a ``LiveDecisionRecord``) is provided, the trace is
+        derived directly from the authoritative live path without re-running the
+        resolver.  When omitted, the full pipeline is re-run for backward
+        compatibility (test-only path). Never raises into the heating cycle.
         """
         if not self._enabled:
             return
         try:
-            zr = self._runtime._zone(self._zone)
-            preds = build_learning_prediction_set(
-                self._zone, getattr(zr, "last_predictions", {}) or {},
-                getattr(zr, "last_confidence", {}) or {},
-                decision_id=getattr(zr, "last_decision_id", None))
-            mode = (DecisionMode.CONTROL if self._runtime.control_enabled
-                    else DecisionMode.SHADOW)
-            trace, _ = self._pipeline.run(
-                self._zone, ts or _utcnow_iso(), recommendation, preds, mode=mode,
-                active_control=active_control,
-                decision_id=getattr(zr, "last_decision_id", None))
+            if live_record is not None:
+                trace = self._build_trace_from_live_record(
+                    live_record, recommendation, ts=ts or _utcnow_iso())
+            else:
+                # LEGACY / TEST-ONLY: backward-compat path for unit tests that call
+                # compute_decision_trace_safe() without a live_record.  The production
+                # coordinator always provides live_record; this branch must never run
+                # in a live coordinator cycle (enforced by test_production_live_record_always_provided).
+                zr = self._runtime._zone(self._zone)
+                preds = build_learning_prediction_set(
+                    self._zone, getattr(zr, "last_predictions", {}) or {},
+                    getattr(zr, "last_confidence", {}) or {},
+                    decision_id=getattr(zr, "last_decision_id", None))
+                mode = (DecisionMode.CONTROL if self._runtime.control_enabled
+                        else DecisionMode.SHADOW)
+                trace, _ = self._pipeline.run(
+                    self._zone, ts or _utcnow_iso(), recommendation, preds, mode=mode,
+                    active_control=active_control,
+                    decision_id=getattr(zr, "last_decision_id", None))
             trace_dict = trace.support_dict()
             # Enrich trace with TPI authority chain fields (for audit/debug)
             # These allow verification that LE 2.0 setpoint and TPI baseline are not mixed.
@@ -659,6 +884,8 @@ class LearningShadowController:
             # Falls back to trv_setpoint in shadow mode (no boost → not overwritten).
             _tpi_diag = recommendation.get("tpi_coef_diag") or {}
             trace_dict.update({
+                # decision_id: links this trace to the lifecycle capture and any outcome record.
+                "decision_id": trace.decision_id,
                 "comfort_target_c": recommendation.get("effective_target"),
                 "tpi_duty_c": recommendation.get("tpi_duty_cycle"),
                 "tpi_baseline_setpoint_c": (recommendation.get("tpi_baseline_setpoint")
@@ -811,6 +1038,15 @@ class LearningShadowController:
             self._last_trace = trace_dict
         except Exception as err:
             self._record_error("decision_trace", err)
+
+    def clear_last_trace(self) -> None:
+        """Clear the cached decision trace.
+
+        Called by the coordinator when no authoritative live record is available
+        for this cycle — prevents a stale trace from a prior cycle being read as
+        current-cycle provenance.
+        """
+        self._last_trace = None
 
     @property
     def last_decision_trace(self) -> Optional[dict]:

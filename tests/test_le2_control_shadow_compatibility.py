@@ -1,4 +1,4 @@
-"""Phase 18 shadow compatibility: SHADOW behaves exactly as before Phase 18."""
+﻿"""Phase 18 shadow compatibility: SHADOW behaves exactly as before Phase 18."""
 from __future__ import annotations
 
 import pytest
@@ -8,7 +8,12 @@ from tests.helpers_ha_runtime import attach_shadow, make_recording_coordinator
 # Shadow-diagnostic status fields that legitimately differ when a shadow is attached:
 # "not_available" (no shadow) vs "missing" (shadow present, prediction not yet produced)
 # are both valid no-cutoff states; only the CONTROL output must be identical.
-_SHADOW_STATUS_KEYS = frozenset({"early_cutoff_status", "early_cutoff_state", "forecast_trust_status", "preheat_status"})
+_SHADOW_STATUS_KEYS = frozenset({
+    "early_cutoff_status", "early_cutoff_state", "forecast_trust_status", "preheat_status",
+    # Phase 19D: HeatLoss source diagnostic fields differ between shadow / no-shadow.
+    "tpi_coef_source", "tpi_hl_rate",
+    "tpi_coef_int", "tpi_coef_ext", "tpi_coef_diag",
+})
 
 
 def _zone_control_equal(a: dict, b: dict) -> bool:
@@ -50,3 +55,4 @@ class TestShadowCompatibility:
         await sh.async_setup()
         result = await coord._async_update_data()
         assert "le2_boost_adjusted" not in result["zone"]
+

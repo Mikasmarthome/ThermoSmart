@@ -428,9 +428,10 @@ class LearningEngine:
                 # unrealistisch für ein Gebäude; Ausreißer durch Sensor-Fehler abfangen
                 if raw_cool <= 0.5:
                     cool_rate = round(raw_cool, 5)
-                    # EMA der Wärmeverlustrate aktualisieren (α=0.15 – träge, stabil)
-                    prev_ema = self._heat_loss_ema.get(zone_id, cool_rate)
-                    self._heat_loss_ema[zone_id] = round(0.15 * cool_rate + 0.85 * prev_ema, 6)
+                    # Phase 19D: _heat_loss_ema mutations silenced.
+                    # LE2 HeatLossModel (PassiveCoolingEpisode) is now the sole
+                    # authority for heat loss. The EMA dict is retained read-only
+                    # for backward-compat display; no new values are written here.
         if is_cooling:
             self._last_idle_temp[zone_id] = (now, current_temp)
         else:

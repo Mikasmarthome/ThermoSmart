@@ -1,4 +1,4 @@
-"""Phase 19A (extended): real live-integration of the decision pipeline in the coordinator.
+﻿"""Phase 19A (extended): real live-integration of the decision pipeline in the coordinator.
 
 The decision pipeline runs read-only in every real cycle; SHADOW stays byte-identical
 and there is exactly one dispatch path (the existing coordinator).
@@ -17,7 +17,12 @@ import pytest
 from custom_components.thermosmart.learning.runtime import LearningRuntimeMode
 from tests.helpers_ha_runtime import attach_shadow, make_recording_coordinator
 
-_SHADOW_STATUS_KEYS = frozenset({"early_cutoff_status", "early_cutoff_state", "forecast_trust_status", "preheat_status"})
+_SHADOW_STATUS_KEYS = frozenset({
+    "early_cutoff_status", "early_cutoff_state", "forecast_trust_status", "preheat_status",
+    # Phase 19D: HeatLoss source diagnostic fields differ between shadow / no-shadow.
+    "tpi_coef_source", "tpi_hl_rate",
+    "tpi_coef_int", "tpi_coef_ext", "tpi_coef_diag",
+})
 
 
 def _zone_control_equal(a: dict, b: dict) -> bool:
@@ -107,3 +112,4 @@ class TestControlReachable:
         coord2, sh2 = await _coord(indoor="18.0", active=True, control=False)
         await coord2._async_update_data()
         assert sh2.last_decision_trace["mode"] == "shadow" and not sh2.control_enabled
+

@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import math
 from typing import Any, Mapping, Optional
 
 from ...const import TPI_MAX_BOOST_CELSIUS
@@ -656,12 +657,42 @@ class LearningShadowController:
             # These allow verification that LE 2.0 setpoint and TPI baseline are not mixed.
             # tpi_baseline_setpoint_c: written by adjust_recommendation_safe before boost.
             # Falls back to trv_setpoint in shadow mode (no boost → not overwritten).
+            _tpi_diag = recommendation.get("tpi_coef_diag") or {}
             trace_dict.update({
                 "comfort_target_c": recommendation.get("effective_target"),
                 "tpi_duty_c": recommendation.get("tpi_duty_cycle"),
                 "tpi_baseline_setpoint_c": (recommendation.get("tpi_baseline_setpoint")
                                             or recommendation.get("trv_setpoint")),
                 "tpi_valve_direct": bool(recommendation.get("tpi_valve_direct", False)),
+                # HeatLoss authority trace (Phase 19D — Variante B bounded adaptive heuristic)
+                "tpi_coef_source": recommendation.get("tpi_coef_source"),
+                # Coefficient authority chain: default → learned → blend → used
+                "tpi_coef_int_default": _tpi_diag.get("coef_int_default"),
+                "tpi_coef_int_learned": _tpi_diag.get("coef_int_learned"),
+                "tpi_coef_blend_weight": _tpi_diag.get("blend_weight"),
+                "tpi_coef_int_used": recommendation.get("tpi_coef_int"),
+                "tpi_coef_ext_used": recommendation.get("tpi_coef_ext"),
+                # Prediction values feeding the ratio
+                "heat_rate_prediction_c_per_h": _tpi_diag.get("heat_rate_c_per_h"),
+                "heat_loss_prediction_c_per_h": recommendation.get("tpi_hl_rate"),
+                "heat_rate_confidence": _tpi_diag.get("hr_confidence"),
+                "heat_loss_confidence": _tpi_diag.get("hl_confidence"),
+                # Outdoor/context availability
+                "tpi_outdoor_context_available": _tpi_diag.get("outdoor_context_available"),
+                "tpi_relative_only": _tpi_diag.get("relative_only"),
+                # Backward-compat alias (used by parity tests)
+                "tpi_heat_loss_prediction_c_per_h": recommendation.get("tpi_hl_rate"),
+                # Step-limiting transition audit fields (Phase 19D)
+                "tpi_coef_int_candidate": _tpi_diag.get("coef_int_candidate"),
+                "tpi_coef_int_previous": _tpi_diag.get("coef_int_previous"),
+                "tpi_coef_transition_applied": _tpi_diag.get("transition_applied"),
+                "tpi_coef_transition_reason": _tpi_diag.get("transition_reason"),
+                "tpi_coef_max_step_up": _tpi_diag.get("coef_int_max_step_up"),
+                "tpi_coef_max_step_down": _tpi_diag.get("coef_int_max_step_down"),
+                # Duty-level transition audit
+                "tpi_duty_previous": _tpi_diag.get("duty_previous"),
+                "tpi_duty_candidate": _tpi_diag.get("duty_candidate"),
+                "tpi_duty_used": _tpi_diag.get("duty_used"),
             })
             # Enrich trace with lifecycle diagnostics from BoostModel (not available in resolver)
             try:
@@ -1211,6 +1242,186 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("heat_loss_rate_read", err)
         return 0.0, "not_available"
+
+    # Confidence thresholds for the coef_int blend ramp:
+    #   BLEND_MIN  = gate-6 threshold (blend weight = 0 → fully default)
+    #   BLEND_FULL = confidence at which blend weight reaches 1 → fully learned
+    _BLEND_FULL_CONFIDENCE: float = 0.80
+    # Max blend weight when HeatLoss has no outdoor context (relative_only).
+    # Without outdoor context the general rate averages all episodes across ΔT — it may
+    # understate losses in cold weather and overstate them in mild weather.  Capping the
+    # blend at 0.5 ensures the default coef_int always contributes at least 50 %.
+    _BLEND_WEIGHT_RELATIVE_ONLY_CAP: float = 0.50
+
+    def read_tpi_coefficients_safe(self) -> tuple:
+        """Return LE2-derived TPI coefficients with blend diagnostics (5-tuple).
+
+        Returns (coef_int_used, coef_ext, heat_loss_pred_or_none, status, diag) where:
+          coef_int_used  — blended coef_int applied to compute_tpi()
+          coef_ext       — TPI_COEF_EXT_DEFAULT (always static)
+          heat_loss_pred — learned rate in °C/h, or None for all non-"valid_le2" statuses
+          status         — gate result string (see below)
+          diag           — dict with fields for trace/audit (never raises)
+
+        Classification: Variante B — Bounded Adaptive Heuristic
+        -------------------------------------------------------
+        coef_int is derived as heat_loss_rate / heat_rate.  This is NOT a rigorous
+        derivation of a proportional control gain from first principles.
+
+        The steady-state analysis shows: to hold the room at target against a passive
+        cooling rate of heat_loss_rate, the required duty is heat_loss_rate / heat_rate.
+        Using this as coef_int implies "the duty needed per °C error scales with the
+        same ratio as steady-state maintenance duty."  This is directionally correct —
+        lossier rooms need more aggressive control — but conflates the steady-state
+        operating point with the error-correction gain.  The two are related but not
+        identical.
+
+        Safeguards that make Variante B acceptable:
+          - coef_int is clamped to [0.15, 1.2] (estimate_coefficients)
+          - only applied when both models exceed confidence 0.35
+          - linearly blended with TPI_COEF_INT_DEFAULT over confidence [0.35 → 0.80]
+          - blend is capped at 0.50 when HeatLoss has no outdoor context (relative_only)
+          - reverts to deterministic defaults on stale / invalid / error
+
+        HeatLoss outdoor context
+        ------------------------
+        HEAT_LOSS_RATE may be learned from episodes at varying outdoor temperatures.
+        When no outdoor sensor is available (relative_only = True in reason_codes),
+        the general bucket averages episodes across all observed ΔT.  This rate is a
+        valid local observation but may not generalize to the current outdoor condition.
+        The blend cap (_BLEND_WEIGHT_RELATIVE_ONLY_CAP) limits TPI influence of
+        context-unaware heat loss estimates.
+
+        Physical units
+        --------------
+        heat_rate      [°C/h] — UNIT_C_PER_H, verified by Gate 4
+        heat_loss_rate [°C/h] — UNIT_C_PER_H, verified by Gate 4
+        coef_int       [dimensionless = °C/h / °C/h], acts as 1/°C in TPI formula
+        coef_ext       [dimensionless], static TPI_COEF_EXT_DEFAULT
+
+        coef_ext rationale (Variante A, static)
+        ----------------------------------------
+        HEAT_LOSS_RATE is not normalised by the indoor-outdoor delta at episode time.
+        Deriving coef_ext = coef_int / 50 and then multiplying by (target − outdoor_now)
+        would implicitly double-scale the outdoor effect.  The static default avoids this.
+        For TRV-only setups without an outdoor sensor, compute_tpi() skips the ext term.
+
+        Validity gates (sequential; first failure returns deterministic defaults + diag):
+          1. shadow enabled                          → le2_disabled
+          2. both predictions present                → prediction_missing
+          3. neither prediction has fallback_used    → cold_start
+          4. UNIT_C_PER_H for both quantities        → invalid_unit
+          5. no "stale"/"superseded" in warnings     → stale_or_superseded
+          6. min(hr_conf, hl_conf) >= 0.35           → low_confidence
+          7. both rates finite and > 0               → invalid_value
+
+        After all gates pass, coef_int_used is computed as:
+          blend       = clamp((conf − 0.35) / (0.80 − 0.35), 0, 1)
+          [if relative_only: blend = min(blend, 0.50)]
+          coef_int_used = blend × coef_int_raw + (1 − blend) × TPI_COEF_INT_DEFAULT
+
+        status values:
+          "valid_le2"           — all gates passed; coef_int is LE2-adaptive (possibly blended)
+          "prediction_missing"  — one or both predictions absent (gate 2)
+          "cold_start"          — fallback_used == True; prior-based, not learned (gate 3)
+          "invalid_unit"        — unit is not UNIT_C_PER_H (gate 4)
+          "stale_or_superseded" — stale or superseded warning present (gate 5)
+          "low_confidence"      — confidence below 0.35 (gate 6)
+          "invalid_value"       — rate ≤ 0 or non-finite (gate 7)
+          "le2_disabled"        — shadow disabled
+          "not_available"       — unexpected runtime error
+
+        Never reads LE v1 _heat_loss_ema.
+        """
+        from ...const import TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, UNIT_C_PER_H
+        _default_diag: dict = {
+            "coef_int_default": TPI_COEF_INT_DEFAULT,
+            "coef_int_candidate": TPI_COEF_INT_DEFAULT,  # gate failures: candidate = default
+            "coef_int_learned": None, "blend_weight": 0.0,
+            "relative_only": False, "outdoor_context_available": False,
+            "heat_rate_c_per_h": None, "heat_loss_c_per_h": None,
+            "hr_confidence": None, "hl_confidence": None,
+        }
+        if not self._enabled:
+            return TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None, "le2_disabled", _default_diag
+        try:
+            from ..contracts import PredictionType
+            zr = self._runtime._zone(self._zone)
+            preds = getattr(zr, "last_predictions", {}) or {}
+            hr_pred = preds.get(PredictionType.HEAT_RATE)
+            hl_pred = preds.get(PredictionType.HEAT_LOSS_RATE)
+            # Gate 2: both predictions present
+            if hr_pred is None or hl_pred is None:
+                return (TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None,
+                        "prediction_missing", _default_diag)
+            # Gate 3: not a fallback/cold-start prior
+            if getattr(hr_pred, "fallback_used", True) or getattr(hl_pred, "fallback_used", True):
+                return (TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None,
+                        "cold_start", _default_diag)
+            # Gate 4: unit must be exactly UNIT_C_PER_H (central contract)
+            _hr_units = getattr(hr_pred, "units", {}) or {}
+            _hl_units = getattr(hl_pred, "units", {}) or {}
+            if _hr_units.get("heat_rate") != UNIT_C_PER_H \
+                    or _hl_units.get("heat_loss_rate") != UNIT_C_PER_H:
+                return (TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None,
+                        "invalid_unit", _default_diag)
+            # Gate 5: not stale or superseded
+            _hr_warns = getattr(hr_pred, "warnings", ()) or ()
+            _hl_warns = getattr(hl_pred, "warnings", ()) or ()
+            if ("stale" in _hr_warns or "superseded" in _hr_warns
+                    or "stale" in _hl_warns or "superseded" in _hl_warns):
+                return (TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None,
+                        "stale_or_superseded", _default_diag)
+            # Gate 6: confidence above threshold (min of both)
+            hr_conf = float(getattr(hr_pred, "confidence", 0.0) or 0.0)
+            hl_conf = float(getattr(hl_pred, "confidence", 0.0) or 0.0)
+            conf = min(hr_conf, hl_conf)
+            if conf < self._PREHEAT_MIN_CONFIDENCE:
+                return (TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None,
+                        "low_confidence", {**_default_diag, "hr_confidence": hr_conf,
+                                           "hl_confidence": hl_conf})
+            # Gate 7: physically plausible, finite rates (nan/inf bypass <= 0 in Python)
+            heat_rate = float(hr_pred.values.get("heat_rate", 0.0) or 0.0)
+            heat_loss = float(hl_pred.values.get("heat_loss_rate", 0.0) or 0.0)
+            if not (math.isfinite(heat_rate) and heat_rate > 0
+                    and math.isfinite(heat_loss) and heat_loss > 0):
+                return (TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None,
+                        "invalid_value", {**_default_diag, "hr_confidence": hr_conf,
+                                          "hl_confidence": hl_conf,
+                                          "heat_rate_c_per_h": heat_rate,
+                                          "heat_loss_c_per_h": heat_loss})
+            # Outdoor context: HeatLoss learned without outdoor sensor cannot claim
+            # full authority because the general rate mixes all episode ΔT values.
+            _hl_reasons = getattr(hl_pred, "reason_codes", ()) or ()
+            relative_only = "relative_only" in _hl_reasons \
+                or "outdoor_temp" in (getattr(hl_pred, "missing_evidence", ()) or ())
+            # Blend: linearly ramp from 0 (at gate-6 threshold) to 1 (at full confidence).
+            # This prevents abrupt step change from default→learned at the threshold.
+            blend = max(0.0, min(1.0,
+                (conf - self._PREHEAT_MIN_CONFIDENCE)
+                / max(0.001, self._BLEND_FULL_CONFIDENCE - self._PREHEAT_MIN_CONFIDENCE)))
+            if relative_only:
+                blend = min(blend, self._BLEND_WEIGHT_RELATIVE_ONLY_CAP)
+            from ...tpi import estimate_coefficients
+            coef_int_raw, _ = estimate_coefficients(heat_rate, heat_loss)
+            coef_int_used = blend * coef_int_raw + (1.0 - blend) * TPI_COEF_INT_DEFAULT
+            coef_ext = TPI_COEF_EXT_DEFAULT
+            diag: dict = {
+                "coef_int_default": TPI_COEF_INT_DEFAULT,
+                "coef_int_candidate": round(coef_int_used, 4),  # blended; before coordinator smoothing
+                "coef_int_learned": round(coef_int_raw, 4),
+                "blend_weight": round(blend, 4),
+                "relative_only": relative_only,
+                "outdoor_context_available": not relative_only,
+                "heat_rate_c_per_h": round(heat_rate, 4),
+                "heat_loss_c_per_h": round(heat_loss, 4),
+                "hr_confidence": round(hr_conf, 4),
+                "hl_confidence": round(hl_conf, 4),
+            }
+            return coef_int_used, coef_ext, round(heat_loss, 4), "valid_le2", diag
+        except Exception as err:
+            self._record_error("tpi_coefficients_read", err)
+        return TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None, "not_available", _default_diag
 
     async def async_save_if_due(self) -> None:
         if not self._enabled:

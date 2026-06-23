@@ -44,6 +44,8 @@ from .const import (
     HEATING_FAILURE_SLOPE_THRESH,
     HEATING_FAILURE_CMD_DELTA,
     TPI_MAX_BOOST_CELSIUS,
+    TPI_COEF_INT_DEFAULT,
+    TPI_COEF_EXT_DEFAULT,
 )
 from .device_profiles import DeviceProfile
 from .weather_engine import WeatherEngine
@@ -63,6 +65,17 @@ _VALVE_RESET_MAX_ATTEMPTS = 3
 _FORECAST_BIAS_MIN_TRUST = 0.35        # minimum trust to apply the °C bias correction
 _FORECAST_BIAS_MIN_APPLY_C = 0.05     # noise floor – ignore sub-threshold corrections
 _FORECAST_BIAS_CORRECTION_MAX_C = 2.0  # hard cap matching ForecastParameters.bias_correction_max_c
+
+# TPI coef_int step-limiting (Phase 19D) — max change per coordinator cycle (~5 min).
+# Derivation: at max 3 °C deficit, 0.10 step → 30 % duty change per cycle.  The
+# full default→learned transition (|0.60 − 0.20| = 0.40) takes 4 cycles ≈ 20 min,
+# which is well within a room's thermal time constant (30-120 min).
+# Symmetric up/down: stepping up (more heating) is equally rate-limited to prevent
+# abrupt duty increases on stale→valid recovery.
+_TPI_COEF_INT_MAX_STEP_UP: float = 0.10
+_TPI_COEF_INT_MAX_STEP_DOWN: float = 0.10
+_TPI_COEF_INT_CLAMP_MIN: float = 0.15   # mirrors estimate_coefficients lower bound
+_TPI_COEF_INT_CLAMP_MAX: float = 1.2    # mirrors estimate_coefficients upper bound
 
 # LE 2.0 early cutoff application gates
 _EARLY_CUTOFF_MIN_RESIDUAL_C = 0.15   # noise floor for residual rise (below → no cutoff)
@@ -179,6 +192,13 @@ class ThermoSmartCoordinator(
 
         # LE 2.0 passive shadow controller (attached at setup; never controls)
         self._le2_shadow = None
+
+        # TPI coef_int step-limiting state (transient, per zone, resets on restart).
+        # _tpi_coef_int_smoothed: last used coef_int; initialized to deterministic default
+        # so the first cycle starts from a known safe state regardless of LE2 predictions.
+        # _tpi_duty_previous: last duty cycle for trace/audit (None before first cycle).
+        self._tpi_coef_int_smoothed: float = TPI_COEF_INT_DEFAULT
+        self._tpi_duty_previous: float | None = None
 
         # LE 2.0 Early Cutoff hold state (transient, never persisted; safe on HA restart)
         # Once early cutoff is applied, the hold maintains the reduced effective_target
@@ -617,10 +637,64 @@ class ThermoSmartCoordinator(
             target = recommendation.get("effective_target")
             current_temp = recommendation.get("current_temp")
             if target is not None:
-                # TPI-Koeffizienten aus Lerndaten ableiten
-                coef_int, coef_ext = self.learning_engine.get_tpi_coefficients(
-                    self.zone_id, weather_data
-                )
+                # TPI-Koeffizienten: LE 2.0 authoritative (Phase 19D).
+                # LE v1 path (learning_engine.get_tpi_coefficients) is kept only as
+                # emergency fallback when the LE2 shadow is not yet attached.
+                if self._le2_shadow is not None:
+                    # LE 2.0 is authoritative for TPI coefficients (Phase 19D).
+                    # read_tpi_coefficients_safe() returns the blended *candidate* coef_int.
+                    # The coordinator applies step-limiting to produce the *used* value so
+                    # valid→stale and stale→valid transitions never cause abrupt duty jumps.
+                    _coef_cand, coef_ext, _tpi_hl_rate, _tpi_src, _tpi_diag = (
+                        self._le2_shadow.read_tpi_coefficients_safe()
+                    )
+                    # Step-limiting: used approaches candidate by at most one step per cycle.
+                    _prev = self._tpi_coef_int_smoothed
+                    _delta = _coef_cand - _prev
+                    _step = max(-_TPI_COEF_INT_MAX_STEP_DOWN,
+                                min(_TPI_COEF_INT_MAX_STEP_UP, _delta))
+                    coef_int = max(_TPI_COEF_INT_CLAMP_MIN,
+                                   min(_TPI_COEF_INT_CLAMP_MAX, _prev + _step))
+                    self._tpi_coef_int_smoothed = coef_int
+                    # Enrich diag with candidate/previous/transition for trace
+                    _tpi_diag = dict(_tpi_diag)
+                    _tpi_diag.update({
+                        "coef_int_candidate": round(_coef_cand, 4),
+                        "coef_int_previous": round(_prev, 4),
+                        "transition_applied": abs(_step) > 1e-5,
+                        "transition_reason": (
+                            "step_limited" if abs(_step) < abs(_delta) - 1e-5 else "converged"
+                        ),
+                        "coef_int_max_step_up": _TPI_COEF_INT_MAX_STEP_UP,
+                        "coef_int_max_step_down": _TPI_COEF_INT_MAX_STEP_DOWN,
+                    })
+                    recommendation["tpi_coef_source"] = _tpi_src
+                    recommendation["tpi_hl_rate"] = _tpi_hl_rate
+                    recommendation["tpi_coef_int"] = coef_int
+                    recommendation["tpi_coef_ext"] = coef_ext
+                    recommendation["tpi_coef_diag"] = _tpi_diag
+                else:
+                    # LE2 shadow not attached (disabled). Deterministic defaults only —
+                    # LE v1 _heat_loss_ema must never be read for control.
+                    coef_int, coef_ext = TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT
+                    self._tpi_coef_int_smoothed = TPI_COEF_INT_DEFAULT  # keep in sync
+                    recommendation["tpi_coef_source"] = "deterministic_baseline"
+                    recommendation["tpi_hl_rate"] = None
+                    recommendation["tpi_coef_int"] = coef_int
+                    recommendation["tpi_coef_ext"] = coef_ext
+                    recommendation["tpi_coef_diag"] = {
+                        "coef_int_default": TPI_COEF_INT_DEFAULT,
+                        "coef_int_candidate": TPI_COEF_INT_DEFAULT,
+                        "coef_int_previous": TPI_COEF_INT_DEFAULT,
+                        "coef_int_learned": None, "blend_weight": 0.0,
+                        "relative_only": False, "outdoor_context_available": False,
+                        "heat_rate_c_per_h": None, "heat_loss_c_per_h": None,
+                        "hr_confidence": None, "hl_confidence": None,
+                        "transition_applied": False,
+                        "transition_reason": "no_shadow",
+                        "coef_int_max_step_up": _TPI_COEF_INT_MAX_STEP_UP,
+                        "coef_int_max_step_down": _TPI_COEF_INT_MAX_STEP_DOWN,
+                    }
                 if current_temp is not None:
                     duty_cycle = compute_tpi(
                         target, current_temp,
@@ -668,6 +742,22 @@ class ThermoSmartCoordinator(
                 recommendation["tpi_coef_int"] = round(coef_int, 3)
                 recommendation["tpi_coef_ext"] = round(coef_ext, 4)
                 recommendation["tpi_valve_direct"] = has_valve
+                # Enrich tpi_coef_diag with duty-level trace for transition audit.
+                # duty_candidate: duty that would result from using candidate coef_int directly.
+                # duty_previous: duty from the previous cycle (for delta/stability verification).
+                # duty_used: actual duty applied this cycle (with step-limited coef_int).
+                _tpi_d = recommendation.get("tpi_coef_diag")
+                if _tpi_d is not None and current_temp is not None:
+                    _cand_ci = _tpi_d.get("coef_int_candidate", coef_int)
+                    _duty_cand = compute_tpi(
+                        target, current_temp, weather_data.get("temperature"),
+                        _cand_ci, coef_ext)
+                    _tpi_d["duty_previous"] = (round(self._tpi_duty_previous, 1)
+                                               if self._tpi_duty_previous is not None else None)
+                    _tpi_d["duty_candidate"] = round(_duty_cand, 1)
+                    _tpi_d["duty_used"] = round(duty_cycle, 1)
+                self._tpi_duty_previous = duty_cycle if current_temp is not None else (
+                    self._tpi_duty_previous)
 
             # Display fallback: when no active heating target exists (summer, window-open,
             # away with adjusted_target=None), populate trv_setpoint for sensor display so

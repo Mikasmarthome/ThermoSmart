@@ -171,17 +171,19 @@ class TestHeatRateWindow:
 # ── Cool-rate guard + heat-loss EMA ──────────────────────────────────────────
 
 class TestCoolRateAndEMA:
-    async def test_cool_rate_recorded_and_ema_seeded(self, monkeypatch):
+    async def test_cool_rate_recorded_and_ema_not_mutated(self, monkeypatch):
+        # Phase 19D: cool_rate is still stored in observations for LE2 training,
+        # but _heat_loss_ema must NOT be mutated (LE2 HeatLossModel is authoritative).
         e = make_engine(monkeypatch)
         # cooling: current < target-0.5; prior idle reading 20 min ago, warmer
         e._last_idle_temp["z"] = (FIXED_NOW - timedelta(minutes=20), 20.5)
         await e.async_observe("z", rec(current_temp=20.0, effective_target=21.0),
                               {"temperature": 10.0})
         obs = e._observations["z"][0]
-        # (20.5-20.0)/20 = 0.025
+        # (20.5-20.0)/20 = 0.025 — still recorded for LE2 PassiveCoolingEpisodes
         assert obs["cool_rate"] == pytest.approx(0.025, abs=1e-5)
-        # first EMA == cool_rate (prev seeded to cool_rate)
-        assert e._heat_loss_ema["z"] == pytest.approx(0.025, abs=1e-5)
+        # EMA must remain empty — mutations are silenced in Phase 19D
+        assert "z" not in e._heat_loss_ema
 
     async def test_cool_rate_guard_rejects_implausible_drop(self, monkeypatch):
         e = make_engine(monkeypatch)
@@ -206,14 +208,16 @@ class TestCoolRateAndEMA:
                               {"temperature": 10.0})
         assert "cool_rate" not in e._observations["z"][0]
 
-    async def test_ema_blends_with_previous(self, monkeypatch):
+    async def test_ema_frozen_after_mutation_silenced(self, monkeypatch):
+        # Phase 19D: existing EMA data may be loaded from store (read-only compat),
+        # but async_observe must NOT update it. The dict must stay frozen.
         e = make_engine(monkeypatch)
-        e._heat_loss_ema["z"] = 0.10  # existing EMA
+        e._heat_loss_ema["z"] = 0.10  # existing value (e.g. loaded from store)
         e._last_idle_temp["z"] = (FIXED_NOW - timedelta(minutes=20), 20.5)
         await e.async_observe("z", rec(current_temp=20.0, effective_target=21.0),
                               {"temperature": 10.0})
-        # cool_rate 0.025 → ema = 0.15*0.025 + 0.85*0.10 = 0.08875
-        assert e._heat_loss_ema["z"] == pytest.approx(0.08875, abs=1e-5)
+        # EMA must remain 0.10 — the mutation (0.15*cool_rate + 0.85*prev) is silenced
+        assert e._heat_loss_ema["z"] == pytest.approx(0.10, abs=1e-5)
 
     async def test_idle_temp_cleared_when_not_cooling(self, monkeypatch):
         e = make_engine(monkeypatch)

@@ -1,4 +1,4 @@
-"""Phase 17C: byte-/argument-equal no-control proof (LE2 shadow on vs off).
+﻿"""Phase 17C: byte-/argument-equal no-control proof (LE2 shadow on vs off).
 
 Runs the REAL coordinator update loop with and without the LE 2.0 shadow attached
 and asserts the existing control actions and result are identical.
@@ -22,7 +22,13 @@ from tests.helpers_ha_runtime import (
 
 # Shadow-diagnostic status fields that legitimately differ when a shadow is attached
 # ("not_available" = no shadow; "missing"/"cold_start"/... = shadow consulted).
-_SHADOW_STATUS_KEYS = frozenset({"early_cutoff_status", "early_cutoff_state", "forecast_trust_status", "preheat_status"})
+_SHADOW_STATUS_KEYS = frozenset({
+    "early_cutoff_status", "early_cutoff_state", "forecast_trust_status", "preheat_status",
+    # Phase 19D: HeatLoss source diagnostic fields differ between shadow / no-shadow.
+    # Control output (trv_setpoint, tpi_coef_int, tpi_coef_ext) is unchanged.
+    "tpi_coef_source", "tpi_hl_rate",
+    "tpi_coef_int", "tpi_coef_ext", "tpi_coef_diag",
+})
 
 
 def _zone_control_equal(a: dict, b: dict) -> bool:
@@ -94,3 +100,4 @@ class TestNoControlEffect:
         # must not raise UpdateFailed
         result = await coord._async_update_data()
         assert result is not None
+

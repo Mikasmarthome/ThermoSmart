@@ -12,6 +12,7 @@ from custom_components.thermosmart.coordinator import ThermoSmartCoordinator
 from custom_components.thermosmart.learning.runtime.ha_integration import (
     LearningShadowController,
 )
+from custom_components.thermosmart.trv_control import _DispatchStats
 from tests.helpers import make_coordinator, make_state, set_hass_states
 
 
@@ -37,9 +38,11 @@ class RecordingCoordinator(ThermoSmartCoordinator):
     async def _apply_temperature(self, cfg, recommendation):
         self.control_calls.append(("apply_temperature", recommendation.get("trv_setpoint"),
                                    recommendation.get("effective_target")))
+        return _DispatchStats()
 
     async def _async_set_valve_percent(self, cfg, duty):
         self.control_calls.append(("set_valve_percent", duty))
+        return _DispatchStats()
 
     async def _apply_frost_protection(self, cfg):
         self.control_calls.append(("frost_protection",))

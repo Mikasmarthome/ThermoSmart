@@ -383,7 +383,18 @@ class LiveDecisionRecord:
     dispatch_attempted: bool = False
     dispatch_path: Optional[str] = None         # "setpoint"|"direct_valve"|"none"
     dispatch_setpoint_c: Optional[float] = None # coordinator-level setpoint (pre-per-entity-clamp)
+    dispatch_effective_setpoint_min_c: Optional[float] = None  # min actual per-device setpoint written
+    dispatch_effective_setpoint_max_c: Optional[float] = None  # max actual per-device setpoint written
     dispatch_duty_pct: Optional[float] = None
-    dispatch_succeeded: bool = False            # True when dispatch awaited without exception
-    dispatch_failure_reason: Optional[str] = None  # repr(exc) if dispatch raised; None = success
+    dispatch_succeeded: bool = False            # True iff dispatch_status == "fully_succeeded"
+    dispatch_failure_reason: Optional[str] = None  # repr(exc) for outer exception; None = success
     dispatch_ts: Optional[str] = None
+    # Per-entity dispatch truth (from asyncio.gather results / sequential calls)
+    dispatch_status: str = "not_attempted"      # "not_attempted"|"fully_succeeded"|"partially_succeeded"|"failed"
+    dispatch_targets_total: int = 0             # entities where a command was queued/attempted
+    dispatch_targets_succeeded: int = 0         # commands that completed without exception
+    dispatch_targets_failed: int = 0            # commands that raised
+    dispatch_failure_reasons: tuple = ()        # privacy-safe normalized error labels (no entity IDs)
+    # ── outcome eligibility (learning attribution gate) ──────────────
+    outcome_eligible: bool = False              # True iff dispatch_status == "fully_succeeded"
+    outcome_reliability: str = "none"           # "full"|"partial"|"none"

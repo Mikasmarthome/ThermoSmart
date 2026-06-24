@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vakáció",
-              "sleep":    "Éjszaka"
+              "sleep": "Éjszaka"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Aktív vezérlés"
       },
-      "learning": { "name": "Tanulási mód" },
-      "vacation_mode": { "name": "Vakációs mód" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Tanulási mód"
+      },
+      "vacation_mode": {
+        "name": "Vakációs mód"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Adaptív boost",
+        "description": "Lehetővé teszi a ThermoSmart számára egy tanult adaptív boost offset alkalmazását. Csak akkor lép érvénybe, ha a Tanulási mód és az Aktív vezérlés is be van kapcsolva. A TPI vezérlés függetlenül fut tovább. Alapértelmezett: ki."
+      }
     },
     "select": {
       "mode": {
         "name": "Fűtési mód",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Kényelmi",
-          "eco":      "Eco",
-          "night":    "Éjszaka",
-          "away":     "Távol",
+          "auto": "Auto",
+          "comfort": "Kényelmi",
+          "eco": "Eco",
+          "night": "Éjszaka",
+          "away": "Távol",
           "vacation": "Vakáció"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Nyári mód",
         "state": {
           "automatic": "Automatikus",
-          "on":        "Be",
-          "off":       "Ki"
+          "on": "Be",
+          "off": "Ki"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Célhőmérséklet" },
-      "trv_setpoint": { "name": "TRV beállítási pont" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Célhőmérséklet"
+      },
+      "trv_setpoint": {
+        "name": "TRV beállítási pont"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Eredménypontszám",
         "state": {
           "learning": "Tanulás"
         }
       },
-      "preheat_minutes": { "name": "Előmelegítési idő" },
-      "confidence": { "name": "Tanulási előrehaladás" },
-      "weather_offset": { "name": "Időjárás-korrekció" },
+      "preheat_minutes": {
+        "name": "Előmelegítési idő"
+      },
+      "confidence": {
+        "name": "Tanulási előrehaladás"
+      },
+      "weather_offset": {
+        "name": "Időjárás-korrekció"
+      },
       "status": {
         "name": "Állapot",
         "state": {
-          "disabled":              "Letiltva",
-          "observation_mode":      "Megfigyelési mód",
+          "disabled": "Letiltva",
+          "observation_mode": "Megfigyelési mód",
           "controlling_no_learning": "Aktív vezérlés (tanulás ki)",
-          "heating_failure":       "Fűtési hiba!",
-          "preheating":            "Előmelegítés",
-          "summer":                "Nyár – fűtés ki",
-          "window_open":           "Ablak nyitva",
-          "vacation":              "Vakáció",
-          "away":                  "Távol",
-          "heating":               "Fűtés",
-          "idle":                  "Hőmérséklet fenntartva",
-          "active":                "Aktív"
+          "heating_failure": "Fűtési hiba!",
+          "preheating": "Előmelegítés",
+          "summer": "Nyár – fűtés ki",
+          "window_open": "Ablak nyitva",
+          "vacation": "Vakáció",
+          "away": "Távol",
+          "heating": "Fűtés",
+          "idle": "Hőmérséklet fenntartva",
+          "active": "Aktív"
         }
       },
-      "temp_slope": { "name": "Hőmérséklet meredeksége" },
-      "temp_ema_1h": { "name": "Hőmérséklet EMA 1h" },
+      "temp_slope": {
+        "name": "Hőmérséklet meredeksége"
+      },
+      "temp_ema_1h": {
+        "name": "Hőmérséklet EMA 1h"
+      },
       "heat_loss": {
         "name": "Hőveszteség",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Tanulás"
         }
       },
-      "sun_intensity": { "name": "Napenergia-nyereség" },
+      "sun_intensity": {
+        "name": "Napenergia-nyereség"
+      },
       "window_cooling_rate": {
         "name": "Ablakon keresztüli hűtési sebesség",
         "state": {
           "learning": "Tanulás"
         }
       },
-      "trv_observations": { "name": "TRV-megfigyelések" }
+      "trv_observations": {
+        "name": "TRV-megfigyelések"
+      }
     }
   }
 }

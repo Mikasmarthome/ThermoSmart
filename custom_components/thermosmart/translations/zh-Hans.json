@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "自动",
+              "auto": "自动",
               "vacation": "假期",
-              "sleep":    "夜间"
+              "sleep": "夜间"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "主动控制"
       },
-      "learning": { "name": "学习模式" },
-      "vacation_mode": { "name": "假期模式" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "学习模式"
+      },
+      "vacation_mode": {
+        "name": "假期模式"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "自适应补偿",
+        "description": "允许 ThermoSmart 应用已学习的自适应补偿偏移。仅当学习模式和主动控制均开启且学习模型具有足够证据时生效。TPI 控制独立运行，不受此设置影响。默认：关闭。"
+      }
     },
     "select": {
       "mode": {
         "name": "供暖模式",
         "state": {
-          "auto":     "自动",
-          "comfort":  "舒适",
-          "eco":      "节能",
-          "night":    "夜间",
-          "away":     "离家",
+          "auto": "自动",
+          "comfort": "舒适",
+          "eco": "节能",
+          "night": "夜间",
+          "away": "离家",
           "vacation": "假期"
         }
       },
@@ -232,43 +242,59 @@
         "name": "夏季模式",
         "state": {
           "automatic": "自动",
-          "on":        "开启",
-          "off":       "关闭"
+          "on": "开启",
+          "off": "关闭"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "目标温度" },
-      "trv_setpoint": { "name": "TRV 设定值" },
-      "tpi_duty_cycle": { "name": "TPI 占空比" },
+      "adjusted_target": {
+        "name": "目标温度"
+      },
+      "trv_setpoint": {
+        "name": "TRV 设定值"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI 占空比"
+      },
       "outcome_score": {
         "name": "结果评分",
         "state": {
           "learning": "学习中"
         }
       },
-      "preheat_minutes": { "name": "预热时间" },
-      "confidence": { "name": "学习进度" },
-      "weather_offset": { "name": "天气修正" },
+      "preheat_minutes": {
+        "name": "预热时间"
+      },
+      "confidence": {
+        "name": "学习进度"
+      },
+      "weather_offset": {
+        "name": "天气修正"
+      },
       "status": {
         "name": "状态",
         "state": {
-          "disabled":              "已禁用",
-          "observation_mode":      "观察模式",
+          "disabled": "已禁用",
+          "observation_mode": "观察模式",
           "controlling_no_learning": "主动控制（学习已关闭）",
-          "heating_failure":       "供暖故障！",
-          "preheating":            "预热中",
-          "summer":                "夏季 – 供暖已关闭",
-          "window_open":           "窗户已打开",
-          "vacation":              "假期",
-          "away":                  "离家",
-          "heating":               "供暖中",
-          "idle":                  "温度已维持",
-          "active":                "活跃"
+          "heating_failure": "供暖故障！",
+          "preheating": "预热中",
+          "summer": "夏季 – 供暖已关闭",
+          "window_open": "窗户已打开",
+          "vacation": "假期",
+          "away": "离家",
+          "heating": "供暖中",
+          "idle": "温度已维持",
+          "active": "活跃"
         }
       },
-      "temp_slope": { "name": "温度斜率" },
-      "temp_ema_1h": { "name": "温度 EMA 1小时" },
+      "temp_slope": {
+        "name": "温度斜率"
+      },
+      "temp_ema_1h": {
+        "name": "温度 EMA 1小时"
+      },
       "heat_loss": {
         "name": "热量损失",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "学习中"
         }
       },
-      "sun_intensity": { "name": "太阳热增益" },
+      "sun_intensity": {
+        "name": "太阳热增益"
+      },
       "window_cooling_rate": {
         "name": "窗户冷却速率",
         "state": {
           "learning": "学习中"
         }
       },
-      "trv_observations": { "name": "TRV 观测值" }
+      "trv_observations": {
+        "name": "TRV 观测值"
+      }
     }
   }
 }

@@ -213,6 +213,10 @@
         "name": "Aktive Steuerung"
       },
       "learning": { "name": "Lernmodus" },
+      "adaptive_boost": {
+        "name": "Adaptiver Boost",
+        "description": "Erlaubt ThermoSmart, einen gelernten adaptiven Boost-Offset auf den Sollwert anzuwenden. Wirkt nur, wenn auch Lernmodus und Aktive Steuerung eingeschaltet sind und das Lernmodell über ausreichend Evidenz verfügt. TPI-Regelung läuft unabhängig davon weiter. Standard: aus."
+      },
       "vacation_mode": { "name": "Urlaubsmodus" },
       "debug_log": { "name": "Debug Log" }
     },

@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Loma",
-              "sleep":    "Yö"
+              "sleep": "Yö"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Aktiivinen ohjaus"
       },
-      "learning": { "name": "Oppimistila" },
-      "vacation_mode": { "name": "Lomatila" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Oppimistila"
+      },
+      "vacation_mode": {
+        "name": "Lomatila"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Adaptiivinen tehostus",
+        "description": "Sallii ThermoSmartin soveltaa opittua adaptiivista tehostussiirtymää. Toimii vain, kun Oppimistila ja Aktiivinen ohjaus ovat myös päällä. TPI-ohjaus jatkuu itsenäisesti. Oletus: pois."
+      }
     },
     "select": {
       "mode": {
         "name": "Lämmitystila",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Mukavuus",
-          "eco":      "Eco",
-          "night":    "Yö",
-          "away":     "Poissa",
+          "auto": "Auto",
+          "comfort": "Mukavuus",
+          "eco": "Eco",
+          "night": "Yö",
+          "away": "Poissa",
           "vacation": "Loma"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Kesätila",
         "state": {
           "automatic": "Automaattinen",
-          "on":        "Päällä",
-          "off":       "Pois"
+          "on": "Päällä",
+          "off": "Pois"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Kohdelämpötila" },
-      "trv_setpoint": { "name": "TRV-asetusarvo" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Kohdelämpötila"
+      },
+      "trv_setpoint": {
+        "name": "TRV-asetusarvo"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Tulospisteet",
         "state": {
           "learning": "Oppiminen käynnissä"
         }
       },
-      "preheat_minutes": { "name": "Esilämmitysaika" },
-      "confidence": { "name": "Oppimisedistyminen" },
-      "weather_offset": { "name": "Sääkorjaus" },
+      "preheat_minutes": {
+        "name": "Esilämmitysaika"
+      },
+      "confidence": {
+        "name": "Oppimisedistyminen"
+      },
+      "weather_offset": {
+        "name": "Sääkorjaus"
+      },
       "status": {
         "name": "Tila",
         "state": {
-          "disabled":              "Poistettu käytöstä",
-          "observation_mode":      "Havainnointitila",
+          "disabled": "Poistettu käytöstä",
+          "observation_mode": "Havainnointitila",
           "controlling_no_learning": "Aktiivinen ohjaus (oppiminen pois)",
-          "heating_failure":       "Lämmitysvika!",
-          "preheating":            "Esilämmitetään",
-          "summer":                "Kesä – lämmitys pois",
-          "window_open":           "Ikkuna auki",
-          "vacation":              "Loma",
-          "away":                  "Poissa",
-          "heating":               "Lämmitetään",
-          "idle":                  "Lämpötila ylläpidetään",
-          "active":                "Aktiivinen"
+          "heating_failure": "Lämmitysvika!",
+          "preheating": "Esilämmitetään",
+          "summer": "Kesä – lämmitys pois",
+          "window_open": "Ikkuna auki",
+          "vacation": "Loma",
+          "away": "Poissa",
+          "heating": "Lämmitetään",
+          "idle": "Lämpötila ylläpidetään",
+          "active": "Aktiivinen"
         }
       },
-      "temp_slope": { "name": "Lämpötilan kaltevuus" },
-      "temp_ema_1h": { "name": "Lämpötila EMA 1h" },
+      "temp_slope": {
+        "name": "Lämpötilan kaltevuus"
+      },
+      "temp_ema_1h": {
+        "name": "Lämpötila EMA 1h"
+      },
       "heat_loss": {
         "name": "Lämpöhäviö",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Oppiminen käynnissä"
         }
       },
-      "sun_intensity": { "name": "Aurinkolämpöhyöty" },
+      "sun_intensity": {
+        "name": "Aurinkolämpöhyöty"
+      },
       "window_cooling_rate": {
         "name": "Ikkunajäähdytysnopeus",
         "state": {
           "learning": "Oppiminen käynnissä"
         }
       },
-      "trv_observations": { "name": "TRV-havainnot" }
+      "trv_observations": {
+        "name": "TRV-havainnot"
+      }
     }
   }
 }

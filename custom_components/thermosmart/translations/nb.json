@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Ferie",
-              "sleep":    "Natt"
+              "sleep": "Natt"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Aktiv styring"
       },
-      "learning": { "name": "Læringsmodus" },
-      "vacation_mode": { "name": "Feriemodus" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Læringsmodus"
+      },
+      "vacation_mode": {
+        "name": "Feriemodus"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Adaptiv boost",
+        "description": "Lar ThermoSmart bruke en lært adaptiv boost-offset. Virker kun når Læringsmodus og Aktiv kontroll også er på. TPI-kontroll fortsetter uavhengig. Standard: av."
+      }
     },
     "select": {
       "mode": {
         "name": "Varmemodus",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Komfort",
-          "eco":      "Eco",
-          "night":    "Natt",
-          "away":     "Borte",
+          "auto": "Auto",
+          "comfort": "Komfort",
+          "eco": "Eco",
+          "night": "Natt",
+          "away": "Borte",
           "vacation": "Ferie"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Sommermodus",
         "state": {
           "automatic": "Automatisk",
-          "on":        "På",
-          "off":       "Av"
+          "on": "På",
+          "off": "Av"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Måltemperatur" },
-      "trv_setpoint": { "name": "TRV-innstillingspunkt" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Måltemperatur"
+      },
+      "trv_setpoint": {
+        "name": "TRV-innstillingspunkt"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Resultatscore",
         "state": {
           "learning": "Lærer"
         }
       },
-      "preheat_minutes": { "name": "Forvarmingstid" },
-      "confidence": { "name": "Læringsfremdrift" },
-      "weather_offset": { "name": "Værkorrigering" },
+      "preheat_minutes": {
+        "name": "Forvarmingstid"
+      },
+      "confidence": {
+        "name": "Læringsfremdrift"
+      },
+      "weather_offset": {
+        "name": "Værkorrigering"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Deaktivert",
-          "observation_mode":      "Observasjonsmodus",
+          "disabled": "Deaktivert",
+          "observation_mode": "Observasjonsmodus",
           "controlling_no_learning": "Aktiv styring (læring av)",
-          "heating_failure":       "Varmefeil!",
-          "preheating":            "Forvarmer",
-          "summer":                "Sommer – varme av",
-          "window_open":           "Vindu åpent",
-          "vacation":              "Ferie",
-          "away":                  "Borte",
-          "heating":               "Varmer",
-          "idle":                  "Temperatur opprettholdt",
-          "active":                "Aktiv"
+          "heating_failure": "Varmefeil!",
+          "preheating": "Forvarmer",
+          "summer": "Sommer – varme av",
+          "window_open": "Vindu åpent",
+          "vacation": "Ferie",
+          "away": "Borte",
+          "heating": "Varmer",
+          "idle": "Temperatur opprettholdt",
+          "active": "Aktiv"
         }
       },
-      "temp_slope": { "name": "Temperaturhelling" },
-      "temp_ema_1h": { "name": "Temperatur EMA 1h" },
+      "temp_slope": {
+        "name": "Temperaturhelling"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatur EMA 1h"
+      },
       "heat_loss": {
         "name": "Varmetap",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Lærer"
         }
       },
-      "sun_intensity": { "name": "Solvarmegevinst" },
+      "sun_intensity": {
+        "name": "Solvarmegevinst"
+      },
       "window_cooling_rate": {
         "name": "Vindusavkjølingshastighet",
         "state": {
           "learning": "Lærer"
         }
       },
-      "trv_observations": { "name": "TRV-observasjoner" }
+      "trv_observations": {
+        "name": "TRV-observasjoner"
+      }
     }
   }
 }

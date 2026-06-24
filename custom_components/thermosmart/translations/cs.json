@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Dovolená",
-              "sleep":    "Noc"
+              "sleep": "Noc"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Aktivní řízení"
       },
-      "learning": { "name": "Učicí režim" },
-      "vacation_mode": { "name": "Dovolenkový režim" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Učicí režim"
+      },
+      "vacation_mode": {
+        "name": "Dovolenkový režim"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Adaptivní boost",
+        "description": "Umožňuje ThermoSmart aplikovat naučený adaptivní boost offset. Funguje pouze pokud jsou zapnuty také Režim učení a Aktivní řízení. TPI řízení pokračuje nezávisle. Výchozí: vypnuto."
+      }
     },
     "select": {
       "mode": {
         "name": "Topný režim",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Komfort",
-          "eco":      "Eco",
-          "night":    "Noc",
-          "away":     "Nepřítomen",
+          "auto": "Auto",
+          "comfort": "Komfort",
+          "eco": "Eco",
+          "night": "Noc",
+          "away": "Nepřítomen",
           "vacation": "Dovolená"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Letní režim",
         "state": {
           "automatic": "Automaticky",
-          "on":        "Zapnuto",
-          "off":       "Vypnuto"
+          "on": "Zapnuto",
+          "off": "Vypnuto"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Cílová teplota" },
-      "trv_setpoint": { "name": "Nastavená hodnota TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Cílová teplota"
+      },
+      "trv_setpoint": {
+        "name": "Nastavená hodnota TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Skóre výsledku",
         "state": {
           "learning": "Probíhá učení"
         }
       },
-      "preheat_minutes": { "name": "Čas předehřívání" },
-      "confidence": { "name": "Pokrok učení" },
-      "weather_offset": { "name": "Korekce počasí" },
+      "preheat_minutes": {
+        "name": "Čas předehřívání"
+      },
+      "confidence": {
+        "name": "Pokrok učení"
+      },
+      "weather_offset": {
+        "name": "Korekce počasí"
+      },
       "status": {
         "name": "Stav",
         "state": {
-          "disabled":              "Deaktivováno",
-          "observation_mode":      "Pozorovací režim",
+          "disabled": "Deaktivováno",
+          "observation_mode": "Pozorovací režim",
           "controlling_no_learning": "Aktivní řízení (učení vypnuto)",
-          "heating_failure":       "Porucha topení!",
-          "preheating":            "Předehřívání",
-          "summer":                "Léto – topení vypnuto",
-          "window_open":           "Okno otevřeno",
-          "vacation":              "Dovolená",
-          "away":                  "Nepřítomen",
-          "heating":               "Topení",
-          "idle":                  "Teplota udržována",
-          "active":                "Aktivní"
+          "heating_failure": "Porucha topení!",
+          "preheating": "Předehřívání",
+          "summer": "Léto – topení vypnuto",
+          "window_open": "Okno otevřeno",
+          "vacation": "Dovolená",
+          "away": "Nepřítomen",
+          "heating": "Topení",
+          "idle": "Teplota udržována",
+          "active": "Aktivní"
         }
       },
-      "temp_slope": { "name": "Sklon teploty" },
-      "temp_ema_1h": { "name": "Teplota EMA 1h" },
+      "temp_slope": {
+        "name": "Sklon teploty"
+      },
+      "temp_ema_1h": {
+        "name": "Teplota EMA 1h"
+      },
       "heat_loss": {
         "name": "Tepelné ztráty",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Probíhá učení"
         }
       },
-      "sun_intensity": { "name": "Sluneční zisk" },
+      "sun_intensity": {
+        "name": "Sluneční zisk"
+      },
       "window_cooling_rate": {
         "name": "Rychlost ochlazování oknem",
         "state": {
           "learning": "Probíhá učení"
         }
       },
-      "trv_observations": { "name": "Pozorování TRV" }
+      "trv_observations": {
+        "name": "Pozorování TRV"
+      }
     }
   }
 }

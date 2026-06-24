@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Авто",
+              "auto": "Авто",
               "vacation": "Почивка",
-              "sleep":    "Нощ"
+              "sleep": "Нощ"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Активно управление"
       },
-      "learning": { "name": "Режим на учене" },
-      "vacation_mode": { "name": "Режим почивка" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Режим на учене"
+      },
+      "vacation_mode": {
+        "name": "Режим почивка"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Адаптивен буст",
+        "description": "Позволява на ThermoSmart да прилага научен адаптивен буст офсет. Действа само когато Режим на обучение и Активно управление са включени. ТПИ управлението продължава независимо. По подразбиране: изключено."
+      }
     },
     "select": {
       "mode": {
         "name": "Режим на отопление",
         "state": {
-          "auto":     "Авто",
-          "comfort":  "Комфорт",
-          "eco":      "Eco",
-          "night":    "Нощ",
-          "away":     "Отсъстващ",
+          "auto": "Авто",
+          "comfort": "Комфорт",
+          "eco": "Eco",
+          "night": "Нощ",
+          "away": "Отсъстващ",
           "vacation": "Почивка"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Летен режим",
         "state": {
           "automatic": "Автоматично",
-          "on":        "Включено",
-          "off":       "Изключено"
+          "on": "Включено",
+          "off": "Изключено"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Целева температура" },
-      "trv_setpoint": { "name": "Зададена стойност TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Целева температура"
+      },
+      "trv_setpoint": {
+        "name": "Зададена стойност TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Оценка на резултата",
         "state": {
           "learning": "Обучение"
         }
       },
-      "preheat_minutes": { "name": "Време за предварително загряване" },
-      "confidence": { "name": "Напредък на обучението" },
-      "weather_offset": { "name": "Корекция за времето" },
+      "preheat_minutes": {
+        "name": "Време за предварително загряване"
+      },
+      "confidence": {
+        "name": "Напредък на обучението"
+      },
+      "weather_offset": {
+        "name": "Корекция за времето"
+      },
       "status": {
         "name": "Статус",
         "state": {
-          "disabled":              "Деактивирано",
-          "observation_mode":      "Режим на наблюдение",
+          "disabled": "Деактивирано",
+          "observation_mode": "Режим на наблюдение",
           "controlling_no_learning": "Активно управление (обучение изкл.)",
-          "heating_failure":       "Повреда на отоплението!",
-          "preheating":            "Предварително загряване",
-          "summer":                "Лято – отоплението изключено",
-          "window_open":           "Прозорец отворен",
-          "vacation":              "Почивка",
-          "away":                  "Отсъстващ",
-          "heating":               "Отопление",
-          "idle":                  "Температурата е поддържана",
-          "active":                "Активно"
+          "heating_failure": "Повреда на отоплението!",
+          "preheating": "Предварително загряване",
+          "summer": "Лято – отоплението изключено",
+          "window_open": "Прозорец отворен",
+          "vacation": "Почивка",
+          "away": "Отсъстващ",
+          "heating": "Отопление",
+          "idle": "Температурата е поддържана",
+          "active": "Активно"
         }
       },
-      "temp_slope": { "name": "Наклон на температурата" },
-      "temp_ema_1h": { "name": "Температура EMA 1h" },
+      "temp_slope": {
+        "name": "Наклон на температурата"
+      },
+      "temp_ema_1h": {
+        "name": "Температура EMA 1h"
+      },
       "heat_loss": {
         "name": "Топлинни загуби",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Обучение"
         }
       },
-      "sun_intensity": { "name": "Слънчева топлинна печалба" },
+      "sun_intensity": {
+        "name": "Слънчева топлинна печалба"
+      },
       "window_cooling_rate": {
         "name": "Скорост на охлаждане от прозорец",
         "state": {
           "learning": "Обучение"
         }
       },
-      "trv_observations": { "name": "Наблюдения TRV" }
+      "trv_observations": {
+        "name": "Наблюдения TRV"
+      }
     }
   }
 }

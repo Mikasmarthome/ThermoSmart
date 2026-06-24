@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vakantie",
-              "sleep":    "Nacht"
+              "sleep": "Nacht"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Actieve bediening"
       },
-      "learning": { "name": "Leermodus" },
-      "vacation_mode": { "name": "Vakantiemodus" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Leermodus"
+      },
+      "vacation_mode": {
+        "name": "Vakantiemodus"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Adaptieve boost",
+        "description": "Stelt ThermoSmart in staat een geleerde adaptieve boost-offset toe te passen. Werkt alleen wanneer ook Leermodus en Actieve besturing zijn ingeschakeld. TPI-aansturing gaat onafhankelijk door. Standaard: uit."
+      }
     },
     "select": {
       "mode": {
         "name": "Verwarmingsmodus",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Comfort",
-          "eco":      "Eco",
-          "night":    "Nacht",
-          "away":     "Afwezig",
+          "auto": "Auto",
+          "comfort": "Comfort",
+          "eco": "Eco",
+          "night": "Nacht",
+          "away": "Afwezig",
           "vacation": "Vakantie"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Zomermodus",
         "state": {
           "automatic": "Automatisch",
-          "on":        "Aan",
-          "off":       "Uit"
+          "on": "Aan",
+          "off": "Uit"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Doeltemperatuur" },
-      "trv_setpoint": { "name": "TRV-instelpunt" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Doeltemperatuur"
+      },
+      "trv_setpoint": {
+        "name": "TRV-instelpunt"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Resultaatscore",
         "state": {
           "learning": "Aan het leren"
         }
       },
-      "preheat_minutes": { "name": "Voorverwarmingstijd" },
-      "confidence": { "name": "Leervoortgang" },
-      "weather_offset": { "name": "Weercorrectie" },
+      "preheat_minutes": {
+        "name": "Voorverwarmingstijd"
+      },
+      "confidence": {
+        "name": "Leervoortgang"
+      },
+      "weather_offset": {
+        "name": "Weercorrectie"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Uitgeschakeld",
-          "observation_mode":      "Observatiemodus",
+          "disabled": "Uitgeschakeld",
+          "observation_mode": "Observatiemodus",
           "controlling_no_learning": "Actieve sturing (leren uit)",
-          "heating_failure":       "Verwarmingsstoring!",
-          "preheating":            "Voorverwarming",
-          "summer":                "Zomer – verwarming uit",
-          "window_open":           "Raam open",
-          "vacation":              "Vakantie",
-          "away":                  "Afwezig",
-          "heating":               "Verwarming actief",
-          "idle":                  "Temperatuur gehandhaafd",
-          "active":                "Actief"
+          "heating_failure": "Verwarmingsstoring!",
+          "preheating": "Voorverwarming",
+          "summer": "Zomer – verwarming uit",
+          "window_open": "Raam open",
+          "vacation": "Vakantie",
+          "away": "Afwezig",
+          "heating": "Verwarming actief",
+          "idle": "Temperatuur gehandhaafd",
+          "active": "Actief"
         }
       },
-      "temp_slope": { "name": "Temperatuurhelling" },
-      "temp_ema_1h": { "name": "Temperatuur EMA 1u" },
+      "temp_slope": {
+        "name": "Temperatuurhelling"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatuur EMA 1u"
+      },
       "heat_loss": {
         "name": "Warmteverlies",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Aan het leren"
         }
       },
-      "sun_intensity": { "name": "Zonnewinst" },
+      "sun_intensity": {
+        "name": "Zonnewinst"
+      },
       "window_cooling_rate": {
         "name": "Afkoelsnelheid raam",
         "state": {
           "learning": "Aan het leren"
         }
       },
-      "trv_observations": { "name": "TRV-observaties" }
+      "trv_observations": {
+        "name": "TRV-observaties"
+      }
     }
   }
 }

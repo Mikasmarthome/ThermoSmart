@@ -15,6 +15,8 @@ from __future__ import annotations
 import hashlib
 import logging
 import math
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any, Mapping, Optional
 
 from ...const import TPI_MAX_BOOST_CELSIUS
@@ -35,6 +37,53 @@ from .lifecycle import (
 
 _LOGGER = logging.getLogger(__name__)
 _ERROR_LOG_THROTTLE = 50  # log at most 1 of every N identical errors
+
+# ── Adaptive Boost Control Resolver ──────────────────────────────────────────
+ADAPTIVE_BOOST_RESOLVER_VERSION = 1
+
+
+class BoostBlockReason(StrEnum):
+    """Typed enum for boost gate blocking and lifecycle release reasons.
+
+    Every outer-gate and dispatch-failure reason is a typed constant so control code
+    never depends on raw string literals.  Lifecycle-internal reasons (window_open,
+    heating_failure, etc.) are owned by adjust_recommendation_safe() and remain as-is.
+    StrEnum: instances are both str and enum — serialization and direct string comparison
+    both work without explicit .value access.
+    """
+    LEARNING_MODE_OFF = "learning_mode_off"
+    ACTIVE_CONTROL_OFF = "active_control_off"
+    ADAPTIVE_BOOST_SWITCH_OFF = "adaptive_boost_switch_off"
+    MIXED_CONTROL_TYPES = "mixed_control_types_unsupported"
+    DEVICE_UNAVAILABLE = "device_unavailable"
+    FAILED_DISPATCH = "failed_dispatch"
+    PARTIAL_DISPATCH = "partial_dispatch"
+    READINESS_UNAVAILABLE = "readiness_unavailable"
+    RESTORE_PENDING = "restore_pending"
+
+
+@dataclass(frozen=True)
+class AdaptiveBoostControlResult:
+    """Typed output of the central adaptive boost resolver for one coordinator cycle.
+
+    Field semantics:
+      ``approved_boost_offset_c``  — 0.0 when any gate blocks; never None.
+      ``applied_boost_offset_c``   — None when inner gates passed and the boost was written
+                                     to trv_setpoint (pre-dispatch; not yet confirmed by
+                                     service call); 0.0 when any gate blocked it (definitely
+                                     not applied).  Post-dispatch truth lives in LiveDecisionRecord.
+    """
+    requested_boost_offset_c: Optional[float]   # raw LE2 proposal (None = no prediction)
+    approved_boost_offset_c: float              # 0.0 when any gate blocks; never None
+    applied_boost_offset_c: Optional[float]     # None = pre-dispatch; 0.0 = blocked
+    boost_allowed: bool                         # True only when all outer gates pass
+    selected_scope: Optional[str]               # bucket | general | general_fallback | prior
+    eligibility_reason: str                     # BoostEligibilityReason or gate reason
+    blocking_reason: Optional[str]              # first gate that blocked this cycle
+    release_reason: Optional[str]               # lifecycle release reason, if triggered
+    clamp_applied: bool                         # True when step/device clamp modified offset
+    source_decision_id: Optional[str]           # LE2 decision_id that produced the boost
+    component_version: int = ADAPTIVE_BOOST_RESOLVER_VERSION
 
 
 def _zone_segment(zone_id: str) -> str:
@@ -200,6 +249,13 @@ class LearningShadowController:
         # Context snapshot at boost-apply time: compared each cycle to detect schedule transitions.
         # A change in comfort_time (same target, new period) triggers a hard schedule_change release.
         self._boost_applied_comfort_time_utc: Optional[str] = None
+        # Adaptive Boost switch state (set by ThermoSmartAdaptiveBoostSwitch via coordinator).
+        # Default OFF — existing installations never receive boost silently after update.
+        self._adaptive_boost_enabled: bool = False
+        # Ephemeral flag: set True by resolve_adaptive_boost_control() for the duration of its
+        # adjust_recommendation_safe() call, then cleared.  Allows the inner method to bypass the
+        # control_enabled runtime-mode guard while keeping the outer triple gate as the sole authority.
+        self._boost_authorized_this_cycle: bool = False
 
     @property
     def runtime(self) -> LearningRuntime:
@@ -242,6 +298,25 @@ class LearningShadowController:
             self._last_result = CoordinatorBridge(self._runtime).process(inp)
         except Exception as err:
             self._record_error("cycle", err)
+
+    def set_adaptive_boost_enabled(self, enabled: bool) -> None:
+        """Called by ThermoSmartAdaptiveBoostSwitch when the user turns boost on/off."""
+        self._adaptive_boost_enabled = bool(enabled)
+
+    def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
+        """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
+
+        Called post-dispatch when the service call did not fully succeed for all setpoint
+        TRVs.  Prevents a stale APPLIED lifecycle from carrying into the next cycle and
+        re-applying a boost offset that was never confirmed by the hardware.  Never raises.
+        """
+        try:
+            reason = (BoostBlockReason.PARTIAL_DISPATCH
+                      if dispatch_status == "partially_succeeded"
+                      else BoostBlockReason.FAILED_DISPATCH)
+            self._release_boost_lifecycle_safe(reason)
+        except Exception as err:
+            self._record_error("invalidate_dispatch", err)
 
     @property
     def control_enabled(self) -> bool:
@@ -507,7 +582,10 @@ class LearningShadowController:
         recommendation["_boost_rejection_reason"] = None
         recommendation["_boost_candidate_c"] = None
         recommendation["_boost_applied_c"] = None
-        if not self.control_enabled:
+        # Normal entry: control_enabled (LearningRuntimeMode.CONTROL, test-only).
+        # Authorized entry: _boost_authorized_this_cycle set by resolve_adaptive_boost_control()
+        # for the duration of its call — the triple-gate + readiness check is the real authority.
+        if not (self.control_enabled or self._boost_authorized_this_cycle):
             return
         try:
             target = recommendation.get("effective_target")
@@ -984,6 +1062,205 @@ class LearningShadowController:
             recommendation["_boost_evaluation_status"] = _BES.EVALUATED_NOT_APPLIED.value
         except Exception as err:
             self._record_error("boost_status", err)
+
+    # ── Adaptive Boost Control Resolver ──────────────────────────────────────
+
+    def _read_boost_activation_readiness_safe(
+        self, recommendation: Mapping[str, Any]
+    ) -> Optional["BoostActivationReadiness"]:  # type: ignore[name-defined]
+        """Read the BoostActivationReadiness from the BoostModel for the current context.
+
+        Pure-on-model-state: derived entirely from persisted model state plus current
+        recommendation context.  Returns None on any error (never raises).
+        """
+        try:
+            from ..models.boost import BoostModel, BoostPredictionContext
+            from ..models.boost_activation import BoostActivationReadiness
+            model = self._boost_model()
+            if model is None:
+                return None
+            target = recommendation.get("effective_target")
+            if target is None:
+                target = recommendation.get("adjusted_target")
+            current = recommendation.get("current_temp")
+            deficit = None
+            if target is not None and current is not None:
+                try:
+                    deficit = max(0.0, float(target) - float(current))
+                except (TypeError, ValueError):
+                    pass
+            # Control type from dispatch path
+            ctrl_type = "direct_valve" if recommendation.get("tpi_valve_direct") else "setpoint"
+            # Collect runtime blocking confounders
+            blocking: list[str] = []
+            if recommendation.get("window_open"):
+                blocking.append("window_open")
+            if recommendation.get("heating_failure"):
+                blocking.append("heating_failure")
+            preheat_active = bool(recommendation.get("preheat_minutes", 0))
+            decision_type_str = "preheat" if preheat_active else "normal"
+            ctx = BoostPredictionContext(
+                start_deficit_c=deficit,
+                decision_type=decision_type_str,
+                control_type=ctrl_type,
+                blocking_reasons=tuple(blocking),
+                now_ts=_utcnow_iso(),
+            )
+            return model.activation_readiness(ctx)
+        except Exception as err:
+            self._record_error("activation_readiness", err)
+            return None
+
+    def resolve_adaptive_boost_control(
+        self,
+        recommendation: dict,
+        *,
+        learning_mode_on: bool,
+        active_control_on: bool,
+        adaptive_boost_switch_on: bool,
+        restore_pending: bool = False,
+        boost_runtime_limit: Optional[float] = None,
+    ) -> "AdaptiveBoostControlResult":
+        """Central adaptive boost resolver. Restore barrier → triple gate → readiness → inner safety gates.
+
+        The ONLY production entry point for real boost control.  Returns a fully typed
+        result for provenance; sets diagnostic keys on ``recommendation``.  Never raises.
+
+        Gate order (strict):
+          0. Restore barrier  (both active_control AND adaptive_boost switches initialized)
+          1. Learning mode ON  (cfg learning_enabled + LE2 enabled)
+          2. Active Control ON (coordinator _active_control)
+          3. Adaptive Boost switch ON (ThermoSmartAdaptiveBoostSwitch)
+          3.5. Mixed-control zone check
+          3.6. Pre-dispatch device availability
+          4. BoostActivationReadiness.eligibility == True AND factor_usable == True
+          5. Inner safety gates (adjust_recommendation_safe) — hard/soft/cooldown/policy
+        """
+        _ZERO = AdaptiveBoostControlResult(
+            requested_boost_offset_c=None, approved_boost_offset_c=0.0,
+            applied_boost_offset_c=0.0, boost_allowed=False,
+            selected_scope=None, eligibility_reason="not_evaluated",
+            blocking_reason=None, release_reason=None, clamp_applied=False,
+            source_decision_id=None,
+        )
+
+        def _blocked(reason: str, *, scope: Optional[str] = None,
+                     release: bool = False) -> AdaptiveBoostControlResult:
+            if release:
+                self._release_boost_lifecycle_safe(reason)
+            recommendation["_boost_rejection_reason"] = reason
+            return AdaptiveBoostControlResult(
+                requested_boost_offset_c=None, approved_boost_offset_c=0.0,
+                applied_boost_offset_c=0.0, boost_allowed=False,
+                selected_scope=scope, eligibility_reason=reason,
+                blocking_reason=reason,
+                release_reason=reason if release else None,
+                clamp_applied=False, source_decision_id=None,
+            )
+
+        try:
+            # Gate 0: Restore initialization barrier.
+            # Both active_control AND adaptive_boost RestoreEntity switches must have
+            # completed at least one restore/set call.  Until then boost is blocked so
+            # no partial-restore cycle can accidentally activate boost.  Learning mode
+            # comes from config (not RestoreEntity) and is therefore not in the barrier.
+            if restore_pending:
+                return _blocked(BoostBlockReason.RESTORE_PENDING)
+
+            # Gate 1: Learning mode (coordinator-side flag + LE2 health)
+            if not learning_mode_on or not self._enabled:
+                return _blocked(BoostBlockReason.LEARNING_MODE_OFF, release=True)
+
+            # Gate 2: Active Control
+            if not active_control_on:
+                return _blocked(BoostBlockReason.ACTIVE_CONTROL_OFF, release=True)
+
+            # Gate 3: Adaptive Boost switch
+            if not adaptive_boost_switch_on:
+                return _blocked(BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF, release=True)
+
+            # Gate 3.5: Mixed control zone — adaptive boost blocked conservatively.
+            # A zone mixing setpoint-TRVs and direct-valve-TRVs cannot safely receive
+            # a per-device split; the entire zone is blocked with a clear typed reason.
+            if recommendation.get("zone_control_type") == "mixed":
+                return _blocked(BoostBlockReason.MIXED_CONTROL_TYPES, release=True)
+
+            # Gate 3.6: Pre-dispatch device availability.
+            # If any setpoint TRV was unavailable when the coordinator sampled states
+            # before the resolver, boost is blocked for this cycle.  Prevents a partial
+            # dispatch where some TRVs received the boosted setpoint and others did not.
+            if recommendation.get("_setpoint_device_unavailable"):
+                return _blocked(BoostBlockReason.DEVICE_UNAVAILABLE, release=True)
+
+            # Gate 4: BoostActivationReadiness
+            readiness = self._read_boost_activation_readiness_safe(recommendation)
+            selected_scope = readiness.selected_scope if readiness is not None else "prior"
+            if readiness is None or not readiness.eligibility or not readiness.factor_usable:
+                reason = readiness.eligibility_reason if readiness is not None else "readiness_unavailable"
+                self._release_boost_lifecycle_safe(reason)
+                recommendation["_boost_rejection_reason"] = reason
+                return AdaptiveBoostControlResult(
+                    requested_boost_offset_c=None, approved_boost_offset_c=0.0,
+                    applied_boost_offset_c=0.0, boost_allowed=False,
+                    selected_scope=selected_scope, eligibility_reason=reason,
+                    blocking_reason=reason, release_reason=reason,
+                    clamp_applied=False, source_decision_id=None,
+                )
+
+            # Gate 4 passed — emit readiness diagnostics on recommendation
+            try:
+                recommendation["_boost_readiness"] = readiness.to_dict()
+            except Exception:
+                pass
+
+            # Inner gates: invoke adjust_recommendation_safe() with authorization flag
+            self._boost_authorized_this_cycle = True
+            try:
+                self.adjust_recommendation_safe(
+                    recommendation, boost_runtime_limit=boost_runtime_limit)
+            finally:
+                self._boost_authorized_this_cycle = False
+
+            # Build typed result from what the inner method wrote
+            inner_rejection = recommendation.get("_boost_rejection_reason")
+            applied_c: float = float(recommendation.get("_boost_applied_c") or 0.0)
+            candidate_c = recommendation.get("_boost_candidate_c")
+            boost_applied = bool(recommendation.get("le2_boost_adjusted", False))
+            approved_c: float = applied_c if boost_applied else 0.0
+
+            clamp_applied = False
+            if candidate_c is not None and applied_c > 0.0:
+                try:
+                    clamp_applied = abs(float(candidate_c) - applied_c) > 0.001
+                except (TypeError, ValueError):
+                    pass
+
+            source_did: Optional[str] = None
+            try:
+                zr = self._runtime._zone(self._zone)
+                _did = getattr(zr, "last_decision_id", None)
+                source_did = str(_did) if _did is not None else None
+            except Exception:
+                pass
+
+            return AdaptiveBoostControlResult(
+                requested_boost_offset_c=(float(candidate_c)
+                                          if candidate_c is not None else None),
+                approved_boost_offset_c=approved_c,
+                # None = pre-dispatch; actual applied truth lives in LiveDecisionRecord.
+                # 0.0 when inner gates blocked the offset (definitely not applied).
+                applied_boost_offset_c=None if boost_applied else 0.0,
+                boost_allowed=True,
+                selected_scope=selected_scope,
+                eligibility_reason=readiness.eligibility_reason,
+                blocking_reason=inner_rejection if not boost_applied else None,
+                release_reason=None,
+                clamp_applied=clamp_applied,
+                source_decision_id=source_did,
+            )
+        except Exception as err:
+            self._record_error("resolve_adaptive_boost", err)
+            return _ZERO
 
     def compute_decision_trace_safe(self, recommendation: Mapping[str, Any], *,
                                     active_control: bool = False,

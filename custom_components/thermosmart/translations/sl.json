@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Samodejno",
+              "auto": "Samodejno",
               "vacation": "Počitnice",
-              "sleep":    "Noč"
+              "sleep": "Noč"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Aktivno krmiljenje"
       },
-      "learning": { "name": "Način učenja" },
-      "vacation_mode": { "name": "Počitniški način" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Način učenja"
+      },
+      "vacation_mode": {
+        "name": "Počitniški način"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Prilagodljiv boost",
+        "description": "Omogoča ThermoSmart-u, da uporabi naučen prilagodljiv boost odmik. Deluje samo, ko sta vklopljeni tudi Način učenja in Aktivno upravljanje. Krmiljenje TPI se nadaljuje neodvisno. Privzeto: izklopljeno."
+      }
     },
     "select": {
       "mode": {
         "name": "Način ogrevanja",
         "state": {
-          "auto":     "Samodejno",
-          "comfort":  "Udobje",
-          "eco":      "Eco",
-          "night":    "Noč",
-          "away":     "Odsoten",
+          "auto": "Samodejno",
+          "comfort": "Udobje",
+          "eco": "Eco",
+          "night": "Noč",
+          "away": "Odsoten",
           "vacation": "Počitnice"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Poletni način",
         "state": {
           "automatic": "Samodejno",
-          "on":        "Vklopljeno",
-          "off":       "Izklopljeno"
+          "on": "Vklopljeno",
+          "off": "Izklopljeno"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Ciljna temperatura" },
-      "trv_setpoint": { "name": "Nastavitvena vrednost TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Ciljna temperatura"
+      },
+      "trv_setpoint": {
+        "name": "Nastavitvena vrednost TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Rezultatna ocena",
         "state": {
           "learning": "Učenje"
         }
       },
-      "preheat_minutes": { "name": "Čas predgrevanja" },
-      "confidence": { "name": "Napredek učenja" },
-      "weather_offset": { "name": "Vremenski odmik" },
+      "preheat_minutes": {
+        "name": "Čas predgrevanja"
+      },
+      "confidence": {
+        "name": "Napredek učenja"
+      },
+      "weather_offset": {
+        "name": "Vremenski odmik"
+      },
       "status": {
         "name": "Stanje",
         "state": {
-          "disabled":              "Deaktivirano",
-          "observation_mode":      "Način opazovanja",
+          "disabled": "Deaktivirano",
+          "observation_mode": "Način opazovanja",
           "controlling_no_learning": "Aktivno krmiljenje (učenje izklop.)",
-          "heating_failure":       "Napaka ogrevanja!",
-          "preheating":            "Predgrevanje",
-          "summer":                "Poletje – ogrevanje izklop.",
-          "window_open":           "Okno odprto",
-          "vacation":              "Počitnice",
-          "away":                  "Odsoten",
-          "heating":               "Ogrevanje",
-          "idle":                  "Temperatura vzdrževana",
-          "active":                "Aktivno"
+          "heating_failure": "Napaka ogrevanja!",
+          "preheating": "Predgrevanje",
+          "summer": "Poletje – ogrevanje izklop.",
+          "window_open": "Okno odprto",
+          "vacation": "Počitnice",
+          "away": "Odsoten",
+          "heating": "Ogrevanje",
+          "idle": "Temperatura vzdrževana",
+          "active": "Aktivno"
         }
       },
-      "temp_slope": { "name": "Naklon temperature" },
-      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "temp_slope": {
+        "name": "Naklon temperature"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatura EMA 1h"
+      },
       "heat_loss": {
         "name": "Toplotne izgube",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Učenje"
         }
       },
-      "sun_intensity": { "name": "Solarni toplotni dobitek" },
+      "sun_intensity": {
+        "name": "Solarni toplotni dobitek"
+      },
       "window_cooling_rate": {
         "name": "Hitrost ohlajanja skozi okno",
         "state": {
           "learning": "Učenje"
         }
       },
-      "trv_observations": { "name": "Opazovanja TRV" }
+      "trv_observations": {
+        "name": "Opazovanja TRV"
+      }
     }
   }
 }

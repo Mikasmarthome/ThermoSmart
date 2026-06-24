@@ -30,9 +30,9 @@ def baseline_from_recommendation(zone_id: str, rec: Mapping,
     # Prefer tpi_baseline_setpoint (written by adjust_recommendation_safe before boost).
     # Falls back to trv_setpoint in shadow mode where the original TPI value is unchanged.
     setpoint = _f(rec, "tpi_baseline_setpoint", "trv_setpoint")
-    # Use the coordinator's pre-computed le2 boost offset directly (not reconstructed).
-    # boost_offset_c = 0.0 when no LE2 boost is active; positive when boost is applied.
-    # This replaces the previous max(0, setpoint-target) which conflated TPI duty with le2.
+    # boost_offset_c = raw LE2 prediction (pre-guard, historical semantics).
+    # 0.0 when no prediction was made or all gates blocked before model evaluation.
+    # Replaces the previous max(0, setpoint-target) which conflated TPI duty with le2.
     boost_offset = _f(rec, "boost_offset_c") or 0.0
     return ControllerBaselineDecision(
         zone_id=zone_id,

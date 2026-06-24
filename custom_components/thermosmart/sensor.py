@@ -132,8 +132,9 @@ class ThermoSmartTRVSetpointSensor(_Base):
         return {
             "target_temperature": target,
             "boost_delta": f"+{boost}°C" if boost > 0 else "0°C",
-            "boost_factor": z.get("boost_factor", 1.0),       # compat: 1.0=neutral
-            "boost_offset_c": z.get("boost_offset_c", 0.0),   # LE2 internal: 0.0=neutral
+            "boost_factor":           z.get("boost_factor", 1.0),           # compat: 1.0=neutral
+            "boost_offset_c":         z.get("boost_offset_c", 0.0),         # LE2 raw prediction: 0.0=neutral
+            "applied_boost_offset_c": z.get("applied_boost_offset_c", 0.0), # confirmed dispatch truth
             "boost_active": boost > 0,
         }
 

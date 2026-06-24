@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Αυτόματο",
+              "auto": "Αυτόματο",
               "vacation": "Διακοπές",
-              "sleep":    "Νύχτα"
+              "sleep": "Νύχτα"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Ενεργός έλεγχος"
       },
-      "learning": { "name": "Λειτουργία εκμάθησης" },
-      "vacation_mode": { "name": "Λειτουργία διακοπών" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Λειτουργία εκμάθησης"
+      },
+      "vacation_mode": {
+        "name": "Λειτουργία διακοπών"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Προσαρμοστική ενίσχυση",
+        "description": "Επιτρέπει στο ThermoSmart να εφαρμόσει ένα μαθημένο προσαρμοστικό offset ενίσχυσης. Ενεργοποιείται μόνο όταν είναι ενεργός και ο Κατάσταση εκμάθησης και ο Ενεργός έλεγχος. Ο έλεγχος TPI συνεχίζεται ανεξάρτητα. Προεπιλογή: ανενεργό."
+      }
     },
     "select": {
       "mode": {
         "name": "Λειτουργία θέρμανσης",
         "state": {
-          "auto":     "Αυτόματο",
-          "comfort":  "Άνεση",
-          "eco":      "Eco",
-          "night":    "Νύχτα",
-          "away":     "Απών",
+          "auto": "Αυτόματο",
+          "comfort": "Άνεση",
+          "eco": "Eco",
+          "night": "Νύχτα",
+          "away": "Απών",
           "vacation": "Διακοπές"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Καλοκαιρινή λειτουργία",
         "state": {
           "automatic": "Αυτόματο",
-          "on":        "Ενεργό",
-          "off":       "Ανενεργό"
+          "on": "Ενεργό",
+          "off": "Ανενεργό"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Θερμοκρασία στόχου" },
-      "trv_setpoint": { "name": "Σημείο ρύθμισης TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Θερμοκρασία στόχου"
+      },
+      "trv_setpoint": {
+        "name": "Σημείο ρύθμισης TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Βαθμολογία αποτελέσματος",
         "state": {
           "learning": "Εκπαίδευση"
         }
       },
-      "preheat_minutes": { "name": "Χρόνος προθέρμανσης" },
-      "confidence": { "name": "Πρόοδος εκμάθησης" },
-      "weather_offset": { "name": "Διόρθωση καιρού" },
+      "preheat_minutes": {
+        "name": "Χρόνος προθέρμανσης"
+      },
+      "confidence": {
+        "name": "Πρόοδος εκμάθησης"
+      },
+      "weather_offset": {
+        "name": "Διόρθωση καιρού"
+      },
       "status": {
         "name": "Κατάσταση",
         "state": {
-          "disabled":              "Απενεργοποιημένο",
-          "observation_mode":      "Λειτουργία παρατήρησης",
+          "disabled": "Απενεργοποιημένο",
+          "observation_mode": "Λειτουργία παρατήρησης",
           "controlling_no_learning": "Ενεργός έλεγχος (εκμάθηση ανενεργή)",
-          "heating_failure":       "Βλάβη θέρμανσης!",
-          "preheating":            "Προθέρμανση",
-          "summer":                "Καλοκαίρι – θέρμανση εκτός",
-          "window_open":           "Παράθυρο ανοιχτό",
-          "vacation":              "Διακοπές",
-          "away":                  "Απών",
-          "heating":               "Θέρμανση",
-          "idle":                  "Θερμοκρασία διατηρείται",
-          "active":                "Ενεργό"
+          "heating_failure": "Βλάβη θέρμανσης!",
+          "preheating": "Προθέρμανση",
+          "summer": "Καλοκαίρι – θέρμανση εκτός",
+          "window_open": "Παράθυρο ανοιχτό",
+          "vacation": "Διακοπές",
+          "away": "Απών",
+          "heating": "Θέρμανση",
+          "idle": "Θερμοκρασία διατηρείται",
+          "active": "Ενεργό"
         }
       },
-      "temp_slope": { "name": "Κλίση θερμοκρασίας" },
-      "temp_ema_1h": { "name": "Θερμοκρασία EMA 1h" },
+      "temp_slope": {
+        "name": "Κλίση θερμοκρασίας"
+      },
+      "temp_ema_1h": {
+        "name": "Θερμοκρασία EMA 1h"
+      },
       "heat_loss": {
         "name": "Απώλεια θερμότητας",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Εκπαίδευση"
         }
       },
-      "sun_intensity": { "name": "Ηλιακό θερμικό κέρδος" },
+      "sun_intensity": {
+        "name": "Ηλιακό θερμικό κέρδος"
+      },
       "window_cooling_rate": {
         "name": "Ρυθμός ψύξης παραθύρου",
         "state": {
           "learning": "Εκπαίδευση"
         }
       },
-      "trv_observations": { "name": "Παρατηρήσεις TRV" }
+      "trv_observations": {
+        "name": "Παρατηρήσεις TRV"
+      }
     }
   }
 }

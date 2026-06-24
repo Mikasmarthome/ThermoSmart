@@ -34,6 +34,10 @@ _SHADOW_STATUS_KEYS = frozenset({
     "_boost_evaluation_status",
     # B2b-4e: live device availability fed to the post-reach observer (shadow-only input).
     "device_states",
+    # B2c: pre-dispatch TRV availability gate flag (shadow-only coordinator enrichment).
+    "_setpoint_device_unavailable",
+    # B2c: mixed/direct_valve/setpoint zone classification (shadow-only).
+    "zone_control_type",
 })
 
 

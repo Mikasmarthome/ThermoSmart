@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Авто",
+              "auto": "Авто",
               "vacation": "Відпустка",
-              "sleep":    "Ніч"
+              "sleep": "Ніч"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Активне керування"
       },
-      "learning": { "name": "Режим навчання" },
-      "vacation_mode": { "name": "Режим відпустки" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Режим навчання"
+      },
+      "vacation_mode": {
+        "name": "Режим відпустки"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Адаптивний буст",
+        "description": "Дозволяє ThermoSmart застосовувати навчений адаптивний буст-зміщення. Діє лише коли також увімкнені Режим навчання та Активне керування. Керування TPI продовжується незалежно. За замовчуванням: вимкнено."
+      }
     },
     "select": {
       "mode": {
         "name": "Режим опалення",
         "state": {
-          "auto":     "Авто",
-          "comfort":  "Комфорт",
-          "eco":      "Eco",
-          "night":    "Ніч",
-          "away":     "Відсутній",
+          "auto": "Авто",
+          "comfort": "Комфорт",
+          "eco": "Eco",
+          "night": "Ніч",
+          "away": "Відсутній",
           "vacation": "Відпустка"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Літній режим",
         "state": {
           "automatic": "Автоматично",
-          "on":        "Увімкнено",
-          "off":       "Вимкнено"
+          "on": "Увімкнено",
+          "off": "Вимкнено"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Цільова температура" },
-      "trv_setpoint": { "name": "Уставка TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Цільова температура"
+      },
+      "trv_setpoint": {
+        "name": "Уставка TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Оцінка результату",
         "state": {
           "learning": "Навчання"
         }
       },
-      "preheat_minutes": { "name": "Час попереднього нагріву" },
-      "confidence": { "name": "Прогрес навчання" },
-      "weather_offset": { "name": "Поправка на погоду" },
+      "preheat_minutes": {
+        "name": "Час попереднього нагріву"
+      },
+      "confidence": {
+        "name": "Прогрес навчання"
+      },
+      "weather_offset": {
+        "name": "Поправка на погоду"
+      },
       "status": {
         "name": "Стан",
         "state": {
-          "disabled":              "Вимкнено",
-          "observation_mode":      "Режим спостереження",
+          "disabled": "Вимкнено",
+          "observation_mode": "Режим спостереження",
           "controlling_no_learning": "Активне керування (навчання вимк.)",
-          "heating_failure":       "Несправність опалення!",
-          "preheating":            "Попереднє нагрівання",
-          "summer":                "Літо – опалення вимк.",
-          "window_open":           "Вікно відкрито",
-          "vacation":              "Відпустка",
-          "away":                  "Відсутній",
-          "heating":               "Опалення",
-          "idle":                  "Температура підтримується",
-          "active":                "Активно"
+          "heating_failure": "Несправність опалення!",
+          "preheating": "Попереднє нагрівання",
+          "summer": "Літо – опалення вимк.",
+          "window_open": "Вікно відкрито",
+          "vacation": "Відпустка",
+          "away": "Відсутній",
+          "heating": "Опалення",
+          "idle": "Температура підтримується",
+          "active": "Активно"
         }
       },
-      "temp_slope": { "name": "Нахил температури" },
-      "temp_ema_1h": { "name": "Температура EMA 1год" },
+      "temp_slope": {
+        "name": "Нахил температури"
+      },
+      "temp_ema_1h": {
+        "name": "Температура EMA 1год"
+      },
       "heat_loss": {
         "name": "Тепловтрати",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Навчання"
         }
       },
-      "sun_intensity": { "name": "Сонячне теплове надходження" },
+      "sun_intensity": {
+        "name": "Сонячне теплове надходження"
+      },
       "window_cooling_rate": {
         "name": "Швидкість охолодження через вікно",
         "state": {
           "learning": "Навчання"
         }
       },
-      "trv_observations": { "name": "Спостереження TRV" }
+      "trv_observations": {
+        "name": "Спостереження TRV"
+      }
     }
   }
 }

@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vacanță",
-              "sleep":    "Noapte"
+              "sleep": "Noapte"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Control activ"
       },
-      "learning": { "name": "Mod învățare" },
-      "vacation_mode": { "name": "Mod vacanță" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Mod învățare"
+      },
+      "vacation_mode": {
+        "name": "Mod vacanță"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Boost adaptiv",
+        "description": "Permite ThermoSmart să aplice un offset de boost adaptiv învățat. Are efect doar când Modul de învățare și Controlul activ sunt de asemenea activate. Controlul TPI continuă independent. Implicit: dezactivat."
+      }
     },
     "select": {
       "mode": {
         "name": "Mod de încălzire",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Confort",
-          "eco":      "Eco",
-          "night":    "Noapte",
-          "away":     "Absent",
+          "auto": "Auto",
+          "comfort": "Confort",
+          "eco": "Eco",
+          "night": "Noapte",
+          "away": "Absent",
           "vacation": "Vacanță"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Mod vară",
         "state": {
           "automatic": "Automat",
-          "on":        "Activat",
-          "off":       "Dezactivat"
+          "on": "Activat",
+          "off": "Dezactivat"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Temperatură țintă" },
-      "trv_setpoint": { "name": "Punct de reglaj TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Temperatură țintă"
+      },
+      "trv_setpoint": {
+        "name": "Punct de reglaj TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Scor de rezultat",
         "state": {
           "learning": "Învaţă"
         }
       },
-      "preheat_minutes": { "name": "Timp de preîncălzire" },
-      "confidence": { "name": "Progres de învățare" },
-      "weather_offset": { "name": "Corecție meteo" },
+      "preheat_minutes": {
+        "name": "Timp de preîncălzire"
+      },
+      "confidence": {
+        "name": "Progres de învățare"
+      },
+      "weather_offset": {
+        "name": "Corecție meteo"
+      },
       "status": {
         "name": "Stare",
         "state": {
-          "disabled":              "Dezactivat",
-          "observation_mode":      "Mod observație",
+          "disabled": "Dezactivat",
+          "observation_mode": "Mod observație",
           "controlling_no_learning": "Control activ (învățare dezactivată)",
-          "heating_failure":       "Defecțiune încălzire!",
-          "preheating":            "Preîncălzire",
-          "summer":                "Vară – încălzire oprită",
-          "window_open":           "Fereastră deschisă",
-          "vacation":              "Vacanță",
-          "away":                  "Absent",
-          "heating":               "Încălzire",
-          "idle":                  "Temperatură menținută",
-          "active":                "Activ"
+          "heating_failure": "Defecțiune încălzire!",
+          "preheating": "Preîncălzire",
+          "summer": "Vară – încălzire oprită",
+          "window_open": "Fereastră deschisă",
+          "vacation": "Vacanță",
+          "away": "Absent",
+          "heating": "Încălzire",
+          "idle": "Temperatură menținută",
+          "active": "Activ"
         }
       },
-      "temp_slope": { "name": "Pantă temperatură" },
-      "temp_ema_1h": { "name": "Temperatură EMA 1h" },
+      "temp_slope": {
+        "name": "Pantă temperatură"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatură EMA 1h"
+      },
       "heat_loss": {
         "name": "Pierdere de căldură",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Învaţă"
         }
       },
-      "sun_intensity": { "name": "Câștig termic solar" },
+      "sun_intensity": {
+        "name": "Câștig termic solar"
+      },
       "window_cooling_rate": {
         "name": "Rată de răcire ferestră",
         "state": {
           "learning": "Învaţă"
         }
       },
-      "trv_observations": { "name": "Observații TRV" }
+      "trv_observations": {
+        "name": "Observații TRV"
+      }
     }
   }
 }

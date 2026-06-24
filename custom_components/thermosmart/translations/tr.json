@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Otomatik",
+              "auto": "Otomatik",
               "vacation": "Tatil",
-              "sleep":    "Gece"
+              "sleep": "Gece"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Aktif kontrol"
       },
-      "learning": { "name": "Öğrenme modu" },
-      "vacation_mode": { "name": "Tatil modu" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Öğrenme modu"
+      },
+      "vacation_mode": {
+        "name": "Tatil modu"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Uyarlanabilir boost",
+        "description": "ThermoSmart'ın öğrenilmiş bir uyarlanabilir boost ofseti uygulamasına izin verir. Yalnızca Öğrenme modu ve Aktif kontrol da açık olduğunda etkili olur. TPI kontrolü bağımsız olarak devam eder. Varsayılan: kapalı."
+      }
     },
     "select": {
       "mode": {
         "name": "Isıtma modu",
         "state": {
-          "auto":     "Otomatik",
-          "comfort":  "Konfor",
-          "eco":      "Eco",
-          "night":    "Gece",
-          "away":     "Uzakta",
+          "auto": "Otomatik",
+          "comfort": "Konfor",
+          "eco": "Eco",
+          "night": "Gece",
+          "away": "Uzakta",
           "vacation": "Tatil"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Yaz modu",
         "state": {
           "automatic": "Otomatik",
-          "on":        "Açık",
-          "off":       "Kapalı"
+          "on": "Açık",
+          "off": "Kapalı"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Hedef sıcaklık" },
-      "trv_setpoint": { "name": "TRV ayar noktası" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Hedef sıcaklık"
+      },
+      "trv_setpoint": {
+        "name": "TRV ayar noktası"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Sonuç puanı",
         "state": {
           "learning": "Öğreniyor"
         }
       },
-      "preheat_minutes": { "name": "Ön ısıtma süresi" },
-      "confidence": { "name": "Öğrenme ilerlemesi" },
-      "weather_offset": { "name": "Hava durumu düzeltmesi" },
+      "preheat_minutes": {
+        "name": "Ön ısıtma süresi"
+      },
+      "confidence": {
+        "name": "Öğrenme ilerlemesi"
+      },
+      "weather_offset": {
+        "name": "Hava durumu düzeltmesi"
+      },
       "status": {
         "name": "Durum",
         "state": {
-          "disabled":              "Devre dışı",
-          "observation_mode":      "Gözlem modu",
+          "disabled": "Devre dışı",
+          "observation_mode": "Gözlem modu",
           "controlling_no_learning": "Aktif kontrol (öğrenme kapalı)",
-          "heating_failure":       "Isıtma arızası!",
-          "preheating":            "Ön ısıtma",
-          "summer":                "Yaz – ısıtma kapalı",
-          "window_open":           "Pencere açık",
-          "vacation":              "Tatil",
-          "away":                  "Uzakta",
-          "heating":               "Isıtılıyor",
-          "idle":                  "Sıcaklık korunuyor",
-          "active":                "Aktif"
+          "heating_failure": "Isıtma arızası!",
+          "preheating": "Ön ısıtma",
+          "summer": "Yaz – ısıtma kapalı",
+          "window_open": "Pencere açık",
+          "vacation": "Tatil",
+          "away": "Uzakta",
+          "heating": "Isıtılıyor",
+          "idle": "Sıcaklık korunuyor",
+          "active": "Aktif"
         }
       },
-      "temp_slope": { "name": "Sıcaklık eğimi" },
-      "temp_ema_1h": { "name": "Sıcaklık EMA 1s" },
+      "temp_slope": {
+        "name": "Sıcaklık eğimi"
+      },
+      "temp_ema_1h": {
+        "name": "Sıcaklık EMA 1s"
+      },
       "heat_loss": {
         "name": "Isı kaybı",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Öğreniyor"
         }
       },
-      "sun_intensity": { "name": "Güneş ısı kazancı" },
+      "sun_intensity": {
+        "name": "Güneş ısı kazancı"
+      },
       "window_cooling_rate": {
         "name": "Pencereden soğuma hızı",
         "state": {
           "learning": "Öğreniyor"
         }
       },
-      "trv_observations": { "name": "TRV gözlemleri" }
+      "trv_observations": {
+        "name": "TRV gözlemleri"
+      }
     }
   }
 }

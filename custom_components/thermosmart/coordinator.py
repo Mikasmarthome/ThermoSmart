@@ -135,6 +135,9 @@ class ThermoSmartCoordinator(
         self._window_delay_cancel: dict[str, Callable[[], None]] = {}
 
         self._last_written_setpoints: dict[str, float] = {}
+        # Boost tracking per zone (keyed by zone_id; used by TRVControlMixin._apply_temperature).
+        # Must be initialized before the first coordinator refresh to avoid AttributeError.
+        self._boost_active: dict = {}
 
         # Kalibrierung (genutzt von TRVControlMixin)
         self._calibration_offsets: dict[str, float] = {}
@@ -191,6 +194,19 @@ class ThermoSmartCoordinator(
         # Debug-Logging: Modus-Tracking für Wechsel-Erkennung
         self._last_effective_mode: str | None = None
 
+        # Adaptive Boost switch state — set by ThermoSmartAdaptiveBoostSwitch.
+        # Default OFF so existing installations never get boost silently after update.
+        self._adaptive_boost_enabled: bool = False
+
+        # Restore initialization barrier: each flag is set True the FIRST time the
+        # corresponding RestoreEntity switch calls its setter after restore.  Until
+        # both are True, resolve_adaptive_boost_control() receives restore_pending=True
+        # and blocks boost regardless of switch states, preventing a partial-restore
+        # cycle from activating boost before all authorities are known.
+        # Learning mode is read from config (not a RestoreEntity) → not in barrier.
+        self._active_control_initialized: bool = False
+        self._adaptive_boost_initialized: bool = False
+
         # LE 2.0 passive shadow controller (attached at setup; never controls)
         self._le2_shadow = None
         # Authoritative live decision record for the last completed cycle (Phase B1).
@@ -246,10 +262,25 @@ class ThermoSmartCoordinator(
 
     def set_active_control(self, active: bool) -> None:
         self._active_control = active
+        self._active_control_initialized = True
         _LOGGER.info(
             "ThermoSmart '%s': Aktive Steuerung %s",
             self.zone_name,
             "AN – Thermostat wird gesteuert" if active else "AUS – Beobachtungsmodus",
+        )
+
+    def set_adaptive_boost_enabled(self, enabled: bool) -> None:
+        self._adaptive_boost_enabled = enabled
+        self._adaptive_boost_initialized = True
+        if self._le2_shadow is not None:
+            try:
+                self._le2_shadow.set_adaptive_boost_enabled(enabled)
+            except Exception:
+                pass
+        _LOGGER.info(
+            "ThermoSmart '%s': Adaptiver Boost %s",
+            self.zone_name,
+            "AN" if enabled else "AUS",
         )
 
     def set_mode(self, mode: str) -> None:
@@ -826,31 +857,27 @@ class ThermoSmartCoordinator(
                     trv_setpoint = duty_to_setpoint(target, duty_cycle, TPI_MAX_BOOST_CELSIUS)
 
                 recommendation["trv_setpoint"] = trv_setpoint
-                # boost_factor from LE 2.0 (additive °C offset, 0.0 = neutral).
-                # LE v1 multiplier (default 1.0) is no longer read or applied.
-                le2_boost = 0.0
-                if self._le2_shadow is not None:
-                    try:
-                        from custom_components.thermosmart.learning.contracts import (
-                            PredictionType)
-                        zr = self._le2_shadow.runtime._zone(self.zone_id)
-                        bp = getattr(zr, "last_predictions", {}).get(
-                            PredictionType.BOOST_FACTOR)
-                        if bp is not None:
-                            le2_boost = bp.values.get("boost_factor", 0.0) or 0.0
-                    except Exception:
-                        pass
-                # boost_offset_c: internal LE 2.0 additive truth (0.0 = neutral)
-                recommendation["boost_offset_c"] = round(le2_boost, 3)
-                # boost_factor: backward-compat attribute (1.0 = neutral, legacy multiplier range)
-                from custom_components.thermosmart.learning.models.boost import (
-                    boost_offset_c_to_compat_factor)
-                recommendation["boost_factor"] = boost_offset_c_to_compat_factor(
-                    le2_boost, TPI_MAX_BOOST_CELSIUS)
+                # boost_offset_c / boost_factor: prediction semantics — set below from
+                # _boost_candidate_c (raw LE2 proposal, pre-guard) after resolver runs.
+                # applied_boost_offset_c: confirmed dispatch truth — updated post-dispatch.
+                recommendation["boost_offset_c"] = 0.0
+                recommendation["boost_factor"] = 1.0
+                recommendation["applied_boost_offset_c"] = 0.0
                 recommendation["tpi_duty_cycle"] = round(duty_cycle, 1)
                 recommendation["tpi_coef_int"] = round(coef_int, 3)
                 recommendation["tpi_coef_ext"] = round(coef_ext, 4)
                 recommendation["tpi_valve_direct"] = has_valve
+                # Mixed-zone detection: a zone combining setpoint-TRVs and direct-valve-TRVs
+                # cannot safely receive a per-device boost split → boost blocked conservatively.
+                _climate_eids = [e for e in cfg.get("climate_entities", []) if e]
+                _has_valve_ctrl = has_valve
+                _has_setpoint_ctrl = any(
+                    not self._auto_valve_map.get(eid) for eid in _climate_eids)
+                recommendation["zone_control_type"] = (
+                    "mixed" if (_has_valve_ctrl and _has_setpoint_ctrl) else
+                    "direct_valve" if _has_valve_ctrl else
+                    "setpoint"
+                )
                 # Enrich tpi_coef_diag with duty-level trace for transition audit.
                 # duty_candidate: duty that would result from using candidate coef_int directly.
                 # duty_previous: duty from the previous cycle (for delta/stability verification).
@@ -936,23 +963,58 @@ class ThermoSmartCoordinator(
             # Must run after effective_summer is resolved so recommendation["is_summer"] is set.
             await self._async_manage_temp_source(cfg, recommendation)
 
-            # ── LE 2.0 controlled adjustment (CONTROL mode only) ────────
-            # Runs BEFORE apply so any adjusted value flows through the existing
-            # device guards and the single existing dispatch path. A strict no-op
-            # unless the shadow runtime is explicitly in CONTROL mode, so SHADOW
-            # (the default) stays byte-identical. Never raises into heating.
+            # ── LE 2.0 Adaptive Boost Control ────────────────────────────
+            # resolve_adaptive_boost_control() is the single authority for real boost.
+            # Gate order: learning_mode_on → active_control_on → adaptive_boost_switch_on
+            #   → mixed_zone_check → device_unavailable_check → readiness → inner gates.
+            # Runs BEFORE dispatch so the approved offset flows through device guards and
+            # the single setpoint dispatch path.  Never raises into heating.
             if self._le2_shadow is not None and not effective_summer:
+                _learning_mode_on = bool(cfg.get("learning_enabled", True))
+                # Pre-dispatch device availability: if any setpoint TRV is unavailable
+                # right now, block boost for this cycle to prevent partial dispatch.
+                # (Mixed/valve zones are caught by zone_control_type in the resolver.)
+                _setpoint_device_unavailable = False
+                if recommendation.get("zone_control_type") == "setpoint":
+                    for _eid in cfg.get("climate_entities", []):
+                        if not _eid:
+                            continue
+                        _dev_st = self.hass.states.get(_eid)
+                        if _dev_st is None or _dev_st.state in ("unavailable", "unknown"):
+                            _setpoint_device_unavailable = True
+                            break
+                recommendation["_setpoint_device_unavailable"] = _setpoint_device_unavailable
+                _restore_pending = not (
+                    self._active_control_initialized and self._adaptive_boost_initialized)
                 try:
-                    self._le2_shadow.adjust_recommendation_safe(
-                        recommendation, boost_runtime_limit=TPI_MAX_BOOST_CELSIUS)
+                    self._le2_shadow.resolve_adaptive_boost_control(
+                        recommendation,
+                        learning_mode_on=_learning_mode_on,
+                        active_control_on=self._active_control,
+                        adaptive_boost_switch_on=self._adaptive_boost_enabled,
+                        restore_pending=_restore_pending,
+                        boost_runtime_limit=TPI_MAX_BOOST_CELSIUS,
+                    )
                 except Exception:
                     pass
-                # B2b-3c: authoritative three-state boost emission (runs in SHADOW too);
+                # B2b-3c: authoritative three-state boost emission (runs every cycle);
                 # 0.0 (evaluated, no boost) is distinct from None (not evaluated).
                 try:
                     self._le2_shadow.emit_boost_authority_status_safe(recommendation)
                 except Exception:
                     pass
+                # boost_offset_c: raw LE2 prediction (historical semantics, pre-guard).
+                # boost_factor: backward-compat multiplier derived from the same prediction.
+                # Neither is updated post-dispatch; applied_boost_offset_c carries dispatch truth.
+                _candidate_c = float(recommendation.get("_boost_candidate_c") or 0.0)
+                recommendation["boost_offset_c"] = round(_candidate_c, 3)
+                try:
+                    from custom_components.thermosmart.learning.models.boost import (
+                        boost_offset_c_to_compat_factor)
+                    recommendation["boost_factor"] = boost_offset_c_to_compat_factor(
+                        _candidate_c, TPI_MAX_BOOST_CELSIUS)
+                except Exception:
+                    recommendation["boost_factor"] = 1.0
             # ── Authoritative Live Decision Record (Phase B1b) ────────────────────
             # Baseline record is always built from coordinator-owned data, regardless of
             # whether LE2 is attached.  The shadow optionally enriches with decision_id
@@ -993,11 +1055,80 @@ class ThermoSmartCoordinator(
                 await self._apply_frost_protection(cfg)
                 recommendation["trv_setpoint"] = TEMP_FROST_PROTECTION
 
+            # ── Post-dispatch dispatch truth (before LiveDecisionRecord) ─────────────
+            # Compute dispatch status now so both the per-device applied truth and the
+            # LiveDecisionRecord completion can use the same authoritative values.
+            _disp_attempted = self._active_control and not effective_summer
+            _combined = _sp_stats.merge(_vv_stats) if _disp_attempted else _DispatchStats()
+            _disp_status = _combined.status if _disp_attempted else "not_attempted"
+            _eff_sps = _sp_stats.effective_setpoints
+
+            # Per-device applied boost offset — updated BEFORE LiveDecisionRecord so
+            # LDR.boost_applied_c reflects real dispatch truth, not the pre-dispatch
+            # approved value.
+            #
+            # Counterfactual formula (per device):
+            #   device_applied_i = effective_with_boost_i - effective_baseline_i
+            # Both sides run through the same per-device transform path (min-clamp,
+            # step-snap, re-clamp) — only the input differs (baseline vs baseline+boost).
+            # This correctly accounts for device-specific priors (min_temp), step
+            # quantization, and profile offsets without double service calls.
+            #
+            # Semantics:
+            #   fully_succeeded  → min(device_applied_i) across written devices ≥ 0
+            #                      (conservative zone truth; absorbs clamp/step reduction).
+            #   partial/failed   → 0.0 public; per-device offsets preserved for provenance.
+            #   not_attempted    → 0.0 (approved-but-not-dispatched must not appear as applied; lifecycle not touched).
+            if self._le2_shadow is not None and bool(recommendation.get("le2_boost_adjusted")):
+                _baseline_c = float(recommendation.get("tpi_baseline_setpoint") or 0.0)
+                _eff_by_eid = _sp_stats.effective_setpoints_by_entity
+
+                def _counterfactual_offsets(eff_by_eid: dict) -> list:
+                    """Compute per-device applied offset via counterfactual baseline resolution."""
+                    offsets = []
+                    for _eid, _eff_sp in eff_by_eid.items():
+                        _st = self.hass.states.get(_eid)
+                        if _st is None:
+                            # State unavailable post-dispatch: fall back to zone baseline.
+                            offsets.append(_eff_sp - _baseline_c)
+                            continue
+                        _prof = self._device_profiles.get(_eid)
+                        _eff_bl = self.resolve_device_effective_setpoint(
+                            _eid, _st, _baseline_c, _prof)
+                        offsets.append(_eff_sp - _eff_bl)
+                    return offsets
+
+                if _disp_status == "fully_succeeded" and _eff_by_eid:
+                    _dev_offsets = _counterfactual_offsets(_eff_by_eid)
+                    _real_applied = max(0.0, min(_dev_offsets))
+                    recommendation["_boost_applied_c"] = round(_real_applied, 4)
+                    recommendation["_boost_per_device_applied_c"] = [
+                        round(o, 4) for o in _dev_offsets]
+                    recommendation["applied_boost_offset_c"] = round(_real_applied, 3)
+                    # boost_offset_c (prediction) and boost_factor are not updated post-dispatch.
+                elif _disp_status == "not_attempted":
+                    # Dispatch path skipped entirely (summer mode / active-control exclusion):
+                    # approved-but-not-dispatched must not surface as applied truth.
+                    recommendation["_boost_applied_c"] = 0.0
+                    recommendation["applied_boost_offset_c"] = 0.0
+                    recommendation["_boost_per_device_applied_c"] = []
+                else:
+                    # Partial or failed dispatch: zero applied truth, preserve per-device data.
+                    if _eff_by_eid and _disp_status == "partially_succeeded":
+                        _dev_offsets = _counterfactual_offsets(_eff_by_eid)
+                        recommendation["_boost_per_device_applied_c"] = [
+                            round(o, 4) for o in _dev_offsets]
+                    recommendation["_boost_applied_c"] = 0.0
+                    recommendation["applied_boost_offset_c"] = 0.0
+                    # Hard-release lifecycle so next cycle re-evaluates from baseline.
+                    try:
+                        self._le2_shadow.invalidate_boost_after_failed_dispatch_safe(
+                            _disp_status)
+                    except Exception:
+                        pass
+
             # ── Complete LiveDecisionRecord with dispatch truth ────────────────────
             if _live_dec_pre is not None:
-                _disp_attempted = self._active_control and not effective_summer
-                _combined = _sp_stats.merge(_vv_stats) if _disp_attempted else _DispatchStats()
-                _disp_status = _combined.status if _disp_attempted else "not_attempted"
                 _disp_path = (
                     ("direct_valve" if recommendation.get("tpi_valve_direct") else "setpoint")
                     if _disp_attempted else "none"
@@ -1008,7 +1139,6 @@ class ThermoSmartCoordinator(
                     "partial" if _disp_status == "partially_succeeded" else
                     "none"
                 )
-                _eff_sps = _sp_stats.effective_setpoints
                 _eff_min = float(min(_eff_sps)) if _eff_sps else None
                 _eff_max = float(max(_eff_sps)) if _eff_sps else None
                 try:

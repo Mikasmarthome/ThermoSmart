@@ -34,7 +34,8 @@ _LOGGER = logging.getLogger(__name__)
 class _DispatchStats:
     """Accumulates per-entity dispatch results without exposing entity IDs."""
     __slots__ = ("targets_total", "targets_succeeded", "targets_failed",
-                 "failure_reasons", "effective_setpoints")
+                 "failure_reasons", "effective_setpoints",
+                 "effective_setpoints_by_entity")
 
     def __init__(self) -> None:
         self.targets_total: int = 0
@@ -42,11 +43,14 @@ class _DispatchStats:
         self.targets_failed: int = 0
         self.failure_reasons: list = []
         self.effective_setpoints: list = []  # actual per-device °C values written (successes only)
+        # entity_id → effective °C written (successes only; keyed for counterfactual baseline).
+        self.effective_setpoints_by_entity: dict = {}
 
-    def record(self, exc=None, *, effective_c=None) -> None:
+    def record(self, exc=None, *, effective_c=None, entity_id: str | None = None) -> None:
         """Record one dispatch attempt; pass exc to mark it as failed.
 
         effective_c: actual setpoint °C that was written (for success, ignored on failure).
+        entity_id: entity whose setpoint was written; populates effective_setpoints_by_entity.
         """
         self.targets_total += 1
         if exc is not None:
@@ -56,6 +60,8 @@ class _DispatchStats:
             self.targets_succeeded += 1
             if effective_c is not None:
                 self.effective_setpoints.append(float(effective_c))
+                if entity_id is not None:
+                    self.effective_setpoints_by_entity[entity_id] = float(effective_c)
 
     def record_gather(self, results) -> None:
         """Process the list of results from asyncio.gather(return_exceptions=True).
@@ -77,6 +83,8 @@ class _DispatchStats:
         merged.targets_failed = self.targets_failed + other.targets_failed
         merged.failure_reasons = self.failure_reasons + other.failure_reasons
         merged.effective_setpoints = self.effective_setpoints + other.effective_setpoints
+        merged.effective_setpoints_by_entity = {
+            **self.effective_setpoints_by_entity, **other.effective_setpoints_by_entity}
         return merged
 
     @property
@@ -565,6 +573,89 @@ class TRVControlMixin:
             pass
         return value
 
+    def resolve_device_effective_setpoint(
+        self, entity_id: str, state, setpoint: float, profile=None
+    ) -> float:
+        """Compute the effective setpoint after all per-device transforms.
+
+        Single authority for both the dispatch path and the counterfactual baseline:
+
+            device_applied_boost = resolve_device_effective_setpoint(eid, state, baseline + boost)
+                                 - resolve_device_effective_setpoint(eid, state, baseline)
+
+        Transform order (matches _apply_temperature exactly — no drift possible):
+          1. HA min_temp clamp
+          2. Profile minimum_setpoint clamp
+          3. Step-snap (target_temp_step attribute)
+          4. Re-clamp min after snap (prevents snap from going below device/profile floor)
+          5. HA max_temp clamp (device ceiling)
+          6. Profile maximum_setpoint clamp (may be stricter than HA max)
+
+        Args:
+            entity_id: for step-snap debug logging.
+            state: HA state object with .attributes dict.
+            setpoint: input °C (e.g. tpi_baseline_setpoint or baseline + approved_boost).
+            profile: DeviceProfile or None.
+        Returns:
+            Effective °C after all per-device clamps, snap, and ceiling.
+        """
+        eff = setpoint
+        # 1. HA min_temp clamp
+        try:
+            dev_min = float(state.attributes.get("min_temp", 0))
+            if 0 < dev_min <= 30 and dev_min > eff:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to device min_temp",
+                    self.zone_name, entity_id, eff, dev_min,
+                )
+                eff = dev_min
+        except (TypeError, ValueError):
+            pass
+        # 2. Profile minimum_setpoint clamp
+        if profile is not None and getattr(profile, "minimum_setpoint", None) is not None:
+            if profile.minimum_setpoint > eff:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to profile minimum_setpoint",
+                    self.zone_name, entity_id, eff, profile.minimum_setpoint,
+                )
+                eff = profile.minimum_setpoint
+        # 3. Step-snap (target_temp_step attribute)
+        eff = self._snap_to_device_step(entity_id, state, eff)
+        # 4. Re-clamp min after snap (snap may have rounded down below floor)
+        try:
+            dev_min = float(state.attributes.get("min_temp", 0))
+            if 0 < dev_min <= 30 and dev_min > eff:
+                eff = dev_min
+        except (TypeError, ValueError):
+            pass
+        if profile is not None and getattr(profile, "minimum_setpoint", None) is not None:
+            if profile.minimum_setpoint > eff:
+                eff = profile.minimum_setpoint
+        # 5. HA max_temp clamp (device ceiling, applied after step-snap)
+        try:
+            dev_max = float(state.attributes.get("max_temp", 0))
+            if dev_max > 0 and eff > dev_max:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to device max_temp",
+                    self.zone_name, entity_id, eff, dev_max,
+                )
+                eff = dev_max
+        except (TypeError, ValueError):
+            pass
+        # 6. Profile maximum_setpoint clamp (may be stricter than HA max)
+        if profile is not None and getattr(profile, "maximum_setpoint", None) is not None:
+            if eff > profile.maximum_setpoint:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to profile maximum_setpoint",
+                    self.zone_name, entity_id, eff, profile.maximum_setpoint,
+                )
+                eff = profile.maximum_setpoint
+        return eff
+
     # ── Temperatur schreiben ──────────────────────────────────────────
 
     async def _apply_temperature(self, cfg: dict, recommendation: dict) -> "_DispatchStats":
@@ -676,33 +767,8 @@ class TRVControlMixin:
                     self.zone_name, entity_id,
                 )
                 continue
-            effective_setpoint = trv_setpoint
-            try:
-                device_min = float(state.attributes.get("min_temp", 0))
-                if 0 < device_min <= 30 and device_min > effective_setpoint:
-                    _LOGGER.debug(
-                        "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C due to device min_temp",
-                        self.zone_name, entity_id, effective_setpoint, device_min,
-                    )
-                    effective_setpoint = device_min
-            except (TypeError, ValueError):
-                pass
-            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
-                _LOGGER.debug(
-                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C due to profile minimum_setpoint",
-                    self.zone_name, entity_id, effective_setpoint, _profile.minimum_setpoint,
-                )
-                effective_setpoint = _profile.minimum_setpoint
-            effective_setpoint = self._snap_to_device_step(entity_id, state, effective_setpoint)
-            # Final clamp: snap must not fall below device or profile minimum
-            try:
-                _dev_min = float(state.attributes.get("min_temp", 0))
-                if 0 < _dev_min <= 30 and _dev_min > effective_setpoint:
-                    effective_setpoint = _dev_min
-            except (TypeError, ValueError):
-                pass
-            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
-                effective_setpoint = _profile.minimum_setpoint
+            effective_setpoint = self.resolve_device_effective_setpoint(
+                entity_id, state, trv_setpoint, _profile)
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:
@@ -750,7 +816,8 @@ class TRVControlMixin:
                     )
                     _hvac_first_exc = err
                 stats.record(_hvac_first_exc,
-                             effective_c=effective_setpoint if _hvac_first_exc is None else None)
+                             effective_c=effective_setpoint if _hvac_first_exc is None else None,
+                             entity_id=entity_id if _hvac_first_exc is None else None)
             else:
                 _sp_pending.append((entity_id, effective_setpoint, self.hass.services.async_call(
                     "climate", "set_temperature",
@@ -770,7 +837,7 @@ class TRVControlMixin:
                     stats.record(result)
                 else:
                     self._last_written_setpoints[eid] = sp  # success only
-                    stats.record(None, effective_c=sp)
+                    stats.record(None, effective_c=sp, entity_id=eid)
 
         if trv_setpoint > target:
             if self.zone_id not in self._boost_active:

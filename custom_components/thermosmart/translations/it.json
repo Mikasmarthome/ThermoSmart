@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vacanza",
-              "sleep":    "Notte"
+              "sleep": "Notte"
             }
           }
         }
@@ -212,19 +212,29 @@
       "active_control": {
         "name": "Controllo attivo"
       },
-      "learning": { "name": "Modalità apprendimento" },
-      "vacation_mode": { "name": "Modalità vacanza" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Modalità apprendimento"
+      },
+      "vacation_mode": {
+        "name": "Modalità vacanza"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      },
+      "adaptive_boost": {
+        "name": "Boost adattivo",
+        "description": "Consente a ThermoSmart di applicare un offset boost adattivo appreso. Ha effetto solo quando anche Modalità apprendimento e Controllo attivo sono attivi. Il controllo TPI continua indipendentemente. Predefinito: disattivato."
+      }
     },
     "select": {
       "mode": {
         "name": "Modalità riscaldamento",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Comfort",
-          "eco":      "Eco",
-          "night":    "Notte",
-          "away":     "Assente",
+          "auto": "Auto",
+          "comfort": "Comfort",
+          "eco": "Eco",
+          "night": "Notte",
+          "away": "Assente",
           "vacation": "Vacanza"
         }
       },
@@ -232,43 +242,59 @@
         "name": "Modalità estate",
         "state": {
           "automatic": "Automatico",
-          "on":        "Attivato",
-          "off":       "Disattivato"
+          "on": "Attivato",
+          "off": "Disattivato"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Temperatura target" },
-      "trv_setpoint": { "name": "Setpoint TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Temperatura target"
+      },
+      "trv_setpoint": {
+        "name": "Setpoint TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Punteggio sessione",
         "state": {
           "learning": "Apprendimento"
         }
       },
-      "preheat_minutes": { "name": "Tempo preriscaldamento" },
-      "confidence": { "name": "Progresso apprendimento" },
-      "weather_offset": { "name": "Correzione meteo" },
+      "preheat_minutes": {
+        "name": "Tempo preriscaldamento"
+      },
+      "confidence": {
+        "name": "Progresso apprendimento"
+      },
+      "weather_offset": {
+        "name": "Correzione meteo"
+      },
       "status": {
         "name": "Stato",
         "state": {
-          "disabled":              "Disabilitato",
-          "observation_mode":      "Modalità osservazione",
+          "disabled": "Disabilitato",
+          "observation_mode": "Modalità osservazione",
           "controlling_no_learning": "Controllo attivo (apprendimento disattivato)",
-          "heating_failure":       "Guasto riscaldamento!",
-          "preheating":            "Preriscaldamento",
-          "summer":                "Estate – riscaldamento spento",
-          "window_open":           "Finestra aperta",
-          "vacation":              "Vacanza",
-          "away":                  "Assente",
-          "heating":               "Riscaldamento in corso",
-          "idle":                  "Temperatura mantenuta",
-          "active":                "Attivo"
+          "heating_failure": "Guasto riscaldamento!",
+          "preheating": "Preriscaldamento",
+          "summer": "Estate – riscaldamento spento",
+          "window_open": "Finestra aperta",
+          "vacation": "Vacanza",
+          "away": "Assente",
+          "heating": "Riscaldamento in corso",
+          "idle": "Temperatura mantenuta",
+          "active": "Attivo"
         }
       },
-      "temp_slope": { "name": "Pendenza temperatura" },
-      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "temp_slope": {
+        "name": "Pendenza temperatura"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatura EMA 1h"
+      },
       "heat_loss": {
         "name": "Dispersione termica",
         "state": {
@@ -281,14 +307,18 @@
           "learning": "Apprendimento"
         }
       },
-      "sun_intensity": { "name": "Guadagno solare" },
+      "sun_intensity": {
+        "name": "Guadagno solare"
+      },
       "window_cooling_rate": {
         "name": "Velocità raffreddamento finestra",
         "state": {
           "learning": "Apprendimento"
         }
       },
-      "trv_observations": { "name": "Osservazioni TRV" }
+      "trv_observations": {
+        "name": "Osservazioni TRV"
+      }
     }
   }
 }

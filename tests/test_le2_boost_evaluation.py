@@ -57,7 +57,7 @@ class TestEvaluation:
 
     def test_missing_baseline_time_gain_not_computable(self):
         ep = boost_episode("e", [18.0, 19.5, 21.0, 21.0])
-        ev = m().evaluate_boost(ep, boost_context(ep))  # no expected_non_boost_duration
+        ev = m().evaluate_boost(ep, boost_context(ep, expected_non_boost_duration_s=None))
         assert ev.time_gain.status is DimensionStatus.NOT_COMPUTABLE
         assert "no_baseline" in ev.time_gain.reason_codes
 
@@ -94,16 +94,24 @@ class TestEvaluation:
 
 
 class TestAttribution:
-    def test_confounder_reduces_attribution(self):
+    def test_confounder_reduces_final_weight_single_authority(self):
+        # B2b-4a Variant B: the confounder penalty is NOT in attribution_reliability; it is
+        # applied exactly once via confounder_reliability (gate + final adaptive weight).
         clean = boost_episode("e", [18.0, 19.5, 21.0])
-        dirty = boost_episode("e", [18.0, 19.5, 21.0], confounder_flags=("solar_gain",))
+        dirty = boost_episode("e", [18.0, 19.5, 21.0], confounder_flags=("occupancy_heat_gain",))
         a_clean = m().evaluate_boost(clean, boost_context(clean)).effect.attribution_reliability
         a_dirty = m().evaluate_boost(dirty, boost_context(dirty)).effect.attribution_reliability
-        assert a_dirty < a_clean
+        # attribution itself is confounder-free (single authority)
+        assert a_dirty == pytest.approx(a_clean)
+        # the confounder reliability carries the one penalty
+        from custom_components.thermosmart.learning.models import evaluate_confounders, \
+            compute_outcome_reliability
+        conf = evaluate_confounders(["occupancy_heat_gain"])
+        assert conf.distinct_causes == 1
 
     def test_relative_benefit_needs_baseline_and_attribution(self):
         ep = boost_episode("e", [18.0, 19.5, 20.5, 21.0, 21.0])
-        no_base = m().evaluate_boost(ep, boost_context(ep))
+        no_base = m().evaluate_boost(ep, boost_context(ep, expected_non_boost_duration_s=None))
         assert no_base.effect.relative_benefit is None
 
     def test_manual_correction_ref_lowers_attribution(self):

@@ -12,7 +12,8 @@ from custom_components.thermosmart.learning.models import (
     BoostPredictionContext,
     boost_model_definition,
 )
-from tests.helpers_boost import boost_context, boost_episode, good_boost
+from tests.helpers_boost import (
+    boost_context, boost_context_with_comparison, boost_episode, good_boost)
 
 
 def m(params=None):
@@ -23,8 +24,8 @@ def trained(n=8, offset=1.5, vals=(18.0, 19.5, 20.5, 21.0, 21.0), deficit=3.0):
     model = m()
     for i in range(n):
         ep = boost_episode(f"e{i}", list(vals), decision_id=f"d{i}")
-        model.update(ep, boost_context(ep, requested_offset_c=offset, start_deficit_c=deficit,
-                                       controller_kind="ts"))
+        model.update(ep, boost_context_with_comparison(
+            ep, requested_offset_c=offset, start_deficit_c=deficit, controller_kind="ts"))
     return model
 
 

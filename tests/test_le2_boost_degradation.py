@@ -46,7 +46,7 @@ class TestTrvOnly:
 
     def test_relative_conservative_without_baseline(self):
         ep = boost_episode("e", [18.0, 19.5, 20.5, 21.0, 21.0])
-        ev = m().evaluate_boost(ep, boost_context(ep))
+        ev = m().evaluate_boost(ep, boost_context(ep, expected_non_boost_duration_s=None))
         assert ev.time_gain.status is DimensionStatus.NOT_COMPUTABLE
 
 

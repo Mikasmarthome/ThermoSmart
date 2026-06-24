@@ -554,7 +554,7 @@ class TestRestartReloadSafety:
         m = _fresh_model()
         for i in range(5):
             ep = hb.boost_episode(f"e{i}", [18, 19, 20, 21, 21], zone=ZONE)
-            m.update(ep, hb.boost_context(ep, zone=ZONE))
+            m.update(ep, hb.boost_context_with_comparison(ep, zone=ZONE))
         state_dict = m.serialize_state()
         m2 = BoostModel(ZONE)
         m2.deserialize_state(state_dict)

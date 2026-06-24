@@ -24,6 +24,10 @@ _SHADOW_STATUS_KEYS = frozenset({
     "tpi_coef_int", "tpi_coef_ext", "tpi_coef_diag",
     # Phase B1: boost provenance keys written only when shadow is attached.
     "_boost_rejection_reason", "_boost_candidate_c", "_boost_applied_c",
+    # B2b-3c: authoritative boost evaluation status (diagnostic; shadow-only).
+    "_boost_evaluation_status",
+    # B2b-4e: live device availability fed to the post-reach observer (shadow-only input).
+    "device_states",
 })
 
 

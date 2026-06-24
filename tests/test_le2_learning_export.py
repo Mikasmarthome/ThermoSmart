@@ -14,7 +14,7 @@ from tests.helpers_orchestration import export_input, heat_rate_confidence, zone
 
 from tests.helpers_outcome import reached_clean
 from tests.helpers_forecast import decision, evaluation
-from tests.helpers_boost import boost_context, boost_episode
+from tests.helpers_boost import boost_context, boost_context_with_comparison, boost_episode
 from tests.helpers_manual_correction import correction_context, correction_event
 from custom_components.thermosmart.learning.models import (
     BoostModel,
@@ -37,7 +37,7 @@ def populated_models(zone="living_room"):
     for i in range(4):
         ep = boost_episode(f"b{i}", [18.0, 19.5, 20.5, 21.0, 21.0], decision_id=f"bd{i}",
                            zone=zone)
-        boost.update(ep, boost_context(ep))
+        boost.update(ep, boost_context_with_comparison(ep))
     manual = ManualCorrectionModel(zone)
     for d in range(5):
         ev = correction_event(f"m{d}", 21.0, 21.3, day=d, zone=zone)

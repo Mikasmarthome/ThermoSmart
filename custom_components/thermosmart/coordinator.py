@@ -648,6 +648,8 @@ class ThermoSmartCoordinator(
                                  if recommendation.get("_boost_applied_c") is not None
                                  else None),
                 boost_rejected_reason=recommendation.get("_boost_rejection_reason"),
+                boost_evaluation_status=recommendation.get(
+                    "_boost_evaluation_status", "unknown"),
                 preheat_minutes=float(recommendation.get("preheat_minutes") or 0.0),
                 preheat_status=recommendation.get("preheat_status"),
                 early_cutoff_state=recommendation.get("early_cutoff_state"),
@@ -945,6 +947,12 @@ class ThermoSmartCoordinator(
                         recommendation, boost_runtime_limit=TPI_MAX_BOOST_CELSIUS)
                 except Exception:
                     pass
+                # B2b-3c: authoritative three-state boost emission (runs in SHADOW too);
+                # 0.0 (evaluated, no boost) is distinct from None (not evaluated).
+                try:
+                    self._le2_shadow.emit_boost_authority_status_safe(recommendation)
+                except Exception:
+                    pass
             # ── Authoritative Live Decision Record (Phase B1b) ────────────────────
             # Baseline record is always built from coordinator-owned data, regardless of
             # whether LE2 is attached.  The shadow optionally enriches with decision_id
@@ -1013,6 +1021,7 @@ class ThermoSmartCoordinator(
                             if recommendation.get("trv_setpoint") is not None else None),
                         dispatch_effective_setpoint_min_c=_eff_min,
                         dispatch_effective_setpoint_max_c=_eff_max,
+                        dispatch_effective_setpoints=tuple(float(x) for x in _eff_sps),
                         dispatch_duty_pct=(float(duty) if _disp_path == "direct_valve" else None),
                         dispatch_succeeded=_outcome_elig,
                         dispatch_status=_disp_status,
@@ -1096,11 +1105,27 @@ class ThermoSmartCoordinator(
                         _sched_time = (dt_util.utcnow()
                                        + timedelta(minutes=_comfort_min)).isoformat()
                         _sched_temp = cfg.get("comfort_temp", 21.0)
+                    # B2b-4e: live per-device availability for the post-reach boost observer
+                    # (binding/entity -> available|unavailable|unknown). No entity ids leave
+                    # the learning runtime; they are hashed into anonymous slots internally.
+                    _dev_states: dict[str, str] = {}
+                    for _eid in cfg.get("climate_entities", []):
+                        if not _eid:
+                            continue
+                        _st = self.hass.states.get(_eid)
+                        if _st is None or _st.state == "unavailable":
+                            _dev_states[_eid] = "unavailable"
+                        elif _st.state == "unknown":
+                            _dev_states[_eid] = "unknown"
+                        else:
+                            _dev_states[_eid] = "available"
+                    recommendation["device_states"] = _dev_states
                     self._le2_shadow.observe_safe(
                         recommendation, weather=weather_data,
                         schedule_comfort_time_utc=_sched_time,
                         schedule_comfort_temperature_c=_sched_temp,
-                        heating_failure=self._heating_failure_since is not None)
+                        heating_failure=self._heating_failure_since is not None,
+                        live_record=self._last_live_decision)
                 except Exception:  # never let LE 2.0 affect the heating path
                     pass
 

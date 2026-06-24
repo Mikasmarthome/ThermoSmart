@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from .baseline import baseline_from_recommendation, zone_input_from_recommendation
 from .contracts import (
+    BoostEvaluationStatus,
     ControlGuardResult,
     ControllerBaselineDecision,
     DecisionMode,
@@ -35,7 +36,7 @@ __all__ = [
     "ControllerBaselineDecision", "ZoneRuntimeInput", "LearningPrediction",
     "LearningPredictionSet", "ResolvedControlDecision", "ControlGuardResult",
     "DeviceControlCommand", "DispatchResult", "DecisionTrace", "DecisionTraceEntry",
-    "DecisionMode", "DecisionReason", "FallbackReason",
+    "DecisionMode", "DecisionReason", "FallbackReason", "BoostEvaluationStatus",
     "DeviceAdapter", "DeviceProfile", "GuardLayer", "GuardParameters",
     "SingleDispatcher", "FinalResolver", "DecisionPipeline",
     "LEGACY_INVENTORY", "Disposition", "LegacyEntry", "by_disposition", "validate_inventory",

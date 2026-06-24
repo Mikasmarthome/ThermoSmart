@@ -9,7 +9,8 @@ from custom_components.thermosmart.learning.models import (
     BoostRebuildItem,
     BoostRejection,
 )
-from tests.helpers_boost import boost_context, boost_episode, good_boost
+from tests.helpers_boost import (
+    boost_context, boost_context_with_comparison, boost_episode, good_boost)
 
 
 def m(params=None):
@@ -54,8 +55,8 @@ class TestUpdate:
         model = m()
         for i in range(6):
             ep = boost_episode(f"e{i}", [18.0, 19.5, 20.5, 21.0, 21.0], decision_id=f"d{i}")
-            model.update(ep, boost_context(ep, start_deficit_c=3.0, controller_kind="ts",
-                                           requested_offset_c=1.5))
+            model.update(ep, boost_context_with_comparison(
+                ep, start_deficit_c=3.0, controller_kind="ts", requested_offset_c=1.5))
         assert any(model._state.buckets)
 
     def test_reliability_attribution_weighting(self):
@@ -88,7 +89,7 @@ class TestUpdate:
     def test_two_zones_isolated(self):
         a = BoostModel("lz_a"); b = BoostModel("lz_b")
         ep = boost_episode("e", [18.0, 19.5, 21.0], zone="lz_a")
-        a.update(ep, boost_context(ep))
+        a.update(ep, boost_context_with_comparison(ep))
         assert a._state.general.sample_count == 1 and b._state.general.sample_count == 0
 
     def test_partial_reduced_weight(self):
@@ -128,7 +129,7 @@ class TestRebuild:
         items = []
         for i in range(n):
             ep = boost_episode(f"e{i}", [18.0, 19.5, 20.5, 21.0, 21.0], decision_id=f"d{i}")
-            items.append(BoostRebuildItem(episode=ep, context=boost_context(ep)))
+            items.append(BoostRebuildItem(episode=ep, context=boost_context_with_comparison(ep)))
         return items
 
     def test_rebuild_equals_sequential(self):
@@ -151,8 +152,8 @@ class TestRebuild:
     def test_rebuild_duplicates(self):
         ep1 = boost_episode("e", [18.0, 19.5, 21.0], decision_id="same")
         ep2 = boost_episode("e2", [18.0, 19.5, 21.0], decision_id="same")
-        items = [BoostRebuildItem(episode=ep1, context=boost_context(ep1)),
-                 BoostRebuildItem(episode=ep2, context=boost_context(ep2))]
+        items = [BoostRebuildItem(episode=ep1, context=boost_context_with_comparison(ep1)),
+                 BoostRebuildItem(episode=ep2, context=boost_context_with_comparison(ep2))]
         rb = m()
         res = rb.rebuild(None, items)
         assert res.duplicate_count == 1 and rb._state.general.sample_count == 1

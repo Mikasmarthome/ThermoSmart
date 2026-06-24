@@ -49,6 +49,15 @@ class DecisionMode(Enum):
     CONTROL = "control"
 
 
+class BoostEvaluationStatus(Enum):
+    """B2b-3c three-state authority for the boost decision. The single authoritative
+    source is the LE-2.0 boost authority; these states must never collapse."""
+    NOT_EVALUATED = "not_evaluated"            # boost authority not invoked / data missing
+    EVALUATED_NOT_APPLIED = "evaluated_not_applied"  # evaluated, authoritatively no boost
+    APPLIED = "applied"                        # a boost offset was authoritatively applied
+    UNKNOWN = "unknown"                        # legacy / unset
+
+
 @dataclass(frozen=True)
 class ZoneRuntimeInput:
     """Normalised, typed snapshot of the values a zone decision needs."""
@@ -398,3 +407,8 @@ class LiveDecisionRecord:
     # ── outcome eligibility (learning attribution gate) ──────────────
     outcome_eligible: bool = False              # True iff dispatch_status == "fully_succeeded"
     outcome_reliability: str = "none"           # "full"|"partial"|"none"
+    # B2b-3c authoritative three-state boost evaluation. 0.0 (evaluated_not_applied) is
+    # distinct from None (not_evaluated/unknown); the two must never collapse.
+    boost_evaluation_status: str = "unknown"
+    # B2b-4b: authoritative per-device effective setpoints actually written (no entity ids).
+    dispatch_effective_setpoints: tuple = ()

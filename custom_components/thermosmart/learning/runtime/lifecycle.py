@@ -9,6 +9,7 @@ an injected store + clock; there are no HA imports here.
 """
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum
@@ -145,12 +146,31 @@ class _ZoneRuntime:
         self.last_decision_id: Optional[str] = None
         self.last_regime: Optional[str] = None
         self.control_ledger = ControlApplicationLedger()
+        # B2b-1: boost update contexts materialised at decision time, awaiting their
+        # OutcomeEpisode to close (cross-cycle). Bounded FIFO, keyed by decision_id.
+        self.pending_boost_contexts: "OrderedDict[str, Any]" = OrderedDict()
+        self._pending_boost_cap = 64
+        # B2b-3: authoritative dispatch records awaiting their OutcomeEpisode + the
+        # per-zone non-boost baseline comparison store.
+        self.pending_dispatch_records: "OrderedDict[str, Any]" = OrderedDict()
+        # B2b-3a: query features FROZEN at the boost decision (first boost cycle of a
+        # decision), keyed by decision_id — never reconstructed from the episode end.
+        self.pending_baseline_ctx: "OrderedDict[str, Any]" = OrderedDict()
+        from ..models import BaselineComparisonStore
+        self.baseline_store = BaselineComparisonStore(zone_id)
+        self.last_baseline_estimate: Any = None
+        self._last_snapshot: Any = None
+        # B2b-4d: at most ONE active deferred boost finalization per zone (post-reach observer).
+        self.pending_boost_outcome: Any = None
 
     def serialize(self) -> dict:
         return {"capture": self.capture.serialize(),
                 "pipeline": self.pipeline.serialize(),
                 "models": self.orchestrator.serialize_models(),
                 "ledger": self.ledger.serialize(),
+                "baseline_store": self.baseline_store.serialize(),
+                "pending_boost_outcome": (self.pending_boost_outcome.to_dict()
+                                          if self.pending_boost_outcome is not None else None),
                 "model_update_counts": dict(self.model_update_counts),
                 "cycles": self.cycles, "last_cycle_ts": self.last_cycle_ts}
 
@@ -170,6 +190,19 @@ class _ZoneRuntime:
                 self.ledger.restore(data["ledger"])
             except Exception as err:
                 errors.append(f"ledger:restore:{type(err).__name__}")
+        if "baseline_store" in data:
+            try:
+                self.baseline_store.restore(data["baseline_store"])
+            except Exception as err:
+                errors.append(f"baseline_store:restore:{type(err).__name__}")
+        if data.get("pending_boost_outcome") is not None:
+            try:
+                from .boost_pending import BoostPendingOutcome
+                self.pending_boost_outcome = BoostPendingOutcome.from_dict(
+                    data["pending_boost_outcome"])   # None on unknown version / corrupt
+            except Exception as err:
+                self.pending_boost_outcome = None
+                errors.append(f"pending_boost:restore:{type(err).__name__}")
         self.model_update_counts = dict(data.get("model_update_counts", {}))
         self.cycles = data.get("cycles", 0)
         self.last_cycle_ts = data.get("last_cycle_ts")
@@ -271,6 +304,46 @@ class LearningRuntime:
         authoritative_change = False
         startup_ok = zr.cycles > self._config.startup_grace_cycles
 
+        # B2b-1: stash the authoritative boost update context (decision-time) until its
+        # OutcomeEpisode closes cross-cycle. Bounded FIFO; keyed by decision_id.
+        if evidence.boost_context is not None:
+            did = evidence.boost_context.decision_id
+            zr.pending_boost_contexts.pop(did, None)
+            zr.pending_boost_contexts[did] = evidence.boost_context
+            while len(zr.pending_boost_contexts) > zr._pending_boost_cap:
+                zr.pending_boost_contexts.popitem(last=False)
+            # B2b-3a: freeze the matching features at the DECISION (first boost cycle); do
+            # not overwrite on later cycles of the same decision (avoids end-state leakage).
+            if did not in zr.pending_baseline_ctx:
+                zr.pending_baseline_ctx[did] = {
+                    "external_temperature_c": (snapshot.outdoor_temp.value
+                                               if getattr(snapshot, "outdoor_temp", None)
+                                               is not None else None),
+                    "heat_rate_used": self._baseline_heat_rate(zr),
+                    "device_control_type": "setpoint", "decision_ts": snapshot.ts}
+                while len(zr.pending_baseline_ctx) > zr._pending_boost_cap:
+                    zr.pending_baseline_ctx.popitem(last=False)
+        # B2b-3: stash the authoritative dispatch record per decision (for non-boost
+        # baseline-sample creation and boost baseline-query at the OutcomeEpisode close).
+        if snapshot.boost_dispatch is not None:
+            ddid = snapshot.decision_id     # authoritative capture id (matches ce.decision_id)
+            zr.pending_dispatch_records.pop(ddid, None)
+            zr.pending_dispatch_records[ddid] = snapshot.boost_dispatch
+            while len(zr.pending_dispatch_records) > zr._pending_boost_cap:
+                zr.pending_dispatch_records.popitem(last=False)
+        zr._last_snapshot = snapshot        # for baseline context at outcome close
+
+        # B2b-4d: advance any deferred post-reach boost observer with THIS cycle's sample;
+        # finalize (exactly one BoostModel.update) when its fixed deadline is reached or an
+        # interruption breaks continuity. Runs before the pipeline so a finalize this cycle
+        # is counted.
+        if zr.pending_boost_outcome is not None:
+            try:
+                if self._tick_pending_boost(zr, snapshot):
+                    authoritative_change = True
+            except Exception as err:
+                self._record_runtime_error("pending_boost_tick", err)
+
         # cross-cycle episode pipeline -> completed authoritative episodes -> updates.
         # Transaction: completed episodes are fully materialised by the builders
         # before any model update; each update is eligibility-gated and isolated.
@@ -283,6 +356,38 @@ class LearningRuntime:
                     authoritative_change = True
                     zr.model_update_counts[ce.model_name] = \
                         zr.model_update_counts.get(ce.model_name, 0) + 1
+                # B2b-1: fan out the closed OutcomeEpisode to the BoostModel with its
+                # authoritative context — but ONLY when a boost was actually dispatched
+                # for this decision (a pending context exists). No context => no boost
+                # update (failed/not-attempted/zero-applied were filtered at materialise).
+                if ce.model_name == "outcome" and ce.decision_id is not None:
+                    bctx = zr.pending_boost_contexts.pop(ce.decision_id, None)
+                    drec = zr.pending_dispatch_records.pop(ce.decision_id, None)
+                    # B2b-4b: augment the episode with runtime confounders from authoritative
+                    # evidence (multi-TRV, supply-delay, early-cutoff, afterheat). The SAME
+                    # augmented episode feeds both the boost outcome and the baseline path.
+                    extra_cf = self._runtime_confounders(zr, ce.episode, drec, snapshot)
+                    bound_episode = self._augment_confounders(ce.episode, extra_cf)
+                    if bctx is not None:
+                        # B2b-3: derive a trustworthy expected_non_boost_duration_s from
+                        # comparable historical NON-boost episodes completed before now
+                        # (baseline FROZEN at decision; cutoff unchanged).
+                        bctx = self._inject_baseline(zr, bctx, bound_episode, snapshot, drec)
+                        bctx = replace(bctx, source_episode_id=bound_episode.episode_id)
+                        from ..episode_schemas import EpisodeReason as _ER
+                        if bound_episode.reason is _ER.REACHED:
+                            # B2b-4d: DEFER — a boost/afterheat overshoot may begin after the
+                            # in-band dwell. Open the post-reach observer; finalize later.
+                            self._open_pending_boost(zr, bound_episode, bctx, snapshot)
+                        else:
+                            # non-REACHED: no SUCCESS possible -> finalize immediately.
+                            if zr.orchestrator.apply_update("boost", bound_episode, bctx):
+                                authoritative_change = True
+                                zr.model_update_counts["boost"] = \
+                                    zr.model_update_counts.get("boost", 0) + 1
+                    else:
+                        # B2b-3: an authoritative NON-boost outcome becomes a baseline sample.
+                        self._maybe_store_baseline(zr, bound_episode, drec, snapshot)
 
         predictions: dict = {}
         confidence_results: dict = {}
@@ -346,6 +451,270 @@ class LearningRuntime:
             comparisons=tuple(comparisons), confidence_results=confidence_results,
             model_errors=model_errors, warnings=tuple(warnings),
             dirty=self._persistence.dirty if self._persistence else False)
+
+    def _baseline_heat_rate(self, zr: "_ZoneRuntime"):
+        from ..contracts import PredictionType
+        pred = (zr.last_predictions or {}).get(PredictionType.HEAT_RATE)
+        try:
+            return float(pred.values.get("heat_rate")) if pred else None
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    def _runtime_confounders(self, zr, episode, dispatch, snapshot) -> tuple:
+        """B2b-4b: derive runtime confounders from authoritative episode/dispatch evidence
+        (multi-TRV per-device, supply-delay vs. expected onset, early-cutoff overlap,
+        afterheat interaction). Returned as canonical flag strings; fed to the SAME central
+        evaluator for both the boost outcome and the non-boost baseline. Never raises."""
+        flags: list[str] = []
+        try:
+            from ..models import (BoostDeviceDispatchEvidence, evaluate_multi_trv,
+                                  supply_delay_confounder, afterheat_attribution_severity,
+                                  ConfounderSeverity, BoostConfounder)
+            from ..contracts import PredictionType
+            # ── multi-TRV from authoritative per-device effective setpoints ──
+            if dispatch is not None:
+                effs = list(getattr(dispatch, "effective_setpoints", ()) or ())
+                base_sp = getattr(dispatch, "baseline_setpoint_c", None)
+                dctype = getattr(dispatch, "device_control_type", "setpoint")
+                applied = getattr(dispatch, "boost_applied_c", None)
+                if effs and base_sp is not None:
+                    devices = [BoostDeviceDispatchEvidence(
+                        slot=f"trv{i}", control_type=dctype,
+                        requested_offset_c=applied,
+                        effective_offset_c=round(float(sp) - float(base_sp), 4),
+                        clamp_applied_c=(abs((applied or 0.0) - (float(sp) - float(base_sp)))
+                                         if applied is not None else 0.0))
+                        for i, sp in enumerate(effs)]
+                    total = int(getattr(dispatch, "targets_total", len(effs)) or len(effs))
+                    failed = int(getattr(dispatch, "targets_failed", 0) or 0)
+                    for j in range(max(0, total - len(effs)) + failed):
+                        devices.append(BoostDeviceDispatchEvidence(
+                            slot=f"trvF{j}", control_type=dctype, requested_offset_c=applied,
+                            effective_offset_c=None, dispatch_succeeded=False))
+                    mtv = evaluate_multi_trv(devices)
+                    if mtv is not None:
+                        flags.append(mtv.value)
+            # ── supply-delay: expected onset (frozen) vs. actual effective onset ──
+            try:
+                preds = getattr(zr, "last_predictions", {}) or {}
+                od = preds.get(PredictionType.ONSET_DELAY)
+                expected_onset = (float(od.values.get("onset_delay_minutes"))
+                                  if od is not None and not getattr(od, "fallback_used", True)
+                                  else None)
+                from ..models.baseline_comparison import _onset_and_target
+                onset_ms, _tm = _onset_and_target(
+                    episode.trajectory.points, episode.target, episode.start_temp,
+                    getattr(episode, "comfort_tolerance_at_start", 0.5))
+                actual_onset = onset_ms / 60000.0 if onset_ms is not None else None
+                sd = supply_delay_confounder(expected_onset, actual_onset)
+                if sd is not None:
+                    flags.append(sd.value)
+            except Exception:
+                pass
+            # ── early-cutoff overlap (same decision) ──
+            ecs = getattr(snapshot, "early_cutoff_state", None) if snapshot is not None else None
+            if ecs in ("cutoff_applied", "coasting_hold"):
+                flags.append(BoostConfounder.EARLY_CUTOFF_INTERACTION.value)
+            # ── afterheat interaction (high expected afterheat) ──
+            try:
+                ah = (getattr(zr, "last_predictions", {}) or {}).get(
+                    PredictionType.EXPECTED_OVERSHOOT)
+                exp_ah = float(ah.values.get("expected_overshoot")) if ah is not None else None
+                if afterheat_attribution_severity(exp_ah, None) is ConfounderSeverity.DEGRADING:
+                    flags.append(BoostConfounder.AFTERHEAT_INTERACTION.value)
+            except Exception:
+                pass
+        except Exception as err:
+            self._record_runtime_error("runtime_confounders", err)
+        return tuple(flags)
+
+    def _augment_confounders(self, episode, extra: tuple):
+        if not extra:
+            return episode
+        merged = tuple(sorted(set(episode.confounder_flags or ()) | set(extra)))
+        return replace(episode, confounder_flags=merged)
+
+    # ── B2b-4d: deferred post-reach boost finalization ──────────────────────
+    def _predicted_afterheat_duration_s(self, zr):
+        from ..contracts import PredictionType
+        pred = (zr.last_predictions or {}).get(PredictionType.AFTERHEAT_DURATION)
+        try:
+            v = pred.values.get("afterheat_duration") if pred else None
+            return float(v) if v is not None else None
+        except (AttributeError, TypeError, ValueError):
+            return None
+
+    def _device_states(self, snapshot) -> dict:
+        return dict(getattr(snapshot, "device_states", {}) or {})
+
+    def _control_type(self, snapshot) -> str:
+        dispatch = getattr(snapshot, "boost_dispatch", None)
+        return getattr(dispatch, "device_control_type", "setpoint") if dispatch else "setpoint"
+
+    def _open_pending_boost(self, zr, episode, bctx, snapshot) -> None:
+        """Open the single per-zone post-reach observer at thermal REACHED.
+
+        Supersession (B2b-4e): a pre-existing pending for a DIFFERENT decision whose deadline
+        has NOT passed is closed as BOOST_INTERRUPTED (superseded) — never silently
+        overwritten and never as a positive outcome. An already-due pending is finalized
+        regularly first."""
+        from .boost_pending import (BoostPendingOutcome, _episode_to_dict,
+                                    observation_window_s)
+        from ..models import BoostOutcomeLifecycleState as _LS
+        from datetime import timedelta
+        try:
+            old = zr.pending_boost_outcome
+            if old is not None and old.decision_id != episode.decision_id:
+                if old.is_due(snapshot.ts):
+                    self._finalize_pending_boost(zr, old, reason="deadline")
+                else:
+                    old.add_confounder("superseded_by_new_decision")
+                    old.state = _LS.INTERRUPTED.value
+                    self._finalize_pending_boost(zr, old, reason="superseded_by_new_decision")
+            elif old is not None and old.decision_id == episode.decision_id:
+                return                          # same decision / retry -> no supersession
+            end_ts = episode.end_ts
+            window = observation_window_s(self._predicted_afterheat_duration_s(zr))
+            deadline = (end_ts + timedelta(seconds=window)).isoformat()
+            p = BoostPendingOutcome(
+                zone_id=zr.zone_id, decision_id=episode.decision_id,
+                episode_id=episode.episode_id,
+                state=_LS.TARGET_REACHED_PENDING_OBSERVATION.value, target=episode.target,
+                episode_end_ts=end_ts.isoformat(), observation_start_ts=end_ts.isoformat(),
+                deadline_ts=deadline, last_valid_ts=end_ts.isoformat(),
+                episode=_episode_to_dict(episode), boost_context=bctx.to_dict())
+            p.seed_devices(end_ts.isoformat(), self._device_states(snapshot),
+                           self._control_type(snapshot))
+            zr.pending_boost_outcome = p
+        except Exception as err:
+            self._record_runtime_error("open_pending_boost", err)
+
+    def _tick_pending_boost(self, zr, snapshot) -> bool:
+        """Advance the pending observer with this cycle's REAL sample + device states;
+        finalize when due or interrupted. Returns True iff a model update happened."""
+        from ..models import BoostOutcomeLifecycleState as _LS
+        from .boost_pending import OBS_MAX_GAP_S
+        p = zr.pending_boost_outcome
+        if p is None:
+            return False
+        now_ts = snapshot.ts
+        gap = p.gap_s(now_ts)
+        continuity_gap = gap is not None and gap > OBS_MAX_GAP_S
+        # real cross-cycle device availability (continuity gap => unknown not a device fault)
+        p.ingest_devices(now_ts, self._device_states(snapshot), self._control_type(snapshot),
+                         continuity_gap=continuity_gap)
+        # continuity / interruption checks (restart gap, safety, context change)
+        interrupt_reason = None
+        if continuity_gap:
+            interrupt_reason = "restart_gap"
+        elif snapshot.window_open:
+            interrupt_reason = "window_open"
+        elif snapshot.heating_failure:
+            interrupt_reason = "heating_failure"
+        elif snapshot.target_c is not None and abs(float(snapshot.target_c) - p.target) > 0.1:
+            interrupt_reason = "target_change"
+        if interrupt_reason is not None:
+            p.add_confounder(interrupt_reason)
+            p.state = _LS.INTERRUPTED.value
+            return self._finalize_pending_boost(zr, p, reason=interrupt_reason)
+        temp = snapshot.indoor_temp.value if getattr(snapshot, "indoor_temp", None) is not None \
+            else None
+        valid = (getattr(snapshot, "indoor_temp_quality", None) is None
+                 or str(getattr(snapshot.indoor_temp_quality, "value", "ok")) == "ok")
+        p.ingest(now_ts, temp, valid=valid)
+        if p.is_due(now_ts):
+            return self._finalize_pending_boost(zr, p, reason="deadline")
+        return False
+
+    def _finalize_pending_boost(self, zr, p, *, reason: str) -> bool:
+        """Crash-atomic, EXACTLY-once finalization (Variant A — single atomic zone snapshot).
+
+        Order: (1) persist the finalization INTENT into the pending (finalized=True), (2) run
+        BoostModel.update which dedups by decision_id and itself records the processed
+        decision_id, (3) mark update_applied and clear the pending. The whole _ZoneRuntime
+        (BoostState incl. processed_decision_ids AND the pending) serializes in ONE snapshot,
+        so any crash restores a consistent state: a re-finalize after restore is idempotent
+        because the model already holds the processed decision_id."""
+        from ..models import BoostOutcomeLifecycleState as _LS
+        updated = False
+        try:
+            episode = p.build_final_episode()
+            from ..models import BoostUpdateContext
+            bctx = BoostUpdateContext.from_dict(p.boost_context)
+            bctx = replace(bctx, source_episode_id=episode.episode_id)
+            p.finalized = True                  # (1) intent
+            p.finalization_reason = reason
+            if p.state != _LS.INTERRUPTED.value:
+                p.state = _LS.FINALIZED.value
+            if zr.orchestrator.apply_update("boost", episode, bctx):   # (2) idempotent update
+                updated = True
+                zr.model_update_counts["boost"] = zr.model_update_counts.get("boost", 0) + 1
+            p.update_applied = True             # (3) effective (model dedup is the authority)
+        except Exception as err:
+            self._record_runtime_error("finalize_pending_boost", err)
+        finally:
+            zr.pending_boost_outcome = None     # clear; model dedup prevents any double update
+        return updated
+
+    def _inject_baseline(self, zr: "_ZoneRuntime", bctx, episode, snapshot, dispatch=None):
+        """B2b-3/3a: query comparable historical non-boost episodes -> expected duration.
+
+        Causal: the cutoff is the boost DECISION time (bound episode start), and matching
+        features are FROZEN at the decision (pending_baseline_ctx), never reconstructed from
+        the episode end. Never raises; on any issue the context is unchanged
+        (expected_non_boost_duration_s stays None => INSUFFICIENT_COMPARISON)."""
+        try:
+            from ..models import BaselineQuery
+            frozen = zr.pending_baseline_ctx.pop(bctx.decision_id, {})
+            q = BaselineQuery(
+                learning_zone_id=zr.zone_id, decision_id=bctx.decision_id,
+                episode_id=episode.episode_id,
+                baseline_cutoff_ts=episode.start_ts.isoformat(),   # decision / bound start
+                start_deficit_c=(bctx.start_deficit_c
+                                 if bctx.start_deficit_c is not None
+                                 else episode.target - episode.start_temp),
+                target_temperature_c=episode.target,
+                external_temperature_c=frozen.get("external_temperature_c"),
+                heat_rate_used=frozen.get("heat_rate_used"), tpi_duty=None,
+                time_of_day_bucket=episode.start_ts.hour,
+                device_control_type=getattr(dispatch, "device_control_type", "setpoint")
+                if dispatch is not None else frozen.get("device_control_type", "setpoint"),
+                query_source="live_decision")
+            est = zr.baseline_store.estimate(q)
+            zr.last_baseline_estimate = est
+            if est.expected_non_boost_duration_s is not None:
+                return replace(
+                    bctx, expected_non_boost_duration_s=est.expected_non_boost_duration_s,
+                    baseline_reliability=est.reliability)
+        except Exception as err:
+            self._record_runtime_error("baseline_inject", err)
+        return bctx
+
+    def _maybe_store_baseline(self, zr: "_ZoneRuntime", episode, dispatch, snapshot) -> None:
+        """B2b-3: build + store an authoritative non-boost baseline sample. Never raises."""
+        if dispatch is None:
+            return
+        try:
+            from ..models import build_non_boost_sample
+            outdoor = snapshot.outdoor_temp.value if getattr(
+                snapshot, "outdoor_temp", None) is not None else None
+            reject_out: list = []
+            sample = build_non_boost_sample(
+                episode, dispatch, external_temperature_c=outdoor,
+                heat_rate_used=self._baseline_heat_rate(zr),
+                device_control_type=getattr(dispatch, "device_control_type", "setpoint"),
+                sensor_reliability=1.0, reject_out=reject_out)
+            if sample is not None:
+                zr.baseline_store.add(sample)
+            elif reject_out:
+                # B2b-3b: count the diagnostic reason (e.g. boost_application_unknown).
+                zr.baseline_store.record_rejection(reject_out[-1])
+        except Exception as err:
+            self._record_runtime_error("baseline_store", err)
+
+    def _record_runtime_error(self, kind: str, err: Exception) -> None:
+        # learning-internal errors must never reach control; counted only.
+        self._runtime_errors = getattr(self, "_runtime_errors", 0) + 1
 
     def run_cycle_safe(self, inp: RuntimeCycleInput) -> RuntimeCycleResult:
         """Bridge entrypoint: NEVER raises; a failure cannot reach heating control."""

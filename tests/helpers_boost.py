@@ -50,7 +50,14 @@ def boost_context(episode, *, requested_offset_c: float = 1.5, start_deficit_c: 
                   actual_duration_s: float = 1800.0, planned_duration_s: float = 1800.0,
                   controller_kind: str = "ts", expected_non_boost_duration_s=None,
                   expected_afterheat_rise_c=None, manual_correction_ref=None,
-                  zone=None) -> BoostUpdateContext:
+                  zone=None, authority: str = "live_record",
+                  dispatch_status: str = "fully_succeeded",
+                  outcome_reliability: str = "full",
+                  boost_applied_c=None, baseline_reliability=None) -> BoostUpdateContext:
+    # B2b-2 correction #1: NO artificial comparison baseline by default. The general
+    # default has expected_non_boost_duration_s=None => INSUFFICIENT_COMPARISON. Tests
+    # that deliberately exercise a baseline use boost_context_with_comparison(...) or
+    # pass expected_non_boost_duration_s explicitly.
     return BoostUpdateContext(
         source_episode_id=episode.episode_id, decision_id=episode.decision_id,
         learning_zone_id=zone, requested_offset_c=requested_offset_c,
@@ -59,9 +66,27 @@ def boost_context(episode, *, requested_offset_c: float = 1.5, start_deficit_c: 
         controller_kind=controller_kind,
         expected_non_boost_duration_s=expected_non_boost_duration_s,
         expected_afterheat_rise_c=expected_afterheat_rise_c,
-        manual_correction_ref=manual_correction_ref)
+        manual_correction_ref=manual_correction_ref,
+        authority=authority, dispatch_status=dispatch_status,
+        outcome_reliability=outcome_reliability,
+        boost_applied_c=requested_offset_c if boost_applied_c is None else boost_applied_c,
+        baseline_reliability=baseline_reliability)
+
+
+def boost_context_with_comparison(episode, *, expected_non_boost_duration_s: float = 3600.0,
+                                  baseline_reliability: float = 0.9,
+                                  **kw) -> BoostUpdateContext:
+    """A boost context that carries a reliable comparison baseline (adaptive path).
+
+    A real comparison baseline always has a reliability, so this helper sets both
+    ``expected_non_boost_duration_s`` and ``baseline_reliability`` (B2b-4). Use in
+    Success / No-Effect / Unnecessary tests; the general ``boost_context`` has no baseline.
+    """
+    return boost_context(episode, expected_non_boost_duration_s=expected_non_boost_duration_s,
+                         baseline_reliability=baseline_reliability, **kw)
 
 
 def good_boost(model, idx, *, offset=1.5, vals=(18.0, 19.5, 20.5, 21.0, 21.0)):
+    # good_boost trains the adaptive model -> needs a reliable comparison baseline.
     ep = boost_episode(f"e{idx}", list(vals), decision_id=f"dec{idx}")
-    return model.update(ep, boost_context(ep, requested_offset_c=offset))
+    return model.update(ep, boost_context_with_comparison(ep, requested_offset_c=offset))

@@ -408,12 +408,12 @@ class TestDurationCooldown:
 
 class TestOutcomeFeedback:
     def _trained_model(self, requested_offset=1.5, n=12) -> BoostModel:
-        from tests.helpers_boost import boost_episode, boost_context
+        from tests.helpers_boost import boost_episode, boost_context_with_comparison
         m = BoostModel("z")
         for i in range(n):
             ep = boost_episode(f"ep{i}", [18.0, 19.5, 21.0, 21.5],
                                zone="z", decision_id=f"dec{i}")
-            ctx = boost_context(ep, requested_offset_c=requested_offset)
+            ctx = boost_context_with_comparison(ep, requested_offset_c=requested_offset)
             m.update(ep, ctx)
         return m
 
@@ -458,12 +458,12 @@ class TestOutcomeFeedback:
     def test_pre_onset_wait_not_measured_as_boost_effectiveness(self):
         """Boost effectiveness is measured on episode duration, not onset wait.
         The BoostUpdateContext.actual_duration_s carries only the active phase."""
-        from tests.helpers_boost import boost_episode, boost_context
+        from tests.helpers_boost import boost_episode, boost_context_with_comparison
         m = BoostModel("z")
         ep = boost_episode("ep_onset", [18.0, 19.5, 20.5, 21.0, 21.0],
                            zone="z", decision_id="dec_onset", duration_min=45)
         # actual_duration_s is only the active heating phase (after onset: 20min = 1200s)
-        ctx = boost_context(ep, requested_offset_c=1.5, actual_duration_s=1200.0)
+        ctx = boost_context_with_comparison(ep, requested_offset_c=1.5, actual_duration_s=1200.0)
         result = m.update(ep, ctx)
         if result.accepted:
             # Duration bucket stores actual_duration_s (1200s), not full episode (3600s)

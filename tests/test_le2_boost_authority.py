@@ -29,7 +29,8 @@ from custom_components.thermosmart.learning.decision.contracts import (
     ControllerBaselineDecision, ZoneRuntimeInput)
 from custom_components.thermosmart.learning.decision.resolver import FinalResolver
 from tests.helpers_decision import preds, rec, run
-from tests.helpers_boost import boost_context, boost_episode, good_boost
+from tests.helpers_boost import (
+    boost_context, boost_context_with_comparison, boost_episode, good_boost)
 
 
 # ---------------------------------------------------------------------------
@@ -44,8 +45,8 @@ def _trained(n=8, offset=1.5, vals=(18.0, 19.5, 20.5, 21.0, 21.0), deficit=3.0):
     m = _fresh()
     for i in range(n):
         ep = boost_episode(f"e{i}", list(vals), decision_id=f"d{i}", zone="z")
-        m.update(ep, boost_context(ep, requested_offset_c=offset, start_deficit_c=deficit,
-                                   controller_kind="ts"))
+        m.update(ep, boost_context_with_comparison(
+            ep, requested_offset_c=offset, start_deficit_c=deficit, controller_kind="ts"))
     return m
 
 
@@ -413,7 +414,8 @@ class TestOutcomeLearning:
     def test_helpful_boost_increases_evidence(self):
         m = _fresh()
         ep1 = boost_episode("e1", [18.0, 19.5, 20.5, 21.0, 21.0], decision_id="d1", zone="z")
-        m.update(ep1, boost_context(ep1, requested_offset_c=1.5, start_deficit_c=3.0))
+        m.update(ep1, boost_context_with_comparison(ep1, requested_offset_c=1.5,
+                                                     start_deficit_c=3.0))
         assert m._state.general.sample_count >= 1
 
     def test_overshoot_counted(self):
@@ -429,11 +431,13 @@ class TestOutcomeLearning:
         for i in range(6):
             ep = boost_episode(f"s{i}", [19.5, 20.5, 21.0], decision_id=f"ds{i}",
                                target=21.0, zone="z")
-            m.update(ep, boost_context(ep, requested_offset_c=0.5, start_deficit_c=0.5))
+            m.update(ep, boost_context_with_comparison(ep, requested_offset_c=0.5,
+                                                       start_deficit_c=0.5))
         for i in range(6):
             ep = boost_episode(f"l{i}", [18.0, 19.5, 20.5, 21.0, 21.0], decision_id=f"dl{i}",
                                target=21.0, zone="z")
-            m.update(ep, boost_context(ep, requested_offset_c=2.0, start_deficit_c=3.0))
+            m.update(ep, boost_context_with_comparison(ep, requested_offset_c=2.0,
+                                                       start_deficit_c=3.0))
         assert m._state.general.sample_count >= 1
 
     def test_missing_optional_data_doesnt_block(self):

@@ -73,12 +73,51 @@ def _decision_type(recommendation: Mapping[str, Any]) -> DecisionType:
         return DecisionType.UNKNOWN
 
 
+def _boost_dispatch_from_live_record(live_record: Any) -> Optional[Any]:
+    """B2b-1: map the authoritative LiveDecisionRecord -> BoostDispatchRecord.
+
+    This is the single source of truth for what boost was actually written. Returns
+    None when no record is available (runtime then uses the marked legacy fallback).
+    """
+    if live_record is None:
+        return None
+    try:
+        from .capture import BoostDispatchRecord
+        did = getattr(live_record, "decision_id", None)
+        if not did:
+            return None
+        # B2b-3c: device control type from the post-dispatch path ("setpoint"/"direct_valve").
+        dpath = getattr(live_record, "dispatch_path", None)
+        device_type = dpath if dpath in ("setpoint", "direct_valve") else "setpoint"
+        return BoostDispatchRecord(
+            decision_id=did,
+            boost_candidate_c=getattr(live_record, "boost_candidate_c", None),
+            # explicit identity: an authoritative 0.0 must NOT become None.
+            boost_applied_c=getattr(live_record, "boost_applied_c", None),
+            baseline_setpoint_c=getattr(live_record, "baseline_setpoint_c", None),
+            final_setpoint_c=getattr(live_record, "final_setpoint_c", None),
+            effective_setpoint_min_c=getattr(live_record, "dispatch_effective_setpoint_min_c", None),
+            effective_setpoint_max_c=getattr(live_record, "dispatch_effective_setpoint_max_c", None),
+            dispatch_status=getattr(live_record, "dispatch_status", "not_attempted"),
+            outcome_eligible=bool(getattr(live_record, "outcome_eligible", False)),
+            outcome_reliability=getattr(live_record, "outcome_reliability", "none"),
+            boost_evaluation_status=getattr(live_record, "boost_evaluation_status", "unknown"),
+            device_control_type=device_type,
+            effective_setpoints=tuple(
+                getattr(live_record, "dispatch_effective_setpoints", ()) or ()),
+            targets_total=int(getattr(live_record, "dispatch_targets_total", 0) or 0),
+            targets_failed=int(getattr(live_record, "dispatch_targets_failed", 0) or 0))
+    except Exception:
+        return None
+
+
 def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *,
                               weather: Optional[Mapping[str, Any]] = None,
                               schedule_comfort_time_utc: Optional[str] = None,
                               schedule_comfort_temperature_c: Optional[float] = None,
                               ts_iso: Optional[str] = None,
-                              heating_failure: bool = False) -> RuntimeCycleInput:
+                              heating_failure: bool = False,
+                              live_record: Any = None) -> RuntimeCycleInput:
     """Materialise a typed cycle input from already-computed coordinator values.
 
     Defensive: only reads present values, never invents a temperature, keeps 0.0,
@@ -123,7 +162,9 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
             preheat_active=bool(rec.get("preheat_minutes", 0)),
             mode=rec.get("mode")),
         window_open=rec.get("window_open"), heating_failure=heating_failure,
-        outdoor_temp=outdoor, forecast_high=rec.get("forecast_high"))
+        outdoor_temp=outdoor, forecast_high=rec.get("forecast_high"),
+        device_states=dict(rec.get("device_states") or {}),   # B2b-4e live availability
+        boost_dispatch=_boost_dispatch_from_live_record(live_record))
 
 
 class LearningShadowController:
@@ -180,8 +221,14 @@ class LearningShadowController:
                      weather: Optional[Mapping[str, Any]] = None,
                      schedule_comfort_time_utc: Optional[str] = None,
                      schedule_comfort_temperature_c: Optional[float] = None,
-                     heating_failure: bool = False) -> None:
-        """Run one passive shadow cycle. Never raises, never controls."""
+                     heating_failure: bool = False,
+                     live_record: Any = None) -> None:
+        """Run one passive shadow cycle. Never raises, never controls.
+
+        ``live_record`` is the authoritative post-dispatch ``LiveDecisionRecord``;
+        when provided, the boost outcome context is bound to its real dispatch result
+        (B2b-1) rather than the setpoint-target heuristic.
+        """
         if not self._enabled:
             return
         # Cache comfort time for TPI-sufficiency check in next adjust_recommendation_safe call.
@@ -191,7 +238,7 @@ class LearningShadowController:
                 self._zone, recommendation, weather=weather,
                 schedule_comfort_time_utc=schedule_comfort_time_utc,
                 schedule_comfort_temperature_c=schedule_comfort_temperature_c,
-                heating_failure=heating_failure)
+                heating_failure=heating_failure, live_record=live_record)
             self._last_result = CoordinatorBridge(self._runtime).process(inp)
         except Exception as err:
             self._record_error("cycle", err)
@@ -891,6 +938,52 @@ class LearningShadowController:
                                       if record.dispatch_setpoint_c is not None
                                       else record.final_setpoint_c),
         )
+
+    def emit_boost_authority_status_safe(self, recommendation: dict) -> None:
+        """B2b-3c: authoritatively emit the three-state boost evaluation for THIS decision.
+
+        Runs every cycle (SHADOW and CONTROL), after ``adjust_recommendation_safe``. The
+        single source of truth for whether a boost was applied / evaluated-not-applied /
+        not-evaluated. ``0.0`` (evaluated, authoritatively no boost) is never collapsed to
+        ``None`` (not evaluated). Never raises; never changes a dispatched value.
+
+        Sets ``_boost_applied_c`` and ``_boost_evaluation_status``; preserves any rejection
+        reason already recorded by the CONTROL applier (e.g. ``direct_valve``).
+        """
+        from ..decision.contracts import BoostEvaluationStatus as _BES
+        try:
+            # LE2 disabled / authority not reachable -> boost was NOT evaluated.
+            if not self._enabled:
+                recommendation["_boost_applied_c"] = None
+                recommendation["_boost_evaluation_status"] = _BES.NOT_EVALUATED.value
+                return
+            applied = recommendation.get("_boost_applied_c")
+            # An applied boost (CONTROL path wrote a positive offset) -> APPLIED.
+            if applied is not None and float(applied) > 0.0:
+                recommendation["_boost_evaluation_status"] = _BES.APPLIED.value
+                return
+            target = recommendation.get("effective_target")
+            if target is None:
+                target = recommendation.get("adjusted_target")
+            setpoint = recommendation.get("trv_setpoint")
+            # Required runtime data missing -> no authoritative statement -> NOT_EVALUATED.
+            if target is None or setpoint is None:
+                recommendation["_boost_applied_c"] = None
+                recommendation["_boost_evaluation_status"] = _BES.NOT_EVALUATED.value
+                return
+            # Direct-valve: an additive °C boost is not applicable; the authority evaluated
+            # it and authoritatively applied no boost (§7).
+            if recommendation.get("tpi_valve_direct"):
+                recommendation["_boost_applied_c"] = 0.0
+                recommendation["_boost_evaluation_status"] = _BES.EVALUATED_NOT_APPLIED.value
+                if not recommendation.get("_boost_rejection_reason"):
+                    recommendation["_boost_rejection_reason"] = "direct_valve"
+                return
+            # Heating decision in scope, no boost applied -> authoritatively 0.0.
+            recommendation["_boost_applied_c"] = 0.0
+            recommendation["_boost_evaluation_status"] = _BES.EVALUATED_NOT_APPLIED.value
+        except Exception as err:
+            self._record_error("boost_status", err)
 
     def compute_decision_trace_safe(self, recommendation: Mapping[str, Any], *,
                                     active_control: bool = False,

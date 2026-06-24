@@ -81,6 +81,33 @@ class ManualCorrectionObservation:
 
 
 @dataclass(frozen=True)
+class BoostDispatchRecord:
+    """Authoritative boost dispatch result for one decision, sourced from the live
+    ``LiveDecisionRecord`` (B2b-1). The single source of truth for what boost was
+    actually written — ``boost_applied_c == 0.0`` is distinct from "not dispatched"
+    (``boost_applied_c is None`` / ``dispatch_status == 'not_attempted'``)."""
+    decision_id: str
+    boost_candidate_c: Optional[float] = None
+    boost_applied_c: Optional[float] = None
+    baseline_setpoint_c: Optional[float] = None
+    final_setpoint_c: Optional[float] = None
+    effective_setpoint_min_c: Optional[float] = None
+    effective_setpoint_max_c: Optional[float] = None
+    dispatch_status: str = "not_attempted"
+    outcome_eligible: bool = False
+    outcome_reliability: str = "none"
+    start_deficit_c: Optional[float] = None
+    expected_non_boost_duration_s: Optional[float] = None
+    # B2b-3c: authoritative boost evaluation state + control type (for baseline authority).
+    boost_evaluation_status: str = "unknown"
+    device_control_type: str = "setpoint"      # "setpoint" | "direct_valve"
+    # B2b-4b: per-device effective setpoints written + target counts (multi-TRV attribution).
+    effective_setpoints: tuple = ()
+    targets_total: int = 0
+    targets_failed: int = 0
+
+
+@dataclass(frozen=True)
 class RuntimeCycleInput:
     """Everything one passive runtime cycle needs, typed and injected."""
     zone_id: str
@@ -95,6 +122,8 @@ class RuntimeCycleInput:
     controller_decision: ControllerDecisionInput = field(
         default_factory=ControllerDecisionInput)
     trv_setpoints: Mapping[str, float] = field(default_factory=dict)  # binding -> setpoint
+    # B2b-4e: live per-device availability (binding -> "available"|"unavailable"|"unknown")
+    device_states: Mapping[str, str] = field(default_factory=dict)
     outdoor_temp: Optional[Measurement] = None
     valve_opening: Optional[Measurement] = None
     hvac_action: Optional[str] = None
@@ -106,6 +135,7 @@ class RuntimeCycleInput:
     legacy_preheat_start_utc: Optional[str] = None
     legacy_boost_offset_c: Optional[float] = None
     legacy_early_cutoff_utc: Optional[float] = None
+    boost_dispatch: Optional[BoostDispatchRecord] = None   # B2b-1 authoritative binding
 
     def __post_init__(self) -> None:
         if not self.zone_id:
@@ -154,6 +184,8 @@ class CapturedSnapshot:
     forecast_high: Optional[float]
     accepted_manual_corrections: tuple[ManualCorrectionObservation, ...]
     rejected_echo_corrections: tuple[str, ...]   # event ids excluded as command echoes
+    boost_dispatch: Optional[BoostDispatchRecord] = None   # B2b-1 authoritative binding
+    device_states: Mapping[str, str] = field(default_factory=dict)   # B2b-4e live availability
 
 
 # -- command ledger -----------------------------------------------------------
@@ -324,7 +356,9 @@ class CaptureCoordinator:
             outdoor_temp=inp.outdoor_temp, valve_opening=inp.valve_opening,
             hvac_action=inp.hvac_action, forecast_high=inp.forecast_high,
             accepted_manual_corrections=tuple(accepted),
-            rejected_echo_corrections=tuple(rejected))
+            rejected_echo_corrections=tuple(rejected),
+            boost_dispatch=inp.boost_dispatch,
+            device_states=dict(inp.device_states or {}))
 
     def serialize(self) -> dict:
         return {

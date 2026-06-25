@@ -8,24 +8,26 @@ Covers (Welle 4a):
 
 These freeze current behaviour, including the `x or default` falsy quirks
 (e.g. an outdoor temperature reported as exactly 0.0 is treated as 10.0).
+Clock frozen via FakeClock injection for methods that use _now_local().
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from custom_components.thermosmart import learning_engine as le
+from custom_components.thermosmart.learning.clock import FakeClock
 from custom_components.thermosmart.learning_engine import LearningEngine
 
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)  # Monday, tz-naive
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def set_now(monkeypatch, when=FIXED_NOW):
-    monkeypatch.setattr(le.dt_util, "now", lambda: when)
+def engine_at(now=FIXED_NOW):
+    """Return a LearningEngine with clock frozen at *now*."""
+    return make_learning_engine(clock=FakeClock(start=now))
 
 
 def make_obs(
@@ -151,9 +153,8 @@ class TestEstimateHeatRateWindSolar:
 # ── _learned_heat_rate_multifactor ───────────────────────────────────────────
 
 class TestLearnedHeatRateApproach1Normalised:
-    def test_normalised_rate_used_with_enough_samples(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_normalised_rate_used_with_enough_samples(self):
+        e = engine_at()
         # 6 fresh, identical-condition obs with norm_heat_rate 0.005
         e._observations["z"] = [
             make_obs(norm_heat_rate=0.005, outdoor_temp=10.0) for _ in range(6)
@@ -162,9 +163,8 @@ class TestLearnedHeatRateApproach1Normalised:
         rate = e._learned_heat_rate_multifactor("z", {"temperature": 10.0}, target=21.0)
         assert rate == pytest.approx(0.055, abs=1e-4)
 
-    def test_below_min_samples_falls_through_to_approach2(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_below_min_samples_falls_through_to_approach2(self):
+        e = engine_at()
         # only 3 norm obs (< LEARNING_MIN_SAMPLES) but 6 heat_rate obs
         e._observations["z"] = (
             [make_obs(norm_heat_rate=0.005) for _ in range(3)]
@@ -176,23 +176,20 @@ class TestLearnedHeatRateApproach1Normalised:
 
 
 class TestLearnedHeatRateApproach2Fallback:
-    def test_no_target_uses_approach2(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_no_target_uses_approach2(self):
+        e = engine_at()
         e._observations["z"] = [make_obs(heat_rate=0.06) for _ in range(6)]
         rate = e._learned_heat_rate_multifactor("z", {"temperature": 10.0}, target=None)
         assert rate == pytest.approx(0.06, abs=1e-4)
 
-    def test_insufficient_heat_rate_samples_returns_zero(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_insufficient_heat_rate_samples_returns_zero(self):
+        e = engine_at()
         e._observations["z"] = [make_obs(heat_rate=0.06) for _ in range(3)]
         rate = e._learned_heat_rate_multifactor("z", {"temperature": 10.0}, target=None)
         assert rate == 0.0
 
-    def test_dissimilar_conditions_filtered_out(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_dissimilar_conditions_filtered_out(self):
+        e = engine_at()
         # obs at outdoor 40, current 10 → thermal weight ~0 → all filtered
         e._observations["z"] = [
             make_obs(heat_rate=0.06, outdoor_temp=40.0) for _ in range(6)
@@ -201,8 +198,7 @@ class TestLearnedHeatRateApproach2Fallback:
         assert rate == 0.0
 
     def test_empty_observations_returns_zero(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+        e = engine_at()
         rate = e._learned_heat_rate_multifactor("z", {"temperature": 10.0}, target=None)
         assert rate == 0.0
 
@@ -211,25 +207,22 @@ class TestLearnedHeatRateApproach2Fallback:
 
 class TestGetHeatRateGate:
     def test_low_confidence_uses_physics_estimate(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+        e = engine_at()
         e._observations["z"] = [make_obs(heat_rate=0.99) for _ in range(10)]
         e._confidence["z"] = 0.1  # below 0.3 gate
         rate = e._get_heat_rate("z", {"temperature": 2.0})
         # falls back to physics estimate for outdoor 2 → 0.050, NOT the learned 0.99
         assert rate == pytest.approx(0.050, abs=1e-6)
 
-    def test_high_confidence_uses_learned_rate(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_high_confidence_uses_learned_rate(self):
+        e = engine_at()
         e._observations["z"] = [make_obs(heat_rate=0.08) for _ in range(8)]
         e._confidence["z"] = 0.9
         rate = e._get_heat_rate("z", {"temperature": 10.0}, target=None)
         assert rate == pytest.approx(0.08, abs=1e-4)
 
     def test_disabled_zone_uses_physics_estimate(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+        e = engine_at()
         e._observations["z"] = [make_obs(heat_rate=0.08) for _ in range(8)]
         e._confidence["z"] = 0.9
         e.set_zone_enabled("z", False)
@@ -237,8 +230,7 @@ class TestGetHeatRateGate:
         assert rate == pytest.approx(0.050, abs=1e-6)
 
     def test_learned_zero_falls_back_to_estimate(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+        e = engine_at()
         # high confidence but no usable obs → learned 0 → estimate
         e._confidence["z"] = 0.9
         rate = e._get_heat_rate("z", {"temperature": 2.0}, target=None)

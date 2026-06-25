@@ -39,8 +39,14 @@ class BoostLearningReadiness:
     DEGRADED = "degraded"
     ROLLED_BACK = "rolled_back"
     COOLDOWN = "cooldown"
+    # B2b-bootstrap: initial controlled trials before any evidence exists.
+    # Uses device_prior_offset_c (from zone config) as the conservative initial offset.
+    # Active only when total_samples < bootstrap_credits AND device prior is configured.
+    # Never a learned value; stability/confidence/reliability gates are skipped.
+    BOOTSTRAP = "bootstrap"
 
-    ALL = (INSUFFICIENT_DATA, SHADOW_LEARNING, ELIGIBLE, DEGRADED, ROLLED_BACK, COOLDOWN)
+    ALL = (INSUFFICIENT_DATA, SHADOW_LEARNING, ELIGIBLE, DEGRADED, ROLLED_BACK, COOLDOWN,
+           BOOTSTRAP)
 
 
 @dataclass(frozen=True)

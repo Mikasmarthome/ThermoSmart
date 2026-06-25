@@ -34,7 +34,6 @@ async def async_setup_entry(
     entities = [
         ThermoSmartActiveSwitch(coordinator, entry),
         ThermoSmartLearningSwitch(coordinator, entry),
-        ThermoSmartAdaptiveBoostSwitch(coordinator, entry),
     ]
 
     # Backward-Compat: globaler Urlaubsschalter an die erste Zone anhängen wenn kein System-Entry
@@ -146,56 +145,6 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
 
     def _get_engine(self):
         return self.hass.data.get(DOMAIN, {}).get("learning_engine")
-
-
-class ThermoSmartAdaptiveBoostSwitch(SwitchEntity, RestoreEntity):
-    """Adaptive Boost switch — default OFF.
-
-    Enables use of the learned adaptive boost offset.  Only active when
-    Learning mode AND Active Control are also ON, AND BoostActivationReadiness
-    reports the factor as eligible and usable.  TPI control continues
-    independently regardless of this switch state.
-    """
-    _attr_has_entity_name = True
-    _attr_translation_key = "adaptive_boost"
-    _attr_icon = "mdi:rocket-launch"
-    _attr_entity_category = None  # visible in the main entity list
-
-    def __init__(self, coordinator: ThermoSmartCoordinator, entry: ConfigEntry):
-        self._coordinator = coordinator
-        self._entry = entry
-        self._attr_unique_id = f"{entry.entry_id}_adaptive_boost"
-        self._attr_device_info = _device_info(entry)
-        self._is_on = False
-
-    async def async_added_to_hass(self) -> None:
-        await super().async_added_to_hass()
-        last = await self.async_get_last_state()
-        # Conservative default: OFF on first install and when state is missing.
-        self._is_on = last is not None and last.state == "on"
-        self._coordinator.set_adaptive_boost_enabled(self._is_on)
-
-    @property
-    def is_on(self) -> bool:
-        return self._is_on
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        return {
-            "adaptive_boost_active": self._is_on,
-        }
-
-    async def async_turn_on(self, **kwargs) -> None:
-        self._is_on = True
-        self.async_write_ha_state()
-        self._coordinator.set_adaptive_boost_enabled(True)
-        await self._coordinator.async_request_refresh()
-
-    async def async_turn_off(self, **kwargs) -> None:
-        self._is_on = False
-        self.async_write_ha_state()
-        self._coordinator.set_adaptive_boost_enabled(False)
-        await self._coordinator.async_request_refresh()
 
 
 # ── Globale Schalter (domain-weit, steuern alle Zonen) ───────────────────────

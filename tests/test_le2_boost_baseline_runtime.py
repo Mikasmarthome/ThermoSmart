@@ -18,7 +18,8 @@ T0 = datetime(2025, 6, 1, 6, 0, 0, tzinfo=timezone.utc)
 
 def _rt():
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                                 startup_grace_cycles=0))
+                                                 startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 def _session(rt, target, base, *, boost, zone="lz"):

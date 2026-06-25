@@ -17,7 +17,7 @@ def set_hass_states(coordinator, states_dict: dict) -> None:
     coordinator.hass.states.get.side_effect = lambda eid: states_dict.get(eid)
 
 
-def make_coordinator(zone_cfg_overrides: dict | None = None):
+def make_coordinator(zone_cfg_overrides: dict | None = None, *, clock=None):
     """Create a ThermoSmartCoordinator with mocked dependencies for unit testing.
 
     Uses MagicMock hass – suitable for testing pure logic methods without HA
@@ -55,7 +55,8 @@ def make_coordinator(zone_cfg_overrides: dict | None = None):
     learning_engine.record_forecast_decision = MagicMock()
 
     with _patch("homeassistant.helpers.frame.report_usage"):
-        return ThermoSmartCoordinator(hass, entry, weather_engine, learning_engine)
+        return ThermoSmartCoordinator(hass, entry, weather_engine, learning_engine,
+                                      clock=clock)
 
 
 def make_zone_config(**overrides) -> dict:
@@ -130,14 +131,16 @@ def make_mock_hass() -> MagicMock:
     return hass
 
 
-def make_learning_engine():
+def make_learning_engine(*, clock=None):
     """Create a LearningEngine with a mocked hass for pure-logic unit tests.
 
     Suitable for Welle 4a characterization tests: methods that only read or
     compute derived values, or mutate in-memory dicts.  The underlying Store is
     never written to in these tests — persistence is covered separately in a
     later wave.
+
+    Pass ``clock`` to inject a FakeClock for deterministic time-dependent tests.
     """
     from custom_components.thermosmart.learning_engine import LearningEngine
 
-    return LearningEngine(make_mock_hass())
+    return LearningEngine(make_mock_hass(), clock=clock)

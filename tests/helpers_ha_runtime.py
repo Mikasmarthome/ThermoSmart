@@ -98,9 +98,16 @@ class FakeStore:
         self.saves += 1
 
 
-def attach_shadow(coord, *, store=None, zone_id=None):
-    shadow = LearningShadowController(hass=coord.hass, zone_id=zone_id or coord.zone_id,
-                                     store=store or FakeStore())
+def attach_shadow(coord, *, store=None, zone_id=None, clock=None, mode=None):
+    from custom_components.thermosmart.learning.runtime.lifecycle import LearningRuntimeMode
+    _clock = clock if clock is not None else getattr(coord, "_clock", None)
+    _mode = mode if mode is not None else LearningRuntimeMode.SHADOW
+    shadow = LearningShadowController(
+        hass=coord.hass, zone_id=zone_id or coord.zone_id,
+        store=store or FakeStore(),
+        clock=_clock,
+        mode=_mode,
+    )
     coord.attach_le2_shadow(shadow)
     return shadow
 
@@ -243,9 +250,8 @@ def make_dispatching_coordinator(zone_cfg_overrides=None, *, indoor="18.0",
     coord.hass.services.async_call = _service_call
     coord._service_calls = _service_calls
 
-    # Activate both switches and mark initialized so restore barrier passes
+    # Mark active_control initialized so restore barrier passes
     coord.set_active_control(True)
-    coord.set_adaptive_boost_enabled(True)
 
     return coord
 

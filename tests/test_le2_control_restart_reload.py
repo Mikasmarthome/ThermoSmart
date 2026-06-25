@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 
 import pytest
 
+from custom_components.thermosmart.learning.clock import FakeClock
 from custom_components.thermosmart.learning.runtime import (
     LearningRuntime, LearningRuntimeConfig, LearningRuntimeMode)
 from custom_components.thermosmart.learning.runtime.ha_integration import LearningShadowController
@@ -12,6 +14,8 @@ from tests.helpers_runtime import MemoryStore
 from tests.helpers_runtime_scenarios import heating_ramp_then_settle
 
 pytestmark = pytest.mark.asyncio
+
+_T0 = datetime(2025, 1, 1, 7, 0, 0, tzinfo=timezone.utc)
 
 
 class TestRestartReload:
@@ -33,8 +37,11 @@ class TestRestartReload:
         assert rt2.mode is LearningRuntimeMode.SHADOW and not rt2.control_enabled
 
     async def test_controller_defaults_to_shadow(self):
-        # the HA shell always constructs SHADOW; CONTROL needs explicit injection
-        ctrl = LearningShadowController(hass=None, zone_id="z", store=MemoryStore())
+        # default mode is SHADOW; production __init__.py explicitly passes CONTROL
+        ctrl = LearningShadowController(
+            hass=None, zone_id="z", store=MemoryStore(),
+            clock=FakeClock(start=_T0),
+        )
         await ctrl.async_setup()
         assert not ctrl.control_enabled
 
@@ -52,7 +59,10 @@ class TestRestartReload:
         assert "control" not in blob.lower() or "control_" not in blob  # no control activation flag
 
     async def test_explicit_injection_enables_control(self):
-        ctrl = LearningShadowController(hass=None, zone_id="z", store=MemoryStore(),
-                                       mode=LearningRuntimeMode.CONTROL)
+        ctrl = LearningShadowController(
+            hass=None, zone_id="z", store=MemoryStore(),
+            mode=LearningRuntimeMode.CONTROL,
+            clock=FakeClock(start=_T0),
+        )
         await ctrl.async_setup()
         assert ctrl.control_enabled

@@ -26,7 +26,8 @@ def _bd(did="x"):
 
 def _rt():
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                                 startup_grace_cycles=0))
+                                                 startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 def _cyc(r, i, temp, heating, *, target=21.0, bd=None, device_states=None, decision_type=None):

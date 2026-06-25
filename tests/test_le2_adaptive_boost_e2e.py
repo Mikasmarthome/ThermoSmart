@@ -3,7 +3,7 @@
 Exercises the FULL production chain without patching the core decision path:
 
     Zone setup
-    → Learning Mode ON + Active Control ON + Adaptive Boost ON
+    → Learning Mode ON + Active Control ON
     → real BoostActivationReadiness (eligible model state injected, evaluator runs for real)
     → real Coordinator cycle (_async_update_data)
     → real TPI baseline
@@ -23,9 +23,9 @@ Test cases:
   TestE2EFullSuccess      — all TRVs succeed, per-device truth from effective setpoints
   TestE2EFullFailure      — all TRVs fail, lifecycle invalidated, applied=0.0
   TestE2EPartialDispatch  — 2 TRVs, one fails, partial truth preserved, lifecycle released
-  TestE2EBoostSwitchOff   — A/B: identical setup, boost switch OFF → no boost
+  TestE2ELearningOff      — A/B: identical setup, learning OFF → no boost
   TestE2EDirectValve      — direct-valve zone → blocked at readiness (unsupported_control_type)
-  TestE2EMixedZone        — mixed-control zone → blocked at Gate 3.5
+  TestE2EMixedZone        — mixed-control zone → blocked at Gate 3
 """
 from __future__ import annotations
 
@@ -267,42 +267,40 @@ class TestE2EPartialDispatch:
             assert ldr.dispatch_targets_total >= 1
 
 
-# ── TestE2EBoostSwitchOff ────────────────────────────────────────────────────
+# ── TestE2ELearningOff ───────────────────────────────────────────────────────
 
-class TestE2EBoostSwitchOff:
-    """A/B: identical setup, boost switch OFF → no boost dispatched."""
+class TestE2ELearningOff:
+    """A/B: identical setup, learning OFF → no boost dispatched."""
 
-    async def test_boost_switch_off_no_boosted_setpoint(self):
-        """When adaptive boost switch is OFF, no boosted setpoint is dispatched."""
+    async def test_learning_off_no_boosted_setpoint(self):
+        """When learning mode is OFF, no boosted setpoint is dispatched."""
         coord, shadow = await _setup_boost_coord(
             climate_entities=["climate.trv_a"],
             climate_states={"climate.trv_a": _make_heat_state(temp=21.0)},
             indoor="15.0",
         )
-        # Override: switch OFF after setup
-        coord.set_adaptive_boost_enabled(False)
+        # Override: disable learning in config
+        coord.entry.data = {**coord.entry.data, "learning_enabled": False}
 
         result = await coord._async_update_data()
         zone = result["zone"]
 
-        # boost_offset_c must be 0.0 (switch blocked it)
         assert zone.get("boost_offset_c", 0.0) == 0.0
-        # le2_boost_adjusted must not be set
         assert not bool(zone.get("le2_boost_adjusted"))
 
-    async def test_boost_switch_off_blocking_reason(self):
+    async def test_learning_off_blocking_reason(self):
         coord, shadow = await _setup_boost_coord(
             climate_entities=["climate.trv_a"],
             climate_states={"climate.trv_a": _make_heat_state(temp=21.0)},
             indoor="15.0",
         )
-        coord.set_adaptive_boost_enabled(False)
+        coord.entry.data = {**coord.entry.data, "learning_enabled": False}
         result = await coord._async_update_data()
         zone = result["zone"]
-        assert zone.get("_boost_rejection_reason") == "adaptive_boost_switch_off"
+        assert zone.get("_boost_rejection_reason") == "learning_mode_off"
 
-    async def test_boost_switch_on_vs_off_is_same_baseline(self):
-        """Baseline setpoint is identical whether boost switch ON or OFF."""
+    async def test_learning_on_vs_off_same_baseline(self):
+        """Baseline setpoint is identical regardless of learning mode."""
         coord_on, shadow_on = await _setup_boost_coord(
             climate_entities=["climate.trv_a"],
             climate_states={"climate.trv_a": _make_heat_state(temp=21.0)},
@@ -313,14 +311,13 @@ class TestE2EBoostSwitchOff:
             climate_states={"climate.trv_a": _make_heat_state(temp=21.0)},
             indoor="15.0",
         )
-        coord_off.set_adaptive_boost_enabled(False)
+        coord_off.entry.data = {**coord_off.entry.data, "learning_enabled": False}
 
         result_on = await coord_on._async_update_data()
         result_off = await coord_off._async_update_data()
 
         baseline_on = result_on["zone"].get("tpi_baseline_setpoint") or result_on["zone"].get("trv_setpoint")
         baseline_off = result_off["zone"].get("trv_setpoint")
-        # Without boost, TRV setpoint (OFF) should equal the TPI baseline (ON)
         if baseline_on is not None and baseline_off is not None:
             assert abs(float(baseline_on) - float(baseline_off)) < 0.1
 
@@ -372,7 +369,7 @@ class TestE2EDirectValve:
 # ── TestE2EMixedZone ──────────────────────────────────────────────────────────
 
 class TestE2EMixedZone:
-    """Mixed-control zone (setpoint + direct valve): blocked at Gate 3.5."""
+    """Mixed-control zone (setpoint + direct valve): blocked at Gate 3."""
 
     async def test_mixed_zone_no_boost(self):
         """Mixed zone must never receive a boost setpoint."""

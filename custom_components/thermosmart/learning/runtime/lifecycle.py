@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timezone
+from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Mapping, Optional
 
@@ -220,7 +220,18 @@ class LearningRuntime:
         self._store = store
         self._persistence = PersistenceOrchestrator(store, policy=self._config.save_policy) \
             if store is not None else None
-        self._clock = clock or (lambda: datetime.now(timezone.utc).isoformat())
+        # Clock authority: explicit injection required. No hidden wall-clock fallback.
+        # A missing clock is a programming error surfaced by a ValueError.
+        # Tests that are not testing clock behavior should pass an explicit lambda
+        # (e.g. clock=lambda: "2025-01-01T00:00:00+00:00") or use helpers_runtime_scenarios.runtime().
+        if clock is None:
+            raise ValueError(
+                "LearningRuntime requires an explicit clock callable — "
+                "pass a SystemClock-backed callable (production) or "
+                "lambda: <fixed_iso_string> / FakeClock (tests). "
+                "Convenience wrapper: helpers_runtime_scenarios.runtime() injects a default."
+            )
+        self._clock = clock
         self._initialized = False
         self._last_cycle_ts: Optional[str] = None
         self._mode = self._config.mode
@@ -264,7 +275,10 @@ class LearningRuntime:
         zr = self._zone(zone_id)
         cr = zr.last_confidence.get(purpose.value)
         prediction = None
-        if proposed_value is not None and cr is not None:
+        _auth = context is not None and context.authorized_override
+        # For authorized override: build a prediction even without a confidence result so
+        # ControlPolicy.resolve() can apply clamping; the confidence gates are bypassed.
+        if proposed_value is not None and (cr is not None or _auth):
             prediction = ControlledPrediction(
                 feature=feature, value=float(proposed_value), unit=unit,
                 confidence_result=cr, model_version=model_version,
@@ -506,9 +520,14 @@ class LearningRuntime:
                     episode.trajectory.points, episode.target, episode.start_temp,
                     getattr(episode, "comfort_tolerance_at_start", 0.5))
                 actual_onset = onset_ms / 60000.0 if onset_ms is not None else None
-                sd = supply_delay_confounder(expected_onset, actual_onset)
-                if sd is not None:
-                    flags.append(sd.value)
+                # Skip supply-delay assessment when no expected onset is available (cold start /
+                # no onset-delay model yet): without a reference we cannot distinguish normal
+                # heating from a supply-delay anomaly — treating None/None as HEATING_FAILURE
+                # would confound all bootstrap outcomes.
+                if expected_onset is not None:
+                    sd = supply_delay_confounder(expected_onset, actual_onset)
+                    if sd is not None:
+                        flags.append(sd.value)
             except Exception:
                 pass
             # ── early-cutoff overlap (same decision) ──

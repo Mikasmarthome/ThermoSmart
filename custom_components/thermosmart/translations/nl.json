@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptieve boost",
-        "description": "Stelt ThermoSmart in staat een geleerde adaptieve boost-offset toe te passen. Werkt alleen wanneer ook Leermodus en Actieve besturing zijn ingeschakeld. TPI-aansturing gaat onafhankelijk door. Standaard: uit."
       }
     },
     "select": {

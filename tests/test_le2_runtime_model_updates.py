@@ -22,7 +22,8 @@ class TestModelUpdates:
         from custom_components.thermosmart.learning.runtime import (
             LearningRuntime, LearningRuntimeConfig, LearningRuntimeMode)
         rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                                   startup_grace_cycles=999))
+                                                   startup_grace_cycles=999),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
         heating_ramp_then_settle(rt)
         assert rt._zone("lz").model_update_counts.get("heat_rate", 0) == 0
 

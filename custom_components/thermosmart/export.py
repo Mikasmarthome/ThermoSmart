@@ -44,7 +44,6 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from homeassistant.core import HomeAssistant
-from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -197,11 +196,26 @@ def _compute_analytics(learning: dict) -> dict:
     }
 
 
-async def async_export_learning_data(hass: HomeAssistant) -> str:
+async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
     """Build anonymized export, write to /config/www/, return absolute file path."""
     le: LearningEngine | None = hass.data.get(DOMAIN, {}).get("learning_engine")
-    now: datetime = dt_util.now()
-    ts_str = now.strftime("%Y%m%dT%H%M%S")
+    if ts is None:
+        # Derive timestamp from the first available coordinator clock (single time authority).
+        for entry_data in hass.data.get(DOMAIN, {}).values():
+            if isinstance(entry_data, dict):
+                coord = entry_data.get("coordinator")
+                if coord is not None and hasattr(coord, "_clock"):
+                    try:
+                        ts = coord._clock.now_utc()
+                    except Exception:
+                        pass
+                    break
+    if ts is None:
+        raise RuntimeError(
+            "async_export_learning_data: no coordinator clock available — "
+            "ensure at least one zone is configured before exporting."
+        )
+    ts_str = ts.strftime("%Y%m%dT%H%M%S")
 
     zones: list[dict] = []
 

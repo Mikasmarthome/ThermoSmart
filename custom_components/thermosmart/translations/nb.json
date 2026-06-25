@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptiv boost",
-        "description": "Lar ThermoSmart bruke en lært adaptiv boost-offset. Virker kun når Læringsmodus og Aktiv kontroll også er på. TPI-kontroll fortsetter uavhengig. Standard: av."
       }
     },
     "select": {

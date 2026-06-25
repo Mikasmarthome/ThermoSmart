@@ -8,25 +8,25 @@ Covers:
 
 The debounced TRV save (async_call_later) is a scheduling side-effect, not under
 test, so _schedule_debounced_save is stubbed. async_save is mocked.
+Clock is frozen via FakeClock injection (no dt_util.now patching).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.thermosmart import learning_engine as le
+from custom_components.thermosmart.learning.clock import FakeClock
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 WEATHER = {"temperature": 8.0, "wind_speed": 3.0, "solar_radiation": 100.0}
 
 
-def make_engine(monkeypatch, now=FIXED_NOW):
-    monkeypatch.setattr(le.dt_util, "now", lambda: now)
-    e = make_learning_engine()
+def make_engine(monkeypatch=None, now=FIXED_NOW):
+    e = make_learning_engine(clock=FakeClock(start=now))
     e.async_save = AsyncMock()
     e._schedule_debounced_save = MagicMock()  # stub scheduling side-effect
     return e

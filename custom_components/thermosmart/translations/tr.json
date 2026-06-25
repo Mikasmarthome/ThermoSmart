@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Uyarlanabilir boost",
-        "description": "ThermoSmart'ın öğrenilmiş bir uyarlanabilir boost ofseti uygulamasına izin verir. Yalnızca Öğrenme modu ve Aktif kontrol da açık olduğunda etkili olur. TPI kontrolü bağımsız olarak devam eder. Varsayılan: kapalı."
       }
     },
     "select": {

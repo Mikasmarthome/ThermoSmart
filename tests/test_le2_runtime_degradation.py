@@ -13,6 +13,7 @@ from tests.helpers_runtime import MemoryStore, cycle_input
 
 
 def rt(**kw):
+    kw.setdefault("clock", lambda: "2025-01-01T00:00:00+00:00")
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW), **kw)
 
 

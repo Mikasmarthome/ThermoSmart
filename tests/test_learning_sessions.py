@@ -6,28 +6,27 @@ Covers:
                             outcome_log cap (200)
   get_outcome_stats       – ts/obs averages
 
-Clock is frozen via dt_util.now() monkeypatch; session start times are injected
-as ISO strings so elapsed durations are deterministic. Persistence is mocked.
+Clock is frozen via FakeClock injection; session start times are injected as
+UTC-aware ISO strings so elapsed durations are deterministic. Persistence is mocked.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.thermosmart import learning_engine as le
+from custom_components.thermosmart.learning.clock import FakeClock
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 WEATHER = {"temperature": 5.0, "wind_speed": 2.0, "solar_radiation": 0.0,
            "humidity": 60.0, "rain": 0.0}
 
 
-def make_engine(monkeypatch, now=FIXED_NOW):
-    monkeypatch.setattr(le.dt_util, "now", lambda: now)
-    e = make_learning_engine()
+def make_engine(monkeypatch=None, now=FIXED_NOW):
+    e = make_learning_engine(clock=FakeClock(start=now))
     # _finalize_session fires save via hass.async_create_task(self.async_save()).
     # A sync MagicMock for async_save avoids creating an un-awaited coroutine.
     e.async_save = MagicMock()

@@ -17,9 +17,10 @@ import logging
 import math
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Mapping, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from ...const import TPI_MAX_BOOST_CELSIUS
+from ..clock import Clock
 from ..contracts import DataQuality, Measurement
 from ..confidence import ConfidencePurpose
 from ..contracts import PredictionType
@@ -53,7 +54,6 @@ class BoostBlockReason(StrEnum):
     """
     LEARNING_MODE_OFF = "learning_mode_off"
     ACTIVE_CONTROL_OFF = "active_control_off"
-    ADAPTIVE_BOOST_SWITCH_OFF = "adaptive_boost_switch_off"
     MIXED_CONTROL_TYPES = "mixed_control_types_unsupported"
     DEVICE_UNAVAILABLE = "device_unavailable"
     FAILED_DISPATCH = "failed_dispatch"
@@ -83,17 +83,15 @@ class AdaptiveBoostControlResult:
     release_reason: Optional[str]               # lifecycle release reason, if triggered
     clamp_applied: bool                         # True when step/device clamp modified offset
     source_decision_id: Optional[str]           # LE2 decision_id that produced the boost
+    # Trace fields — cycle-bound, never persisted
+    authorization_source: Optional[str] = None  # "bootstrap_activation" when authorized_override
+    bypassed_gates: tuple = ()                  # confidence gates bypassed by authorized_override
     component_version: int = ADAPTIVE_BOOST_RESOLVER_VERSION
 
 
 def _zone_segment(zone_id: str) -> str:
     """Non-identifying, stable token for the store key (never an entity name)."""
     return hashlib.sha256(zone_id.encode("utf-8")).hexdigest()[:16]
-
-
-def _utcnow_iso() -> str:
-    from homeassistant.util import dt as dt_util
-    return dt_util.utcnow().isoformat()
 
 
 def _is_celsius_unit(unit: str) -> bool:
@@ -173,7 +171,12 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
     and uses Measurement/None for missing data. Pure given its inputs.
     """
     rec = recommendation or {}
-    ts = ts_iso or _utcnow_iso()
+    if ts_iso is None:
+        raise ValueError(
+            "build_runtime_cycle_input: ts_iso is required — "
+            "pass self._utcnow_iso() from the LearningShadowController."
+        )
+    ts = ts_iso
     target = rec.get("effective_target")
     if target is None:
         target = rec.get("adjusted_target")
@@ -224,12 +227,21 @@ class LearningShadowController:
     """
 
     def __init__(self, hass: Any, zone_id: str, *, store: Any = None,
-                 mode: LearningRuntimeMode = LearningRuntimeMode.SHADOW) -> None:
+                 mode: LearningRuntimeMode = LearningRuntimeMode.SHADOW,
+                 clock: Optional[Clock] = None) -> None:
         self._zone = zone_id
         self._enabled = True
         self._errors = 0
         self._error_signatures: dict[str, int] = {}
         self._last_result = None
+        # Clock injection: explicit clock required — no hidden wall-clock fallback.
+        if clock is None:
+            raise ValueError(
+                "LearningShadowController requires an explicit Clock — "
+                "pass coordinator._clock or a FakeClock for tests."
+            )
+        _clk: Clock = clock
+        self._utcnow_iso: Callable[[], str] = lambda: _clk.now_utc().isoformat()
         adapter = store
         if adapter is None:
             try:
@@ -237,7 +249,7 @@ class LearningShadowController:
             except Exception:  # store construction must never break setup
                 adapter = None
         self._runtime = LearningRuntime(
-            LearningRuntimeConfig(mode=mode), store=adapter, clock=_utcnow_iso)
+            LearningRuntimeConfig(mode=mode), store=adapter, clock=self._utcnow_iso)
         # The new decision pipeline runs read-only every cycle (no sink => it can never
         # dispatch). The existing coordinator remains the single real dispatch path.
         self._pipeline = DecisionPipeline(
@@ -249,13 +261,8 @@ class LearningShadowController:
         # Context snapshot at boost-apply time: compared each cycle to detect schedule transitions.
         # A change in comfort_time (same target, new period) triggers a hard schedule_change release.
         self._boost_applied_comfort_time_utc: Optional[str] = None
-        # Adaptive Boost switch state (set by ThermoSmartAdaptiveBoostSwitch via coordinator).
-        # Default OFF — existing installations never receive boost silently after update.
-        self._adaptive_boost_enabled: bool = False
-        # Ephemeral flag: set True by resolve_adaptive_boost_control() for the duration of its
-        # adjust_recommendation_safe() call, then cleared.  Allows the inner method to bypass the
-        # control_enabled runtime-mode guard while keeping the outer triple gate as the sole authority.
-        self._boost_authorized_this_cycle: bool = False
+        # Note: _boost_authorized_this_cycle mutable flag removed in favour of direct
+        # authorized_override parameter on adjust_recommendation_safe() (structural refactor).
 
     @property
     def runtime(self) -> LearningRuntime:
@@ -294,14 +301,11 @@ class LearningShadowController:
                 self._zone, recommendation, weather=weather,
                 schedule_comfort_time_utc=schedule_comfort_time_utc,
                 schedule_comfort_temperature_c=schedule_comfort_temperature_c,
-                heating_failure=heating_failure, live_record=live_record)
+                heating_failure=heating_failure, live_record=live_record,
+                ts_iso=self._utcnow_iso())
             self._last_result = CoordinatorBridge(self._runtime).process(inp)
         except Exception as err:
             self._record_error("cycle", err)
-
-    def set_adaptive_boost_enabled(self, enabled: bool) -> None:
-        """Called by ThermoSmartAdaptiveBoostSwitch when the user turns boost on/off."""
-        self._adaptive_boost_enabled = bool(enabled)
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -339,7 +343,7 @@ class LearningShadowController:
             from ..models.boost import BoostLifecycle
             lc = model._state.lifecycle
             if lc in (BoostLifecycle.APPLIED, BoostLifecycle.ACTIVE):
-                model.release_lifecycle(reason, _utcnow_iso())
+                model.release_lifecycle(reason, self._utcnow_iso())
         except Exception as err:
             self._record_error("lifecycle_release", err)
 
@@ -355,12 +359,12 @@ class LearningShadowController:
                 return
             if not s.lifecycle_start_ts:
                 return
-            from datetime import datetime, timezone
+            from datetime import datetime
             start = datetime.fromisoformat(s.lifecycle_start_ts.replace("Z", "+00:00"))
-            now = datetime.now(timezone.utc)
+            now = datetime.fromisoformat(self._utcnow_iso())
             elapsed = (now - start).total_seconds()
             if elapsed >= s.lifecycle_max_duration_s:
-                model.release_lifecycle("timeout", _utcnow_iso())
+                model.release_lifecycle("timeout", self._utcnow_iso())
         except Exception as err:
             self._record_error("lifecycle_timeout", err)
 
@@ -418,7 +422,7 @@ class LearningShadowController:
             if remaining <= 0:
                 return  # target already reached; handled by target_reached check
             slope = recommendation.get("temp_slope")  # °C/min from coordinator
-            ts = _utcnow_iso()
+            ts = self._utcnow_iso()
             params = model._params
 
             # Compute active duration since lifecycle start
@@ -566,13 +570,17 @@ class LearningShadowController:
             self._record_error("lifecycle_deescalation", err)
 
     def adjust_recommendation_safe(self, recommendation: dict, *,
-                                   boost_runtime_limit: Optional[float] = None) -> None:
+                                   boost_runtime_limit: Optional[float] = None,
+                                   authorized_override: bool = False) -> None:
         """In CONTROL mode only, apply LE 2.0 boost authority to the dispatched recommendation.
 
         Full authority: LE 2.0 determines the final boost offset (both increases and
         decreases). The existing TPI setpoint is the baseline; LE 2.0 may increase or
         reduce it, subject to confidence gate and device clamps. Never raises; a no-op
         in any non-CONTROL mode (SHADOW stays byte-identical).
+
+        ``authorized_override=True`` is passed by resolve_adaptive_boost_control() to bypass
+        the runtime-mode gate and confidence gate; all safety gates remain active.
 
         Side-effects on ``recommendation`` (Phase B1 provenance tracking):
           ``_boost_rejection_reason`` — gate that blocked boost, or None when applied.
@@ -582,10 +590,10 @@ class LearningShadowController:
         recommendation["_boost_rejection_reason"] = None
         recommendation["_boost_candidate_c"] = None
         recommendation["_boost_applied_c"] = None
-        # Normal entry: control_enabled (LearningRuntimeMode.CONTROL, test-only).
-        # Authorized entry: _boost_authorized_this_cycle set by resolve_adaptive_boost_control()
-        # for the duration of its call — the triple-gate + readiness check is the real authority.
-        if not (self.control_enabled or self._boost_authorized_this_cycle):
+        # Mode gate: non-bypassable by authorized_override. Production shadows run in
+        # LearningRuntimeMode.CONTROL (control_enabled=True). SHADOW-mode instances are
+        # read-only capture; they must never apply boost regardless of authorization.
+        if not self.control_enabled:
             return
         try:
             target = recommendation.get("effective_target")
@@ -712,7 +720,7 @@ class LearningShadowController:
                 self._record_error("soft_deescalation", err)
             # Cooldown guard: skip boost application during active cooldown period
             _model_cooldown = self._boost_model()
-            if _model_cooldown is not None and _model_cooldown.cooldown_active(_utcnow_iso()):
+            if _model_cooldown is not None and _model_cooldown.cooldown_active(self._utcnow_iso()):
                 recommendation["_boost_rejection_reason"] = "cooldown_active"
                 return
             # Baseline = currently applied le2 boost (not TPI offset reconstruction).
@@ -730,6 +738,22 @@ class LearningShadowController:
             zr = self._runtime._zone(self._zone)
             boost_pred = zr.last_predictions.get(PredictionType.BOOST_FACTOR)
             proposed = boost_pred.values.get("boost_factor") if boost_pred else None
+            # B2b-bootstrap: the orchestrator calls predict() with a default context that
+            # lacks device_prior_offset_c, so last_predictions holds the neutral 0.0 default.
+            # When the activation readiness (already computed by _read_boost_activation_readiness_safe)
+            # reports BOOTSTRAP state with a non-zero factor, use that authoritative factor instead
+            # so the bootstrap prior reaches the control decision.
+            # B2b-bootstrap: the orchestrator calls predict() with a default context that
+            # lacks device_prior_offset_c, so last_predictions holds the neutral 0.0 default.
+            # When the activation readiness (already computed by _read_boost_activation_readiness_safe)
+            # reports BOOTSTRAP state with a non-zero factor, use that authoritative factor instead
+            # so the bootstrap prior reaches the control decision.
+            if proposed is None or proposed <= 0.0:
+                _br = recommendation.get("_boost_readiness")
+                if _br and _br.get("learning_readiness") == "bootstrap":
+                    _cf = _br.get("current_factor_c")
+                    if _cf is not None and float(_cf) > 0.0:
+                        proposed = float(_cf)
             if proposed is None:
                 recommendation["_boost_rejection_reason"] = "no_prediction"
                 return
@@ -737,7 +761,10 @@ class LearningShadowController:
             ctx = ControlContext(
                 window_open=bool(recommendation.get("window_open")),
                 heating_failure=bool(recommendation.get("heating_failure")),
-                boost_runtime_limit=boost_runtime_limit)
+                boost_runtime_limit=boost_runtime_limit,
+                # Forward the boost authorization so ControlPolicy bypasses the shadow-mode
+                # runtime gate and the confidence gate (BoostActivationReadiness is the authority).
+                authorized_override=authorized_override)
             decision = self._runtime.control_decision(
                 self._zone, ControlFeature.BOOST_OFFSET, baseline_offset, proposed,
                 ConfidencePurpose.BOOST, context=ctx, unit="celsius_offset",
@@ -758,7 +785,7 @@ class LearningShadowController:
                             episode_id=episode_id,
                             applied_offset_c=decision.final_value,
                             base_target_c=float(target),
-                            ts=_utcnow_iso())
+                            ts=self._utcnow_iso())
                     else:
                         _lifecycle_applied = True  # no model → no binding check → allow
                 except Exception as err:
@@ -832,7 +859,7 @@ class LearningShadowController:
             return LiveDecisionRecord(
                 decision_id=decision_id,
                 zone_id=self._zone,
-                ts=ts or _utcnow_iso(),
+                ts=ts or self._utcnow_iso(),
                 mode=mode_str,
                 baseline_setpoint_c=(float(baseline_sp) if baseline_sp is not None else None),
                 final_setpoint_c=(float(recommendation["trv_setpoint"])
@@ -1099,12 +1126,17 @@ class LearningShadowController:
                 blocking.append("heating_failure")
             preheat_active = bool(recommendation.get("preheat_minutes", 0))
             decision_type_str = "preheat" if preheat_active else "normal"
+            # B2b-bootstrap: read zone-configured device prior from recommendation so
+            # the bootstrap path in BoostModel can allow initial controlled trials.
+            _bsp = recommendation.get("boost_bootstrap_prior_c")
+            _device_prior = float(_bsp) if _bsp and float(_bsp) > 0.0 else None
             ctx = BoostPredictionContext(
                 start_deficit_c=deficit,
                 decision_type=decision_type_str,
                 control_type=ctrl_type,
                 blocking_reasons=tuple(blocking),
-                now_ts=_utcnow_iso(),
+                now_ts=self._utcnow_iso(),
+                device_prior_offset_c=_device_prior,
             )
             return model.activation_readiness(ctx)
         except Exception as err:
@@ -1117,22 +1149,20 @@ class LearningShadowController:
         *,
         learning_mode_on: bool,
         active_control_on: bool,
-        adaptive_boost_switch_on: bool,
         restore_pending: bool = False,
         boost_runtime_limit: Optional[float] = None,
     ) -> "AdaptiveBoostControlResult":
-        """Central adaptive boost resolver. Restore barrier → triple gate → readiness → inner safety gates.
+        """Central adaptive boost resolver. Restore barrier → double gate → readiness → inner safety gates.
 
         The ONLY production entry point for real boost control.  Returns a fully typed
         result for provenance; sets diagnostic keys on ``recommendation``.  Never raises.
 
         Gate order (strict):
-          0. Restore barrier  (both active_control AND adaptive_boost switches initialized)
+          0. Restore barrier  (active_control RestoreEntity initialized)
           1. Learning mode ON  (cfg learning_enabled + LE2 enabled)
           2. Active Control ON (coordinator _active_control)
-          3. Adaptive Boost switch ON (ThermoSmartAdaptiveBoostSwitch)
-          3.5. Mixed-control zone check
-          3.6. Pre-dispatch device availability
+          3. Mixed-control zone check
+          3.5. Pre-dispatch device availability
           4. BoostActivationReadiness.eligibility == True AND factor_usable == True
           5. Inner safety gates (adjust_recommendation_safe) — hard/soft/cooldown/policy
         """
@@ -1160,10 +1190,10 @@ class LearningShadowController:
 
         try:
             # Gate 0: Restore initialization barrier.
-            # Both active_control AND adaptive_boost RestoreEntity switches must have
-            # completed at least one restore/set call.  Until then boost is blocked so
-            # no partial-restore cycle can accidentally activate boost.  Learning mode
-            # comes from config (not RestoreEntity) and is therefore not in the barrier.
+            # Active Control RestoreEntity must have completed at least one restore/set
+            # call.  Until then boost is blocked so no partial-restore cycle can
+            # accidentally activate boost.  Learning mode comes from config (not a
+            # RestoreEntity) and is therefore not in the barrier.
             if restore_pending:
                 return _blocked(BoostBlockReason.RESTORE_PENDING)
 
@@ -1175,17 +1205,13 @@ class LearningShadowController:
             if not active_control_on:
                 return _blocked(BoostBlockReason.ACTIVE_CONTROL_OFF, release=True)
 
-            # Gate 3: Adaptive Boost switch
-            if not adaptive_boost_switch_on:
-                return _blocked(BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF, release=True)
-
-            # Gate 3.5: Mixed control zone — adaptive boost blocked conservatively.
+            # Gate 3: Mixed control zone — adaptive boost blocked conservatively.
             # A zone mixing setpoint-TRVs and direct-valve-TRVs cannot safely receive
             # a per-device split; the entire zone is blocked with a clear typed reason.
             if recommendation.get("zone_control_type") == "mixed":
                 return _blocked(BoostBlockReason.MIXED_CONTROL_TYPES, release=True)
 
-            # Gate 3.6: Pre-dispatch device availability.
+            # Gate 3.5: Pre-dispatch device availability.
             # If any setpoint TRV was unavailable when the coordinator sampled states
             # before the resolver, boost is blocked for this cycle.  Prevents a partial
             # dispatch where some TRVs received the boosted setpoint and others did not.
@@ -1213,13 +1239,11 @@ class LearningShadowController:
             except Exception:
                 pass
 
-            # Inner gates: invoke adjust_recommendation_safe() with authorization flag
-            self._boost_authorized_this_cycle = True
-            try:
-                self.adjust_recommendation_safe(
-                    recommendation, boost_runtime_limit=boost_runtime_limit)
-            finally:
-                self._boost_authorized_this_cycle = False
+            # Inner gates: invoke adjust_recommendation_safe() with authorization.
+            # authorized_override=True passes directly — no mutable flag lifecycle needed.
+            self.adjust_recommendation_safe(
+                recommendation, boost_runtime_limit=boost_runtime_limit,
+                authorized_override=True)
 
             # Build typed result from what the inner method wrote
             inner_rejection = recommendation.get("_boost_rejection_reason")
@@ -1257,6 +1281,10 @@ class LearningShadowController:
                 release_reason=None,
                 clamp_applied=clamp_applied,
                 source_decision_id=source_did,
+                authorization_source="bootstrap_activation",
+                bypassed_gates=(
+                    "confidence", "reliability", "fallback_dominant", "prior_dominant"
+                ),
             )
         except Exception as err:
             self._record_error("resolve_adaptive_boost", err)
@@ -1278,7 +1306,7 @@ class LearningShadowController:
         try:
             if live_record is not None:
                 trace = self._build_trace_from_live_record(
-                    live_record, recommendation, ts=ts or _utcnow_iso())
+                    live_record, recommendation, ts=ts or self._utcnow_iso())
             else:
                 # LEGACY / TEST-ONLY: backward-compat path for unit tests that call
                 # compute_decision_trace_safe() without a live_record.  The production
@@ -1292,7 +1320,7 @@ class LearningShadowController:
                 mode = (DecisionMode.CONTROL if self._runtime.control_enabled
                         else DecisionMode.SHADOW)
                 trace, _ = self._pipeline.run(
-                    self._zone, ts or _utcnow_iso(), recommendation, preds, mode=mode,
+                    self._zone, ts or self._utcnow_iso(), recommendation, preds, mode=mode,
                     active_control=active_control,
                     decision_id=getattr(zr, "last_decision_id", None))
             trace_dict = trace.support_dict()
@@ -1344,7 +1372,7 @@ class LearningShadowController:
                 boost_model = self._boost_model()
                 if boost_model is not None:
                     s = boost_model._state
-                    ts_now = ts or _utcnow_iso()
+                    ts_now = ts or self._utcnow_iso()
                     active_dur: Optional[float] = None
                     cooldown_rem: Optional[float] = None
                     from ..models.boost import BoostLifecycle

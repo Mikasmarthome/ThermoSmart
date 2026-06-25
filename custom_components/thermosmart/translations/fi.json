@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptiivinen tehostus",
-        "description": "Sallii ThermoSmartin soveltaa opittua adaptiivista tehostussiirtymää. Toimii vain, kun Oppimistila ja Aktiivinen ohjaus ovat myös päällä. TPI-ohjaus jatkuu itsenäisesti. Oletus: pois."
       }
     },
     "select": {

@@ -38,21 +38,25 @@ Tests:
     - reason code is PARTIAL_DISPATCH for partial
 
   TestRestoreRace:
-    - coordinator with adaptive_boost_enabled=False never boosts
-    - coordinator with active_control=False never boosts even if adaptive_boost=True
+    - coordinator with active_control=False never boosts
     - all-False default → no boost path
 """
 from __future__ import annotations
 
 import pytest
+from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch as _patch
 
+from custom_components.thermosmart.learning.clock import FakeClock
 from custom_components.thermosmart.learning.runtime.ha_integration import (
     AdaptiveBoostControlResult,
     BoostBlockReason,
     LearningShadowController,
     ADAPTIVE_BOOST_RESOLVER_VERSION,
 )
+from custom_components.thermosmart.learning.runtime.lifecycle import LearningRuntimeMode
+
+_T0 = datetime(2025, 3, 10, 6, 0, 0, tzinfo=timezone.utc)
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -64,7 +68,11 @@ def _make_shadow(zone_id="zone_test"):
         "custom_components.thermosmart.learning.runtime.ha_integration.HomeAssistantStoreAdapter",
         return_value=MagicMock(),
     ):
-        shadow = LearningShadowController(hass, zone_id)
+        shadow = LearningShadowController(
+            hass, zone_id,
+            mode=LearningRuntimeMode.CONTROL,
+            clock=FakeClock(start=_T0),
+        )
     return shadow
 
 
@@ -82,12 +90,11 @@ def _base_rec(*, current_temp=18.0, target=21.0, setpoint=21.0, zone_control_typ
     }
 
 
-def _resolve(shadow, rec, *, learning=True, active=True, boost_switch=True):
+def _resolve(shadow, rec, *, learning=True, active=True):
     return shadow.resolve_adaptive_boost_control(
         rec,
         learning_mode_on=learning,
         active_control_on=active,
-        adaptive_boost_switch_on=boost_switch,
         boost_runtime_limit=8.0,
     )
 
@@ -99,7 +106,6 @@ class TestBoostBlockReasonConstants:
         attrs = [
             BoostBlockReason.LEARNING_MODE_OFF,
             BoostBlockReason.ACTIVE_CONTROL_OFF,
-            BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF,
             BoostBlockReason.MIXED_CONTROL_TYPES,
             BoostBlockReason.DEVICE_UNAVAILABLE,
             BoostBlockReason.FAILED_DISPATCH,
@@ -112,7 +118,6 @@ class TestBoostBlockReasonConstants:
     def test_outer_gate_string_values(self):
         assert BoostBlockReason.LEARNING_MODE_OFF == "learning_mode_off"
         assert BoostBlockReason.ACTIVE_CONTROL_OFF == "active_control_off"
-        assert BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF == "adaptive_boost_switch_off"
         assert BoostBlockReason.MIXED_CONTROL_TYPES == "mixed_control_types_unsupported"
         assert BoostBlockReason.DEVICE_UNAVAILABLE == "device_unavailable"
         assert BoostBlockReason.FAILED_DISPATCH == "failed_dispatch"
@@ -122,7 +127,6 @@ class TestBoostBlockReasonConstants:
         values = [
             BoostBlockReason.LEARNING_MODE_OFF,
             BoostBlockReason.ACTIVE_CONTROL_OFF,
-            BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF,
             BoostBlockReason.MIXED_CONTROL_TYPES,
             BoostBlockReason.DEVICE_UNAVAILABLE,
             BoostBlockReason.FAILED_DISPATCH,
@@ -130,6 +134,10 @@ class TestBoostBlockReasonConstants:
             BoostBlockReason.READINESS_UNAVAILABLE,
         ]
         assert len(values) == len(set(values))
+
+    def test_adaptive_boost_switch_off_constant_removed(self):
+        """ADAPTIVE_BOOST_SWITCH_OFF must not exist — the switch was removed."""
+        assert not hasattr(BoostBlockReason, "ADAPTIVE_BOOST_SWITCH_OFF")
 
 
 # ── TestAppliedSemanticPreDispatch ─────────────────────────────────────────────
@@ -145,12 +153,6 @@ class TestAppliedSemanticPreDispatch:
         shadow = _make_shadow()
         rec = _base_rec()
         r = _resolve(shadow, rec, active=False)
-        assert r.applied_boost_offset_c == 0.0
-
-    def test_applied_is_zero_when_gate_3_blocks(self):
-        shadow = _make_shadow()
-        rec = _base_rec()
-        r = _resolve(shadow, rec, boost_switch=False)
         assert r.applied_boost_offset_c == 0.0
 
     def test_applied_is_zero_when_mixed_zone_blocks(self):
@@ -170,7 +172,6 @@ class TestAppliedSemanticPreDispatch:
         for kwargs in [
             {"learning": False},
             {"active": False},
-            {"boost_switch": False},
         ]:
             rec = _base_rec()
             r = _resolve(shadow, rec, **kwargs)
@@ -180,7 +181,6 @@ class TestAppliedSemanticPreDispatch:
         """When all outer+readiness gates pass and inner gates apply boost, applied = None."""
         shadow = _make_shadow()
         rec = _base_rec()
-        # Patch readiness to return eligible=True, factor_usable=True
         readiness = MagicMock()
         readiness.eligibility = True
         readiness.factor_usable = True
@@ -190,8 +190,7 @@ class TestAppliedSemanticPreDispatch:
 
         with _patch.object(shadow, "_read_boost_activation_readiness_safe",
                            return_value=readiness):
-            # Patch adjust_recommendation_safe to simulate boost applied
-            def _fake_adjust(r, *, boost_runtime_limit=None):
+            def _fake_adjust(r, *, boost_runtime_limit=None, authorized_override=False):
                 r["_boost_applied_c"] = 1.5
                 r["_boost_candidate_c"] = 1.5
                 r["le2_boost_adjusted"] = True
@@ -233,15 +232,14 @@ class TestPreDispatchDeviceUnavailable:
         assert released == [BoostBlockReason.DEVICE_UNAVAILABLE]
 
     def test_available_device_passes_gate(self):
-        """Available device passes Gate 3.6; blocked at readiness (no model)."""
+        """Available device passes Gate 3.5; blocked at readiness (no model)."""
         shadow = _make_shadow()
         rec = _base_rec(device_unavailable=False)
         r = _resolve(shadow, rec)
-        # Gate 3.6 passes; blocked at Gate 4 (readiness/no model)
         assert r.blocking_reason != BoostBlockReason.DEVICE_UNAVAILABLE
 
     def test_learning_gate_fires_before_device_gate(self):
-        """Gate 1 (learning) fires before Gate 3.6 (device unavailable)."""
+        """Gate 1 (learning) fires before Gate 3.5 (device unavailable)."""
         shadow = _make_shadow()
         rec = _base_rec(device_unavailable=True)
         r = _resolve(shadow, rec, learning=False)
@@ -281,7 +279,7 @@ class TestMixedControlZone:
         assert r.eligibility_reason == BoostBlockReason.MIXED_CONTROL_TYPES
 
     def test_pure_setpoint_passes_mixed_gate(self):
-        """Pure setpoint zone → Gate 3.5 passes; blocked at readiness (no model)."""
+        """Pure setpoint zone → Gate 3 passes; blocked at readiness (no model)."""
         shadow = _make_shadow()
         rec = _base_rec(zone_control_type="setpoint")
         r = _resolve(shadow, rec)
@@ -312,7 +310,6 @@ class TestBoostOffsetCSemantics:
         for kwargs in [
             {"learning": False},
             {"active": False},
-            {"boost_switch": False},
         ]:
             rec = _base_rec()
             r = _resolve(shadow, rec, **kwargs)
@@ -336,7 +333,6 @@ class TestBoostOffsetCSemantics:
         for kwargs in [
             {"learning": False},
             {"active": False},
-            {"boost_switch": False},
         ]:
             rec = _base_rec()
             r = _resolve(shadow, rec, **kwargs)
@@ -382,7 +378,6 @@ class TestPostDispatchInvalidation:
         shadow = _make_shadow()
         with _patch.object(shadow, "_release_boost_lifecycle_safe",
                            side_effect=RuntimeError("test")):
-            # Must not raise even if release raises
             try:
                 shadow.invalidate_boost_after_failed_dispatch_safe("failed")
             except RuntimeError:
@@ -394,7 +389,6 @@ class TestPostDispatchInvalidation:
         released = []
         with _patch.object(shadow, "_release_boost_lifecycle_safe",
                            side_effect=released.append):
-            # Not calling invalidate for not_attempted (coordinator guard)
             pass  # coordinator only calls invalidate for failed/partial
         assert released == []
 
@@ -404,57 +398,34 @@ class TestPostDispatchInvalidation:
 class TestRestoreRace:
     """Verify coordinator defaults prevent boost during partial restore."""
 
-    def test_adaptive_boost_disabled_by_default_blocks_gate3(self):
+    def test_active_control_disabled_blocks_gate2(self):
         shadow = _make_shadow()
         rec = _base_rec()
-        # coordinator._adaptive_boost_enabled = False (default) → switch gate blocks
-        r = _resolve(shadow, rec, boost_switch=False)
-        assert r.blocking_reason == BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF
-
-    def test_active_control_disabled_by_default_blocks_gate2(self):
-        shadow = _make_shadow()
-        rec = _base_rec()
-        # coordinator._active_control = False (default)
-        r = _resolve(shadow, rec, active=False, boost_switch=True)
+        r = _resolve(shadow, rec, active=False)
         assert r.blocking_reason == BoostBlockReason.ACTIVE_CONTROL_OFF
 
     def test_all_defaults_false_no_boost_possible(self):
         shadow = _make_shadow()
         rec = _base_rec()
-        # Simulates coordinator state just after startup before any switch restores
-        r = _resolve(shadow, rec, learning=True, active=False, boost_switch=False)
+        r = _resolve(shadow, rec, learning=True, active=False)
         assert r.boost_allowed is False
-
-    def test_adaptive_boost_on_but_active_control_not_restored_blocks(self):
-        """Adaptive Boost switch restores first → still no boost (active_control=False)."""
-        shadow = _make_shadow()
-        rec = _base_rec()
-        # AdaptiveBoost switch restored (True), Active Control not yet (False)
-        r = _resolve(shadow, rec, active=False, boost_switch=True)
-        assert r.boost_allowed is False
-        assert r.blocking_reason == BoostBlockReason.ACTIVE_CONTROL_OFF
 
     def test_learning_switch_affects_gate1(self):
-        """Learning OFF blocks at Gate 1 regardless of other switch states."""
+        """Learning OFF blocks at Gate 1 regardless of active_control state."""
         shadow = _make_shadow()
         rec = _base_rec()
-        r = _resolve(shadow, rec, learning=False, active=True, boost_switch=True)
+        r = _resolve(shadow, rec, learning=False, active=True)
         assert r.blocking_reason == BoostBlockReason.LEARNING_MODE_OFF
 
     def test_gate_order_is_strict(self):
-        """Gate 1 always fires before Gate 2 which fires before Gate 3."""
+        """Gate 1 always fires before Gate 2."""
         shadow = _make_shadow()
-        # All gates off: Gate 1 fires first
+        # Both gates off: Gate 1 fires first
         rec = _base_rec()
-        r = _resolve(shadow, rec, learning=False, active=False, boost_switch=False)
+        r = _resolve(shadow, rec, learning=False, active=False)
         assert r.blocking_reason == BoostBlockReason.LEARNING_MODE_OFF
 
         # Gate 1 on, Gate 2 off: Gate 2 fires
         rec = _base_rec()
-        r = _resolve(shadow, rec, learning=True, active=False, boost_switch=False)
+        r = _resolve(shadow, rec, learning=True, active=False)
         assert r.blocking_reason == BoostBlockReason.ACTIVE_CONTROL_OFF
-
-        # Gate 1+2 on, Gate 3 off: Gate 3 fires
-        rec = _base_rec()
-        r = _resolve(shadow, rec, learning=True, active=True, boost_switch=False)
-        assert r.blocking_reason == BoostBlockReason.ADAPTIVE_BOOST_SWITCH_OFF

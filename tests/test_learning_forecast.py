@@ -5,31 +5,30 @@ Covers:
   evaluate_forecast_decisions – 5h lookback, bias up/down/neutral,
                                 min/max clamping, 7d cleanup of evaluated entries
 
-Clock frozen via dt_util.now() monkeypatch. _forecast_decisions is in-memory
+Clock frozen via FakeClock injection. _forecast_decisions is in-memory
 (not persisted); save (fired on change) is mocked to a no-op.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.thermosmart import learning_engine as le
 from custom_components.thermosmart.const import (
     FORECAST_BIAS_MIN,
     FORECAST_BIAS_MAX,
     FORECAST_BIAS_LEARNING_RATE,
 )
+from custom_components.thermosmart.learning.clock import FakeClock
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def make_engine(monkeypatch, now=FIXED_NOW):
-    monkeypatch.setattr(le.dt_util, "now", lambda: now)
-    e = make_learning_engine()
+def make_engine(monkeypatch=None, now=FIXED_NOW):
+    e = make_learning_engine(clock=FakeClock(start=now))
     e.async_save = MagicMock()
     e._hass.async_create_task = lambda *a, **k: None
     return e

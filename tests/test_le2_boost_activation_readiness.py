@@ -199,21 +199,19 @@ class TestRestart:
         assert not m.activation_readiness(_ctx()).eligibility
 
 
-# ── UI target contract (B2b: no switch; B2c: switch added in switch.py) ──────
+# ── UI target contract ────────────────────────────────────────────────────────
 class TestUiTargetContract:
-    def test_adaptive_boost_switch_entity_added_in_b2c(self):
-        # B2c adds ThermoSmartAdaptiveBoostSwitch (default OFF) in switch.py.
-        # This test documents the intentional addition of the entity in B2c.
+    def test_adaptive_boost_switch_removed(self):
+        """ThermoSmartAdaptiveBoostSwitch must NOT exist — it was removed in S1a."""
         from pathlib import Path
         import custom_components.thermosmart as pkg
         root = Path(pkg.__file__).parent
         hits = []
         for p in root.rglob("*.py"):
             txt = p.read_text(encoding="utf-8", errors="ignore").lower()
-            if "adaptive_boost" in txt and "switchentity" in txt:
+            if "thermosmartadaptiveboostswitch" in txt:
                 hits.append(p.name)
-        assert hits, "B2c: ThermoSmartAdaptiveBoostSwitch must exist in switch.py"
-        assert "switch.py" in hits
+        assert not hits, f"ThermoSmartAdaptiveBoostSwitch found in: {hits} — should be gone"
 
     def test_readiness_is_advisory_only(self):
         # computing readiness must not mutate the model state (no activation side effects)

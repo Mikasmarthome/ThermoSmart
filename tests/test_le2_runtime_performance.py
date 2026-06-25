@@ -30,7 +30,8 @@ class TestPerformance:
 
     async def test_open_comparisons_bounded(self):
         rt = LearningRuntime(LearningRuntimeConfig(
-            mode=LearningRuntimeMode.SHADOW, max_open_comparisons=5))
+            mode=LearningRuntimeMode.SHADOW, max_open_comparisons=5),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
         for i in range(20):
             rt.run_cycle(cycle_input(f"2026-06-22T05:{i:02d}:00+00:00",
                                      legacy_preheat="2026-06-22T06:00:00+00:00",
@@ -46,7 +47,7 @@ class TestPerformance:
 
     def test_cycle_does_not_full_serialize(self):
         # a plain cycle must not serialise model state (only mark dirty)
-        rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW))
+        rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW), clock=lambda: "2025-01-01T00:00:00+00:00")
         calls = {"n": 0}
         orig = rt._zone("lr").orchestrator.serialize_models
 

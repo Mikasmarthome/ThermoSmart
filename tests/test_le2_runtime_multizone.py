@@ -12,7 +12,7 @@ from tests.helpers_runtime import cycle_input
 
 
 def rt():
-    return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW))
+    return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW), clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 class TestMultiZone:

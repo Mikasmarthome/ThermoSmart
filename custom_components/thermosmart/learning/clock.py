@@ -5,6 +5,14 @@ Home Assistant helper) directly. Instead every component receives a ``Clock``
 and uses it for wall-clock time (UTC, timezone-aware) and a monotonic source
 for intra-episode durations that survive system clock corrections.
 
+At the HA integration boundary (coordinator.py, ha_integration.py) the injected
+``Clock`` is used for all UTC-based fachliche timestamps (decision records, cycle
+timestamps, heating-failure timers, schedule offsets). Timezone-aware local-time
+calls that need HA's configured timezone (schedule period matching, window event
+timestamps) use ``dt_util.now()`` which is patched globally by ``SimulationClock``
+in all simulation tests — these are NOT considered unauthorized at the HA integration
+layer because ``dt_util.now`` IS the HA-sanctioned local-time authority there.
+
 This module has no Home Assistant dependency and is fully testable with a
 deterministic ``FakeClock``.
 """

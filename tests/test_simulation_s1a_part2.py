@@ -20,6 +20,12 @@ import time as _real_time
 
 import pytest
 
+# Normalized performance limit per simulation step.
+# Calibrated on the Docker full-suite context (WARNING log level, post-4000-test GC pressure):
+# isolation ~7ms/step, full-suite ~15-18ms/step. 25ms/step provides ~40% headroom while
+# still catching real algorithmic regressions (3× slowdown = 75ms/step → clear failure).
+_PERF_LIMIT_MS_PER_STEP = 25.0
+
 from custom_components.thermosmart.coordinator import ControlAdaptationMode
 from tests.simulation.runner import ScenarioRunner
 from tests.simulation.scenarios import (
@@ -397,7 +403,10 @@ class TestFourModeMatrix:
         assert summary.service_call_count > 0, (
             "Mode C must produce service calls (active control)")
         assert summary.dominant_mode() == ControlAdaptationMode.DETERMINISTIC
-        assert elapsed < 30.0
+        _ms = elapsed * 1000 / summary.total_steps
+        assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+            f"Mode C too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps)"
+        )
 
     @pytest.mark.asyncio
     async def test_mode_d_adaptive_safety_and_comfort(self):
@@ -417,7 +426,10 @@ class TestFourModeMatrix:
             f"Mode D comfort too low: {summary.comfort_fraction:.1%}")
         assert summary.service_call_count > 0
         assert summary.dominant_mode() == ControlAdaptationMode.ADAPTIVE
-        assert elapsed < 30.0
+        _ms = elapsed * 1000 / summary.total_steps
+        assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+            f"Mode D too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps)"
+        )
 
     @pytest.mark.asyncio
     async def test_modes_c_and_d_have_equivalent_safety(self):
@@ -453,7 +465,11 @@ async def test_s1f_self_learning_no_boost_before_eligibility():
     assert summary.total_steps == cfg.n_steps, "S1-F did not complete"
     assert summary.cold_fraction == 0.0, (
         f"S1-F safety violation: {summary.cold_steps} cold steps")
-    assert elapsed < 120.0, f"30-day S1-F too slow: {elapsed:.1f}s"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"S1-F too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps, "
+        f"limit {_PERF_LIMIT_MS_PER_STEP}ms/step)"
+    )
 
 
 @pytest.mark.asyncio
@@ -680,7 +696,11 @@ async def test_7day_run_within_30s():
     t0 = _real_time.monotonic()
     summary = await runner.run()
     elapsed = _real_time.monotonic() - t0
-    assert elapsed < 30.0, f"7-day run took {elapsed:.1f}s (limit 30s)"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"7-day run too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps, "
+        f"limit {_PERF_LIMIT_MS_PER_STEP}ms/step)"
+    )
     assert summary.total_steps == cfg.n_steps
 
 

@@ -2,7 +2,7 @@
 
 Covers:
   TestBoostActiveInit   -- _boost_active initialized before first refresh, never AttributeError
-  TestRestoreBarrier    -- barrier blocks until both switches initialized; error paths; no timeout
+  TestRestoreBarrier    -- barrier blocks until active_control initialized; error paths; no timeout
   TestPartialRecovery   -- sequential two-cycle test: partial dispatch -> baseline restoration
 """
 from __future__ import annotations
@@ -81,16 +81,15 @@ class TestBoostActiveInit:
 # -- TestRestoreBarrier --
 
 class TestRestoreBarrier:
-    """Restore initialization barrier blocks until both switches initialized."""
+    """Restore initialization barrier blocks until active_control is initialized."""
 
     @pytest.mark.asyncio
-    async def test_barrier_blocks_when_neither_initialized(self):
+    async def test_barrier_blocks_when_not_initialized(self):
         coord = make_recording_coordinator(indoor="15.0")
         shadow = attach_shadow(coord)
         await shadow.async_setup()
         inject_eligible_boost_model(shadow)
         coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
 
         result = await coord._async_update_data()
         zone = result["zone"]
@@ -100,20 +99,7 @@ class TestRestoreBarrier:
             f"unexpected rejection: {rej!r}"
 
     @pytest.mark.asyncio
-    async def test_barrier_blocks_when_only_active_control_initialized(self):
-        coord = make_recording_coordinator(indoor="15.0")
-        shadow = attach_shadow(coord)
-        await shadow.async_setup()
-        inject_eligible_boost_model(shadow)
-        coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
-        coord.set_active_control(True)
-
-        result = await coord._async_update_data()
-        assert result["zone"].get("boost_offset_c", 0.0) == 0.0
-
-    @pytest.mark.asyncio
-    async def test_barrier_unblocks_when_both_initialized(self):
+    async def test_barrier_unblocks_when_active_control_initialized(self):
         coord = make_dispatching_coordinator(
             climate_entities=["climate.trv"],
             climate_states={"climate.trv": {"temperature": 21.0, "min_temp": 5.0,
@@ -124,7 +110,6 @@ class TestRestoreBarrier:
         await shadow.async_setup()
         inject_eligible_boost_model(shadow)
         assert coord._active_control_initialized
-        assert coord._adaptive_boost_initialized
 
         result = await coord._async_update_data()
         assert result["zone"].get("_boost_rejection_reason") != "restore_pending"
@@ -135,11 +120,10 @@ class TestRestoreBarrier:
         shadow = attach_shadow(coord)
         await shadow.async_setup()
         coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
 
         for _ in range(5):
             await coord._async_update_data()
-            assert not (coord._active_control_initialized and coord._adaptive_boost_initialized)
+            assert not coord._active_control_initialized
 
     @pytest.mark.asyncio
     async def test_barrier_malformed_restore_state_stays_blocked(self):
@@ -148,7 +132,6 @@ class TestRestoreBarrier:
         await shadow.async_setup()
         coord._active_control = "yes_please"
         coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
 
         result = await coord._async_update_data()
         assert result["zone"].get("boost_offset_c", 0.0) == 0.0
@@ -159,7 +142,6 @@ class TestRestoreBarrier:
         shadow = attach_shadow(coord)
         await shadow.async_setup()
         coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
 
         result = await coord._async_update_data()
         assert result is not None
@@ -168,9 +150,7 @@ class TestRestoreBarrier:
     def test_restore_pending_computable_without_entity_ids(self):
         coord = make_recording_coordinator()
         coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
-        restore_pending = not (
-            coord._active_control_initialized and coord._adaptive_boost_initialized)
+        restore_pending = not coord._active_control_initialized
         assert restore_pending is True
         assert "climate." not in str(restore_pending)
 
@@ -406,15 +386,14 @@ class TestNotAttempted:
         await shadow.async_setup()
         inject_eligible_boost_model(shadow)
         coord._active_control_initialized = False
-        coord._adaptive_boost_initialized = False
 
         result = await coord._async_update_data()
         assert result["zone"].get("boost_offset_c", 0.0) == 0.0          # Gate 0 blocks before model
         assert result["zone"].get("applied_boost_offset_c", 0.0) == 0.0  # no dispatch
 
     @pytest.mark.asyncio
-    async def test_boost_switch_off_applied_zero(self):
-        """Adaptive boost switch OFF: Gate 3 blocks → boost_offset_c=0.0, applied=0.0."""
+    async def test_learning_off_applied_zero(self):
+        """Learning OFF: Gate 1 blocks → boost_offset_c=0.0, applied=0.0."""
         coord = make_dispatching_coordinator(
             climate_entities=["climate.trv"],
             climate_states={"climate.trv": {"temperature": 21.0, "min_temp": 5.0,
@@ -424,15 +403,15 @@ class TestNotAttempted:
         shadow = attach_shadow(coord)
         await shadow.async_setup()
         inject_eligible_boost_model(shadow)
-        coord.set_adaptive_boost_enabled(False)
+        coord.entry.data = {**coord.entry.data, "learning_enabled": False}
 
         result = await coord._async_update_data()
-        assert result["zone"].get("boost_offset_c", 0.0) == 0.0          # Gate 3 blocks before model
+        assert result["zone"].get("boost_offset_c", 0.0) == 0.0          # Gate 1 blocks before model
         assert result["zone"].get("applied_boost_offset_c", 0.0) == 0.0  # no dispatch
 
     @pytest.mark.asyncio
-    async def test_prior_applied_boost_then_switch_off_no_stale(self):
-        """Cycle 1: boost applied. Cycle 2: switch OFF → applied 0.0, no stale value."""
+    async def test_prior_applied_boost_then_learning_off_no_stale(self):
+        """Cycle 1: boost applied. Cycle 2: learning OFF → applied 0.0, no stale value."""
         coord = make_dispatching_coordinator(
             climate_entities=["climate.trv"],
             climate_states={"climate.trv": {"temperature": 21.0, "min_temp": 5.0,
@@ -446,13 +425,13 @@ class TestNotAttempted:
         await coord._async_update_data()
         # Cycle 1 may or may not have approved boost — either way cycle 2 must be 0.0
 
-        coord.set_adaptive_boost_enabled(False)
+        coord.entry.data = {**coord.entry.data, "learning_enabled": False}
         async def _c2_svc(domain, service, data=None, *, blocking=True, **kw):
             pass
         coord.hass.services.async_call = _c2_svc
 
         result2 = await coord._async_update_data()
-        assert result2["zone"].get("boost_offset_c", 0.0) == 0.0          # Gate 3 blocks → prediction=0.0
+        assert result2["zone"].get("boost_offset_c", 0.0) == 0.0          # Gate 1 blocks → prediction=0.0
         assert result2["zone"].get("applied_boost_offset_c", 0.0) == 0.0  # no stale applied
         assert result2["zone"].get("_boost_per_device_applied_c", []) == []
 

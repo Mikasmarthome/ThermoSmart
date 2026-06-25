@@ -177,6 +177,10 @@ class ControlContext:
     device_min: Optional[float] = None
     device_max: Optional[float] = None
     boost_runtime_limit: Optional[float] = None   # TPI_MAX_BOOST_CELSIUS at call site
+    # Explicit authorization from resolve_adaptive_boost_control(): bypasses the shadow-mode
+    # runtime gate and the ConfidenceAggregator gate (which is redundant — BoostActivationReadiness
+    # is the real authority for authorized boosts).  All physical safety gates still apply.
+    authorized_override: bool = False
 
 
 def _summary(cr: Any) -> Optional[ConfidenceSummary]:
@@ -228,6 +232,9 @@ class ControlPolicy:
         conf = _summary(prediction.confidence_result) if prediction is not None else None
 
         # 1. runtime + feature gating
+        # Non-bypassable by authorized_override: runtime_is_control is a structural gate.
+        # Production shadows are created with LearningRuntimeMode.CONTROL so this gate
+        # passes naturally. authorized_override only bypasses confidence gates (4a-4e below).
         if not self._runtime_is_control:
             return self._fallback(feature, baseline_value, unit,
                                   ControlRejection.RUNTIME_NOT_CONTROL.value, None, conf)
@@ -258,28 +265,32 @@ class ControlPolicy:
                 return self._fallback(feature, baseline_value, unit, reason.value,
                                       prediction.value, conf)
         # 4. confidence authority (single source: the ConfidenceResult)
-        if conf is None:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.CONTROL_GATE_CLOSED.value, prediction.value, None)
-        if conf.hard_cap:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.HARD_CAP_ACTIVE.value, prediction.value, conf)
-        if not conf.control_allowed:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.CONTROL_GATE_CLOSED.value, prediction.value, conf)
-        if conf.value < self._p.min_control_confidence:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.INSUFFICIENT_CONFIDENCE.value,
-                                  prediction.value, conf)
-        if conf.reliability < self._p.min_reliability:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.LOW_RELIABILITY.value, prediction.value, conf)
-        if self._p.reject_on_fallback and conf.fallback_used:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.FALLBACK_DOMINANT.value, prediction.value, conf)
-        if self._p.reject_on_prior_dominant and conf.prior_fraction >= self._p.prior_dominant_threshold:
-            return self._fallback(feature, baseline_value, unit,
-                                  ControlRejection.PRIOR_DOMINANT.value, prediction.value, conf)
+        # authorized_override: BoostActivationReadiness is the authority — confidence gate
+        # here is redundant and would block bootstrap/cold-start scenarios unnecessarily.
+        if not ctx.authorized_override:
+            if conf is None:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.CONTROL_GATE_CLOSED.value, prediction.value, None)
+            if conf.hard_cap:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.HARD_CAP_ACTIVE.value, prediction.value, conf)
+            if not conf.control_allowed:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.CONTROL_GATE_CLOSED.value, prediction.value, conf)
+            if conf.value < self._p.min_control_confidence:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.INSUFFICIENT_CONFIDENCE.value,
+                                      prediction.value, conf)
+            if conf.reliability < self._p.min_reliability:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.LOW_RELIABILITY.value, prediction.value, conf)
+        if not ctx.authorized_override:
+            if self._p.reject_on_fallback and conf is not None and conf.fallback_used:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.FALLBACK_DOMINANT.value, prediction.value, conf)
+            if self._p.reject_on_prior_dominant and conf is not None and conf.prior_fraction >= self._p.prior_dominant_threshold:
+                return self._fallback(feature, baseline_value, unit,
+                                      ControlRejection.PRIOR_DOMINANT.value, prediction.value, conf)
         # 5. boost runtime-limit guard
         if feature is ControlFeature.BOOST_OFFSET:
             limit = ctx.boost_runtime_limit

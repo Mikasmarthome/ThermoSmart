@@ -176,6 +176,15 @@ def build_activation_readiness(*, recommendation, factor_stable: bool, control_t
         reason = (R.REHABILITATION_REQUIRED if rec.known_good_available and rec.rehab_progress < 1.0
                   else R.SHADOW_LEARNING)
         return _not_eligible(reason, **common)
+    if rec.readiness == BoostLearningReadiness.BOOTSTRAP:
+        # B2b-bootstrap: initial controlled trial using device prior offset.
+        # No evidence yet — stability/confidence/reliability gates do not apply.
+        # factor_usable must still be True (set by predict_boost_factor bootstrap path).
+        if not rec.factor_usable:
+            return _not_eligible(R.NO_USABLE_FACTOR, **common)
+        return BoostActivationReadiness(
+            eligibility=True, eligibility_reason=R.ELIGIBLE, factor_usable=True, **common,
+            min_activation_confidence=min_confidence, min_activation_reliability=min_reliability)
     if not rec.factor_usable:
         reason = (R.NO_ELIGIBLE_SCOPE if rec.selected_scope in ("prior", "unavailable")
                   else R.NO_USABLE_FACTOR)

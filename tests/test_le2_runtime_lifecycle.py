@@ -25,7 +25,7 @@ class TestLifecycle:
         assert await r.async_setup() and r.initialized
 
     async def test_setup_without_store(self):
-        r = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW))
+        r = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW), clock=lambda: "2025-01-01T00:00:00+00:00")
         assert await r.async_setup() and r.initialized
 
     async def test_restore_survives_restart(self):

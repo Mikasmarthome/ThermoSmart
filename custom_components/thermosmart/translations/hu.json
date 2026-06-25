@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptív boost",
-        "description": "Lehetővé teszi a ThermoSmart számára egy tanult adaptív boost offset alkalmazását. Csak akkor lép érvénybe, ha a Tanulási mód és az Aktív vezérlés is be van kapcsolva. A TPI vezérlés függetlenül fut tovább. Alapértelmezett: ki."
       }
     },
     "select": {

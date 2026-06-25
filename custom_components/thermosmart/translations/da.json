@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptivt boost",
-        "description": "Giver ThermoSmart mulighed for at anvende et lært adaptivt boost-offset. Virker kun, hvis Læringstilstand og Aktiv styring også er slået til. TPI-styring kører uafhængigt. Standard: slukket."
       }
     },
     "select": {

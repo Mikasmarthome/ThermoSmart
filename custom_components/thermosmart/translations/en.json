@@ -200,9 +200,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vacation",
-              "sleep":    "Night"
+              "sleep": "Night"
             }
           }
         }
@@ -212,23 +212,25 @@
       "active_control": {
         "name": "Active Control"
       },
-      "learning": { "name": "Learning mode" },
-      "adaptive_boost": {
-        "name": "Adaptive Boost",
-        "description": "Allows ThermoSmart to apply a learned adaptive boost offset to the setpoint. Only takes effect when Learning mode and Active Control are also on, and when the learning model has sufficient evidence. TPI control continues independently regardless of this setting. Default: off."
+      "learning": {
+        "name": "Learning mode"
       },
-      "vacation_mode": { "name": "Vacation Mode" },
-      "debug_log": { "name": "Debug Log" }
+      "vacation_mode": {
+        "name": "Vacation Mode"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Heating mode",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Comfort",
-          "eco":      "Eco",
-          "night":    "Night",
-          "away":     "Away",
+          "auto": "Auto",
+          "comfort": "Comfort",
+          "eco": "Eco",
+          "night": "Night",
+          "away": "Away",
           "vacation": "Vacation"
         }
       },
@@ -236,43 +238,59 @@
         "name": "Summer Mode",
         "state": {
           "automatic": "Automatic",
-          "on":        "On",
-          "off":       "Off"
+          "on": "On",
+          "off": "Off"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Target temperature" },
-      "trv_setpoint": { "name": "TRV setpoint" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Target temperature"
+      },
+      "trv_setpoint": {
+        "name": "TRV setpoint"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Outcome Score",
         "state": {
           "learning": "Learning"
         }
       },
-      "preheat_minutes": { "name": "Preheat time" },
-      "confidence": { "name": "Learning progress" },
-      "weather_offset": { "name": "Weather correction" },
+      "preheat_minutes": {
+        "name": "Preheat time"
+      },
+      "confidence": {
+        "name": "Learning progress"
+      },
+      "weather_offset": {
+        "name": "Weather correction"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Disabled",
-          "observation_mode":      "Observation mode",
+          "disabled": "Disabled",
+          "observation_mode": "Observation mode",
           "controlling_no_learning": "Controlling (learning off)",
-          "heating_failure":       "Heating failure!",
-          "preheating":            "Preheating",
-          "summer":                "Summer – heating off",
-          "window_open":           "Window open",
-          "vacation":              "Vacation",
-          "away":                  "Away",
-          "heating":               "Heating",
-          "idle":                  "Temperature maintained",
-          "active":                "Active"
+          "heating_failure": "Heating failure!",
+          "preheating": "Preheating",
+          "summer": "Summer – heating off",
+          "window_open": "Window open",
+          "vacation": "Vacation",
+          "away": "Away",
+          "heating": "Heating",
+          "idle": "Temperature maintained",
+          "active": "Active"
         }
       },
-      "temp_slope": { "name": "Temperature slope" },
-      "temp_ema_1h": { "name": "Temperature EMA 1h" },
+      "temp_slope": {
+        "name": "Temperature slope"
+      },
+      "temp_ema_1h": {
+        "name": "Temperature EMA 1h"
+      },
       "heat_loss": {
         "name": "Heat loss",
         "state": {
@@ -285,14 +303,18 @@
           "learning": "Learning"
         }
       },
-      "sun_intensity": { "name": "Solar heat gain" },
+      "sun_intensity": {
+        "name": "Solar heat gain"
+      },
       "window_cooling_rate": {
         "name": "Window cooling rate",
         "state": {
           "learning": "Learning"
         }
       },
-      "trv_observations": { "name": "TRV observations" }
+      "trv_observations": {
+        "name": "TRV observations"
+      }
     }
   }
 }

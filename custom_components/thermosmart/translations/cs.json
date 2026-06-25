@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptivní boost",
-        "description": "Umožňuje ThermoSmart aplikovat naučený adaptivní boost offset. Funguje pouze pokud jsou zapnuty také Režim učení a Aktivní řízení. TPI řízení pokračuje nezávisle. Výchozí: vypnuto."
       }
     },
     "select": {

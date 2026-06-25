@@ -20,13 +20,15 @@ from __future__ import annotations
 import logging
 import math
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.storage import Store
 from homeassistant.util import dt as dt_util
+
+from .learning.clock import Clock, SystemClock as _SystemClock
 
 from .const import (
     STORAGE_VERSION,
@@ -50,6 +52,11 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+def _ensure_aware(dt: datetime) -> datetime:
+    """Return dt as UTC-aware; naive inputs are assumed UTC (legacy storage compat)."""
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
+
+
 # ── Gewichtungsfunktionen ───────────────────────────────────────────────────
 
 def _time_weight(obs_ts: str, now: datetime, halflife_days: float = 180) -> float:
@@ -57,9 +64,10 @@ def _time_weight(obs_ts: str, now: datetime, halflife_days: float = 180) -> floa
     Halbwertszeit 180 Tage – alte Gewohnheiten zählen weiter.
     """
     try:
-        age_days = max((now - datetime.fromisoformat(obs_ts)).total_seconds() / 86400, 0)
-    except (ValueError, TypeError):
+        obs_dt = _ensure_aware(datetime.fromisoformat(obs_ts))
+    except (ValueError, TypeError):  # malformed string or None from corrupted storage
         return 0.0
+    age_days = max((now - obs_dt).total_seconds() / 86400, 0)
     return math.exp(-age_days / halflife_days)
 
 
@@ -75,8 +83,8 @@ def _thermal_weight(obs: dict, conditions: dict, now: datetime) -> float:
       - Außenluftfeuchtigkeit (σ=15%) – feuchte Kälte kühlt stärker
     """
     try:
-        obs_dt = datetime.fromisoformat(obs["ts"])
-    except (ValueError, TypeError, KeyError):
+        obs_dt = _ensure_aware(datetime.fromisoformat(obs["ts"]))
+    except (ValueError, TypeError, KeyError):  # malformed ts, None ts, or missing key
         return 0.0
 
     age_days = max((now - obs_dt).total_seconds() / 86400, 0)
@@ -160,8 +168,9 @@ class LearningEngine:
     }
     """
 
-    def __init__(self, hass: HomeAssistant) -> None:
+    def __init__(self, hass: HomeAssistant, *, clock: "Clock | None" = None) -> None:
         self._hass = hass
+        self._clock: Clock = clock if clock is not None else _SystemClock()
         # Phase 19A-B: LE 2.0 is the single active learning engine. When frozen, this
         # legacy engine performs NO state mutation and NO store write — it is read-only.
         # Its persisted store is never deleted or migrated. Off by default so the engine
@@ -186,6 +195,14 @@ class LearningEngine:
         self._outcome_log: dict[str, list[dict]] = defaultdict(list)
         # Pending handle for debounced TRV-observation save (60 s after last observation)
         self._debounce_save_cancel: object | None = None
+
+    def _now_local(self):
+        """Return current local time derived from the injected clock.
+
+        Uses dt_util.as_local() for timezone conversion only — not as a time source.
+        Matches the same helper in ThermoSmartCoordinator so timestamps are consistent.
+        """
+        return dt_util.as_local(self._clock.now_utc())
 
     # ── Persistenz ──────────────────────────────────────────────────────
 
@@ -264,16 +281,21 @@ class LearningEngine:
         ein reines Sicherheitsnetz, das im Normalbetrieb nicht greift.
         Läuft nur beim Speichern – kein Performance-Einfluss auf den Update-Zyklus.
         """
-        cutoff = dt_util.now() - timedelta(days=max_age_days)
-        cutoff_iso = cutoff.isoformat()
+        cutoff = _ensure_aware(self._now_local() - timedelta(days=max_age_days))
+
+        def _survives_cutoff(obs: dict) -> bool:
+            ts_str = obs.get("ts")
+            if not ts_str:
+                return False  # missing/empty timestamp → prune
+            try:
+                return _ensure_aware(datetime.fromisoformat(ts_str)) >= cutoff
+            except (ValueError, TypeError):
+                return False  # malformed timestamp → prune visibly
 
         for store in (self._observations, self._trv_observations, self._window_cooling_obs):
             for zone_id in list(store.keys()):
                 before = len(store[zone_id])
-                store[zone_id] = [
-                    o for o in store[zone_id]
-                    if o.get("ts", "") >= cutoff_iso
-                ]
+                store[zone_id] = [o for o in store[zone_id] if _survives_cutoff(o)]
                 if len(store[zone_id]) > max_per_zone:
                     store[zone_id] = store[zone_id][-max_per_zone:]
                 removed = before - len(store[zone_id])
@@ -358,7 +380,7 @@ class LearningEngine:
         cutoff = now - timedelta(minutes=window_min)
         for obs in reversed(obs_list[-20:]):   # Nur letzte 20 prüfen → schnell
             try:
-                if datetime.fromisoformat(obs["ts"]) < cutoff:
+                if _ensure_aware(datetime.fromisoformat(obs["ts"])) < cutoff:
                     break
             except (ValueError, KeyError):
                 continue
@@ -404,7 +426,7 @@ class LearningEngine:
         if current_temp is None or adjusted_target is None:
             return
 
-        now = dt_util.now()
+        now = self._now_local()
 
         # Heizrate aus aufeinanderfolgenden Messungen
         heat_rate: float | None = None
@@ -529,7 +551,7 @@ class LearningEngine:
         if heat_rate is not None and heat_rate <= 0:
             return
 
-        now = dt_util.now()
+        now = self._now_local()
         obs: dict = {
             "ts": now.isoformat(),
             "trv_setpoint": round(trv_setpoint, 1),
@@ -557,7 +579,7 @@ class LearningEngine:
         if existing:
             last = existing[-1]
             try:
-                last_ts = datetime.fromisoformat(last["ts"])
+                last_ts = _ensure_aware(datetime.fromisoformat(last["ts"]))
                 if (now - last_ts).total_seconds() < 5.0:
                     if (
                         last.get("trv_setpoint") == obs["trv_setpoint"]
@@ -611,7 +633,7 @@ class LearningEngine:
         if temp_drop < 0.5:
             return
 
-        now = dt_util.now()
+        now = self._now_local()
         obs: dict = {
             "ts": now.isoformat(),
             "duration_min": round(duration_min, 1),
@@ -655,7 +677,7 @@ class LearningEngine:
           - Sitzungsende:  Ziel erreicht (Score berechnen) oder Timeout 90 min
           - Unterbrechung: Fenster offen (target=None) oder Modus geändert
         """
-        now = dt_util.now()
+        now = self._now_local()
         if self._frozen:
             return
         session = self._heating_sessions.get(zone_id)
@@ -697,7 +719,7 @@ class LearningEngine:
                 # Sitzung fortführen: Peak tracken, Timeout prüfen
                 session["peak_temp"] = max(session["peak_temp"], current_temp)
                 try:
-                    start = datetime.fromisoformat(session["start_time"])
+                    start = _ensure_aware(datetime.fromisoformat(session["start_time"]))
                     if (now - start).total_seconds() / 60 >= 90:
                         self._finalize_session(zone_id, current_temp, "timeout")
                 except (ValueError, KeyError):
@@ -714,9 +736,9 @@ class LearningEngine:
         if session is None:
             return
 
-        now = dt_util.now()
+        now = self._now_local()
         try:
-            start = datetime.fromisoformat(session["start_time"])
+            start = _ensure_aware(datetime.fromisoformat(session["start_time"]))
             elapsed_min = (now - start).total_seconds() / 60
         except (ValueError, KeyError):
             return
@@ -884,7 +906,7 @@ class LearningEngine:
         if len(obs_list) < 2:
             return None
 
-        now = dt_util.now()
+        now = self._now_local()
         outdoor = weather_data.get("temperature") or 10.0
         wind = weather_data.get("wind_speed") or 0.0
 
@@ -896,7 +918,7 @@ class LearningEngine:
             temp_sim = math.exp(-((obs_outdoor - outdoor) / 5.0) ** 2)
             wind_sim = math.exp(-((obs_wind - wind) / 3.0) ** 2)
             try:
-                age_days = (now - datetime.fromisoformat(obs["ts"])).total_seconds() / 86400
+                age_days = (now - _ensure_aware(datetime.fromisoformat(obs["ts"]))).total_seconds() / 86400
             except (ValueError, KeyError):
                 age_days = 0
             recency = math.exp(-age_days / 180)
@@ -999,7 +1021,7 @@ class LearningEngine:
 
     def get_confidence_breakdown(self, zone_id: str) -> dict:
         """Aufschlüsselung der Konfidenz nach Lernspuren."""
-        now = dt_util.now()
+        now = self._now_local()
         obs = self._observations.get(zone_id, [])
         heating_obs = [o for o in obs if o.get("heat_rate") is not None]
         trv_n = len(self._trv_observations.get(zone_id, []))
@@ -1044,13 +1066,13 @@ class LearningEngine:
             return
         if not self._is_enabled(zone_id):
             return
-        now = dt_util.now()
+        now = self._now_local()
         # Duplikat-Schutz: kein neuer Eintrag wenn eine noch unausgewertete Entscheidung
         # aus den letzten 2 Stunden existiert
         recent = self._forecast_decisions[zone_id]
         if recent:
             try:
-                last_ts = datetime.fromisoformat(recent[-1]["ts"])
+                last_ts = _ensure_aware(datetime.fromisoformat(recent[-1]["ts"]))
                 if (now - last_ts).total_seconds() < 7200:
                     return
             except (ValueError, KeyError):
@@ -1088,7 +1110,7 @@ class LearningEngine:
             return
         if current_temp is None:
             return
-        now = dt_util.now()
+        now = self._now_local()
         decisions = self._forecast_decisions.get(zone_id, [])
         changed = False
 
@@ -1096,7 +1118,7 @@ class LearningEngine:
             if dec.get("evaluated"):
                 continue
             try:
-                decision_time = datetime.fromisoformat(dec["ts"])
+                decision_time = _ensure_aware(datetime.fromisoformat(dec["ts"]))
             except (ValueError, KeyError):
                 dec["evaluated"] = True
                 continue
@@ -1186,7 +1208,7 @@ class LearningEngine:
         schedule_cfg: dict | None = None,
     ) -> float:
         """Konfigurierbarer Zeitplan: Werktag 4 Blöcke, Wochenende 2 Blöcke."""
-        now = dt_util.now()
+        now = self._now_local()
         is_weekend = now.weekday() >= 5
         cur = now.hour * 60 + now.minute
 
@@ -1324,7 +1346,7 @@ class LearningEngine:
            Ähnlichkeit nach Außentemp, Wind, Solar, Feuchte
            → Oktober bei 8°C + Wind ≈ Januar bei 8°C + Wind
         """
-        now = dt_util.now()
+        now = self._now_local()
         curr_outdoor = weather_data.get("temperature") or 10.0
 
         # Nur die letzten 500 Beobachtungen auswerten – ältere haben durch
@@ -1454,7 +1476,7 @@ class LearningEngine:
         Jede Lernspur wächst unabhängig und verbessert sich mit der Zeit.
         """
         zones = [zone_id] if zone_id else list(self._observations.keys())
-        now = dt_util.now()
+        now = self._now_local()
 
         for zid in zones:
             # ── Basis-Lernen (60%) ─────────────────────────────────────────

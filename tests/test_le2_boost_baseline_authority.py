@@ -103,7 +103,8 @@ class TestRuntimeUnknownDiagnostics:
             LearningRuntimeMode, RuntimeCycleInput, ScheduleTarget)
         T0 = datetime(2025, 6, 1, 6, 0, 0, tzinfo=timezone.utc)
         rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                                   startup_grace_cycles=0))
+                                                   startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
         # non-boost session but dispatch reports boost_applied_c=None (unprovable)
         bd = BoostDispatchRecord("x", boost_applied_c=None, dispatch_status="fully_succeeded")
         t = 18.0

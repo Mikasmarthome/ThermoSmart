@@ -14,7 +14,7 @@ async def test_entry_loads_with_shadow(hass, hass_storage, enable_custom_integra
     assert "coordinator" in entry_data
     shadow = entry_data.get("le2_shadow")
     assert shadow is not None
-    assert shadow.runtime.mode is LearningRuntimeMode.SHADOW
+    assert shadow.runtime.mode is LearningRuntimeMode.CONTROL
 
 
 async def test_coordinator_has_single_shadow_reference(hass, hass_storage,
@@ -35,7 +35,7 @@ async def test_no_store_written_on_setup(hass, hass_storage, enable_custom_integ
 async def test_diagnostics_available(hass, hass_storage, enable_custom_integrations):
     _, _, entry_data = await setup_zone(hass)
     d = entry_data["le2_shadow"].diagnostics()
-    assert d["mode"] == "shadow" and d["initialized"] is True
+    assert d["mode"] == "control" and d["initialized"] is True
 
 
 async def test_setup_failure_isolated(hass, hass_storage, enable_custom_integrations,

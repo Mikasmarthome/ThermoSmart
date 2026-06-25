@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import dataclasses
 import logging
-import time
 from collections import deque
 from datetime import datetime, timedelta
 
@@ -49,6 +48,7 @@ from .const import (
     TPI_COEF_EXT_DEFAULT,
 )
 from .device_profiles import DeviceProfile
+from .learning.clock import Clock, SystemClock
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
 from .window import WindowMixin
@@ -84,6 +84,31 @@ _EARLY_CUTOFF_MAX_C = 3.0             # hard maximum (mirrors AfterheatParameter
 _EARLY_CUTOFF_HOLD_TIMEOUT_SECS: float = 1800.0  # 30-min max afterheat window before forced release
 
 
+class ControlAdaptationMode:
+    """Derived control mode based on the two user-visible switches.
+
+    Invariants (computed each cycle, never stored as state):
+      INACTIVE           — Learning OFF + Active Control OFF: no ThermoSmart influence
+      SHADOW_ONLY        — Learning ON  + Active Control OFF: observe and learn, no service calls
+      DETERMINISTIC      — Learning OFF + Active Control ON:  TPI control, static defaults only
+      ADAPTIVE           — Learning ON  + Active Control ON:  full adaptive LE2 control
+    """
+    INACTIVE      = "inactive"
+    SHADOW_ONLY   = "shadow_only"
+    DETERMINISTIC = "deterministic"
+    ADAPTIVE      = "adaptive"
+
+    @staticmethod
+    def derive(learning_mode_on: bool, active_control_on: bool) -> str:
+        if learning_mode_on and active_control_on:
+            return ControlAdaptationMode.ADAPTIVE
+        if learning_mode_on:
+            return ControlAdaptationMode.SHADOW_ONLY
+        if active_control_on:
+            return ControlAdaptationMode.DETERMINISTIC
+        return ControlAdaptationMode.INACTIVE
+
+
 class ThermoSmartCoordinator(
     DataUpdateCoordinator,
     TRVControlMixin,
@@ -106,6 +131,8 @@ class ThermoSmartCoordinator(
         entry: ConfigEntry,
         weather_engine: WeatherEngine,
         learning_engine: LearningEngine,
+        *,
+        clock: "Clock | None" = None,
     ) -> None:
         super().__init__(
             hass, _LOGGER,
@@ -194,18 +221,10 @@ class ThermoSmartCoordinator(
         # Debug-Logging: Modus-Tracking für Wechsel-Erkennung
         self._last_effective_mode: str | None = None
 
-        # Adaptive Boost switch state — set by ThermoSmartAdaptiveBoostSwitch.
-        # Default OFF so existing installations never get boost silently after update.
-        self._adaptive_boost_enabled: bool = False
-
-        # Restore initialization barrier: each flag is set True the FIRST time the
-        # corresponding RestoreEntity switch calls its setter after restore.  Until
-        # both are True, resolve_adaptive_boost_control() receives restore_pending=True
-        # and blocks boost regardless of switch states, preventing a partial-restore
-        # cycle from activating boost before all authorities are known.
+        # Restore initialization barrier: set True the first time Active Control
+        # RestoreEntity calls its setter after restore.  Until then, boost is blocked.
         # Learning mode is read from config (not a RestoreEntity) → not in barrier.
         self._active_control_initialized: bool = False
-        self._adaptive_boost_initialized: bool = False
 
         # LE 2.0 passive shadow controller (attached at setup; never controls)
         self._le2_shadow = None
@@ -235,16 +254,29 @@ class ThermoSmartCoordinator(
         self._ec_hold_cut_target: float = 0.0
         self._ec_hold_comfort_temp: float = 0.0
         self._ec_hold_period: str = ""
-        self._ec_hold_started: float = 0.0   # time.monotonic() when hold was started
+        self._ec_hold_started: float = 0.0   # _clock.monotonic() when hold was started
         self._ec_state: str = "inactive"
         self._ec_episode_failed: bool = False  # True after temp-falling/timeout release
         self._ec_failed_cut_target: float = 0.0  # cut_target of the failed episode
+
+        # Injectable clock — replaced by FakeClock in simulation/tests.
+        # All fachliche Zeitaufrufe in this coordinator must go through self._clock.
+        # Production callers pass nothing → SystemClock; tests/simulation pass FakeClock.
+        self._clock: Clock = clock if clock is not None else SystemClock()
 
     # ── Eigenschaften ────────────────────────────────────────────────
 
     def attach_le2_shadow(self, shadow) -> None:
         """Attach the passive LE 2.0 shadow controller (diagnostics only)."""
         self._le2_shadow = shadow
+
+    def _now_local(self):
+        """Return current local time derived from the injected clock.
+
+        Uses dt_util.as_local() for timezone conversion only — not as a time source.
+        All fachliche local-time calls in coordinator and its mixins must use this.
+        """
+        return dt_util.as_local(self._clock.now_utc())
 
     @property
     def zone_id(self) -> str:
@@ -267,20 +299,6 @@ class ThermoSmartCoordinator(
             "ThermoSmart '%s': Aktive Steuerung %s",
             self.zone_name,
             "AN – Thermostat wird gesteuert" if active else "AUS – Beobachtungsmodus",
-        )
-
-    def set_adaptive_boost_enabled(self, enabled: bool) -> None:
-        self._adaptive_boost_enabled = enabled
-        self._adaptive_boost_initialized = True
-        if self._le2_shadow is not None:
-            try:
-                self._le2_shadow.set_adaptive_boost_enabled(enabled)
-            except Exception:
-                pass
-        _LOGGER.info(
-            "ThermoSmart '%s': Adaptiver Boost %s",
-            self.zone_name,
-            "AN" if enabled else "AUS",
         )
 
     def set_mode(self, mode: str) -> None:
@@ -368,7 +386,7 @@ class ThermoSmartCoordinator(
     # ── Zeitplan-Helfer ──────────────────────────────────────────────
 
     def _current_schedule_period(self) -> str:
-        now = dt_util.now()
+        now = self._now_local()
         cfg = self.zone_cfg
         is_weekend = now.weekday() >= 5
         cur = now.hour * 60 + now.minute
@@ -396,7 +414,7 @@ class ThermoSmartCoordinator(
 
     def _minutes_until_next_comfort(self, cfg: dict) -> int | None:
         """Minuten bis zur nächsten Komfortphase – None wenn bereits aktiv."""
-        now = dt_util.now()
+        now = self._now_local()
         is_weekend = now.weekday() >= 5
         cur = now.hour * 60 + now.minute
 
@@ -444,7 +462,7 @@ class ThermoSmartCoordinator(
                 if old is None or new is None or old.state == new.state:
                     return
                 entity_id = event.data["entity_id"]
-                now = dt_util.now()
+                now = self._now_local()
 
                 if entity_id in window_sensors:
                     if new.state == "on":
@@ -772,6 +790,23 @@ class ThermoSmartCoordinator(
 
             recommendation["is_summer"] = effective_summer
 
+            # Derive adaptation mode once per cycle from the two user-visible switches.
+            # All LE2 adaptive reads below are gated on _learning_mode_on so that
+            # Learning OFF → only deterministic defaults influence real control.
+            _learning_mode_on = bool(cfg.get("learning_enabled", True))
+            _active_control_on = self._active_control
+            _adaptation_mode = ControlAdaptationMode.derive(_learning_mode_on, _active_control_on)
+            recommendation["adaptation_mode"] = _adaptation_mode
+
+            # B2b-bootstrap: pass zone-configured device prior to the boost model so
+            # it can run initial controlled trials before any adaptive evidence exists.
+            _bsp = cfg.get("boost_bootstrap_prior_c")
+            if _bsp is not None:
+                try:
+                    recommendation["boost_bootstrap_prior_c"] = float(_bsp)
+                except (TypeError, ValueError):
+                    pass
+
             # Use effective_target (weather-adjusted) for TPI/TRV calculations.
             # adjusted_target is only the display value.
             target = recommendation.get("effective_target")
@@ -780,7 +815,7 @@ class ThermoSmartCoordinator(
                 # TPI-Koeffizienten: LE 2.0 authoritative (Phase 19D).
                 # LE v1 path (learning_engine.get_tpi_coefficients) is kept only as
                 # emergency fallback when the LE2 shadow is not yet attached.
-                if self._le2_shadow is not None:
+                if _learning_mode_on and self._le2_shadow is not None:
                     # LE 2.0 is authoritative for TPI coefficients (Phase 19D).
                     # read_tpi_coefficients_safe() returns the blended *candidate* coef_int.
                     # The coordinator applies step-limiting to produce the *used* value so
@@ -965,12 +1000,11 @@ class ThermoSmartCoordinator(
 
             # ── LE 2.0 Adaptive Boost Control ────────────────────────────
             # resolve_adaptive_boost_control() is the single authority for real boost.
-            # Gate order: learning_mode_on → active_control_on → adaptive_boost_switch_on
+            # Gate order: learning_mode_on → active_control_on
             #   → mixed_zone_check → device_unavailable_check → readiness → inner gates.
             # Runs BEFORE dispatch so the approved offset flows through device guards and
             # the single setpoint dispatch path.  Never raises into heating.
             if self._le2_shadow is not None and not effective_summer:
-                _learning_mode_on = bool(cfg.get("learning_enabled", True))
                 # Pre-dispatch device availability: if any setpoint TRV is unavailable
                 # right now, block boost for this cycle to prevent partial dispatch.
                 # (Mixed/valve zones are caught by zone_control_type in the resolver.)
@@ -984,14 +1018,12 @@ class ThermoSmartCoordinator(
                             _setpoint_device_unavailable = True
                             break
                 recommendation["_setpoint_device_unavailable"] = _setpoint_device_unavailable
-                _restore_pending = not (
-                    self._active_control_initialized and self._adaptive_boost_initialized)
+                _restore_pending = not self._active_control_initialized
                 try:
                     self._le2_shadow.resolve_adaptive_boost_control(
                         recommendation,
                         learning_mode_on=_learning_mode_on,
                         active_control_on=self._active_control,
-                        adaptive_boost_switch_on=self._adaptive_boost_enabled,
                         restore_pending=_restore_pending,
                         boost_runtime_limit=TPI_MAX_BOOST_CELSIUS,
                     )
@@ -1020,7 +1052,7 @@ class ThermoSmartCoordinator(
             # whether LE2 is attached.  The shadow optionally enriches with decision_id
             # and onset_delay from LE2 predictions.  Neither build nor enrichment may
             # raise into the heating cycle.
-            _cycle_ts = dt_util.utcnow().isoformat()
+            _cycle_ts = self._clock.now_utc().isoformat()
             _mode_str = "control" if self._active_control else "shadow"
             _live_dec_pre = self._build_baseline_live_decision(
                 recommendation, ts=_cycle_ts, mode_str=_mode_str)
@@ -1225,14 +1257,15 @@ class ThermoSmartCoordinator(
 
             # ── LE 2.0 passive shadow observation ───────────────────────
             # Runs AFTER the control decision is fully determined and applied.
+            # Only when Learning Mode is ON — Learning OFF → no shadow observation.
             # Purely passive (diagnostics only); doubly guarded so a learning
             # failure can never become a heating failure or an UpdateFailed.
-            if self._le2_shadow is not None:
+            if _learning_mode_on and self._le2_shadow is not None:
                 try:
                     _sched_time = _sched_temp = None
                     _comfort_min = self._minutes_until_next_comfort(cfg)
                     if _comfort_min is not None:
-                        _sched_time = (dt_util.utcnow()
+                        _sched_time = (self._clock.now_utc()
                                        + timedelta(minutes=_comfort_min)).isoformat()
                         _sched_temp = cfg.get("comfort_temp", 21.0)
                     # B2b-4e: live per-device availability for the post-reach boost observer
@@ -1368,11 +1401,12 @@ class ThermoSmartCoordinator(
     # ── Berechnung ───────────────────────────────────────────────────
 
     async def _compute_recommendation(self, cfg: dict, weather_data: dict, mode: str) -> dict:
+        _learning_mode_on = bool(cfg.get("learning_enabled", True))
         current_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
         if current_temp is None:
             current_temp = self._read_trv_avg_temp(cfg.get("climate_entities", []))
 
-        now = dt_util.now()
+        now = self._now_local()
         if current_temp is not None:
             if self._indoor_temp_prev is not None:
                 prev_time, prev_temp = self._indoor_temp_prev
@@ -1407,10 +1441,11 @@ class ThermoSmartCoordinator(
 
         # ── Preheat duration: LE 2.0 is the sole adaptive source ────────────
         # LE v1 is NEVER read for preheat; the frozen LE v1 store is historical.
-        # When LE 2.0 has no evidence, the deterministic baseline is used.
+        # When LE 2.0 has no evidence, or Learning Mode is OFF, the deterministic
+        # baseline is used. Learning OFF → no adaptive preheat, no onset delay.
         # Onset delay is separate from HeatRate learning (never folded in).
         from .learning.runtime.ha_integration import LearningShadowController
-        if self._le2_shadow is not None:
+        if _learning_mode_on and self._le2_shadow is not None:
             preheat_minutes, preheat_status = self._le2_shadow.read_preheat_minutes_safe(
                 current_temp, comfort_temp,
                 outdoor_temp=weather_data.get("temperature") if weather_data else None,
@@ -1541,7 +1576,8 @@ class ThermoSmartCoordinator(
                     # LE 2.0: read FORECAST_TRUST and FORECAST_BIAS separately via Read Gate.
                     # Trust gates suppression strength; Bias corrects the °C target independently.
                     # Only bias reads when trust is "valid" (real evidence, not cold-start/stale).
-                    if self._le2_shadow is not None:
+                    # Learning OFF → static trust=1.0 / bias=0.0 (no LE2 values in control).
+                    if _learning_mode_on and self._le2_shadow is not None:
                         le2_forecast_trust, le2_forecast_trust_status = (
                             self._le2_shadow.read_forecast_trust_safe())
                         if le2_forecast_trust_status == "valid":
@@ -1613,7 +1649,8 @@ class ThermoSmartCoordinator(
                 _temp_rising = (self._indoor_temp_slope is not None
                                 and self._indoor_temp_slope >= 0.0)
                 _ec_eligible = (
-                    _heating_to_target
+                    _learning_mode_on
+                    and _heating_to_target
                     and current_temp is not None
                     and self._le2_shadow is not None
                 )
@@ -1622,8 +1659,9 @@ class ThermoSmartCoordinator(
                 # "keine zweite parallele Regime-Heuristik": regime comes exclusively
                 # from the shadow runtime pipeline (ThermalRegimeClassifier), never from
                 # a coordinator-local heuristic.
+                # Learning OFF → regime is never used (ec_eligible is already False).
                 _ec_regime = (self._le2_shadow.read_regime_safe()
-                              if self._le2_shadow is not None else None)
+                              if (_learning_mode_on and self._le2_shadow is not None) else None)
 
                 # Episode change: different comfort target or schedule period → reset.
                 if (self._ec_hold_active or self._ec_episode_failed) and (
@@ -1641,7 +1679,7 @@ class ThermoSmartCoordinator(
                     # safety gates.  A stale/missing prediction after hold-start must
                     # NOT trigger immediate reheat (Prediction quality is a pre-start
                     # gate only; the applied cut threshold is frozen for the duration).
-                    _hold_age = time.monotonic() - self._ec_hold_started
+                    _hold_age = self._clock.monotonic() - self._ec_hold_started
                     _release = None
 
                     if not _ec_eligible:
@@ -1691,7 +1729,7 @@ class ThermoSmartCoordinator(
                             self._ec_hold_cut_target = effective_target
                             self._ec_hold_comfort_temp = comfort_temp
                             self._ec_hold_period = _current_period
-                            self._ec_hold_started = time.monotonic()
+                            self._ec_hold_started = self._clock.monotonic()
                             self._ec_state = "cutoff_applied"
                     else:
                         self._ec_state = "eligible"
@@ -1897,14 +1935,14 @@ class ThermoSmartCoordinator(
 
         if is_heating_commanded and (slope is None or slope < HEATING_FAILURE_SLOPE_THRESH):
             if self._heating_failure_since is None:
-                self._heating_failure_since = dt_util.now()
+                self._heating_failure_since = self._clock.now_utc()
                 _LOGGER.debug(
                     "ThermoSmart '%s': Möglicher Heizungsausfall – "
                     "Temp fällt trotz Heizbefehl (SP=%.1f°C, Ist=%.1f°C, Slope=%.4f°C/min)",
                     self.zone_name, trv_setpoint, current_temp, slope,
                 )
 
-            elapsed_min = (dt_util.now() - self._heating_failure_since).total_seconds() / 60
+            elapsed_min = (self._clock.now_utc() - self._heating_failure_since).total_seconds() / 60
             if elapsed_min >= HEATING_FAILURE_DELAY_MIN and not self._heating_failure_notified:
                 self._heating_failure_notified = True
                 _LOGGER.warning(
@@ -1961,7 +1999,7 @@ class ThermoSmartCoordinator(
             return
 
         heat_rate = None
-        now = dt_util.now()
+        now = self._now_local()
         if self.zone_id in self.learning_engine._last_temp:
             last_time, last_temp = self.learning_engine._last_temp[self.zone_id]
             elapsed_min = (now - last_time).total_seconds() / 60

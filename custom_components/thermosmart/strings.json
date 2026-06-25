@@ -213,10 +213,6 @@
         "name": "Active Control"
       },
       "learning": { "name": "Learning mode" },
-      "adaptive_boost": {
-        "name": "Adaptive Boost",
-        "description": "Allows ThermoSmart to apply a learned adaptive boost offset to the setpoint. Only takes effect when Learning mode and Active Control are also on, and when the learning model has sufficient evidence. TPI control continues independently regardless of this setting. Default: off."
-      },
       "vacation_mode": { "name": "Vacation Mode" },
       "debug_log": { "name": "Debug Log" }
     },

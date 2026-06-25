@@ -321,6 +321,11 @@ class BoostParameters:
     partial_weight_factor: float = 0.5
     default_boost_offset_c: float = 0.0    # neutral prior: no automatic boost without evidence
     default_boost_duration_s: float = 1800.0
+    # B2b-bootstrap: max cold-start trials allowed before any adaptive evidence exists.
+    # Requires device_prior_offset_c in the prediction context (from zone config field
+    # boost_bootstrap_prior_c). When total_samples >= bootstrap_credits the bootstrap
+    # path closes and normal eligibility rules apply.
+    bootstrap_credits: int = 3
     min_duration_pred_s: float = 300.0
     max_duration_pred_s: float = 7200.0
     # Adaptive control limits (separate from technical 8°C TPI maximum)
@@ -1465,7 +1470,22 @@ class BoostModel:
             readiness = general.readiness
             reason = "general_eligible" if general_ok else "scope_not_eligible"
         else:
-            usable, readiness, reason = False, general.readiness, "prior"
+            # B2b-bootstrap: allow initial controlled trials when no evidence exists yet
+            # and a device prior offset has been configured for this zone.
+            _n_total = len(self._state.recent_samples) + len(self._state.diagnostic_samples)
+            _has_device_prior = (context is not None
+                                 and context.device_prior_offset_c is not None
+                                 and context.device_prior_offset_c > 0.0)
+            _bootstrap_ok = (
+                general.readiness == BoostLearningReadiness.INSUFFICIENT_DATA
+                and _n_total < p.bootstrap_credits
+                and _has_device_prior
+            )
+            if _bootstrap_ok:
+                offset = clamp(context.device_prior_offset_c, 0.0, adap_cap)
+                usable, readiness, reason = True, BoostLearningReadiness.BOOTSTRAP, "bootstrap_prior"
+            else:
+                usable, readiness, reason = False, general.readiness, "prior"
         eff_state = scope_state if (sel_scope == "bucket" and scope_state) else general
         cooldown_active = readiness in (BoostLearningReadiness.ROLLED_BACK,
                                         BoostLearningReadiness.COOLDOWN)

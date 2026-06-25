@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "自适应补偿",
-        "description": "允许 ThermoSmart 应用已学习的自适应补偿偏移。仅当学习模式和主动控制均开启且学习模型具有足够证据时生效。TPI 控制独立运行，不受此设置影响。默认：关闭。"
       }
     },
     "select": {

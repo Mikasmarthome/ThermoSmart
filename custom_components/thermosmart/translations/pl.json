@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Adaptywny boost",
-        "description": "Umożliwia ThermoSmart zastosowanie nauczonego adaptywnego przesunięcia boost. Działa tylko gdy włączone są również Tryb uczenia i Aktywna kontrola. Sterowanie TPI działa niezależnie. Domyślnie: wyłączone."
       }
     },
     "select": {

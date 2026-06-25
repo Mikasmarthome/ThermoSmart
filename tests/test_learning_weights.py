@@ -6,7 +6,7 @@ They take Python dicts and datetime objects — no HA fixtures required.
 from __future__ import annotations
 
 import math
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -19,7 +19,7 @@ from custom_components.thermosmart.learning_engine import (
 # ── _time_weight ──────────────────────────────────────────────────────────────
 
 class TestTimeWeight:
-    _NOW = datetime(2025, 6, 15, 12, 0, 0)
+    _NOW = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
 
     def test_fresh_observation_weight_is_one(self):
         """Observation from 'now' → weight = 1.0."""
@@ -64,7 +64,7 @@ class TestTimeWeight:
 
     def test_weight_is_always_positive(self):
         """Even ancient observations produce a positive weight (never zero or negative)."""
-        ancient = datetime(2010, 1, 1).isoformat()
+        ancient = datetime(2010, 1, 1, tzinfo=timezone.utc).isoformat()
         weight = _time_weight(ancient, self._NOW)
         assert weight > 0.0
 
@@ -97,7 +97,7 @@ class TestThermalWeight:
     outdoor conditions to the current conditions and returns a 0–1 weight.
     """
 
-    _NOW = datetime(2025, 6, 15, 12, 0, 0)
+    _NOW = datetime(2025, 6, 15, 12, 0, 0, tzinfo=timezone.utc)
 
     def _obs(
         self,

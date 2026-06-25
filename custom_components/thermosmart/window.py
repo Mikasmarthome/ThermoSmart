@@ -12,8 +12,6 @@ from __future__ import annotations
 import logging
 from datetime import timedelta
 
-from homeassistant.util import dt as dt_util
-
 from .const import (
     WINDOW_SLOPE_EMA_ALPHA,
     WINDOW_SLOPE_MIN_POINTS,
@@ -27,7 +25,7 @@ class WindowMixin:
     """Fenstererkennung mit konfigurierbaren Verzögerungen + Slope-Erkennung."""
 
     def _check_window_open(self, cfg: dict, current_temp: float | None = None) -> bool:
-        now = dt_util.now()
+        now = self._now_local()
         open_delay = timedelta(minutes=cfg.get("window_open_delay", 5))
         close_delay = timedelta(minutes=cfg.get("window_close_delay", 2))
 

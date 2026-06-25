@@ -17,7 +17,8 @@ T0 = datetime(2025, 6, 1, 6, 0, 0, tzinfo=timezone.utc)
 
 def _run_session(bd, *, target=21.0, zone="lz", early_cutoff=None):
     rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                               startup_grace_cycles=0))
+                                               startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
     t = target - 3.0
     for i, (heating, setp) in enumerate([(True, target + 3)] * 7 + [(False, target - 4)] * 6):
         ts = (T0 + timedelta(minutes=i * 5)).isoformat()

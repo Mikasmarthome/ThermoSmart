@@ -10,19 +10,21 @@ Covers, with a MOCKED Store (no real disk I/O, Windows-runnable):
   _schedule_debounced_save   – no-op while a save is already pending
 
 These freeze current behaviour. Note: _forecast_decisions is NOT persisted.
+Clock is frozen via FakeClock injection (no dt_util.now patching).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from custom_components.thermosmart import learning_engine as le
+from custom_components.thermosmart.learning.clock import FakeClock
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 
 PERSISTED_KEYS = {
     "observations",
@@ -35,9 +37,8 @@ PERSISTED_KEYS = {
 }
 
 
-def make_engine(monkeypatch, now=FIXED_NOW):
-    monkeypatch.setattr(le.dt_util, "now", lambda: now)
-    e = make_learning_engine()
+def make_engine(monkeypatch=None, now=FIXED_NOW):
+    e = make_learning_engine(clock=FakeClock(start=now))
     e._store.async_save = AsyncMock()
     e._store.async_load = AsyncMock(return_value=None)
     e._hass.async_create_task = lambda *a, **k: None
@@ -166,26 +167,23 @@ class TestRoundTrip:
 # ── _prune_old_observations ──────────────────────────────────────────────────
 
 class TestPruneOldObservations:
-    def test_old_observations_removed(self, monkeypatch):
-        monkeypatch.setattr(le.dt_util, "now", lambda: FIXED_NOW)
-        e = make_learning_engine()
+    def test_old_observations_removed(self):
+        e = make_engine()
         old = {"ts": (FIXED_NOW - timedelta(days=1200)).isoformat()}  # > 1095
         recent = {"ts": (FIXED_NOW - timedelta(days=10)).isoformat()}
         e._observations["z"] = [old, recent]
         e._prune_old_observations()
         assert e._observations["z"] == [recent]
 
-    def test_cutoff_boundary_keeps_recent(self, monkeypatch):
-        monkeypatch.setattr(le.dt_util, "now", lambda: FIXED_NOW)
-        e = make_learning_engine()
+    def test_cutoff_boundary_keeps_recent(self):
+        e = make_engine()
         just_inside = {"ts": (FIXED_NOW - timedelta(days=1000)).isoformat()}
         e._observations["z"] = [just_inside]
         e._prune_old_observations()
         assert e._observations["z"] == [just_inside]
 
-    def test_prune_applies_to_all_three_obs_stores(self, monkeypatch):
-        monkeypatch.setattr(le.dt_util, "now", lambda: FIXED_NOW)
-        e = make_learning_engine()
+    def test_prune_applies_to_all_three_obs_stores(self):
+        e = make_engine()
         old = {"ts": (FIXED_NOW - timedelta(days=1200)).isoformat()}
         e._observations["z"] = [dict(old)]
         e._trv_observations["z"] = [dict(old)]
@@ -195,9 +193,8 @@ class TestPruneOldObservations:
         assert e._trv_observations["z"] == []
         assert e._window_cooling_obs["z"] == []
 
-    def test_per_zone_cap_trims_to_last_n(self, monkeypatch):
-        monkeypatch.setattr(le.dt_util, "now", lambda: FIXED_NOW)
-        e = make_learning_engine()
+    def test_per_zone_cap_trims_to_last_n(self):
+        e = make_engine()
         ts = FIXED_NOW.isoformat()
         e._observations["z"] = [{"ts": ts, "i": i} for i in range(5003)]
         e._prune_old_observations(max_per_zone=5000)
@@ -206,11 +203,10 @@ class TestPruneOldObservations:
         assert e._observations["z"][0]["i"] == 3
         assert e._observations["z"][-1]["i"] == 5002
 
-    def test_outcome_log_not_age_pruned(self, monkeypatch):
+    def test_outcome_log_not_age_pruned(self):
         # QUIRK: _prune_old_observations only touches the 3 obs stores;
         # outcome_log is capped elsewhere (to 200) but never age-pruned here.
-        monkeypatch.setattr(le.dt_util, "now", lambda: FIXED_NOW)
-        e = make_learning_engine()
+        e = make_engine()
         e._outcome_log["z"] = [{"ts": (FIXED_NOW - timedelta(days=2000)).isoformat()}]
         e._prune_old_observations()
         assert len(e._outcome_log["z"]) == 1

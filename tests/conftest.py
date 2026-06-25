@@ -1,27 +1,39 @@
 """Pytest configuration for ThermoSmart tests.
 
-Welle 1 (pure Python):
-  No HA fixtures needed. Tests import HA modules that are installed as a
-  package, but the runner / event loop plugin is NOT loaded here since
-  homeassistant.runner imports fcntl which is unavailable on Windows.
+Two test tiers
+--------------
+Welle 1 — pure Python (this Windows/local dev environment):
+  Tests import HA modules installed as packages, but the
+  pytest-homeassistant-custom-component plugin (which provides the ``hass``,
+  ``hass_storage``, and ``enable_custom_integrations`` fixtures) is DISABLED via
+  ``addopts = -p no:homeassistant`` in setup.cfg.
 
-Welle 2+ (HA integration tests):
-  Uncomment `pytest_plugins` below when running on Linux / WSL / CI where
-  homeassistant.runner is available. The HA fixtures (hass, hass_storage,
-  enable_custom_integrations) will then be available for integration tests.
+  Tests that need those fixtures are excluded from collection on Windows below.
+
+Welle 2+ — HA integration tests (Linux / WSL / Docker / CI):
+  Run with ``--override-ini='addopts='`` to re-enable the plugin.  The HA
+  fixtures then become available and the excluded files are collected normally.
+
+Why platform-based gating instead of try/import?
+  The earlier approach (``try: import homeassistant.runner``) broke when
+  fcntl.py / resource.py stubs made the import succeed on Windows while the
+  actual ``hass`` fixture (which needs POSIX socket.socketpair for asyncio's
+  ProactorEventLoop) remains unavailable.  An explicit ``sys.platform`` check
+  is honest and correct.
 """
 from __future__ import annotations
 
-# Uncomment for Welle 2+ (requires Linux/WSL/CI — homeassistant.runner needs fcntl):
-# pytest_plugins = "pytest_homeassistant_custom_component"
+import sys
 
-# Real Home-Assistant-fixture tests (test_le2_ha_real_*.py) need the
-# pytest_homeassistant_custom_component plugin + a working hass fixture, which are
-# only available on Linux/CI/Docker (homeassistant.runner imports fcntl). On
-# Windows they are auto-skipped here so the local suite stays green; in Docker
-# (addopts cleared) they collect and run normally.
+# Files that require the ``hass`` / ``hass_storage`` / ``enable_custom_integrations``
+# fixtures from pytest-homeassistant-custom-component.  On Windows the plugin is
+# disabled (setup.cfg: addopts = -p no:homeassistant) so these tests cannot run.
+# On Linux/CI the plugin is enabled via --override-ini='addopts=' and they run fully.
 collect_ignore_glob: list[str] = []
-try:  # pragma: no cover - environment probe
-    import homeassistant.runner  # noqa: F401
-except Exception:  # fcntl unavailable on Windows
-    collect_ignore_glob = ["test_le2_ha_real_*.py"]
+
+if sys.platform == "win32":
+    collect_ignore_glob = [
+        "test_le2_ha_real_*.py",
+        "test_config_flow.py",
+        "test_options_flow.py",
+    ]

@@ -4,8 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from homeassistant.util import dt as dt_util
-
 from .const import (
     CONF_VALVE_MAINTENANCE,
     VALVE_MAINTENANCE_HOUR,
@@ -41,7 +39,7 @@ class MaintenanceMixin:
         if not valve_likely_idle:
             return
 
-        now = dt_util.now()
+        now = self._now_local()
         if now.weekday() != VALVE_MAINTENANCE_WEEKDAY or now.hour != VALVE_MAINTENANCE_HOUR:
             return
 

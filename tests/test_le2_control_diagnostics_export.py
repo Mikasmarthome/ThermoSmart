@@ -16,7 +16,8 @@ from tests.helpers_ha_runtime import attach_shadow, make_recording_coordinator
 
 def _rt():
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.CONTROL,
-                                                 startup_grace_cycles=0))
+                                                 startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 class TestControlDiagnostics:

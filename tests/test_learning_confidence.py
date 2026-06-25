@@ -5,24 +5,25 @@ Covers:
   get_confidence_breakdown  – per-track percentages (note: no diversity here)
   get_cold_start_phase      – phase-label thresholds
 
-`_rebuild_confidence` and `get_confidence_breakdown` read dt_util.now(), so it
-is monkeypatched to a fixed datetime and observations are timestamped fresh.
+Clock is frozen via FakeClock injection; observations are timestamped with
+UTC-aware ISO strings so _time_weight / _thermal_weight calculations work.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from custom_components.thermosmart import learning_engine as le
+from custom_components.thermosmart.learning.clock import FakeClock
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def set_now(monkeypatch, when=FIXED_NOW):
-    monkeypatch.setattr(le.dt_util, "now", lambda: when)
+def make_engine(monkeypatch=None, now=FIXED_NOW):
+    """Return a LearningEngine with its clock frozen at *now*."""
+    return make_learning_engine(clock=FakeClock(start=now))
 
 
 def heat_obs(*, heat_rate=0.05, wind=None, solar=None, indoor_hum=None,
@@ -48,33 +49,29 @@ def plain_obs(*, days_ago=0, now=FIXED_NOW) -> dict:
 # ── _rebuild_confidence: base track (60%) ────────────────────────────────────
 
 class TestRebuildConfidenceBase:
-    def test_only_heat_rate_obs_count(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_only_heat_rate_obs_count(self):
+        e = make_engine()
         # 50 plain obs (no heat_rate) → base confidence stays 0
         e._observations["z"] = [plain_obs() for _ in range(50)]
         e._rebuild_confidence("z")
         assert e.get_confidence("z") == 0.0
 
-    def test_25_heating_obs_gives_half_base(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_25_heating_obs_gives_half_base(self):
+        e = make_engine()
         # 25 fresh heating obs, no diversity → base = 25/50 = 0.5 → total = 0.3
         e._observations["z"] = [heat_obs() for _ in range(25)]
         e._rebuild_confidence("z")
         assert e.get_confidence("z") == pytest.approx(0.3, abs=0.01)
 
-    def test_50_heating_obs_saturates_base(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_50_heating_obs_saturates_base(self):
+        e = make_engine()
         e._observations["z"] = [heat_obs() for _ in range(50)]
         e._rebuild_confidence("z")
         # base saturates at 1.0 → total = 0.6
         assert e.get_confidence("z") == pytest.approx(0.6, abs=0.01)
 
-    def test_diversity_factor_raises_base(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_diversity_factor_raises_base(self):
+        e = make_engine()
         # 25 obs with wind+solar+humidity → diversity 1.15 → base 0.575
         e._observations["z"] = [
             heat_obs(wind=3.0, solar=200.0, indoor_hum=45.0) for _ in range(25)
@@ -87,33 +84,29 @@ class TestRebuildConfidenceBase:
 # ── _rebuild_confidence: all tracks ──────────────────────────────────────────
 
 class TestRebuildConfidenceTracks:
-    def test_trv_track_contributes_thirty_percent(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_trv_track_contributes_thirty_percent(self):
+        e = make_engine()
         e._trv_observations["z"] = [{"ts": FIXED_NOW.isoformat()} for _ in range(30)]
         e._rebuild_confidence("z")
         # only TRV saturated → 1.0 * 0.3
         assert e.get_confidence("z") == pytest.approx(0.3, abs=0.01)
 
-    def test_window_track_contributes_ten_percent(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_window_track_contributes_ten_percent(self):
+        e = make_engine()
         e._window_cooling_obs["z"] = [{"ts": FIXED_NOW.isoformat()} for _ in range(5)]
         e._rebuild_confidence("z")
         assert e.get_confidence("z") == pytest.approx(0.1, abs=0.01)
 
-    def test_all_tracks_saturated_gives_one(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_all_tracks_saturated_gives_one(self):
+        e = make_engine()
         e._observations["z"] = [heat_obs() for _ in range(50)]
         e._trv_observations["z"] = [{"ts": FIXED_NOW.isoformat()} for _ in range(30)]
         e._window_cooling_obs["z"] = [{"ts": FIXED_NOW.isoformat()} for _ in range(5)]
         e._rebuild_confidence("z")
         assert e.get_confidence("z") == pytest.approx(1.0, abs=0.01)
 
-    def test_rebuild_all_zones_when_no_zone_given(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_rebuild_all_zones_when_no_zone_given(self):
+        e = make_engine()
         e._observations["a"] = [heat_obs() for _ in range(50)]
         e._observations["b"] = [heat_obs() for _ in range(50)]
         e._rebuild_confidence()  # no zone arg → all zones
@@ -124,9 +117,8 @@ class TestRebuildConfidenceTracks:
 # ── get_confidence_breakdown ─────────────────────────────────────────────────
 
 class TestConfidenceBreakdown:
-    def test_breakdown_keys_present(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_breakdown_keys_present(self):
+        e = make_engine()
         e._observations["z"] = [heat_obs() for _ in range(25)]
         e._rebuild_confidence("z")
         b = e.get_confidence_breakdown("z")
@@ -137,11 +129,10 @@ class TestConfidenceBreakdown:
         ):
             assert key in b
 
-    def test_room_patterns_has_no_diversity_factor(self, monkeypatch):
+    def test_room_patterns_has_no_diversity_factor(self):
         # QUIRK: breakdown.room_patterns_% omits the diversity multiplier that
         # _rebuild_confidence applies → total_% and room_patterns_% can diverge.
-        set_now(monkeypatch)
-        e = make_learning_engine()
+        e = make_engine()
         e._observations["z"] = [
             heat_obs(wind=3.0, solar=200.0, indoor_hum=45.0) for _ in range(25)
         ]
@@ -152,18 +143,16 @@ class TestConfidenceBreakdown:
         # total_% reflects diversity-boosted base → 0.345 * 100 = 34.5
         assert b["total_%"] == pytest.approx(34.5, abs=0.2)
 
-    def test_total_observations_counts_all_obs(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_total_observations_counts_all_obs(self):
+        e = make_engine()
         e._observations["z"] = [heat_obs() for _ in range(10)] + [plain_obs() for _ in range(15)]
         e._rebuild_confidence("z")
         b = e.get_confidence_breakdown("z")
         assert b["total_observations"] == 25
         assert b["heating_observations"] == 10
 
-    def test_forecast_confidence_defaults_to_full(self, monkeypatch):
-        set_now(monkeypatch)
-        e = make_learning_engine()
+    def test_forecast_confidence_defaults_to_full(self):
+        e = make_engine()
         b = e.get_confidence_breakdown("z")
         # default forecast bias = FORECAST_BIAS_MAX (1.0) → 100.0
         assert b["forecast_confidence_%"] == pytest.approx(100.0, abs=0.1)

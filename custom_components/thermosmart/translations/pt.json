@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Impulso adaptativo",
-        "description": "Permite ao ThermoSmart aplicar um offset de impulso adaptativo aprendido. Só tem efeito quando o Modo de aprendizagem e o Controlo ativo também estão ligados. O controlo TPI continua de forma independente. Predefinição: desligado."
       }
     },
     "select": {

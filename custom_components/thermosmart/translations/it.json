@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Boost adattivo",
-        "description": "Consente a ThermoSmart di applicare un offset boost adattivo appreso. Ha effetto solo quando anche Modalità apprendimento e Controllo attivo sono attivi. Il controllo TPI continua indipendentemente. Predefinito: disattivato."
       }
     },
     "select": {

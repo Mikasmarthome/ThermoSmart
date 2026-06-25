@@ -19,7 +19,7 @@ from tests.helpers_runtime import cycle_input
 
 
 def shadow_runtime():
-    return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW))
+    return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW), clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 class TestShadowPredictions:
@@ -121,12 +121,12 @@ class TestShadowOutcome:
 
 class TestModes:
     def test_inactive_no_work(self):
-        rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.INACTIVE))
+        rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.INACTIVE), clock=lambda: "2025-01-01T00:00:00+00:00")
         r = rt.run_cycle(cycle_input("2026-06-22T05:00:00+00:00"))
         assert not r.captured and r.shadow_predictions == ()
 
     def test_capture_only_no_shadow(self):
-        rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.CAPTURE_ONLY))
+        rt = LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.CAPTURE_ONLY), clock=lambda: "2025-01-01T00:00:00+00:00")
         r = rt.run_cycle(cycle_input("2026-06-22T05:00:00+00:00"))
         assert r.captured and r.shadow_predictions == ()
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Optional, Sequence
 
+from custom_components.thermosmart.learning.clock import FakeClock
 from custom_components.thermosmart.learning.contracts import DataQuality, Measurement
 from custom_components.thermosmart.learning.runtime import (
     ControllerDecisionInput,
@@ -18,8 +19,13 @@ from custom_components.thermosmart.learning.runtime import (
 T0 = datetime(2025, 1, 1, 6, 0, 0, tzinfo=timezone.utc)
 COMFORT = "2025-01-01T07:00:00+00:00"
 
+# Default clock for scenario helpers — deterministic anchor at T0.
+_DEFAULT_CLOCK = lambda: T0.isoformat()
+
 
 def runtime(mode=LearningRuntimeMode.SHADOW, **kw):
+    if "clock" not in kw:
+        kw["clock"] = _DEFAULT_CLOCK
     return LearningRuntime(LearningRuntimeConfig(mode=mode, startup_grace_cycles=0), **kw)
 
 

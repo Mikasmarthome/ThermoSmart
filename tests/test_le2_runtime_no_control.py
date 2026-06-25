@@ -16,7 +16,7 @@ from tests.helpers_runtime import cycle_input
 
 
 def shadow_runtime():
-    return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW))
+    return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW), clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 class TestNoControl:

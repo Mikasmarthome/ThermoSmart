@@ -220,10 +220,6 @@
       },
       "debug_log": {
         "name": "Debug Log"
-      },
-      "adaptive_boost": {
-        "name": "Prilagodljiv boost",
-        "description": "Omogoča ThermoSmart-u, da uporabi naučen prilagodljiv boost odmik. Deluje samo, ko sta vklopljeni tudi Način učenja in Aktivno upravljanje. Krmiljenje TPI se nadaljuje neodvisno. Privzeto: izklopljeno."
       }
     },
     "select": {

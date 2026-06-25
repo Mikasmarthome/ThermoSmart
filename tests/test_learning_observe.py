@@ -5,27 +5,26 @@ heat-rate windowing, cool-rate guard + heat-loss EMA, dedup, norm_heat_rate,
 and the "save every 50 observations" trigger.
 
 Storage is never written: engine.async_save is replaced with an AsyncMock.
-dt_util.now() is monkeypatched to a fixed naive datetime so elapsed-time
-windows are deterministic.
+A FakeClock is injected so elapsed-time windows are deterministic without
+patching dt_util.now() (LearningEngine._now_local() uses the injected clock).
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
 
-from custom_components.thermosmart import learning_engine as le
+from custom_components.thermosmart.learning.clock import FakeClock
 from tests.helpers import make_learning_engine
 
 
-FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0)  # Monday, tz-naive
+FIXED_NOW = datetime(2025, 6, 16, 12, 0, 0, tzinfo=timezone.utc)  # Monday, UTC
 
 
-def make_engine(monkeypatch, now=FIXED_NOW):
-    """LearningEngine with frozen clock and a mocked (no-op) save."""
-    monkeypatch.setattr(le.dt_util, "now", lambda: now)
-    e = make_learning_engine()
+def make_engine(monkeypatch=None, now=FIXED_NOW):
+    """LearningEngine with frozen clock (FakeClock) and a mocked (no-op) save."""
+    e = make_learning_engine(clock=FakeClock(start=now))
     e.async_save = AsyncMock()
     return e
 

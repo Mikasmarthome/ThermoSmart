@@ -22,7 +22,8 @@ BD = BoostDispatchRecord("x", boost_applied_c=1.5, dispatch_status="fully_succee
 
 def _rt():
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                                 startup_grace_cycles=0))
+                                                 startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 def _cyc(r, i, temp, heating, *, target=21.0, bd=BD, zone="lz", window=False):

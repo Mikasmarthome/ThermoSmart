@@ -13,7 +13,8 @@ from tests.helpers_runtime_scenarios import heating_ramp_then_settle
 
 def _rt():
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.CONTROL,
-                                                 startup_grace_cycles=0))
+                                                 startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 class TestControlOutcomes:

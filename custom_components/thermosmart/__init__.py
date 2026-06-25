@@ -222,8 +222,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Setup failure here must never fail the zone or affect heating.
     try:
         from .learning.runtime.ha_integration import LearningShadowController
+        from .learning.runtime.lifecycle import LearningRuntimeMode
 
-        le2_shadow = LearningShadowController(hass, entry.entry_id)
+        le2_shadow = LearningShadowController(
+            hass, entry.entry_id,
+            clock=coordinator._clock,
+            mode=LearningRuntimeMode.CONTROL,
+        )
         await le2_shadow.async_setup()
         coordinator.attach_le2_shadow(le2_shadow)
         entry_store["le2_shadow"] = le2_shadow

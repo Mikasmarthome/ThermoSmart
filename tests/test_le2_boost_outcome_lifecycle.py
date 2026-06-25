@@ -21,7 +21,8 @@ COMFORT = "2025-01-01T07:00:00+00:00"
 
 def _rt():
     return LearningRuntime(LearningRuntimeConfig(mode=LearningRuntimeMode.SHADOW,
-                                                 startup_grace_cycles=0))
+                                                 startup_grace_cycles=0),
+                              clock=lambda: "2025-01-01T00:00:00+00:00")
 
 
 def _cycle(rt, i, temp, *, heating, boost_dispatch=None, target=21.0, zone="lz"):

@@ -844,7 +844,7 @@ class TRVControlMixin:
                 self._boost_active[self.zone_id] = {
                     "target": target,
                     "setpoint": trv_setpoint,
-                    "started": dt_util.now(),
+                    "started": self._now_local(),
                 }
             else:
                 self._boost_active[self.zone_id]["target"] = target
@@ -1036,7 +1036,7 @@ class TRVControlMixin:
             return
 
         ext_map: dict[str, str] = getattr(self, "_auto_ext_temp_map", {})
-        now = dt_util.now()
+        now = self._now_local()
 
         # Zone-wide sensor availability check
         sensors_available = any(

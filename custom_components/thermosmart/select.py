@@ -107,10 +107,11 @@ class ThermoSmartModeSelect(SelectEntity, RestoreEntity):
 
         # Als Coordinator-Listener registrieren → Entity aktualisiert sich
         # wenn das Climate-Entity oder ein anderer Pfad den Modus ändert.
-        self._coordinator.async_add_listener(self._handle_coordinator_update)
-
-    async def async_will_remove_from_hass(self) -> None:
-        self._coordinator.async_remove_listener(self._handle_coordinator_update)
+        # async_add_listener returns an unsubscribe callable; async_on_remove
+        # invokes it automatically when the entity is removed or unloaded.
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self._handle_coordinator_update)
+        )
 
     @callback
     def _handle_coordinator_update(self) -> None:

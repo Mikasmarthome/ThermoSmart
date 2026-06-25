@@ -30,6 +30,12 @@ import time as _real_time
 
 import pytest
 
+# Normalized performance limit per simulation step.
+# Calibrated on the Docker full-suite context (WARNING log level, post-4000-test GC pressure):
+# isolation ~7ms/step, full-suite ~15-18ms/step. 25ms/step provides ~40% headroom while
+# still catching real algorithmic regressions (3× slowdown = 75ms/step → clear failure).
+_PERF_LIMIT_MS_PER_STEP = 25.0
+
 from tests.simulation.runner import ScenarioRunner
 from tests.simulation.scenarios import (
     scenario_s1a,
@@ -61,7 +67,11 @@ async def test_s1a_baseline_7day():
     # ≥40% absolute = ≥61% of scheduled comfort period (cold start expected)
     assert summary.comfort_fraction >= 0.40, (
         f"Comfort too low: {summary.comfort_fraction:.1%}")
-    assert elapsed < 30.0, f"7-day simulation too slow: {elapsed:.1f}s (limit 30s)"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"Simulation too slow: {_ms:.1f}ms/step "
+        f"({elapsed:.1f}s / {summary.total_steps} steps, limit {_PERF_LIMIT_MS_PER_STEP}ms/step)"
+    )
 
 
 @pytest.mark.asyncio
@@ -79,7 +89,11 @@ async def test_s1a_adapted_7day():
     assert summary.cold_fraction == 0.0, (
         f"Safety violation in adapted run: {summary.cold_steps} cold steps")
     assert summary.comfort_fraction >= 0.40
-    assert elapsed < 30.0, f"Adapted 7-day run too slow: {elapsed:.1f}s"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"Adapted run too slow: {_ms:.1f}ms/step "
+        f"({elapsed:.1f}s / {summary.total_steps} steps, limit {_PERF_LIMIT_MS_PER_STEP}ms/step)"
+    )
 
 
 @pytest.mark.asyncio
@@ -116,7 +130,10 @@ async def test_s1b_external_sensor_7day():
     assert summary.total_steps == cfg.n_steps
     assert summary.cold_fraction == 0.0, (
         f"Safety violation in S1-B: {summary.cold_steps} cold steps")
-    assert elapsed < 45.0, f"S1-B too slow: {elapsed:.1f}s"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"S1-B too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps)"
+    )
 
 
 # ── S1-C: Afterheat-prone room ───────────────────────────────────────────────
@@ -138,7 +155,10 @@ async def test_s1c_afterheat_room_7day():
     # With 2 kW radiator and 30-min afterheat, overshooting is expected but bounded
     assert summary.overshoot_fraction < 0.40, (
         f"Excessive overshoot in S1-C: {summary.overshoot_fraction:.1%}")
-    assert elapsed < 45.0, f"S1-C too slow: {elapsed:.1f}s"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"S1-C too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps)"
+    )
 
 
 # ── S1-D: Multi-TRV partial failure ──────────────────────────────────────────
@@ -157,7 +177,10 @@ async def test_s1d_multi_trv_partial_failure():
     assert summary.total_steps == cfg.n_steps, "Simulation did not complete all steps"
     assert summary.cold_fraction == 0.0, (
         f"Safety violation in S1-D after partial failure: {summary.cold_steps} cold steps")
-    assert elapsed < 45.0, f"S1-D too slow: {elapsed:.1f}s"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"S1-D too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps)"
+    )
 
 
 # ── S1-E: Restart week ───────────────────────────────────────────────────────
@@ -176,7 +199,10 @@ async def test_s1e_restart_week():
     assert summary.total_steps == cfg.n_steps, "Simulation did not complete all steps"
     assert summary.cold_fraction == 0.0, (
         f"Safety violation in S1-E (restart): {summary.cold_steps} cold steps")
-    assert elapsed < 60.0, f"S1-E too slow: {elapsed:.1f}s"
+    _ms = elapsed * 1000 / summary.total_steps
+    assert _ms < _PERF_LIMIT_MS_PER_STEP, (
+        f"S1-E too slow: {_ms:.1f}ms/step ({elapsed:.1f}s / {summary.total_steps} steps)"
+    )
 
     # Post-restart: learning state preserved — boost should have been applied at some point
     # (seeded model → eligible from the start; restarts must not erase this)

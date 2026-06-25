@@ -1938,8 +1938,9 @@ class ThermoSmartCoordinator(
                 self._heating_failure_since = self._clock.now_utc()
                 _LOGGER.debug(
                     "ThermoSmart '%s': Möglicher Heizungsausfall – "
-                    "Temp fällt trotz Heizbefehl (SP=%.1f°C, Ist=%.1f°C, Slope=%.4f°C/min)",
-                    self.zone_name, trv_setpoint, current_temp, slope,
+                    "Temp fällt trotz Heizbefehl (SP=%.1f°C, Ist=%.1f°C, Slope=%s°C/min)",
+                    self.zone_name, trv_setpoint, current_temp,
+                    f"{slope:.4f}" if slope is not None else "n/a",
                 )
 
             elapsed_min = (self._clock.now_utc() - self._heating_failure_since).total_seconds() / 60
@@ -1947,8 +1948,9 @@ class ThermoSmartCoordinator(
                 self._heating_failure_notified = True
                 _LOGGER.warning(
                     "ThermoSmart '%s': HEIZUNGSAUSFALL – SP=%.1f°C, Ist=%.1f°C, "
-                    "Slope=%.4f°C/min, seit %.0f min. TRV oder Wärmequelle prüfen!",
-                    self.zone_name, trv_setpoint, current_temp, slope, elapsed_min,
+                    "Slope=%s°C/min, seit %.0f min. TRV oder Wärmequelle prüfen!",
+                    self.zone_name, trv_setpoint, current_temp,
+                    f"{slope:.4f}" if slope is not None else "n/a", elapsed_min,
                 )
                 self.hass.async_create_task(
                     self.hass.services.async_call(

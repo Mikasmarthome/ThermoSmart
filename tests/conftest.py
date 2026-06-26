@@ -33,7 +33,10 @@ collect_ignore_glob: list[str] = []
 
 if sys.platform == "win32":
     collect_ignore_glob = [
-        "test_le2_ha_real_*.py",
+        "test_*_ha_real_*.py",       # any *_ha_real_* test (le2, s1a, …)
+        "test_*_restart_ha.py",      # any *_restart_ha test (trv restart, …)
+        "test_*_trv_restart.py",     # setpoint/multi TRV restart HA tests
+        "test_*_valve_restart.py",   # direct-valve restart HA tests
         "test_config_flow.py",
         "test_options_flow.py",
     ]

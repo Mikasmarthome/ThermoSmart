@@ -106,6 +106,49 @@ class BoostDispatchRecord:
     targets_total: int = 0
     targets_failed: int = 0
 
+    def to_dict(self) -> dict:
+        return {
+            "decision_id": self.decision_id,
+            "boost_candidate_c": self.boost_candidate_c,
+            "boost_applied_c": self.boost_applied_c,
+            "baseline_setpoint_c": self.baseline_setpoint_c,
+            "final_setpoint_c": self.final_setpoint_c,
+            "effective_setpoint_min_c": self.effective_setpoint_min_c,
+            "effective_setpoint_max_c": self.effective_setpoint_max_c,
+            "dispatch_status": self.dispatch_status,
+            "outcome_eligible": self.outcome_eligible,
+            "outcome_reliability": self.outcome_reliability,
+            "start_deficit_c": self.start_deficit_c,
+            "expected_non_boost_duration_s": self.expected_non_boost_duration_s,
+            "boost_evaluation_status": self.boost_evaluation_status,
+            "device_control_type": self.device_control_type,
+            "effective_setpoints": list(self.effective_setpoints),
+            "targets_total": self.targets_total,
+            "targets_failed": self.targets_failed,
+        }
+
+    @classmethod
+    def from_dict(cls, d: Mapping[str, object]) -> "BoostDispatchRecord":
+        return cls(
+            decision_id=str(d["decision_id"]),
+            boost_candidate_c=d.get("boost_candidate_c"),
+            boost_applied_c=d.get("boost_applied_c"),
+            baseline_setpoint_c=d.get("baseline_setpoint_c"),
+            final_setpoint_c=d.get("final_setpoint_c"),
+            effective_setpoint_min_c=d.get("effective_setpoint_min_c"),
+            effective_setpoint_max_c=d.get("effective_setpoint_max_c"),
+            dispatch_status=str(d.get("dispatch_status", "not_attempted")),
+            outcome_eligible=bool(d.get("outcome_eligible", False)),
+            outcome_reliability=str(d.get("outcome_reliability", "none")),
+            start_deficit_c=d.get("start_deficit_c"),
+            expected_non_boost_duration_s=d.get("expected_non_boost_duration_s"),
+            boost_evaluation_status=str(d.get("boost_evaluation_status", "unknown")),
+            device_control_type=str(d.get("device_control_type", "setpoint")),
+            effective_setpoints=tuple(d.get("effective_setpoints", [])),
+            targets_total=int(d.get("targets_total", 0)),
+            targets_failed=int(d.get("targets_failed", 0)),
+        )
+
 
 @dataclass(frozen=True)
 class RuntimeCycleInput:

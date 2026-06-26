@@ -161,6 +161,7 @@ class ZoneExportInput:
     episodes: Optional[EpisodeSummary] = None
     regime_summary: Optional[str] = None
     missing_evidence: tuple[str, ...] = ()
+    pending_attribution: Optional[Mapping[str, Any]] = None
 
 
 @dataclass(frozen=True)

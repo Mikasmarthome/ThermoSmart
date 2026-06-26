@@ -141,6 +141,21 @@ class DiagnosticsOrchestrator:
                                                 sorted(z.storage.record_counts.items())}}
         if z.episodes is not None:
             out["episodes"] = {k: int(v) for k, v in sorted(z.episodes.counts_by_type.items())}
+        if z.pending_attribution is not None:
+            # Expose counts only — no decision IDs, no entity IDs.
+            pa = z.pending_attribution
+            out["pending_attribution"] = {
+                "schema_version": int(pa.get("schema_version", 1)),
+                "pending_context_count": int(pa.get("pending_context_count", 0)),
+                "pending_dispatch_count": int(pa.get("pending_dispatch_count", 0)),
+                "outcome_eligible_count": int(pa.get("outcome_eligible_count", 0)),
+                "dispatch_statuses": {str(k): int(v)
+                                      for k, v in pa.get("dispatch_statuses", {}).items()},
+                "control_types": sorted(str(c) for c in pa.get("control_types", [])),
+                "total_targets": int(pa.get("total_targets", 0)),
+                "failed_targets": int(pa.get("failed_targets", 0)),
+                "pending_outcome_active": bool(pa.get("pending_outcome_active", False)),
+            }
         return out
 
     def _model(self, pz: str, name: str, model: Any) -> ModelDiagnosticsEntry:

@@ -164,6 +164,25 @@ class _ZoneRuntime:
         self.pending_boost_outcome: Any = None
 
     def serialize(self) -> dict:
+        # B2b-attribution: persist pending boost contexts and dispatch records so that a
+        # real dispatch that occurred before episode-close is never silently lost on restart.
+        # pending_boost_contexts (BoostUpdateContext) and pending_dispatch_records
+        # (BoostDispatchRecord) are persisted alongside pending_baseline_ctx (plain dict).
+        try:
+            _pbc = {did: bctx.to_dict()
+                    for did, bctx in self.pending_boost_contexts.items()}
+        except Exception:
+            _pbc = {}
+        try:
+            _pdr = {did: drec.to_dict()
+                    for did, drec in self.pending_dispatch_records.items()}
+        except Exception:
+            _pdr = {}
+        try:
+            _pbx = {did: dict(ctx)
+                    for did, ctx in self.pending_baseline_ctx.items()}
+        except Exception:
+            _pbx = {}
         return {"capture": self.capture.serialize(),
                 "pipeline": self.pipeline.serialize(),
                 "models": self.orchestrator.serialize_models(),
@@ -171,8 +190,42 @@ class _ZoneRuntime:
                 "baseline_store": self.baseline_store.serialize(),
                 "pending_boost_outcome": (self.pending_boost_outcome.to_dict()
                                           if self.pending_boost_outcome is not None else None),
+                "pending_boost_contexts": _pbc,
+                "pending_dispatch_records": _pdr,
+                "pending_baseline_ctx": _pbx,
                 "model_update_counts": dict(self.model_update_counts),
                 "cycles": self.cycles, "last_cycle_ts": self.last_cycle_ts}
+
+    def pending_attribution_summary(self) -> dict:
+        """Compact, privacy-safe summary of pending pre-episode-close attribution state.
+
+        Suitable for Support Export and Research Export.  Never raises; returns a
+        zero-state summary on any error.  No raw decision IDs or entity IDs are exposed.
+        """
+        try:
+            bc = self.pending_boost_contexts
+            dr = self.pending_dispatch_records
+            dispatch_statuses: dict[str, int] = {}
+            for r in dr.values():
+                s = getattr(r, "dispatch_status", "unknown")
+                dispatch_statuses[s] = dispatch_statuses.get(s, 0) + 1
+            control_types = sorted(set(
+                getattr(r, "device_control_type", "setpoint") for r in dr.values()))
+            return {
+                "schema_version": 1,
+                "pending_context_count": len(bc),
+                "pending_dispatch_count": len(dr),
+                "outcome_eligible_count": sum(
+                    1 for r in dr.values() if getattr(r, "outcome_eligible", False)),
+                "dispatch_statuses": dispatch_statuses,
+                "control_types": control_types,
+                "total_targets": sum(getattr(r, "targets_total", 0) for r in dr.values()),
+                "failed_targets": sum(getattr(r, "targets_failed", 0) for r in dr.values()),
+                "pending_outcome_active": self.pending_boost_outcome is not None,
+            }
+        except Exception:
+            return {"schema_version": 1, "pending_context_count": 0,
+                    "pending_dispatch_count": 0}
 
     def restore(self, data: Mapping[str, Any]) -> tuple[str, ...]:
         errors: list[str] = []
@@ -203,6 +256,37 @@ class _ZoneRuntime:
             except Exception as err:
                 self.pending_boost_outcome = None
                 errors.append(f"pending_boost:restore:{type(err).__name__}")
+        # B2b-attribution: restore pending pre-episode-close contexts so a restart between
+        # dispatch and episode-close does not silently lose the learning attribution.
+        if "pending_boost_contexts" in data:
+            try:
+                from ..models import BoostUpdateContext
+                for did, bctx_d in (data["pending_boost_contexts"] or {}).items():
+                    try:
+                        self.pending_boost_contexts[did] = BoostUpdateContext.from_dict(bctx_d)
+                    except Exception:
+                        pass  # corrupt entry isolated; decision loses attribution (logged above)
+            except Exception as err:
+                errors.append(f"pending_boost_contexts:restore:{type(err).__name__}")
+        if "pending_dispatch_records" in data:
+            try:
+                from .capture import BoostDispatchRecord
+                for did, drec_d in (data["pending_dispatch_records"] or {}).items():
+                    try:
+                        self.pending_dispatch_records[did] = BoostDispatchRecord.from_dict(drec_d)
+                    except Exception:
+                        pass  # corrupt entry isolated
+            except Exception as err:
+                errors.append(f"pending_dispatch_records:restore:{type(err).__name__}")
+        if "pending_baseline_ctx" in data:
+            try:
+                for did, ctx in (data["pending_baseline_ctx"] or {}).items():
+                    try:
+                        self.pending_baseline_ctx[did] = dict(ctx)
+                    except Exception:
+                        pass
+            except Exception as err:
+                errors.append(f"pending_baseline_ctx:restore:{type(err).__name__}")
         self.model_update_counts = dict(data.get("model_update_counts", {}))
         self.cycles = data.get("cycles", 0)
         self.last_cycle_ts = data.get("last_cycle_ts")
@@ -819,6 +903,17 @@ class LearningRuntime:
                                  for z in self._zones.values()),
             control_rejections=self._aggregate_control_rejections(),
             reversion_count=self._reversion_count)
+
+    def pending_attribution_summary(self, zone_id: str) -> dict:
+        """Return a compact, privacy-safe summary of pending attribution for one zone.
+
+        Returns a zero-state dict on any error so callers need no special handling.
+        """
+        try:
+            return self._zones[zone_id].pending_attribution_summary()
+        except Exception:
+            return {"schema_version": 1, "pending_context_count": 0,
+                    "pending_dispatch_count": 0}
 
     def _aggregate_model_update_counts(self) -> dict:
         out: dict[str, int] = {}

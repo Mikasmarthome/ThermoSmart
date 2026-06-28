@@ -9,13 +9,30 @@ Four-mode matrix scenarios (S1a Part 2):
   mode_b  — Learning ON  + Active OFF (SHADOW_ONLY): shadow learning only, no dispatch
   mode_c  — Learning OFF + Active ON  (DETERMINISTIC): TPI with static defaults
   mode_d  — Learning ON  + Active ON  (ADAPTIVE): full adaptive (equivalent to S1-A default)
+
+Item 6 scenarios (long-run, 3 room profiles):
+  s1g_*_fast_insulated  — Profile A: quick-response, well-insulated
+  s1g_*_slow_inertia    — Profile B: heavy mass, significant afterheat
+  s1g_*_difficult       — Profile C: high heat loss, window events, noisy sensor
+  s1g_*_baseline        — Deterministic baseline for A/B comparison
+  Durations: 90-day (summer→autumn) and 180-day (full heating season).
 """
 from __future__ import annotations
 
 import math
+import random as _random
 from datetime import datetime, timezone
+from typing import Optional
 
-from tests.simulation.physics import RoomProfile
+from tests.simulation.physics import (
+    RoomProfile,
+    PROFILE_FAST_INSULATED,
+    PROFILE_SLOW_INERTIA,
+    PROFILE_DIFFICULT,
+    PROFILE_CLEAN_AFTERHEAT,
+    PROFILE_CLEAN_HEAT_LOSS,
+    PROFILE_CLEAN_SUPPLY_DELAY,
+)
 from tests.simulation.runner import ScenarioConfig
 
 # ── Shared helpers ───────────────────────────────────────────────────────────
@@ -29,6 +46,81 @@ def _outdoor_sinusoidal(base_c: float = -5.0, amplitude: float = 3.0) -> callabl
         hour = sim_time.hour + sim_time.minute / 60
         return base_c + amplitude * math.cos(2 * math.pi * (hour - 14.0) / 24.0)
     return fn
+
+
+def _outdoor_seasonal(
+    start_utc: datetime,
+    *,
+    base_winter_c: float = -5.0,
+    base_summer_c: float = 18.0,
+    day_amplitude: float = 4.0,
+) -> callable:
+    """Seasonal + diurnal outdoor temperature for 90/180-day runs.
+
+    Seasonal component: cosine over 365 days.
+      - Peak (warmest) at summer solstice: day 172 from Jan 1 ≈ end of June
+      - start_utc determines the day-of-year offset at simulation start
+
+    Diurnal component: coldest ~02:00, warmest ~14:00.
+
+    Returns: fn(sim_time) → float (°C)
+    """
+    start_day_of_year = start_utc.timetuple().tm_yday
+    base_mean = (base_winter_c + base_summer_c) / 2.0
+    base_range = (base_summer_c - base_winter_c) / 2.0
+    # Day 172 = summer solstice (closest to warmest outdoor T)
+    summer_day = 172
+
+    def fn(sim_time: datetime) -> float:
+        elapsed_s = (sim_time - start_utc).total_seconds()
+        elapsed_days = elapsed_s / 86400.0
+        day_of_year = (start_day_of_year + elapsed_days) % 365.0
+        # Seasonal: cosine — max at summer solstice, min at winter solstice (day ~355)
+        seasonal = base_mean + base_range * math.cos(
+            2 * math.pi * (day_of_year - summer_day) / 365.0)
+        # Diurnal: coldest ~02:00, warmest ~14:00
+        hour = sim_time.hour + sim_time.minute / 60.0
+        diurnal = day_amplitude * math.cos(2 * math.pi * (hour - 14.0) / 24.0)
+        return seasonal + diurnal
+
+    return fn
+
+
+def _window_schedule_random(
+    n_steps: int,
+    *,
+    seed: int = 99,
+    mean_open_duration_steps: int = 6,   # ~30 min for 5-min steps
+    mean_closed_duration_steps: int = 72,  # ~6 hours between events
+) -> list:
+    """Generate a random window open/close schedule as [(step_idx, is_open), ...].
+
+    Uses independent seed so window events are reproducible regardless of
+    other random.seed() calls during the run.  Does NOT consume from the global
+    RNG during run(); the schedule is pre-computed before the simulation starts.
+    """
+    rng = _random.Random(seed)
+    schedule = []
+    step = 0
+    while step < n_steps:
+        # Next open event
+        wait = rng.randint(
+            max(1, mean_closed_duration_steps // 2),
+            mean_closed_duration_steps * 2
+        )
+        step += wait
+        if step >= n_steps:
+            break
+        schedule.append((step, True))  # open
+        # Duration open
+        duration = rng.randint(
+            max(1, mean_open_duration_steps // 2),
+            mean_open_duration_steps * 3
+        )
+        step += duration
+        if step < n_steps:
+            schedule.append((step, False))  # close
+    return schedule
 
 
 def _solar_gain(max_w: float = 150.0) -> callable:
@@ -320,4 +412,479 @@ def scenario_restart_equiv_with_restarts() -> ScenarioConfig:
             int(7 * 24 * 3600 / 300),
             int(10 * 24 * 3600 / 300),
         },
+    )
+
+
+# ── Item 6: Extended Self-Learning Scenarios (90 / 180 days) ─────────────────
+#
+# Start: 2024-10-01 00:00 UTC — beginning of heating season (autumn → winter)
+# So 90 days covers Oct–Dec (full autumn + early winter, dropping outdoor temps).
+# 180 days covers Oct–Mar (full heating season including coldest period).
+#
+# Restart points: Day 3, 14, 30, 60, 89 (for 90-day); + 120, 179 (for 180-day).
+# Model snapshots every day (288 steps at 5-min).
+
+_HEATING_SEASON_START_UTC = datetime(2024, 10, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def _restart_steps_days(*days: int, step_s: float = 300.0) -> set:
+    """Convert a list of day indices to step indices."""
+    return {int(d * 24 * 3600 / step_s) for d in days}
+
+
+def _steps_per_day(step_s: float = 300.0) -> int:
+    return int(86400 / step_s)
+
+
+# ── Profile A — Fast, insulated room ─────────────────────────────────────────
+
+def scenario_s1g_90d_profile_a(*, seed: int = 42) -> ScenarioConfig:
+    """90-day run: Profile A (fast insulated), heating season, full restart schedule."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 90 * 24 * 3600
+    n_steps = int(duration_s / 300.0)
+    return ScenarioConfig(
+        name="S1G-90d-ProfileA",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_a"],
+        sensor_entity="sensor.room_s1g_a",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-3.0,
+                                          base_summer_c=16.0, day_amplitude=4.0),
+        solar_gain_fn=_solar_gain(100.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(3, 14, 30, 60, 89),
+    )
+
+
+def scenario_s1g_90d_profile_a_baseline(*, seed: int = 42) -> ScenarioConfig:
+    """90-day run: Profile A, deterministic baseline (no adaptive control)."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 90 * 24 * 3600
+    return ScenarioConfig(
+        name="S1G-90d-ProfileA-baseline",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_ab"],
+        sensor_entity="sensor.room_s1g_ab",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-3.0,
+                                          base_summer_c=16.0, day_amplitude=4.0),
+        solar_gain_fn=_solar_gain(100.0),
+        learning_mode=False,
+        active_control=True,
+        baseline_mode=True,
+        seed=seed,
+        model_snapshot_interval_steps=0,
+    )
+
+
+# ── Profile B — Slow, high-inertia room ──────────────────────────────────────
+
+def scenario_s1g_90d_profile_b(*, seed: int = 42) -> ScenarioConfig:
+    """90-day run: Profile B (slow inertia), heating season, full restart schedule."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 90 * 24 * 3600
+    return ScenarioConfig(
+        name="S1G-90d-ProfileB",
+        room_profile=PROFILE_SLOW_INERTIA,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_b"],
+        sensor_entity="sensor.room_s1g_b",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-3.0,
+                                          base_summer_c=16.0, day_amplitude=4.0),
+        solar_gain_fn=_solar_gain(80.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(3, 14, 30, 60, 89),
+    )
+
+
+def scenario_s1g_90d_profile_b_baseline(*, seed: int = 42) -> ScenarioConfig:
+    """90-day baseline: Profile B, deterministic only."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 90 * 24 * 3600
+    return ScenarioConfig(
+        name="S1G-90d-ProfileB-baseline",
+        room_profile=PROFILE_SLOW_INERTIA,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_bb"],
+        sensor_entity="sensor.room_s1g_bb",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-3.0,
+                                          base_summer_c=16.0, day_amplitude=4.0),
+        solar_gain_fn=_solar_gain(80.0),
+        learning_mode=False,
+        active_control=True,
+        baseline_mode=True,
+        seed=seed,
+        model_snapshot_interval_steps=0,
+    )
+
+
+# ── Profile C — Difficult room (high loss, window events, noisy sensor) ───────
+
+def scenario_s1g_90d_profile_c(*, seed: int = 42) -> ScenarioConfig:
+    """90-day run: Profile C (difficult), with window events, full restart schedule."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 90 * 24 * 3600
+    n_steps = int(duration_s / 300.0)
+    # Window events: ~3 per day on average, each ~30 min open
+    win_sched = _window_schedule_random(
+        n_steps, seed=seed + 1,
+        mean_open_duration_steps=6,
+        mean_closed_duration_steps=72,
+    )
+    return ScenarioConfig(
+        name="S1G-90d-ProfileC",
+        room_profile=PROFILE_DIFFICULT,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_c"],
+        sensor_entity="sensor.room_s1g_c",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-5.0,
+                                          base_summer_c=14.0, day_amplitude=5.0),
+        solar_gain_fn=_solar_gain(50.0),    # north-facing: less solar gain
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        window_schedule=win_sched,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(3, 14, 30, 60, 89),
+    )
+
+
+def scenario_s1g_90d_profile_c_baseline(*, seed: int = 42) -> ScenarioConfig:
+    """90-day baseline: Profile C, deterministic only, same window events."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 90 * 24 * 3600
+    n_steps = int(duration_s / 300.0)
+    win_sched = _window_schedule_random(
+        n_steps, seed=seed + 1,
+        mean_open_duration_steps=6,
+        mean_closed_duration_steps=72,
+    )
+    return ScenarioConfig(
+        name="S1G-90d-ProfileC-baseline",
+        room_profile=PROFILE_DIFFICULT,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_cb"],
+        sensor_entity="sensor.room_s1g_cb",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-5.0,
+                                          base_summer_c=14.0, day_amplitude=5.0),
+        solar_gain_fn=_solar_gain(50.0),
+        learning_mode=False,
+        active_control=True,
+        baseline_mode=True,
+        seed=seed,
+        window_schedule=win_sched,
+        model_snapshot_interval_steps=0,
+    )
+
+
+# ── 180-day variants (full heating season Oct → Mar) ─────────────────────────
+
+def scenario_s1g_180d_profile_a(*, seed: int = 42) -> ScenarioConfig:
+    """180-day run: Profile A, full heating season (Oct → Mar)."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 180 * 24 * 3600
+    return ScenarioConfig(
+        name="S1G-180d-ProfileA",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_180a"],
+        sensor_entity="sensor.room_s1g_180a",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-3.0,
+                                          base_summer_c=16.0, day_amplitude=4.0),
+        solar_gain_fn=_solar_gain(100.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(3, 14, 30, 60, 89, 120, 179),
+    )
+
+
+def scenario_s1g_180d_profile_b(*, seed: int = 42) -> ScenarioConfig:
+    """180-day run: Profile B (slow inertia), full heating season."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 180 * 24 * 3600
+    return ScenarioConfig(
+        name="S1G-180d-ProfileB",
+        room_profile=PROFILE_SLOW_INERTIA,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_180b"],
+        sensor_entity="sensor.room_s1g_180b",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-3.0,
+                                          base_summer_c=16.0, day_amplitude=4.0),
+        solar_gain_fn=_solar_gain(80.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(3, 14, 30, 60, 89, 120, 179),
+    )
+
+
+def scenario_s1g_180d_profile_c(*, seed: int = 42) -> ScenarioConfig:
+    """180-day run: Profile C (difficult), window events, full restart schedule."""
+    start = _HEATING_SEASON_START_UTC
+    duration_s = 180 * 24 * 3600
+    n_steps = int(duration_s / 300.0)
+    win_sched = _window_schedule_random(
+        n_steps, seed=seed + 1,
+        mean_open_duration_steps=6,
+        mean_closed_duration_steps=72,
+    )
+    return ScenarioConfig(
+        name="S1G-180d-ProfileC",
+        room_profile=PROFILE_DIFFICULT,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1g_180c"],
+        sensor_entity="sensor.room_s1g_180c",
+        outdoor_temp_fn=_outdoor_seasonal(start, base_winter_c=-5.0,
+                                          base_summer_c=14.0, day_amplitude=5.0),
+        solar_gain_fn=_solar_gain(50.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        window_schedule=win_sched,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(3, 14, 30, 60, 89, 120, 179),
+    )
+
+
+# ── Clean model scenarios (focused, 30-day) ───────────────────────────────────
+#
+# These scenarios are designed so a single model gets sufficient clean episodes.
+# Each scenario uses a room profile and conditions engineered for that model.
+
+_SPRING_START_UTC = datetime(2024, 3, 1, 0, 0, 0, tzinfo=timezone.utc)
+_WINTER_START_UTC = datetime(2024, 1, 8, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def scenario_clean_heat_rate_7d(*, seed: int = 42) -> ScenarioConfig:
+    """Clean HeatRate convergence: Profile A, winter, very low noise, 7 days."""
+    return ScenarioConfig(
+        name="clean-heat-rate-7d",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=_WINTER_START_UTC,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=7 * 24 * 3600,
+        climate_entities=["climate.trv_chr"],
+        sensor_entity="sensor.room_chr",
+        outdoor_temp_fn=_outdoor_sinusoidal(-5.0, 2.0),
+        solar_gain_fn=_solar_gain(50.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={"boost_bootstrap_prior_c": 1.5},
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+    )
+
+
+def scenario_clean_supply_delay_30d(*, seed: int = 42) -> ScenarioConfig:
+    """Clean OnsetDelay convergence: heavy mass, 20-min supply delay, clean sensor, 30 days."""
+    start = _WINTER_START_UTC
+    return ScenarioConfig(
+        name="clean-supply-delay-30d",
+        room_profile=PROFILE_CLEAN_SUPPLY_DELAY,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=30 * 24 * 3600,
+        climate_entities=["climate.trv_csd"],
+        sensor_entity="sensor.room_csd",
+        outdoor_temp_fn=_outdoor_sinusoidal(-3.0, 3.0),
+        solar_gain_fn=_solar_gain(50.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={"boost_bootstrap_prior_c": 1.5},
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(7, 14, 21),
+    )
+
+
+def scenario_clean_afterheat_30d(*, seed: int = 42) -> ScenarioConfig:
+    """Clean Afterheat convergence: strong heater, mild spring outdoor, low noise, 30 days.
+
+    Spring outdoor (5°C base) ensures large afterheat signal:
+      Q_in(afterheat) = 2500W + 20W; Q_out = 70×17.5 = 1225W; net = +1295W → slope ≈ +0.016°C/min
+    This exceeds the heating_slope_eps=0.01°C/min threshold, enabling AFTERHEAT regime.
+
+    Schedule: night setback 22:00→14°C, comfort 06:00→21°C.  The 7°C nightly drop
+    (21→14°C) guarantees a daily morning boost preheat from ~14°C → 22.5°C, giving:
+      (a) full supply-delay warmup fraction → strong afterheat_w=2500W at cutoff
+      (b) slope at T+1: (2500*0.88+20−70×17.5)/5e6×60 ≈ +0.013°C/min > 0.01 ✓
+    Drive end detected via controller_demand True→False; the pre-cutoff boost setpoint
+    (e.g. 30+°C) is captured via _prev_trv_setpoint so setpoint_before > setpoint_after
+    enables _drive_end_reliability() inference without HeatingDriveEndEvent.
+    """
+    start = _SPRING_START_UTC
+    return ScenarioConfig(
+        name="clean-afterheat-30d",
+        room_profile=PROFILE_CLEAN_AFTERHEAT,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=30 * 24 * 3600,
+        climate_entities=["climate.trv_cah"],
+        sensor_entity="sensor.room_cah",
+        outdoor_temp_fn=_outdoor_sinusoidal(5.0, 3.0),
+        solar_gain_fn=_solar_gain(100.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "comfort_temp": 21.0,
+            "night_temp": 14.0,   # 7°C drop → daily boost preheat from 14→22.5°C
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(7, 14, 21),
+    )
+
+
+def scenario_clean_heat_loss_30d(*, seed: int = 42) -> ScenarioConfig:
+    """Clean HeatLoss convergence: high heat loss, night setback (22:00→10°C), winter, 30 days.
+
+    Night setback to 10°C ensures PASSIVE_COOLING regime is detectable in the 120-point
+    rolling trajectory window:
+      Night: target=10°C, room cools from 21°C; rate ≈ 0.041°C/min >> 0.01 threshold
+      PASSIVE_COOLING detected at ~step 48 of night (240 min), when 48 negative slopes
+      displace enough heating history in the rolling window (median flips negative).
+      Room at detection: ≈11.2°C, still well above 10°C target → free cooling episode.
+      Day:   target=21°C, TPI heats normally
+    A 14°C target would not work: only 34 steps of cooling (171 min) before TPI engages,
+    insufficient to flip the 120-point median (needs N > 47.9).
+    No window events to avoid contamination.
+    """
+    start = _WINTER_START_UTC
+    return ScenarioConfig(
+        name="clean-heat-loss-30d",
+        room_profile=PROFILE_CLEAN_HEAT_LOSS,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=30 * 24 * 3600,
+        climate_entities=["climate.trv_chl"],
+        sensor_entity="sensor.room_chl",
+        outdoor_temp_fn=_outdoor_sinusoidal(-5.0, 3.0),
+        solar_gain_fn=_solar_gain(0.0),   # no solar — pure thermal
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 10.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(7, 14, 21),
     )

@@ -373,11 +373,9 @@ class ThermalRegimeClassifier:
 
     def _try_afterheat(self, inp, trend, missing, solar_conf) -> Optional[RegimeResult]:
         p = self._params
-        recent_direct = (inp.heating_drive_end is not None
-                         and inp.seconds_since_drive_end is not None
+        recent_direct = (inp.seconds_since_drive_end is not None
                          and 0 <= inp.seconds_since_drive_end <= p.max_seconds_since_drive_end)
-        too_old = (inp.heating_drive_end is not None
-                   and inp.seconds_since_drive_end is not None
+        too_old = (inp.seconds_since_drive_end is not None
                    and inp.seconds_since_drive_end > p.max_seconds_since_drive_end)
         rising = (trend.available and trend.slope is not None
                   and trend.slope >= p.heating_slope_eps)
@@ -391,16 +389,25 @@ class ThermalRegimeClassifier:
             return None
         if not (recent_direct or indirect):
             return None
-        if not (rising and decaying):
+        # Within 600 s of a confirmed drive end the 120-point median slope is
+        # structurally 0 (flooded by preceding stable/cooling history), so `rising`
+        # is always False even though afterheat energy is physically present.
+        # `just_ended` bypasses BOTH rising and decaying when there is sufficient
+        # trajectory history (≥ min_history_points); with too few points the
+        # bypass is disabled and the original strict `rising AND decaying` applies.
+        sufficient_pts = trend.valid_points >= p.min_history_points
+        just_ended = recent_direct and inp.seconds_since_drive_end <= 600 and sufficient_pts
+        if not ((rising and decaying) or just_ended):
             return None
 
         reasons = [ReasonCode.DECAYING_TREND, ReasonCode.DEMAND_OFF]
         evidence = [RegimeEvidence(ReasonCode.DECAYING_TREND.value, 0.6)]
         if recent_direct:
             reasons.append(ReasonCode.RECENT_DRIVE_END)
-            evidence.append(RegimeEvidence(ReasonCode.RECENT_DRIVE_END.value,
-                                           inp.heating_drive_end.source_confidence))
-            base = 0.7 * (0.5 + 0.5 * inp.heating_drive_end.source_confidence)
+            _drv_conf = inp.heating_drive_end.source_confidence \
+                if inp.heating_drive_end is not None else 0.7
+            evidence.append(RegimeEvidence(ReasonCode.RECENT_DRIVE_END.value, _drv_conf))
+            base = 0.7 * (0.5 + 0.5 * _drv_conf)
         else:
             reasons.append(ReasonCode.INDIRECT_DRIVE_END)
             base = 0.45

@@ -1255,6 +1255,24 @@ class ThermoSmartCoordinator(
                 self._active_control,
             )
 
+            # ── LE 2.0: collect hvac_action for regime classifier ───────
+            # Needed by both shadow and standalone ha_integration paths so that
+            # the LE2 regime classifier can confirm ACTIVE_HEATING without relying
+            # solely on temperature slope.  "heating" wins if ANY TRV reports it.
+            if _learning_mode_on:
+                _zone_hvac_action = None
+                for _eid in cfg.get("climate_entities", []):
+                    if not _eid:
+                        continue
+                    _st = self.hass.states.get(_eid)
+                    if _st is not None and _zone_hvac_action != "heating":
+                        _ha = _st.attributes.get("hvac_action")
+                        if _ha == "heating":
+                            _zone_hvac_action = "heating"
+                        elif _ha is not None and _zone_hvac_action is None:
+                            _zone_hvac_action = _ha
+                recommendation["_hvac_action"] = _zone_hvac_action
+
             # ── LE 2.0 passive shadow observation ───────────────────────
             # Runs AFTER the control decision is fully determined and applied.
             # Only when Learning Mode is ON — Learning OFF → no shadow observation.

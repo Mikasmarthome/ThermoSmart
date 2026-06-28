@@ -79,6 +79,11 @@ class RuntimePipeline:
         self._processed_ts: list[str] = []
         self._open_decision_id: Optional[str] = None
         self._previous_regime: Optional[str] = None
+        self._prev_demand_raw: Optional[bool] = None   # raw controller_demand (not fallback proxy)
+        self._prev_hvac: Optional[str] = None          # fallback when demand data is absent
+        self._prev_trv_setpoint: Optional[float] = None
+        self._last_heating_setpoint: Optional[float] = None
+        self._drive_end_ts: Optional[datetime] = None
 
     # -- helpers --------------------------------------------------------
 
@@ -125,11 +130,42 @@ class RuntimePipeline:
         demand = snapshot.controller_demand
         if demand is None and temp is not None and snapshot.trv_setpoint_c is not None:
             demand = snapshot.trv_setpoint_c > temp + 0.3   # honest fallback proxy
+
+        # Drive-end detection: primary via TPI controller_demand True→False (fires the
+        # step the boost ends — coordinator sets effective_target to comfort, TPI duty
+        # goes to 0, demand=False — while hvac_action may still read "heating" for one
+        # more step due to TRV state lag).  Fallback to hvac_action when demand absent.
+        raw_demand = snapshot.controller_demand   # before the fallback proxy
+        curr_hvac = snapshot.hvac_action
+        demand_fell = (self._prev_demand_raw is True and raw_demand is False)
+        hvac_fell = (raw_demand is None
+                     and self._prev_hvac == "heating"
+                     and curr_hvac is not None and curr_hvac != "heating")
+        if demand_fell or hvac_fell:
+            self._drive_end_ts = datetime.fromisoformat(snapshot.ts)
+            # Capture the setpoint from the step BEFORE demand fell; that step still
+            # had the boost setpoint (e.g. 24.4 °C) so setpoint_before > setpoint_after
+            # enables drive-end inference in _drive_end_reliability().
+            self._last_heating_setpoint = self._prev_trv_setpoint
+        if raw_demand is not None:
+            self._prev_demand_raw = raw_demand
+        self._prev_hvac = curr_hvac
+        self._prev_trv_setpoint = snapshot.trv_setpoint_c
+
+        seconds_since: Optional[float] = None
+        if self._drive_end_ts is not None:
+            try:
+                seconds_since = (datetime.fromisoformat(snapshot.ts) - self._drive_end_ts).total_seconds()
+            except Exception:
+                seconds_since = None
+
         regime = self._classifier.classify(RegimeInput(
             indoor_temp=temp, target=snapshot.target_c, trv_setpoint=snapshot.trv_setpoint_c,
             controller_demand=demand, tpi_on=snapshot.tpi_on,
             window_open=snapshot.window_open, heating_failure=snapshot.heating_failure,
-            outdoor_temp=snapshot.outdoor_temp, trajectory_features=features))
+            outdoor_temp=snapshot.outdoor_temp, trajectory_features=features,
+            valve_opening=snapshot.valve_opening, hvac_action=snapshot.hvac_action,
+            seconds_since_drive_end=seconds_since))
 
         # decision context for the outcome builder (open on a new decision)
         decision_start = None
@@ -141,19 +177,35 @@ class RuntimePipeline:
                     comfort_tolerance_at_start=0.5, controller=ControllerKind.THERMOSMART,
                     start_temp=temp)
 
+        # Provide the pre-cutoff boost setpoint within the afterheat window so the
+        # AfterheatBuilder captures setpoint_before > setpoint_after for drive-end inference.
+        _drive_end_sp = (self._last_heating_setpoint
+                         if seconds_since is not None and seconds_since <= 1800 else None)
+
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,
             target=snapshot.target_c, trv_setpoint=snapshot.trv_setpoint_c,
             window_open=snapshot.window_open, heating_failure=snapshot.heating_failure,
             outdoor_temp=snapshot.outdoor_temp,
-            indoor_temp_quality=snapshot.indoor_temp_quality, decision_start=decision_start)
+            indoor_temp_quality=snapshot.indoor_temp_quality, decision_start=decision_start,
+            drive_end_setpoint_c=_drive_end_sp)
+
+        # Call each builder exactly once per step, then fan out the result to every
+        # model that shares the builder key.  Without this, two models that share a
+        # builder (e.g. heat_rate and onset_delay both use "heating") would cause the
+        # second model's call to hit the per-step dedup guard and receive NO_CHANGE
+        # instead of the closed episode — silently dropping updates.
+        builder_results: dict[str, "BuilderResult"] = {}
+        for _bkey in dict.fromkeys(bk for _, bk in _BUILDER_MODEL):
+            try:
+                builder_results[_bkey] = self._builders[_bkey].process(binp)
+            except Exception:
+                pass
 
         completed: list[CompletedEpisode] = []
         for model_name, builder_key in _BUILDER_MODEL:
-            builder = self._builders[builder_key]
-            try:
-                res = builder.process(binp)
-            except Exception:
+            res = builder_results.get(builder_key)
+            if res is None:
                 continue
             if res.action is BuilderAction.CLOSED and res.episode is not None:
                 did = getattr(res.episode, "decision_id", None)
@@ -177,6 +229,11 @@ class RuntimePipeline:
             "processed_ts": list(self._processed_ts[-self._cap:]),
             "open_decision_id": self._open_decision_id,
             "previous_regime": self._previous_regime,
+            "prev_demand_raw": self._prev_demand_raw,
+            "prev_hvac": self._prev_hvac,
+            "prev_trv_setpoint": self._prev_trv_setpoint,
+            "last_heating_setpoint": self._last_heating_setpoint,
+            "drive_end_ts": self._drive_end_ts.isoformat() if self._drive_end_ts is not None else None,
             "builders": {k: b.snapshot_state() for k, b in self._builders.items()},
         }
 
@@ -189,6 +246,12 @@ class RuntimePipeline:
         self._processed_ts = list(data.get("processed_ts", []))
         self._open_decision_id = data.get("open_decision_id")
         self._previous_regime = data.get("previous_regime")
+        self._prev_demand_raw = data.get("prev_demand_raw")
+        self._prev_hvac = data.get("prev_hvac")
+        self._prev_trv_setpoint = data.get("prev_trv_setpoint")
+        self._last_heating_setpoint = data.get("last_heating_setpoint")
+        _det = data.get("drive_end_ts")
+        self._drive_end_ts = datetime.fromisoformat(_det) if _det is not None else None
         for k, b in self._builders.items():
             bs = data.get("builders", {}).get(k)
             if bs is None:

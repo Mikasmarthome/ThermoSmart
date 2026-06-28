@@ -39,4 +39,8 @@ if sys.platform == "win32":
         "test_*_valve_restart.py",   # direct-valve restart HA tests
         "test_config_flow.py",
         "test_options_flow.py",
+        # Item 6 long-run files (90/180-day): excluded on Windows due to runtime
+        # (90-day × 5-min steps ≈ 25 920 steps × ~20 ms = ~9 min per test).
+        # All long-run tests are included in the full Docker validation.
+        "test_s1a_item6_long_run.py",
     ]

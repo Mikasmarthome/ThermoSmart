@@ -27,9 +27,16 @@ class AfterheatEpisodeBuilder(EpisodeBuilder):
             aborted = self._maybe_abort(inp)
             if aborted is not None:
                 return aborted
-            # renewed active heating ends afterheat
+            # renewed active heating ends afterheat; try graceful close first so that
+            # morning-boost episodes (which peak and then cool until TPI restarts for
+            # maintenance) are not simply discarded.  The confounder is added ONLY if
+            # the close fails (episode too short) — a successful close means the heating
+            # happened AFTER the episode, not during, so it is not a contamination event.
             if regime is Regime.ACTIVE_HEATING or inp.controller_demand is True \
                     or _valve_open(inp):
+                candidate = self._close(ReasonCode.CLOSED_PEAK_COOLING, inp)
+                if candidate.action is BuilderAction.CLOSED:
+                    return candidate
                 self._confounders.add(ConfounderCode.REHEATING)
                 return self._abort(ReasonCode.ABORTED_REHEATING)
             # peak reached and cooling begins -> close
@@ -57,7 +64,12 @@ class AfterheatEpisodeBuilder(EpisodeBuilder):
                 and inp.regime.reliability >= self._params.min_open_reliability
                 and self._is_disturbance(inp) is None):
             self._open(inp, self.trajectory_cap)
-            self._extra["setpoint_before"] = inp.trv_setpoint
+            # Prefer the captured boost setpoint (from before coordinator reduced to comfort)
+            # so that setpoint_before > setpoint_after enables drive-end inference.
+            self._extra["setpoint_before"] = (
+                inp.drive_end_setpoint_c if inp.drive_end_setpoint_c is not None
+                else inp.trv_setpoint
+            )
             return BuilderResult(BuilderAction.OPENED, open_episode_id=self._episode_id,
                                  reason_codes=(ReasonCode.OPENED.value,))
         return BuilderResult(BuilderAction.NO_CHANGE)

@@ -45,7 +45,6 @@ from custom_components.thermosmart.learning.export import (
 from custom_components.thermosmart.learning.privacy import Pseudonymizer
 from tests.helpers_runtime import MemoryStore
 
-pytestmark = pytest.mark.asyncio
 
 
 def _make_drec(did="dec-1", *, dispatch_status="fully_succeeded",
@@ -173,6 +172,7 @@ class TestPerDeviceDispatchLedger:
         assert drec2 is not None, "Successful dispatch must survive restart for attribution"
         assert drec2.outcome_eligible
 
+    @pytest.mark.asyncio
     async def test_dedup_no_second_attribution_after_restart(self):
         """After restart, the same decision_id is rejected by dedup."""
         from tests.helpers_boost import boost_episode, boost_context
@@ -324,6 +324,7 @@ class TestPendingAttributionSummary:
 class TestLearningRuntimePendingAttributionSummary:
     """Tests for LearningRuntime.pending_attribution_summary(zone_id)."""
 
+    @pytest.mark.asyncio
     async def test_summary_available_for_zone(self):
         from tests.helpers_runtime_scenarios import runtime
         rt = runtime(store=MemoryStore(data=None))
@@ -332,6 +333,7 @@ class TestLearningRuntimePendingAttributionSummary:
         s = rt.pending_attribution_summary("lz")
         assert s["pending_context_count"] == 0
 
+    @pytest.mark.asyncio
     async def test_summary_reflects_pending_in_zone(self):
         from tests.helpers_runtime_scenarios import runtime
         rt = runtime(store=MemoryStore(data=None))
@@ -341,6 +343,7 @@ class TestLearningRuntimePendingAttributionSummary:
         s = rt.pending_attribution_summary("lz")
         assert s["pending_dispatch_count"] == 1
 
+    @pytest.mark.asyncio
     async def test_summary_unknown_zone_no_crash(self):
         from tests.helpers_runtime_scenarios import runtime
         rt = runtime(store=MemoryStore(data=None))

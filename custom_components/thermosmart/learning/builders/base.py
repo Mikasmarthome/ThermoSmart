@@ -144,6 +144,10 @@ class BuilderInput:
     decision_superseded: bool = False
     manual_correction: bool = False
     mode_change: bool = False
+    # drive-end evidence for afterheat builder: setpoint from the last heating step
+    # (before coordinator reduced it to comfort).  Lets the builder capture
+    # setpoint_before > setpoint_after so _drive_end_reliability() can infer drive end.
+    drive_end_setpoint_c: Optional[float] = None
     # dedup
     event_id: Optional[str] = None
 

@@ -202,6 +202,10 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
             outdoor = Measurement(ot, DataQuality.OK)
 
     decision_type = _decision_type(rec)
+    # Read hvac_action from recommendation (set by coordinator from TRV entity attributes).
+    # Enables ACTIVE_HEATING classification without relying solely on temperature slope,
+    # which can fall below the detection threshold in high-loss or slow-response rooms.
+    hvac_action = rec.get("_hvac_action")
     return RuntimeCycleInput(
         zone_id=zone_id, ts=ts, target_c=target, trv_setpoint_c=setpoint, indoor_temp=indoor,
         schedule=ScheduleTarget(comfort_time_utc=schedule_comfort_time_utc,
@@ -216,6 +220,7 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
         window_open=rec.get("window_open"), heating_failure=heating_failure,
         outdoor_temp=outdoor, forecast_high=rec.get("forecast_high"),
         device_states=dict(rec.get("device_states") or {}),   # B2b-4e live availability
+        hvac_action=hvac_action,
         boost_dispatch=_boost_dispatch_from_live_record(live_record))
 
 

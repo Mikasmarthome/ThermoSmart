@@ -50,4 +50,7 @@ if sys.platform == "win32":
         "test_s1a_item8_ab_long_run.py",
         # Item 10 long-run storage simulation (30d/90d): excluded on Windows.
         "test_s1a_item10_storage_long_run.py",
+        # Item 11 long-run performance simulation (30d/90d/180d): excluded on Windows.
+        # 180d × 51 840 steps × ~5 ms = ~4 min per test.
+        "test_s1a_item11_perf_long_run.py",
     ]

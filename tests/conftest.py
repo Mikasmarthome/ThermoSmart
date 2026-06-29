@@ -43,4 +43,9 @@ if sys.platform == "win32":
         # (90-day × 5-min steps ≈ 25 920 steps × ~20 ms = ~9 min per test).
         # All long-run tests are included in the full Docker validation.
         "test_s1a_item6_long_run.py",
+        # Item 8 A/B files: excluded on Windows due to runtime.
+        # 30d × 2 runs per pair test ≈ 6 min each; 16 tests ≈ 90 min.
+        # 90/180d A/B pairs ≈ 20–45 min each.
+        "test_s1a_item8_ab_30d.py",
+        "test_s1a_item8_ab_long_run.py",
     ]

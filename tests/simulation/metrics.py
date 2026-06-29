@@ -137,6 +137,10 @@ class MetricsSummary:
     # Sum of all noisy sensor readings — seed-sensitive; differs between seeds even
     # when aggregate metrics (heating_wh, comfort) are identical.
     sensor_readings_sum: float = 0.0
+    # Item 8 A/B extensions
+    overshoot_area_k_h: float = 0.0   # ∫max(0, T_room − comfort_temp)·dt [K·h]
+    undershoot_area_k_h: float = 0.0  # ∫max(0, comfort_threshold − T_room)·dt [K·h]
+    heating_on_steps: int = 0          # steps where room heater was physically active
 
     @property
     def comfort_fraction(self) -> float:
@@ -260,6 +264,15 @@ class MetricsCollector:
         s.adaptation_mode_counts[adaptation_mode] = (
             s.adaptation_mode_counts.get(adaptation_mode, 0) + 1
         )
+
+        # Item 8: area integrals and heating-on counter
+        step_h = step_s / 3600.0
+        if room_temp > self.comfort_temp:
+            s.overshoot_area_k_h += (room_temp - self.comfort_temp) * step_h
+        if room_temp < self._comfort_threshold:
+            s.undershoot_area_k_h += (self._comfort_threshold - room_temp) * step_h
+        if room.is_heating:
+            s.heating_on_steps += 1
 
         day = self._get_or_create_day(sim_time)
         if room_temp >= self._comfort_threshold:

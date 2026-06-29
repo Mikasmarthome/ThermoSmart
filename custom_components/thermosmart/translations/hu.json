@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "1. lépés / 4 – Eszközök és érzékelők",
+        "title": "Beállítások",
+        "menu_options": {
+          "devices": "Eszközök és érzékelők",
+          "schedule": "Hőmérsékletek és ütemterv",
+          "presence": "Jelenlét és tanulás",
+          "weather": "Időjárás és kültéri érzékelők"
+        }
+      },
+      "devices": {
+        "title": "Eszközök és érzékelők",
         "description": "A kalibrációs entitások és a quirk kapcsolók automatikusan felismerhetők.",
         "data": {
           "name": "Zóna neve",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "2. lépés / 4 – Hőmérsékletek és ütemterv",
+        "title": "Hőmérsékletek és ütemterv",
         "description": "Napi folyamat: Éjszaka → Komfort → Éjszaka\n\nHa minden személy távol van, a ThermoSmart automatikusan a távolléti hőmérsékletre vált – az ütemtervtől függetlenül.",
         "data": {
           "comfort_temp": "Kényelmi hőmérséklet",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "3. lépés / 4 – Jelenlét és tanulás",
+        "title": "Jelenlét és tanulás",
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "4. lépés / 4 – Időjárás és kültéri érzékelők",
+        "title": "Időjárás és kültéri érzékelők",
         "description": "Minden mező opcionális. A saját érzékelők elsőbbséget élveznek az időjárás entitással szemben.",
         "data": {
           "weather_entity": "Időjárás entitás",

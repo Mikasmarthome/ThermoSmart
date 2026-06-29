@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Steg 1 / 4 – Enheter & Sensorer",
+        "title": "Inställningar",
+        "menu_options": {
+          "devices": "Enheter & Sensorer",
+          "schedule": "Temperaturer & Schema",
+          "presence": "Närvaro & Inlärning",
+          "weather": "Väder & Utomhussensorer"
+        }
+      },
+      "devices": {
+        "title": "Enheter & Sensorer",
         "description": "Kalibreringsentiteter och quirk-brytare upptäcks automatiskt.",
         "data": {
           "name": "Zonnamn",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Steg 2 / 4 – Temperaturer & Schema",
+        "title": "Temperaturer & Schema",
         "description": "Dagligt flöde: Natt → Komfort → Natt\n\nNär alla personer är borta växlar ThermoSmart automatiskt till borta-temperaturen – oavsett schemat.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Steg 3 / 4 – Närvaro & Inlärning",
+        "title": "Närvaro & Inlärning",
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Steg 4 / 4 – Väder & Utomhussensorer",
+        "title": "Väder & Utomhussensorer",
         "description": "Alla fält valfria. Egna sensorer har företräde framför väderentiteten.",
         "data": {
           "weather_entity": "Väderentitet",

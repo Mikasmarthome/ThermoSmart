@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Vaihe 1 / 4 – Laitteet ja anturit",
+        "title": "Asetukset",
+        "menu_options": {
+          "devices": "Laitteet ja anturit",
+          "schedule": "Lämpötilat ja aikataulu",
+          "presence": "Läsnäolo ja oppiminen",
+          "weather": "Sää ja ulkoanturit"
+        }
+      },
+      "devices": {
+        "title": "Laitteet ja anturit",
         "description": "Kalibrointientiteetit ja quirk-kytkimet havaitaan automaattisesti.",
         "data": {
           "name": "Vyöhykkeen nimi",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Vaihe 2 / 4 – Lämpötilat ja aikataulu",
+        "title": "Lämpötilat ja aikataulu",
         "description": "Päivittäinen kulku: Yö → Mukavuus → Yö\n\nKun kaikki henkilöt ovat poissa, ThermoSmart vaihtaa automaattisesti poissaololämpötilaan – aikataulusta riippumatta.",
         "data": {
           "comfort_temp": "Mukavuuslämpötila",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Vaihe 3 / 4 – Läsnäolo ja oppiminen",
+        "title": "Läsnäolo ja oppiminen",
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Vaihe 4 / 4 – Sää ja ulkoanturit",
+        "title": "Sää ja ulkoanturit",
         "description": "Kaikki kentät ovat valinnaisia. Omat anturit ohittavat sääentiteetin.",
         "data": {
           "weather_entity": "Sääentiteetti",

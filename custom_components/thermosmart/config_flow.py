@@ -326,15 +326,23 @@ class ThermoSmartSystemOptionsFlow(config_entries.OptionsFlow):
 # ── Options Flow (Zone bearbeiten) ───────────────────────────────────────────
 
 class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
-    """Gleiche 4 Schritte wie die Ersteinrichtung, vorausgefüllt mit aktuellen Werten."""
+    """Options Hub: users pick a section and edit only that section.
 
-    def __init__(self) -> None:
-        self._data: dict = {}
+    Each section handler saves a partial update merged with all current fields,
+    so unrelated options are always preserved. The hub entry point (async_step_init)
+    shows a menu — users are never forced through all four steps for a single change.
+    """
 
     def _current(self) -> dict:
         return {**self.config_entry.data, **self.config_entry.options}
 
     async def async_step_init(self, user_input: dict | None = None):
+        return self.async_show_menu(
+            step_id="init",
+            menu_options=["devices", "schedule", "presence", "weather"],
+        )
+
+    async def async_step_devices(self, user_input: dict | None = None):
         errors: dict[str, str] = {}
         current = self._current()
         if user_input is not None:
@@ -343,24 +351,20 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
             elif not user_input.get("climate_entities"):
                 errors["climate_entities"] = "required"
             else:
-                self._data.update(user_input)
-                return await self.async_step_schedule()
-
+                return self.async_create_entry(title="", data={**current, **user_input})
         return self.async_show_form(
-            step_id="init",
+            step_id="devices",
             data_schema=_schema_devices(current),
             errors=errors,
         )
 
     async def async_step_schedule(self, user_input: dict | None = None):
-        current = self._current()
         errors: dict[str, str] = {}
+        current = self._current()
         if user_input is not None:
             errors = _validate_temps(user_input)
             if not errors:
-                self._data.update(user_input)
-                return await self.async_step_presence()
-
+                return self.async_create_entry(title="", data={**current, **user_input})
         return self.async_show_form(
             step_id="schedule",
             data_schema=_schema_schedule(current),
@@ -370,9 +374,7 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
     async def async_step_presence(self, user_input: dict | None = None):
         current = self._current()
         if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_weather()
-
+            return self.async_create_entry(title="", data={**current, **user_input})
         return self.async_show_form(
             step_id="presence",
             data_schema=_schema_presence(current),
@@ -386,9 +388,7 @@ class ThermoSmartOptionsFlow(config_entries.OptionsFlow):
             if weather and self.hass.states.get(weather) is None:
                 errors[CONF_WEATHER_ENTITY] = "entity_not_found"
             else:
-                self._data.update(user_input)
-                return self.async_create_entry(title="", data={**current, **self._data})
-
+                return self.async_create_entry(title="", data={**current, **user_input})
         return self.async_show_form(
             step_id="weather",
             data_schema=_schema_weather(current),

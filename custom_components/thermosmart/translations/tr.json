@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Adım 1 / 4 – Cihazlar ve sensörler",
+        "title": "Ayarlar",
+        "menu_options": {
+          "devices": "Cihazlar ve sensörler",
+          "schedule": "Sıcaklıklar ve program",
+          "presence": "Varlık ve öğrenme",
+          "weather": "Hava durumu ve dış sensörler"
+        }
+      },
+      "devices": {
+        "title": "Cihazlar ve sensörler",
         "description": "Kalibrasyon varlıkları ve quirk anahtarları otomatik olarak algılanır.",
         "data": {
           "name": "Bölge adı",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Adım 2 / 4 – Sıcaklıklar ve program",
+        "title": "Sıcaklıklar ve program",
         "description": "Günlük akış: Gece → Konfor → Gece\n\nTüm kişiler uzakta olduğunda, ThermoSmart programdan bağımsız olarak otomatik olarak uzakta sıcaklığına geçer.",
         "data": {
           "comfort_temp": "Konfor sıcaklığı",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Adım 3 / 4 – Varlık ve öğrenme",
+        "title": "Varlık ve öğrenme",
         "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Adım 4 / 4 – Hava durumu ve dış sensörler",
+        "title": "Hava durumu ve dış sensörler",
         "description": "Tüm alanlar isteğe bağlıdır. Kendi sensörleriniz hava durumu varlığına göre önceliklidir.",
         "data": {
           "weather_entity": "Hava durumu varlığı",

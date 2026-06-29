@@ -3,7 +3,7 @@
 These are the canonical long-run proofs for Item 6.  Each test runs the full
 production coordinator + LE2 shadow over 90 or 180 simulated days with one of
 the three room profiles, validates all acceptance criteria, and generates a
-structured SimulationResult that is printed to stdout for the Abschlussbericht.
+structured SimulationResult that is printed to stdout as a simulation report.
 
 Test matrix (all use ScenarioRunner with SimulationClock, REAL LE2 path):
   90-day × 3 profiles × {adaptive, baseline} = 6 tests

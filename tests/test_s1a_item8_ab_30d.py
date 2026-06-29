@@ -138,7 +138,7 @@ async def test_30d_stress_adaptive_graceful_degradation():
       - No NaN/Inf (model stability under faults)
       - Service calls bounded (no runaway dispatching)
       - Adaptive does not escalate beyond what physics dictates
-    The quantitative cold_fraction value is documented for the Abschlussbericht.
+    The quantitative cold_fraction value is documented in the simulation report.
     """
     cfg = scenario_s1h_30d_stress(seed=_SEED)
     summary = await ScenarioRunner(cfg).run()

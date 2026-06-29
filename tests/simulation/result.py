@@ -299,7 +299,7 @@ class SimulationResult:
             raise AssertionError(msg)
 
     def report(self) -> str:
-        """Human-readable text summary for test output / Abschlussbericht."""
+        """Human-readable text summary for test output."""
         lines = [
             f"SimulationResult: {self.scenario_id}",
             f"  Profile:           {self.profile_name}",

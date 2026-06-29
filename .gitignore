@@ -220,7 +220,6 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-
 # Reference extracts — never commit third-party source code
 vt_extracted/
 
@@ -245,6 +244,19 @@ diagnostics/
 *.diagnostics.json
 *.trace
 *.trace.json
+
+# Temporary and backup files
+*.zip
+*.bak
+*.tmp
+*.old
+*.orig
+*.swp
+
+# Local logo working files (not for commit)
+ThermoSmart Logo Neu*.png
+*_working.png
+*_draft.png
 
 # Local editor / OS
 .DS_Store

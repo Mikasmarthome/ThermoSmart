@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "第 1 步 / 4 – 设备和传感器",
+        "title": "设置",
+        "menu_options": {
+          "devices": "设备和传感器",
+          "schedule": "温度和计划",
+          "presence": "在家检测和学习",
+          "weather": "天气和室外传感器"
+        }
+      },
+      "devices": {
+        "title": "设备和传感器",
         "description": "校准实体和 quirk 开关会自动检测。",
         "data": {
           "name": "区域名称",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "第 2 步 / 4 – 温度和计划",
+        "title": "温度和计划",
         "description": "每日流程：夜间 → 舒适 → 夜间\n\n当所有人员离开时，ThermoSmart 会自动切换到离家温度——与计划无关。",
         "data": {
           "comfort_temp": "舒适温度",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "第 3 步 / 4 – 在家检测和学习",
+        "title": "在家检测和学习",
         "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
         "data": {
           "presence_persons": "用于检测在家状态的人员",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "第 4 步 / 4 – 天气和室外传感器",
+        "title": "天气和室外传感器",
         "description": "所有字段均为可选。自有传感器优先于天气实体。",
         "data": {
           "weather_entity": "天气实体",

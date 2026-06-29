@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Paso 1 / 4 – Dispositivos y sensores",
+        "title": "Configuración",
+        "menu_options": {
+          "devices": "Dispositivos y sensores",
+          "schedule": "Temperaturas y horario",
+          "presence": "Presencia y aprendizaje",
+          "weather": "Tiempo y sensores exteriores"
+        }
+      },
+      "devices": {
+        "title": "Dispositivos y sensores",
         "description": "Las entidades de calibración y los interruptores de quirk se detectan automáticamente.",
         "data": {
           "name": "Nombre de zona",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Paso 2 / 4 – Temperaturas y horario",
+        "title": "Temperaturas y horario",
         "description": "Flujo diario: Noche → Confort → Noche\n\nCuando todas las personas están ausentes, ThermoSmart cambia automáticamente a la temperatura de ausencia – independientemente del horario.",
         "data": {
           "comfort_temp": "Temperatura de confort",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Paso 3 / 4 – Presencia y aprendizaje",
+        "title": "Presencia y aprendizaje",
         "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Paso 4 / 4 – Tiempo y sensores exteriores",
+        "title": "Tiempo y sensores exteriores",
         "description": "Todos los campos son opcionales. Los sensores propios tienen prioridad sobre la entidad meteorológica.",
         "data": {
           "weather_entity": "Entidad meteorológica",

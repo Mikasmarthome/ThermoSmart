@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Pasul 1 / 4 – Dispozitive și senzori",
+        "title": "Setări",
+        "menu_options": {
+          "devices": "Dispozitive și senzori",
+          "schedule": "Temperaturi și program",
+          "presence": "Prezență și învățare",
+          "weather": "Vreme și senzori exteriori"
+        }
+      },
+      "devices": {
+        "title": "Dispozitive și senzori",
         "description": "Entitățile de calibrare și comutatoarele quirk sunt detectate automat.",
         "data": {
           "name": "Numele zonei",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Pasul 2 / 4 – Temperaturi și program",
+        "title": "Temperaturi și program",
         "description": "Flux zilnic: Noapte → Confort → Noapte\n\nCând toate persoanele sunt absente, ThermoSmart trece automat la temperatura de absență – indiferent de program.",
         "data": {
           "comfort_temp": "Temperatură de confort",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Pasul 3 / 4 – Prezență și învățare",
+        "title": "Prezență și învățare",
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Pasul 4 / 4 – Vreme și senzori exteriori",
+        "title": "Vreme și senzori exteriori",
         "description": "Toate câmpurile sunt opționale. Senzorii proprii au prioritate față de entitatea meteo.",
         "data": {
           "weather_entity": "Entitate meteo",

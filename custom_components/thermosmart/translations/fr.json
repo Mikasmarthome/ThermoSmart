@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Étape 1 / 4 – Appareils & Capteurs",
+        "title": "Paramètres",
+        "menu_options": {
+          "devices": "Appareils & Capteurs",
+          "schedule": "Températures & Horaires",
+          "presence": "Présence & Apprentissage",
+          "weather": "Météo & Capteurs extérieurs"
+        }
+      },
+      "devices": {
+        "title": "Appareils & Capteurs",
         "description": "Les entités de calibration et les interrupteurs de quirk sont détectés automatiquement.",
         "data": {
           "name": "Nom de la zone",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Étape 2 / 4 – Températures & Horaires",
+        "title": "Températures & Horaires",
         "description": "Déroulement journalier : Nuit → Confort → Nuit\n\nQuand toutes les personnes sont absentes, ThermoSmart bascule automatiquement en température d'absence – indépendamment du planning.",
         "data": {
           "comfort_temp": "Température de confort",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Étape 3 / 4 – Présence & Apprentissage",
+        "title": "Présence & Apprentissage",
         "description": "Qui est à la maison ? ThermoSmart bascule automatiquement en mode absence quand tout le monde part.",
         "data": {
           "presence_persons": "Personnes pour la détection de présence",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Étape 4 / 4 – Météo & Capteurs extérieurs",
+        "title": "Météo & Capteurs extérieurs",
         "description": "Tous les champs sont optionnels. Les capteurs personnels ont la priorité sur l'entité météo.",
         "data": {
           "weather_entity": "Entité météo",

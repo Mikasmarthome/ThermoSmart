@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Trinn 1 / 4 – Enheter og sensorer",
+        "title": "Innstillinger",
+        "menu_options": {
+          "devices": "Enheter og sensorer",
+          "schedule": "Temperaturer og tidsplan",
+          "presence": "Tilstedeværelse og læring",
+          "weather": "Vær og utendørs sensorer"
+        }
+      },
+      "devices": {
+        "title": "Enheter og sensorer",
         "description": "Kalibreringsenheter og quirk-brytere oppdages automatisk.",
         "data": {
           "name": "Sonenavn",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Trinn 2 / 4 – Temperaturer og tidsplan",
+        "title": "Temperaturer og tidsplan",
         "description": "Daglig forløp: Natt → Komfort → Natt\n\nNår alle personer er borte, bytter ThermoSmart automatisk til fraværstemperaturen – uavhengig av tidsplanen.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Trinn 3 / 4 – Tilstedeværelse og læring",
+        "title": "Tilstedeværelse og læring",
         "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Trinn 4 / 4 – Vær og utendørs sensorer",
+        "title": "Vær og utendørs sensorer",
         "description": "Alle felt er valgfrie. Egne sensorer har forrang over værenheten.",
         "data": {
           "weather_entity": "Værenhet",

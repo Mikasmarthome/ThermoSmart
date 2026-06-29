@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Krok 1 / 4 – Urządzenia i czujniki",
+        "title": "Ustawienia",
+        "menu_options": {
+          "devices": "Urządzenia i czujniki",
+          "schedule": "Temperatury i harmonogram",
+          "presence": "Obecność i uczenie",
+          "weather": "Pogoda i czujniki zewnętrzne"
+        }
+      },
+      "devices": {
+        "title": "Urządzenia i czujniki",
         "description": "Jednostki kalibracji i przełączniki quirk są wykrywane automatycznie.",
         "data": {
           "name": "Nazwa strefy",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Krok 2 / 4 – Temperatury i harmonogram",
+        "title": "Temperatury i harmonogram",
         "description": "Przebieg dnia: Noc → Komfort → Noc\n\nGdy wszystkie osoby są nieobecne, ThermoSmart automatycznie przełącza na temperaturę nieobecności – niezależnie od harmonogramu.",
         "data": {
           "comfort_temp": "Temperatura komfortu",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Obecność i uczenie",
+        "title": "Obecność i uczenie",
         "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Krok 4 / 4 – Pogoda i czujniki zewnętrzne",
+        "title": "Pogoda i czujniki zewnętrzne",
         "description": "Wszystkie pola opcjonalne. Własne czujniki mają pierwszeństwo przed jednostką pogodową.",
         "data": {
           "weather_entity": "Jednostka pogodowa",

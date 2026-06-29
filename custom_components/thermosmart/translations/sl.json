@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Korak 1 / 4 – Naprave in senzorji",
+        "title": "Nastavitve",
+        "menu_options": {
+          "devices": "Naprave in senzorji",
+          "schedule": "Temperature in urnik",
+          "presence": "Prisotnost in učenje",
+          "weather": "Vreme in zunanji senzorji"
+        }
+      },
+      "devices": {
+        "title": "Naprave in senzorji",
         "description": "Kalibracijske entitete in stikala quirk se zaznajo samodejno.",
         "data": {
           "name": "Ime cone",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Korak 2 / 4 – Temperature in urnik",
+        "title": "Temperature in urnik",
         "description": "Dnevni potek: Noč → Udobje → Noč\n\nKo so vse osebe odsotne, ThermoSmart samodejno preklopi na temperaturo odsotnosti – ne glede na urnik.",
         "data": {
           "comfort_temp": "Temperatura udobja",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Korak 3 / 4 – Prisotnost in učenje",
+        "title": "Prisotnost in učenje",
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Korak 4 / 4 – Vreme in zunanji senzorji",
+        "title": "Vreme in zunanji senzorji",
         "description": "Vsa polja so neobvezna. Lastni senzorji imajo prednost pred vremensko entiteto.",
         "data": {
           "weather_entity": "Vremenska entiteta",

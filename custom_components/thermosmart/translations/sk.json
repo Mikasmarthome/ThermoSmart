@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Krok 1 / 4 – Zariadenia a senzory",
+        "title": "Nastavenia",
+        "menu_options": {
+          "devices": "Zariadenia a senzory",
+          "schedule": "Teploty a plán",
+          "presence": "Prítomnosť a učenie",
+          "weather": "Počasie a vonkajšie senzory"
+        }
+      },
+      "devices": {
+        "title": "Zariadenia a senzory",
         "description": "Kalibračné entity a prepínače quirk sa rozpoznajú automaticky.",
         "data": {
           "name": "Názov zóny",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Krok 2 / 4 – Teploty a plán",
+        "title": "Teploty a plán",
         "description": "Denný priebeh: Noc → Komfort → Noc\n\nKeď sú všetky osoby preč, ThermoSmart automaticky prepne na teplotu neprítomnosti – bez ohľadu na plán.",
         "data": {
           "comfort_temp": "Komfortná teplota",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Prítomnosť a učenie",
+        "title": "Prítomnosť a učenie",
         "description": "Kto je doma? ThermoSmart automaticky prepne do režimu neprítomnosti, keď všetci odídu.",
         "data": {
           "presence_persons": "Osoby na detekciu prítomnosti",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Krok 4 / 4 – Počasie a vonkajšie senzory",
+        "title": "Počasie a vonkajšie senzory",
         "description": "Všetky polia sú voliteľné. Vlastné senzory majú prednosť pred entitou počasia.",
         "data": {
           "weather_entity": "Entita počasia",

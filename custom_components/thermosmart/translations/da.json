@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Trin 1 / 4 – Enheder og sensorer",
+        "title": "Indstillinger",
+        "menu_options": {
+          "devices": "Enheder og sensorer",
+          "schedule": "Temperaturer og tidsplan",
+          "presence": "Tilstedeværelse og læring",
+          "weather": "Vejr og udendørs sensorer"
+        }
+      },
+      "devices": {
+        "title": "Enheder og sensorer",
         "description": "Kalibreringsenheder og quirk-afbrydere registreres automatisk.",
         "data": {
           "name": "Zonenavn",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Trin 2 / 4 – Temperaturer og tidsplan",
+        "title": "Temperaturer og tidsplan",
         "description": "Dagligt forløb: Nat → Komfort → Nat\n\nNår alle personer er væk, skifter ThermoSmart automatisk til fraværstemperaturen – uanset tidsplanen.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Trin 3 / 4 – Tilstedeværelse og læring",
+        "title": "Tilstedeværelse og læring",
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Trin 4 / 4 – Vejr og udendørs sensorer",
+        "title": "Vejr og udendørs sensorer",
         "description": "Alle felter er valgfrie. Egne sensorer har forrang over vejrenheden.",
         "data": {
           "weather_entity": "Vejrenhed",

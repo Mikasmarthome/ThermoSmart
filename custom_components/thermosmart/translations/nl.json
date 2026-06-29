@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Stap 1 / 4 – Apparaten & Sensoren",
+        "title": "Instellingen",
+        "menu_options": {
+          "devices": "Apparaten & Sensoren",
+          "schedule": "Temperaturen & Schema",
+          "presence": "Aanwezigheid & Leren",
+          "weather": "Weer & Buitensensoren"
+        }
+      },
+      "devices": {
+        "title": "Apparaten & Sensoren",
         "description": "Kalibratie-entiteiten en quirk-schakelaars worden automatisch gedetecteerd.",
         "data": {
           "name": "Zonenaam",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Stap 2 / 4 – Temperaturen & Schema",
+        "title": "Temperaturen & Schema",
         "description": "Dagverloop: Nacht → Comfort → Nacht\n\nAls alle personen afwezig zijn, schakelt ThermoSmart automatisch naar de afwezigheidstemperatuur – ongeacht het schema.",
         "data": {
           "comfort_temp": "Comforttemperatuur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Stap 3 / 4 – Aanwezigheid & Leren",
+        "title": "Aanwezigheid & Leren",
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Stap 4 / 4 – Weer & Buitensensoren",
+        "title": "Weer & Buitensensoren",
         "description": "Alle velden optioneel. Eigen sensoren hebben voorrang op de weer-entiteit.",
         "data": {
           "weather_entity": "Weer-entiteit",

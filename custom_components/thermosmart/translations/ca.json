@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Pas 1 / 4 – Dispositius i sensors",
+        "title": "Configuració",
+        "menu_options": {
+          "devices": "Dispositius i sensors",
+          "schedule": "Temperatures i horari",
+          "presence": "Presència i aprenentatge",
+          "weather": "Meteorologia i sensors exteriors"
+        }
+      },
+      "devices": {
+        "title": "Dispositius i sensors",
         "description": "Les entitats de calibratge i els interruptors de quirk es detecten automàticament.",
         "data": {
           "name": "Nom de la zona",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Pas 2 / 4 – Temperatures i horari",
+        "title": "Temperatures i horari",
         "description": "Flux diari: Nit → Confort → Nit\n\nQuan totes les persones estan absents, ThermoSmart canvia automàticament a la temperatura d'absència, independentment de l'horari.",
         "data": {
           "comfort_temp": "Temperatura de confort",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Pas 3 / 4 – Presència i aprenentatge",
+        "title": "Presència i aprenentatge",
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Pas 4 / 4 – Meteorologia i sensors exteriors",
+        "title": "Meteorologia i sensors exteriors",
         "description": "Tots els camps són opcionals. Els sensors propis tenen prioritat sobre l'entitat meteorològica.",
         "data": {
           "weather_entity": "Entitat meteorològica",

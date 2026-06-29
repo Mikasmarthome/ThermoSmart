@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mikasmarthome/ThermoSmart/main/assets/thermosmart-logo.png" alt="ThermoSmart" width="256"/>
+  <img src="https://raw.githubusercontent.com/Mikasmarthome/ThermoSmart/main/brand/logo.png" alt="ThermoSmart" width="256"/>
 </p>
 
 <h1 align="center">ThermoSmart</h1>
@@ -42,7 +42,7 @@ Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar �
 
 ## Screenshots
 
-![Three ThermoSmart heating zones displayed in a Lovelace dashboard — each zone shows a temperature ring with current and target temperature, active mode indicator, outdoor temperature, humidity, and mode buttons for Auto, Eco, Night, Comfort, Away and Vacation](assets/screenshots/dashboard-zones.jpeg)
+![Three ThermoSmart heating zones displayed in a Lovelace dashboard — each zone shows a temperature ring with current and target temperature, active mode indicator, outdoor temperature, humidity, and mode buttons for Auto, Eco, Night, Comfort, Away and Vacation](brand/screenshots/dashboard-zones.jpeg)
 
 *Three heating zones managed by ThermoSmart. The temperature ring shows current and target temperature at a glance. Mode buttons, outdoor conditions, and a history graph (Actual / Target / Outdoor) are visible per zone. Screenshot uses the optional [thermosmart-card](https://github.com/Mikasmarthome/thermosmart-card) Lovelace frontend.*
 

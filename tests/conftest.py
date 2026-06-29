@@ -48,4 +48,6 @@ if sys.platform == "win32":
         # 90/180d A/B pairs ≈ 20–45 min each.
         "test_s1a_item8_ab_30d.py",
         "test_s1a_item8_ab_long_run.py",
+        # Item 10 long-run storage simulation (30d/90d): excluded on Windows.
+        "test_s1a_item10_storage_long_run.py",
     ]

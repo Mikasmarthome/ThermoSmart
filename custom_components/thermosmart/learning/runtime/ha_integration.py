@@ -260,6 +260,10 @@ class LearningShadowController:
         self._pipeline = DecisionPipeline(
             resolver=FinalResolver(boost_runtime_limit=TPI_MAX_BOOST_CELSIUS))
         self._last_trace: Optional[dict] = None
+        # In-memory adaptation candidate history — reset on HA restart (by design).
+        self._adaptation_history: dict = {}
+        self._last_outcome_ts: Optional[str] = None
+        self._adaptation_last_error: Optional[str] = None
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -311,6 +315,150 @@ class LearningShadowController:
             self._last_result = CoordinatorBridge(self._runtime).process(inp)
         except Exception as err:
             self._record_error("cycle", err)
+        # Passive adaptation history — post-cycle, never raises, never affects heating.
+        try:
+            self._update_adaptation_history_safe(recommendation, weather)
+        except Exception as err:
+            try:
+                self._adaptation_last_error = str(err)
+            except Exception:
+                pass
+
+    def _update_adaptation_history_safe(
+        self,
+        recommendation: Any,
+        weather: Optional[Any],
+    ) -> None:
+        """Update in-memory adaptation history from current outcome model state.
+
+        Skips if outcome model has not advanced since last call (deduplication via
+        last_update_ts). Never mutates control state. Never raises — all errors are
+        captured in _adaptation_last_error.
+        """
+        try:
+            zr = self._runtime._zone(self._zone)
+            _om = zr.orchestrator.models.get("outcome")
+            if _om is None:
+                return
+            diag = _om.diagnostics()
+            new_ts = diag.last_update_ts
+            if not new_ts or new_ts == self._last_outcome_ts:
+                return
+
+            # Build OutcomeSignal from diagnostics
+            from ..adaptation.contracts import OutcomeSignal, SituationContext
+            full_count, partial_count = diag.full_partial
+            total_accepted = full_count + partial_count
+            partial_ratio = (
+                (partial_count / total_accepted) if total_accepted > 0 else 0.0
+            )
+            rej_counts = dict(diag.rejection_counts)
+            total_rej = sum(rej_counts.values())
+            signal = OutcomeSignal(
+                sample_count=diag.sample_counts.get("general", 0),
+                timeout_rate=diag.timeout_rate,
+                overshoot_rate=diag.overshoot_rate,
+                reached_rate=diag.reached_rate,
+                general_data_quality=diag.general_data_quality,
+                aggregate_reliability=getattr(diag, "confidence", 0.0),
+                partial_ratio=partial_ratio,
+                confounder_contamination=total_rej > 0,
+            )
+
+            # Build SituationContext — similar to export._adaptation_situation_context
+            # but without coordinator/coord; reads from recommendation and weather args.
+            _OUTDOOR_EDGES = (-10.0, -5.0, 0.0, 5.0, 10.0, 15.0)
+            outdoor_bucket: Optional[str] = None
+            if weather:
+                try:
+                    ot_raw = weather.get("temperature") if hasattr(weather, "get") else None
+                    if ot_raw is not None:
+                        ot = float(ot_raw)
+                        idx = sum(1 for edge in _OUTDOOR_EDGES if ot >= edge)
+                        outdoor_bucket = f"b{idx}"
+                except Exception:
+                    pass
+
+            mode_context: Optional[str] = None
+            preheat_was_active: Optional[bool] = None
+            if recommendation:
+                try:
+                    mode_context = recommendation.get("mode") or None
+                except Exception:
+                    pass
+                try:
+                    pa = recommendation.get("preheat_active")
+                    preheat_was_active = bool(pa) if pa is not None else None
+                except Exception:
+                    pass
+
+            controller_kind: Optional[str] = None
+            try:
+                _state = getattr(_om, "_state", None)
+                _samples = getattr(_state, "recent_samples", ()) or ()
+                if _samples:
+                    controller_kind = getattr(_samples[-1], "controller_kind", None)
+            except Exception:
+                pass
+
+            time_of_day_bucket: Optional[int] = None
+            weekday: Optional[int] = None
+            is_weekend: Optional[bool] = None
+            context_time_source = "unavailable"
+            try:
+                from datetime import datetime
+                _ts = datetime.fromisoformat(new_ts.replace("Z", "+00:00"))
+                time_of_day_bucket = _ts.hour
+                weekday = _ts.weekday()
+                is_weekend = weekday >= 5
+                context_time_source = "model_last_update"
+            except Exception:
+                pass
+
+            situation = SituationContext(
+                controller_kind=controller_kind,
+                outdoor_bucket=outdoor_bucket,
+                mode_context=mode_context,
+                time_of_day_bucket=time_of_day_bucket,
+                weekday=weekday,
+                is_weekend=is_weekend,
+                preheat_was_active=preheat_was_active,
+                boost_was_active=None,
+                target_delta_c=None,
+                heat_loss_c_per_h=None,
+                preheat_minutes_used=None,
+                active_control=None,
+                learning_enabled=None,
+                context_time_source=context_time_source,
+            )
+
+            from ..adaptation.history import update_adaptation_history
+            self._adaptation_history = update_adaptation_history(
+                self._adaptation_history,
+                self._zone,
+                signal,
+                situation,
+                new_ts,
+            )
+            self._last_outcome_ts = new_ts
+            self._adaptation_last_error = None
+        except Exception as err:
+            self._adaptation_last_error = str(err)
+
+    def adaptation_history_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory adaptation history.
+
+        Keys are candidate_key strings; values are CandidateHistoryEntry instances.
+        Empty on first call (reset on HA restart). Never raises.
+        """
+        try:
+            return dict(self._adaptation_history)
+        except Exception:
+            return {}
+
+    def adaptation_last_error(self) -> Optional[str]:
+        """Return the last error message from adaptation history accumulation, or None."""
+        return self._adaptation_last_error
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.

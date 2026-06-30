@@ -250,6 +250,37 @@ class PromotionGateResult:
         }
 
 
+def update_adaptation_history(
+    history: dict,
+    zone_id: str,
+    signal: "OutcomeSignal",
+    situation: "SituationContext",
+    created_at: str,
+    *,
+    now_ts: Optional[str] = None,
+    max_entries: int = 50,
+) -> dict:
+    """Pure function: suggest candidates, accumulate SHADOW ones, prune, return new dict.
+
+    REJECTED candidates are not accumulated.
+    Returns a new dict — never mutates the input.
+    """
+    from .candidates import suggest_candidates
+    from .contracts import AdaptationLifecycle
+    from .history_store_schema import prune_history_entries
+
+    traces = suggest_candidates(zone_id, signal, situation, created_at)
+    new_history = dict(history)
+    for trace in traces:
+        if trace.lifecycle is AdaptationLifecycle.SHADOW:
+            identity = candidate_identity_from_trace(zone_id, trace)
+            key = make_candidate_key(identity)
+            new_history[key] = accumulate_into_history(new_history.get(key), trace, key)
+    return prune_history_entries(
+        new_history, now_ts=now_ts or created_at, max_entries=max_entries,
+    )
+
+
 def evaluate_promotion_readiness(
     entry: CandidateHistoryEntry,
     *,

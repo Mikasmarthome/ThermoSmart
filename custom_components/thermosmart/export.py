@@ -327,12 +327,31 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                     safe["adaptation_candidates"] = _export_list
         except Exception:
             pass
-        # 3c. Adaptation candidate history summary (always present; empty until
-        #     runtime accumulation is wired up — no artificial entries generated).
+        # 3c. Adaptation candidate history (in-memory; empty until first outcome cycle).
         try:
-            safe["adaptation_candidate_history"] = _le2_adaptation_history_for_research([])
+            shadow = getattr(coord, "_le2_shadow", None)
+            _history_tuples: list = []
+            if shadow is not None:
+                _hist_snapshot = shadow.adaptation_history_snapshot()
+                if _hist_snapshot:
+                    from datetime import datetime as _dt
+                    for _entry in _hist_snapshot.values():
+                        try:
+                            _span = 0.0
+                            if _entry.first_seen_ts and _entry.last_seen_ts:
+                                _t0 = _dt.fromisoformat(
+                                    _entry.first_seen_ts.replace("Z", "+00:00"))
+                                _t1 = _dt.fromisoformat(
+                                    _entry.last_seen_ts.replace("Z", "+00:00"))
+                                _span = max(0.0, (_t1 - _t0).total_seconds() / 86400.0)
+                        except Exception:
+                            _span = 0.0
+                        _history_tuples.append((_entry, _span, 0.0))
+            safe["adaptation_candidate_history"] = _le2_adaptation_history_for_research(
+                _history_tuples
+            )
         except Exception:
-            pass
+            safe["adaptation_candidate_history"] = []
         # 4. Final privacy scan (belt-and-suspenders)
         try:
             from .learning.privacy import scan_payload
@@ -443,26 +462,50 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
 def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
     """Return adaptation candidate history summary for support export.
 
-    Currently returns zero counts — no runtime history accumulation is wired up
-    yet. The dict structure is stable and ready for future runtime binding.
+    Reads the in-memory candidate history from coord._le2_shadow.
     Never raises.
     """
+    _zero = {"entry_count": 0, "promotion_ready_count": 0, "blocked_count": 0, "last_error": None}
     try:
-        # No runtime accumulation yet — return neutral, structurally complete dict.
-        # When runtime history is wired, read accumulated entries via coord here.
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return _zero
+        history = shadow.adaptation_history_snapshot()
+        if not history:
+            last_err = shadow.adaptation_last_error()
+            return {**_zero, "last_error": last_err}
+        from .learning.adaptation import (
+            evaluate_promotion_readiness,
+            PromotionReadiness,
+        )
+        from datetime import datetime, timezone
+        ready = 0
+        blocked = 0
+        for entry in history.values():
+            try:
+                span_days = 0.0
+                try:
+                    if entry.first_seen_ts and entry.last_seen_ts:
+                        t0 = datetime.fromisoformat(entry.first_seen_ts.replace("Z", "+00:00"))
+                        t1 = datetime.fromisoformat(entry.last_seen_ts.replace("Z", "+00:00"))
+                        span_days = max(0.0, (t1 - t0).total_seconds() / 86400.0)
+                except Exception:
+                    pass
+                pgr = evaluate_promotion_readiness(entry, span_days=span_days, confounder_ratio=0.0)
+                if pgr.readiness is PromotionReadiness.ELIGIBLE:
+                    ready += 1
+                else:
+                    blocked += 1
+            except Exception:
+                blocked += 1
         return {
-            "entry_count": 0,
-            "promotion_ready_count": 0,
-            "blocked_count": 0,
-            "last_error": None,
+            "entry_count": len(history),
+            "promotion_ready_count": ready,
+            "blocked_count": blocked,
+            "last_error": shadow.adaptation_last_error(),
         }
     except Exception as err:
-        return {
-            "entry_count": 0,
-            "promotion_ready_count": 0,
-            "blocked_count": 0,
-            "last_error": str(err),
-        }
+        return {**_zero, "last_error": str(err)}
 
 
 def _le2_adaptation_history_for_research(history_entries: list) -> list[dict]:

@@ -39,6 +39,7 @@ from .history import (
     candidate_identity_from_trace,
     evaluate_promotion_readiness,
     make_candidate_key,
+    update_adaptation_history,
 )
 from .history_store_schema import (
     HISTORY_SCHEMA_VERSION,
@@ -70,6 +71,7 @@ __all__ = [
     "candidate_identity_from_trace",
     "evaluate_promotion_readiness",
     "make_candidate_key",
+    "update_adaptation_history",
     "HISTORY_SCHEMA_VERSION",
     "AdaptationHistoryState",
     "adaptation_history_entry_for_research_export",

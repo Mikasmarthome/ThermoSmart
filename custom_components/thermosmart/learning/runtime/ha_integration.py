@@ -2153,6 +2153,139 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("unload", err)
 
+    def read_outcome_score_safe(self) -> tuple:
+        """Read LE 2.0 outcome quality score (0–100 %) for display.
+
+        Returns ``(score_pct, status)`` where:
+        - ``score_pct``: float 0–100 when learned evidence available, else ``None``.
+        - ``status``: "valid", "cold_start", or "not_available".
+
+        Uses ``OutcomeModel.predict()`` — pure read, no side effects, no state mutation.
+        """
+        if not self._enabled:
+            return None, "not_available"
+        try:
+            from ..models.outcome import OutcomePredictionContext
+            zr = self._runtime._zone(self._zone)
+            model = zr.orchestrator.models.get("outcome")
+            if model is None:
+                return None, "not_available"
+            pred = model.predict(OutcomePredictionContext())
+            if getattr(pred, "fallback_used", True):
+                return None, "cold_start"
+            quality = pred.values.get("outcome_quality")
+            if quality is None:
+                return None, "cold_start"
+            return round(float(quality) * 100, 1), "valid"
+        except Exception as err:
+            self._record_error("outcome_score_read", err)
+        return None, "not_available"
+
+    def read_outcome_attributes_safe(self) -> dict:
+        """Read LE 2.0 outcome diagnostics for entity extra_state_attributes.
+
+        Pure read — no side effects, no state mutation.
+        """
+        if not self._enabled:
+            return {"data_status": "not_available", "data_source": "current_learning_engine"}
+        try:
+            zr = self._runtime._zone(self._zone)
+            model = zr.orchestrator.models.get("outcome")
+            if model is None:
+                return {"data_status": "not_available", "data_source": "current_learning_engine"}
+            diag = model.diagnostics()
+            sample_count = diag.sample_counts.get("general", 0)
+            if sample_count == 0:
+                outcome_status = "cold_start"
+            elif sample_count < 5:
+                outcome_status = "learning"
+            else:
+                outcome_status = "learned"
+            return {
+                "data_source": "current_learning_engine",
+                "outcome_status": outcome_status,
+                "sample_count": sample_count,
+                "reached_rate": diag.reached_rate,
+                "timeout_rate": diag.timeout_rate,
+                "overshoot_rate": diag.overshoot_rate,
+                "last_update": diag.last_update_ts,
+            }
+        except Exception as err:
+            self._record_error("outcome_attrs_read", err)
+        return {"data_status": "not_available", "data_source": "current_learning_engine"}
+
+    # Per-model real-data thresholds for learning progress.
+    # Only episode-driven model updates count; prior/fallback state is excluded.
+    _PROGRESS_THRESHOLDS: dict[str, int] = {
+        "heat_rate": 10,
+        "heat_loss": 10,
+        "afterheat": 5,
+        "onset_delay": 5,
+        "outcome": 5,
+    }
+
+    def learning_progress_safe(self) -> tuple[float, dict]:
+        """Learning progress from zone-specific real model updates (0.0–100.0 %, attributes).
+
+        Uses per-zone ``model_update_counts`` directly — only incremented when a real,
+        quality-passed episode drives an actual model update. Bootstrap, priors, fallback
+        values, and the confidence aggregator's output are explicitly excluded.
+
+        Returns ``(progress_pct, attributes)`` where ``progress_pct`` is 0.0 for a fresh
+        zone with no real heating data.
+        """
+        _cold = {
+            "data_source": "current_learning_engine",
+            "progress_status": "cold_start",
+            "eligible_heating_episodes": 0,
+            "eligible_outcome_samples": 0,
+            "eligible_trv_observations": 0,
+            "models_with_real_data": 0,
+            "models_total": len(self._PROGRESS_THRESHOLDS),
+            "bootstrap_excluded": True,
+            "historical_snapshot_used": False,
+            "reason": "no_valid_heating_episodes_yet",
+        }
+        if not self._enabled:
+            return 0.0, {**_cold, "reason": "learning_disabled"}
+        try:
+            zr = self._runtime._zone(self._zone)
+            counts = dict(zr.model_update_counts)
+
+            models_with_data = 0
+            total_saturation = 0.0
+            for model, threshold in self._PROGRESS_THRESHOLDS.items():
+                n = counts.get(model, 0)
+                if n > 0:
+                    models_with_data += 1
+                    total_saturation += min(1.0, n / threshold)
+
+            n_models = len(self._PROGRESS_THRESHOLDS)
+            progress_pct = round(total_saturation / n_models * 100.0, 1) if n_models else 0.0
+
+            if progress_pct == 0.0:
+                status, reason = "cold_start", "no_valid_heating_episodes_yet"
+            elif models_with_data < n_models:
+                status, reason = "learning", "partial_data"
+            else:
+                status, reason = "learned", "sufficient_data"
+
+            return progress_pct, {
+                "data_source": "current_learning_engine",
+                "progress_status": status,
+                "eligible_heating_episodes": counts.get("heat_rate", 0),
+                "eligible_outcome_samples": counts.get("outcome", 0),
+                "eligible_trv_observations": counts.get("onset_delay", 0),
+                "models_with_real_data": models_with_data,
+                "models_total": n_models,
+                "bootstrap_excluded": True,
+                "historical_snapshot_used": False,
+                "reason": reason,
+            }
+        except Exception as err:
+            self._record_error("learning_progress", err)
+        return 0.0, _cold
+
     def diagnostics(self) -> dict:
         h = self._runtime.health()
         return {

@@ -200,8 +200,11 @@
   },
   "entity": {
     "button": {
-      "export_learning_data": {
+      "create_research_export": {
         "name": "导出学习数据"
+      },
+      "create_support_export": {
+        "name": "Create Support Export"
       }
     },
     "climate": {

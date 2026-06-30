@@ -235,6 +235,7 @@ class LearningShadowController:
                  mode: LearningRuntimeMode = LearningRuntimeMode.SHADOW,
                  clock: Optional[Clock] = None) -> None:
         self._zone = zone_id
+        self._hass = hass
         self._enabled = True
         self._errors = 0
         self._error_signatures: dict[str, int] = {}
@@ -260,10 +261,19 @@ class LearningShadowController:
         self._pipeline = DecisionPipeline(
             resolver=FinalResolver(boost_runtime_limit=TPI_MAX_BOOST_CELSIUS))
         self._last_trace: Optional[dict] = None
-        # In-memory adaptation candidate history — reset on HA restart (by design).
+        # Adaptation candidate history — in-memory with persistent backing store.
         self._adaptation_history: dict = {}
         self._last_outcome_ts: Optional[str] = None
         self._adaptation_last_error: Optional[str] = None
+        self._adaptation_save_needed: bool = False
+        self._adaptation_store = None
+        try:
+            from ..storage.stores import AdaptationHistoryStore, HomeAssistantStoreFactory
+            self._adaptation_store = AdaptationHistoryStore(
+                HomeAssistantStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: history stays in-memory only
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -283,11 +293,14 @@ class LearningShadowController:
 
     async def async_setup(self) -> bool:
         try:
-            return await self._runtime.async_setup()
+            setup_ok = await self._runtime.async_setup()
         except Exception as err:  # learning setup failure must not fail the entry
             self._record_error("setup", err)
             self._enabled = False
             return False
+        # Load persisted adaptation history (non-fatal; errors in _adaptation_last_error)
+        await self._async_load_adaptation_history_safe()
+        return setup_ok
 
     def observe_safe(self, recommendation: Mapping[str, Any], *,
                      weather: Optional[Mapping[str, Any]] = None,
@@ -442,6 +455,12 @@ class LearningShadowController:
             )
             self._last_outcome_ts = new_ts
             self._adaptation_last_error = None
+            self._adaptation_save_needed = True
+            # Schedule best-effort async save (fire-and-forget; never blocks heating)
+            try:
+                self._hass.async_create_task(self._async_save_adaptation_history_safe())
+            except Exception:
+                pass  # not in HA event loop (tests) — will save via async_save_if_due
         except Exception as err:
             self._adaptation_last_error = str(err)
 
@@ -459,6 +478,41 @@ class LearningShadowController:
     def adaptation_last_error(self) -> Optional[str]:
         """Return the last error message from adaptation history accumulation, or None."""
         return self._adaptation_last_error
+
+    async def _async_load_adaptation_history_safe(self) -> None:
+        """Load persisted adaptation history. Non-fatal on missing or corrupt store."""
+        if self._adaptation_store is None:
+            return
+        try:
+            raw = await self._adaptation_store.load()
+            if raw is None:
+                return
+            from ..adaptation.history_store_schema import deserialize_history_state
+            state = deserialize_history_state(raw, self._zone)
+            if state.entries:
+                self._adaptation_history = dict(state.entries)
+        except Exception as err:
+            self._adaptation_last_error = str(err)
+
+    async def _async_save_adaptation_history_safe(self) -> None:
+        """Persist adaptation history best-effort. Non-fatal on error."""
+        if self._adaptation_store is None or not self._adaptation_save_needed:
+            return
+        try:
+            from ..adaptation.history_store_schema import (
+                AdaptationHistoryState, prune_history_entries, serialize_history_state,
+            )
+            now_ts = self._utcnow_iso()
+            entries = prune_history_entries(self._adaptation_history, now_ts=now_ts)
+            state = AdaptationHistoryState(
+                learning_zone_id=self._zone,
+                updated_at=now_ts,
+                entries=entries,
+            )
+            await self._adaptation_store.save(serialize_history_state(state))
+            self._adaptation_save_needed = False
+        except Exception as err:
+            self._adaptation_last_error = str(err)
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -2287,6 +2341,7 @@ class LearningShadowController:
             await self._runtime.async_save_if_due()
         except Exception as err:
             self._record_error("save", err)
+        await self._async_save_adaptation_history_safe()
 
     async def async_flush(self) -> None:
         try:
@@ -2300,6 +2355,8 @@ class LearningShadowController:
             await self._runtime.async_unload()
         except Exception as err:
             self._record_error("unload", err)
+        # Flush adaptation history (best-effort; saves if dirty)
+        await self._async_save_adaptation_history_safe()
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.

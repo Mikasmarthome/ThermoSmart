@@ -312,9 +312,7 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                         getattr(_om2, "_state", None), "aggregate_reliability", 0.0
                     ),
                     partial_ratio=(_pc / _total) if _total > 0 else 0.0,
-                    confounder_contamination=(
-                        (_rejections > _attempts * 0.20) if _attempts > 0 else False
-                    ),
+                    confounder_contamination=(_rejections > 0),
                 )
                 _sit = _adaptation_situation_context(
                     coord, zone_rt, last_update_ts=_od.last_update_ts
@@ -346,7 +344,9 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                                 _span = max(0.0, (_t1 - _t0).total_seconds() / 86400.0)
                         except Exception:
                             _span = 0.0
-                        _history_tuples.append((_entry, _span, 0.0))
+                        _history_tuples.append(
+                            (_entry, _span, _le2_confounder_ratio(coord, zone_id))
+                        )
             safe["adaptation_candidate_history"] = _le2_adaptation_history_for_research(
                 _history_tuples
             )
@@ -459,6 +459,28 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
         return None
 
 
+def _le2_confounder_ratio(coord: Any, zone_id: str) -> float:
+    """Compute rejection-based confounder ratio from the outcome model. Returns 0.0 on error."""
+    try:
+        rt = _le2_runtime(coord)
+        if rt is None:
+            return 0.0
+        zr = rt._zones.get(zone_id)
+        if zr is None:
+            return 0.0
+        om = zr.orchestrator.models.get("outcome")
+        if om is None:
+            return 0.0
+        d = om.diagnostics()
+        fc, pc = d.full_partial
+        total = fc + pc
+        rej = sum(d.rejection_counts.values()) if d.rejection_counts else 0
+        att = total + rej
+        return float(rej / att) if att > 0 else 0.0
+    except Exception:
+        return 0.0
+
+
 def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
     """Return adaptation candidate history summary for support export.
 
@@ -491,7 +513,10 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
                         span_days = max(0.0, (t1 - t0).total_seconds() / 86400.0)
                 except Exception:
                     pass
-                pgr = evaluate_promotion_readiness(entry, span_days=span_days, confounder_ratio=0.0)
+                pgr = evaluate_promotion_readiness(
+                    entry, span_days=span_days,
+                    confounder_ratio=_le2_confounder_ratio(coord, zone_id),
+                )
                 if pgr.readiness is PromotionReadiness.ELIGIBLE:
                     ready += 1
                 else:

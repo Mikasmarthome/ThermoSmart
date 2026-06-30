@@ -32,6 +32,7 @@ from .registry import (
 from .raw_schemas import RawTrackName
 from .storage import naming
 from .storage.stores import (
+    AdaptationHistoryStore,
     EpisodesStore,
     GlobalIndexStore,
     ModelStateStore,
@@ -334,6 +335,10 @@ async def reset_v2_learning_state(
     await EpisodesStore(factory, lz).delete()
     await ModelStateStore(factory, lz).delete()
     await ZoneMetadataStore(factory, lz).delete()
+    try:
+        await AdaptationHistoryStore(factory, lz).delete()
+    except Exception:
+        pass  # non-fatal: store may not exist yet on first reset
 
     if not reinitialize:
         return InitializationResult(

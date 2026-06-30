@@ -81,3 +81,8 @@ def model_state_key(learning_zone_id: str) -> str:
 def global_index_key() -> str:
     """The single global index store key (a reconstructable cache)."""
     return f"{_PREFIX}__global_index"
+
+
+def adaptation_history_key(learning_zone_id: str) -> str:
+    """Store key for the passive adaptation candidate history of one zone."""
+    return _key(learning_zone_id, "adaptation_history")

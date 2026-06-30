@@ -66,6 +66,7 @@ class SituationContext:
     preheat_minutes_used:  Optional[float] = None
     active_control:        Optional[bool]  = None   # zone in active control vs observation
     learning_enabled:      Optional[bool]  = None   # learning switch state
+    context_time_source:   Optional[str]   = None   # "model_last_update" | "unavailable"
 
     def to_dict(self) -> dict:
         return {
@@ -82,6 +83,7 @@ class SituationContext:
             "preheat_minutes_used": self.preheat_minutes_used,
             "active_control":       self.active_control,
             "learning_enabled":     self.learning_enabled,
+            "context_time_source":  self.context_time_source,
         }
 
 

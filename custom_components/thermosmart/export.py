@@ -316,7 +316,9 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                         (_rejections > _attempts * 0.20) if _attempts > 0 else False
                     ),
                 )
-                _sit = _adaptation_situation_context(coord, zone_rt)
+                _sit = _adaptation_situation_context(
+                    coord, zone_rt, last_update_ts=_od.last_update_ts
+                )
                 _traces = suggest_candidates(
                     zone_id, _signal, _sit, _od.last_update_ts or ""
                 )
@@ -404,7 +406,7 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
                 (_rejections > _attempts * 0.20) if _attempts > 0 else False
             ),
         )
-        _sit = _adaptation_situation_context(coord, zone_rt)
+        _sit = _adaptation_situation_context(coord, zone_rt, last_update_ts=_od.last_update_ts)
         try:
             import dataclasses as _dc
             _ctx_available = any(
@@ -432,16 +434,21 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
         return None
 
 
-def _adaptation_situation_context(coord: Any, zone_rt: Any) -> Any:
+def _adaptation_situation_context(
+    coord: Any, zone_rt: Any, last_update_ts: Optional[str] = None
+) -> Any:
     """Build an enriched SituationContext for passive adaptation candidates.
 
-    Reads from coordinator.data and the last OutcomeModel sample. All access
-    is defensive — missing data leaves the corresponding field None. Never raises;
-    falls back to an empty SituationContext on any unexpected error.
+    Reads from coordinator.data and the last OutcomeModel sample. Time-of-day
+    and weekday are derived from last_update_ts (OutcomeDiagnostics.last_update_ts
+    = episode.end_ts of the last accepted outcome) — never from the current
+    wall-clock, so the same model state always produces the same context.
+
+    All access is defensive — missing data leaves the corresponding field None.
+    Never raises; falls back to an empty SituationContext on any unexpected error.
     """
     from .learning.adaptation import SituationContext
     try:
-        from datetime import timezone
         _OUTDOOR_EDGES = (-10.0, -5.0, 0.0, 5.0, 10.0, 15.0)
 
         zdata = (getattr(coord, "data", None) or {}).get("zone", {}) or {}
@@ -489,11 +496,23 @@ def _adaptation_situation_context(coord: Any, zone_rt: Any) -> Any:
         except Exception:
             pass
 
-        # ── time of day / weekday from export timestamp ───────────────────────
-        _now = datetime.now(tz=timezone.utc)
-        time_of_day_bucket = _now.hour
-        weekday            = _now.weekday()
-        is_weekend         = weekday >= 5
+        # ── time of day / weekday from last outcome timestamp (deterministic) ─
+        # Derived from OutcomeDiagnostics.last_update_ts = episode.end_ts of the
+        # last accepted outcome — NOT from datetime.now() so that the same model
+        # state always produces the same context values.
+        time_of_day_bucket: Optional[int]  = None
+        weekday:            Optional[int]  = None
+        is_weekend:         Optional[bool] = None
+        context_time_source = "unavailable"
+        if last_update_ts:
+            try:
+                _ts = datetime.fromisoformat(last_update_ts.replace("Z", "+00:00"))
+                time_of_day_bucket  = _ts.hour
+                weekday             = _ts.weekday()
+                is_weekend          = weekday >= 5
+                context_time_source = "model_last_update"
+            except Exception:
+                pass
 
         return SituationContext(
             controller_kind=controller_kind,
@@ -513,6 +532,7 @@ def _adaptation_situation_context(coord: Any, zone_rt: Any) -> Any:
                 bool(active_control) if active_control is not None else None
             ),
             learning_enabled=learning_enabled,
+            context_time_source=context_time_source,
         )
     except Exception:
         from .learning.adaptation import SituationContext

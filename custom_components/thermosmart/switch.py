@@ -5,7 +5,7 @@ import logging
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 
@@ -223,6 +223,7 @@ class ThermoSmartGlobalDebugSwitch(SwitchEntity, RestoreEntity):
     _attr_has_entity_name = True
     _attr_translation_key = "debug_log"
     _attr_icon = "mdi:bug-check"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_unique_id = DOMAIN_GLOBAL_DEBUG
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry):

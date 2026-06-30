@@ -11,12 +11,14 @@ Exported data contains:
   - Export timestamp
   - Per-zone: TRV count, sensor counts, feature flags (booleans only)
   - Per-zone: all numeric learning data (observations, rates, confidence, …)
+  - Per-zone: LE2 model coefficient statistics (numeric only — no IDs)
 
 Exported data does NOT contain:
   - Passwords or authentication tokens of any kind
   - Entity IDs, device names, or integration names
   - Person names or user identifiers
   - Street addresses or geographic coordinates
+  - Decision IDs, episode IDs, or internal runtime identifiers
 
 Timestamps are intentionally retained:
   Observation timestamps (ts, hour, minute, weekday) are required for
@@ -33,17 +35,31 @@ has_forecast note:
 Zone identity: each zone_id (HA entry_id UUID) is replaced with a deterministic
 12-char hex digest.  Exports from the same installation share the same digests,
 making longitudinal data correlatable without being reversible.
+
+LE2 research data:
+  Only model coefficient aggregates are included (models, cycles,
+  last_cycle_ts, model_update_counts).  Fields containing IDs of any kind
+  (decision_id, episode_id, learning_zone_id, zone_id, …) are stripped
+  recursively before inclusion.  A privacy scan is performed as a final check.
+
+24h auto-delete:
+  Export files are scheduled for deletion 24 hours after creation using
+  async_call_later.  This schedule does NOT survive a Home Assistant restart.
+  If HA is restarted before the 24-hour window expires, the file remains until
+  the user deletes it manually or the next export overwrites the timer.
 """
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 import logging
 import os
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_call_later
 
 from .const import (
     DOMAIN,
@@ -63,7 +79,43 @@ _LOGGER = logging.getLogger(__name__)
 
 EXPORT_FORMAT_VERSION = 1
 _ANON_SALT = "thermosmart_le_export_v1"
+_EXPORT_CLEANUP_DELAY_S: float = 24 * 3600  # 24 hours; not restart-safe
 
+# ── LE2 privacy helpers ───────────────────────────────────────────────────────
+
+# Top-level keys safe to include from _ZoneRuntime.serialize().
+# Excluded: capture (contains zone_id + decision_id in ledger),
+#           pipeline (contains zone_id + open_decision_id),
+#           ledger (inside capture, contains decision_ids),
+#           baseline_store, pending_* (all contain decision-related IDs).
+_LE2_RESEARCH_SAFE_TOP_KEYS = frozenset(
+    {"models", "cycles", "last_cycle_ts", "model_update_counts"}
+)
+
+# Key substrings to strip recursively — mirrors privacy.py _FORBIDDEN_KEY_SUBSTRINGS
+# plus "zone_id" which the scanner does not catch standalone.
+_LE2_STRIP_KEY_SUBSTRINGS = (
+    "entity_id", "entry_id", "device_id", "decision_id", "episode_id", "event_id",
+    "evaluation_id", "user_id", "person", "email", "latitude", "longitude", "address",
+    "hostname", "ip_address", "ipaddr", "source_episode_id", "correction_event_id",
+    "source_decision_id", "trv_binding_id", "learning_zone_id", "zone_id",
+)
+
+
+def _le2_strip_forbidden(obj: Any) -> Any:
+    """Recursively remove keys matching LE2 privacy-forbidden substrings."""
+    if isinstance(obj, dict):
+        return {
+            k: _le2_strip_forbidden(v)
+            for k, v in obj.items()
+            if not (isinstance(k, str) and any(s in k.lower() for s in _LE2_STRIP_KEY_SUBSTRINGS))
+        }
+    if isinstance(obj, list):
+        return [_le2_strip_forbidden(i) for i in obj]
+    return obj
+
+
+# ── zone helpers ─────────────────────────────────────────────────────────────
 
 def _zone_hash(zone_id: str) -> str:
     """Deterministic 12-char hex digest — correlatable across exports, not reversible."""
@@ -156,9 +208,6 @@ def _compute_analytics(learning: dict) -> dict:
     )
 
     # --- contaminated / clean heat_rate -----------------------------------
-    # Contaminated: heat_rate present but delta < -1.0 (room clearly below target,
-    # reading reflects catch-up heating rather than steady-state performance).
-    # Clean: heat_rate present and delta >= -1.0.
     contaminated_heat_rate_count = sum(
         1 for obs in observations
         if "heat_rate" in obs and obs.get("delta", 0.0) < -1.0
@@ -196,20 +245,123 @@ def _compute_analytics(learning: dict) -> dict:
     }
 
 
+# ── LE2 data accessors ────────────────────────────────────────────────────────
+
+def _le2_runtime(coord):
+    """Safely return the LE2 LearningRuntime from a coordinator, or None."""
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return None
+        return getattr(shadow, "runtime", None)
+    except Exception:
+        return None
+
+
+def _le2_research_data(coord, zone_id: str) -> dict | None:
+    """Return privacy-safe LE2 model statistics for research export, or None.
+
+    Only includes top-level keys from _LE2_RESEARCH_SAFE_TOP_KEYS (models,
+    cycles, last_cycle_ts, model_update_counts).  All fields whose key contains
+    a forbidden substring (decision_id, learning_zone_id, zone_id, …) are
+    stripped recursively before inclusion.  A final privacy scan confirms no
+    violations remain; if any do, the LE2 block is excluded for that zone.
+    """
+    try:
+        rt = _le2_runtime(coord)
+        if rt is None:
+            return None
+        zone_rt = rt._zones.get(zone_id)
+        if zone_rt is None:
+            return None
+        raw = zone_rt.serialize()
+        # 1. Allowlist: only safe top-level sections
+        filtered = {k: v for k, v in raw.items() if k in _LE2_RESEARCH_SAFE_TOP_KEYS}
+        # 2. Recursive strip of forbidden keys within allowed sections
+        safe = _le2_strip_forbidden(filtered)
+        # 3. Final privacy scan (belt-and-suspenders)
+        try:
+            from .learning.privacy import scan_payload
+            violations = scan_payload(safe)
+            if violations:
+                _LOGGER.warning(
+                    "ThermoSmart: LE2 research data for zone %s has %d residual privacy "
+                    "violation(s) after stripping — LE2 block excluded for this zone. "
+                    "Violations: %s",
+                    _zone_hash(zone_id), len(violations),
+                    [(v.path, v.kind) for v in violations[:5]],
+                )
+                return None
+        except Exception as scan_err:
+            _LOGGER.debug("ThermoSmart: LE2 privacy scan skipped: %s", scan_err)
+        return safe
+    except Exception:
+        return None
+
+
+def _le2_health_data(coord) -> dict | None:
+    """Return LE2 RuntimeHealth as a plain dict for support export, or None."""
+    try:
+        rt = _le2_runtime(coord)
+        if rt is None:
+            return None
+        return dataclasses.asdict(rt.health())
+    except Exception:
+        return None
+
+
+def _le2_pending_data(coord, zone_id: str) -> dict | None:
+    """Return LE2 pending-attribution summary for support export, or None."""
+    try:
+        rt = _le2_runtime(coord)
+        if rt is None:
+            return None
+        return rt.pending_attribution_summary(zone_id)
+    except Exception:
+        return None
+
+
+def _resolve_clock(hass: HomeAssistant) -> datetime | None:
+    """Return a UTC timestamp from the first available coordinator clock."""
+    for entry_data in hass.data.get(DOMAIN, {}).values():
+        if isinstance(entry_data, dict):
+            coord = entry_data.get("coordinator")
+            if coord is not None and hasattr(coord, "_clock"):
+                try:
+                    return coord._clock.now_utc()
+                except Exception:
+                    pass
+    return None
+
+
+# ── cleanup scheduler ─────────────────────────────────────────────────────────
+
+def _schedule_export_cleanup(hass: HomeAssistant, filepath: str) -> None:
+    """Schedule deletion of an export file after 24 h.
+
+    Best-effort: the timer runs in the current HA session only and does NOT
+    survive a restart.  If HA restarts before 24 h, the file remains until the
+    user deletes it or until this timer fires in a future session.
+    """
+    def _cleanup(_now: datetime) -> None:
+        try:
+            os.remove(filepath)
+            _LOGGER.debug("ThermoSmart: auto-deleted export file after 24 h: %s", filepath)
+        except FileNotFoundError:
+            pass
+        except OSError as err:
+            _LOGGER.warning("ThermoSmart: could not delete export file %s: %s", filepath, err)
+
+    async_call_later(hass, _EXPORT_CLEANUP_DELAY_S, _cleanup)
+
+
+# ── export functions ──────────────────────────────────────────────────────────
+
 async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
-    """Build anonymized export, write to /config/www/, return absolute file path."""
+    """Build anonymized research export covering all zones, write to /config/www/."""
     le: LearningEngine | None = hass.data.get(DOMAIN, {}).get("learning_engine")
     if ts is None:
-        # Derive timestamp from the first available coordinator clock (single time authority).
-        for entry_data in hass.data.get(DOMAIN, {}).values():
-            if isinstance(entry_data, dict):
-                coord = entry_data.get("coordinator")
-                if coord is not None and hasattr(coord, "_clock"):
-                    try:
-                        ts = coord._clock.now_utc()
-                    except Exception:
-                        pass
-                    break
+        ts = _resolve_clock(hass)
     if ts is None:
         raise RuntimeError(
             "async_export_learning_data: no coordinator clock available — "
@@ -224,21 +376,27 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
         if cfg.get("entry_type") == "system":
             continue
 
+        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        coord = entry_data.get("coordinator") if isinstance(entry_data, dict) else None
+
         meta = _zone_meta(cfg)
         learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
         analytics = _compute_analytics(learning)
+        le2 = _le2_research_data(coord, entry.entry_id) if coord is not None else None
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
             **meta,
-            "learning": learning,
+            "historical_learning_snapshot": learning,
             "analytics": analytics,
+            "runtime_models": le2,
         })
 
     export: dict = {
         "thermosmart_version": VERSION,
+        "export_type": "research",
         "export_format_version": EXPORT_FORMAT_VERSION,
-        "export_timestamp": now.isoformat(),
+        "export_timestamp": ts.isoformat(),
         "zone_count": len(zones),
         "total_trv_count": sum(z["trv_count"] for z in zones),
         "total_temp_sensor_count": sum(z["temp_sensor_count"] for z in zones),
@@ -249,7 +407,7 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
     www_dir = hass.config.path("www")
     os.makedirs(www_dir, exist_ok=True)
     random_suffix = os.urandom(3).hex()
-    filename = f"thermosmart_export_{ts_str}_{random_suffix}.json"
+    filename = f"thermosmart_research_{ts_str}_{random_suffix}.json"
     filepath = os.path.join(www_dir, filename)
 
     def _write() -> None:
@@ -257,20 +415,113 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             json.dump(export, fh, indent=2, ensure_ascii=False, default=str)
 
     await hass.async_add_executor_job(_write)
-    _LOGGER.info("ThermoSmart: anonymized export written → %s", filepath)
+    _schedule_export_cleanup(hass, filepath)
+    _LOGGER.info("ThermoSmart: research export written → %s", filepath)
     return filepath
 
 
-def build_export_notification_message(filename: str) -> str:
-    """Return the persistent notification message for a completed export.
+async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
+    """Build a support-oriented export covering all zones, write to /config/www/."""
+    from homeassistant.const import __version__ as HA_VERSION  # noqa: PLC0415
 
-    Single source of truth — used by both the service handler and the button entity.
-    """
+    if ts is None:
+        ts = _resolve_clock(hass)
+    if ts is None:
+        raise RuntimeError(
+            "async_export_support_data: no coordinator clock available — "
+            "ensure at least one zone is configured before exporting."
+        )
+    ts_str = ts.strftime("%Y%m%dT%H%M%S")
+
+    all_entries = [
+        e for e in hass.config_entries.async_entries(DOMAIN)
+        if {**e.data, **e.options}.get("entry_type") != "system"
+    ]
+
+    zones: list[dict] = []
+    for entry in all_entries:
+        cfg = {**entry.data, **entry.options}
+
+        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+        coord = entry_data.get("coordinator") if isinstance(entry_data, dict) else None
+
+        zone_info: dict = {
+            "zone_hash": _zone_hash(entry.entry_id),
+            "config_flags": _zone_meta(cfg),
+        }
+
+        if coord is not None:
+            zone_info["runtime_state"] = {
+                "active_control": getattr(coord, "_active_control", None),
+                "learning_enabled": getattr(coord, "_learning_enabled", None),
+                "current_mode": getattr(coord, "_current_mode", None),
+                "confidence": round(float(getattr(coord, "_confidence", 0.0) or 0.0), 3),
+            }
+            zone_info["runtime_health"] = _le2_health_data(coord)
+            zone_info["runtime_pending"] = _le2_pending_data(coord, entry.entry_id)
+        else:
+            zone_info["runtime_state"] = None
+            zone_info["runtime_health"] = None
+            zone_info["runtime_pending"] = None
+
+        zones.append(zone_info)
+
+    export: dict = {
+        "thermosmart_version": VERSION,
+        "export_type": "support",
+        "export_format_version": EXPORT_FORMAT_VERSION,
+        "export_timestamp": ts.isoformat(),
+        "system": {
+            "ha_version": HA_VERSION,
+            "zone_count": len(zones),
+        },
+        "zones": zones,
+    }
+
+    www_dir = hass.config.path("www")
+    os.makedirs(www_dir, exist_ok=True)
+    random_suffix = os.urandom(3).hex()
+    filename = f"thermosmart_support_{ts_str}_{random_suffix}.json"
+    filepath = os.path.join(www_dir, filename)
+
+    def _write() -> None:
+        with open(filepath, "w", encoding="utf-8") as fh:
+            json.dump(export, fh, indent=2, ensure_ascii=False, default=str)
+
+    await hass.async_add_executor_job(_write)
+    _schedule_export_cleanup(hass, filepath)
+    _LOGGER.info("ThermoSmart: support export written → %s", filepath)
+    return filepath
+
+
+# ── notification messages ─────────────────────────────────────────────────────
+
+def build_export_notification_message(filename: str) -> str:
+    """Return the persistent notification message for a completed research export."""
     return (
-        f"Export saved to `/config/www/{filename}`.\n\n"
-        "To open the export file, append this path to your Home Assistant URL:\n\n"
-        f"`/local/{filename}`\n\n"
-        "The file will open as JSON in your browser. "
-        "To save it, use **Save Page As…** (Ctrl+S / Cmd+S).\n\n"
-        "Review the file before sharing. No data has been sent anywhere."
+        "ThermoSmart Research-Export wurde erstellt.\n\n"
+        "Die Datei enthält detailliertere anonymisierte technische Lern-, Sensor-, "
+        "Entscheidungs- und Ergebnisdaten. Sie ist zur Analyse und Weiterentwicklung "
+        "von ThermoSmart gedacht.\n\n"
+        "Die Datei enthält keine Raum- oder Zonennamen, Entity-IDs, Geräte-IDs, "
+        "Adressen oder exakten Standortdaten. Prüfe die Datei vor dem Teilen.\n\n"
+        "Die Datei wurde nur lokal erstellt, nicht hochgeladen oder übertragen. "
+        "Sie wird nach 24 Stunden automatisch gelöscht "
+        "(sofern Home Assistant bis dahin nicht neu gestartet wurde).\n\n"
+        f"**Datei:**\n`/config/www/{filename}`\n\n"
+        f"**Öffnen:**\n`/local/{filename}`"
+    )
+
+
+def build_support_notification_message(filename: str) -> str:
+    """Return the persistent notification message for a completed support export."""
+    return (
+        "ThermoSmart Support-Export wurde erstellt.\n\n"
+        "Die Datei enthält zusammengefasste datenschutzfreundliche "
+        "Diagnoseinformationen.\n\n"
+        "Sie wird nach 24 Stunden automatisch gelöscht "
+        "(sofern Home Assistant bis dahin nicht neu gestartet wurde).\n\n"
+        f"**Datei:**\n`/config/www/{filename}`\n\n"
+        f"**Öffnen:**\n`/local/{filename}`\n\n"
+        "Prüfe die Datei vor dem Teilen. Es wurden keine Daten übertragen."
     )

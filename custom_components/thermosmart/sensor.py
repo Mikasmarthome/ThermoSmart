@@ -7,7 +7,7 @@ from homeassistant.components.sensor import SensorDeviceClass, SensorEntity, Sen
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfTemperature
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -168,28 +168,25 @@ class ThermoSmartConfidenceSensor(_Base):
 
     @property
     def native_value(self):
-        return round((self._zone.get("learning_confidence", 0.0) * 100), 1)
-
-    @property
-    def extra_state_attributes(self) -> dict:
-        # Phase 19A-B: confidence breakdown is sourced from LE 2.0 (display adapter),
-        # never from the frozen legacy engine. No LE 2.0 => neutral empty attributes.
         shadow = getattr(self.coordinator, "_le2_shadow", None)
         if shadow is None:
-            return {}
-        breakdown = shadow.confidence_display_attributes()
-        combined = self._zone.get("learning_confidence", 0.0)
-        phase = "learning" if combined < 0.5 else "confident"
-        return {
-            "learning_phase": phase,
-            "room_patterns_%": breakdown.get("room_patterns_%", 0.0),
-            "trv_efficiency_%": breakdown.get("trv_efficiency_%", 0.0),
-            "window_cooling_%": breakdown.get("window_cooling_%", 0.0),
-            "forecast_confidence_%": breakdown.get("forecast_confidence_%", 0.0),
-            "total_observations": breakdown.get("total_observations", 0),
-            "trv_observations": breakdown.get("trv_observations", 0),
-            "window_events": breakdown.get("window_events", 0),
-        }
+            return 0.0
+        progress_pct, _ = shadow.learning_progress_safe()
+        return progress_pct
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is None:
+            return {
+                "data_source": "current_learning_engine",
+                "progress_status": "cold_start",
+                "reason": "shadow_unavailable",
+                "bootstrap_excluded": True,
+                "historical_snapshot_used": False,
+            }
+        _, attrs = shadow.learning_progress_safe()
+        return attrs
 
 
 class ThermoSmartWeatherOffsetSensor(_Base):
@@ -293,6 +290,7 @@ class ThermoSmartStatusSensor(_Base):
 class ThermoSmartTempSlopeSensor(_Base):
     """Temperature change rate – positive = warming, negative = cooling."""
     _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "temp_slope"
 
     def __init__(self, coordinator, entry):
@@ -325,6 +323,7 @@ class ThermoSmartHeatingPowerSensor(_Base):
     K/min display.  LE v1 is no longer read for this value.
     """
     _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "heating_power"
 
     def __init__(self, coordinator, entry):
@@ -405,6 +404,7 @@ class ThermoSmartHeatLossRateSensor(_Base):
     K/min display.  LE v1 is no longer read for this value when shadow is attached.
     """
     _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "heat_loss"
 
     def __init__(self, coordinator, entry):
@@ -477,11 +477,10 @@ class ThermoSmartSunIntensitySensor(_Base):
 class ThermoSmartOutcomeScoreSensor(_Base):
     """Outcome score of recent heating sessions (0–100%).
 
-    Rates how well a heating session performed:
-    - Target reached quickly and accurately → high score
-    - Target reached late or not at all → low score
-    - Strong overshoot → low score
-    Works for both active control and observation mode.
+    Sourced from the active zone-separated learning engine (OutcomeModel).
+    Returns None while in cold start (no episodes yet); updates as episodes
+    are completed and evaluated. Uses the weighted performance score across
+    physical target achievement, comfort quality and controller quality.
     """
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "outcome_score"
@@ -495,27 +494,24 @@ class ThermoSmartOutcomeScoreSensor(_Base):
 
     @property
     def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is None:
             return None
-        stats = le.get_outcome_stats(self.coordinator.zone_id)
-        return stats.get("avg_score_%")
+        score_pct, _status = shadow.read_outcome_score_safe()
+        return score_pct
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {"data_status": "learning"}
-        stats = le.get_outcome_stats(self.coordinator.zone_id)
-        attrs = dict(stats)
-        if stats.get("avg_score_%") is None:
-            attrs["data_status"] = "learning"
-        return attrs
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is None:
+            return {"data_source": "current_learning_engine", "data_status": "not_available"}
+        return shadow.read_outcome_attributes_safe()
 
 
 class ThermoSmartTRVObservationsSensor(_Base):
     """Number of learned TRV setpoint observations from observation mode."""
     _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "trv_observations"
 
     def __init__(self, coordinator, entry):
@@ -527,20 +523,24 @@ class ThermoSmartTRVObservationsSensor(_Base):
 
     @property
     def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
-            return 0
-        return le.get_trv_stats(self.coordinator.zone_id).get("trv_observations", 0)
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is not None:
+            breakdown = shadow.confidence_display_attributes()
+            return breakdown.get("trv_observations", 0)
+        return 0
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {}
-        stats = le.get_trv_stats(self.coordinator.zone_id)
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is not None:
+            breakdown = shadow.confidence_display_attributes()
+            return {
+                "source": "runtime",
+                "window_events": breakdown.get("window_events", 0),
+                "mode": "observation" if not self.coordinator._active_control else "active",
+            }
         return {
-            "setpoint_efficiency": stats.get("avg_setpoint_efficiency"),
-            "window_cooling_rate": stats.get("avg_window_cooling_rate"),
+            "source": "unavailable",
             "mode": "observation" if not self.coordinator._active_control else "active",
         }
 
@@ -552,6 +552,7 @@ class ThermoSmartTempEma1hSensor(_Base):
     Useful for detecting whether the room is genuinely warming or cooling over time.
     """
     _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "temp_ema_1h"
 
     def __init__(self, coordinator, entry):
@@ -575,6 +576,7 @@ class ThermoSmartWindowCoolingRateSensor(_Base):
     Returns None until at least 2 window events have been recorded.
     """
     _attr_entity_registry_enabled_default = False
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "window_cooling_rate"
 
     def __init__(self, coordinator, entry):
@@ -586,23 +588,19 @@ class ThermoSmartWindowCoolingRateSensor(_Base):
 
     @property
     def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
-            return None
-        data = self.coordinator.data or {}
-        weather = data.get("weather", {})
-        return le.get_window_cooling_rate(self.coordinator.zone_id, weather)
+        # LE1 is frozen — its window cooling rate is a historical snapshot, never updated.
+        # LE2 models window cooling via HeatLossModel but has no dedicated public
+        # read method for K/min rate yet. Return None until a live source exists.
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {"data_status": "learning"}
-        data = self.coordinator.data or {}
-        weather = data.get("weather", {})
-        val = le.get_window_cooling_rate(self.coordinator.zone_id, weather)
-        stats = le.get_trv_stats(self.coordinator.zone_id)
-        attrs: dict[str, Any] = {"window_events": stats.get("window_observations", 0)}
-        if val is None:
-            attrs["data_status"] = "learning"
-        return attrs
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is not None:
+            breakdown = shadow.confidence_display_attributes()
+            return {
+                "data_status": "learning",
+                "window_events": breakdown.get("window_events", 0),
+                "source": "runtime",
+            }
+        return {"data_status": "learning"}

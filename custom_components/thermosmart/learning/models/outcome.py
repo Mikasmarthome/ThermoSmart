@@ -303,6 +303,7 @@ class OutcomeSample:
     builder_version: int
     classifier_version: int
     reason_codes: tuple[str, ...]
+    confounder_flags: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -706,7 +707,8 @@ class OutcomeModel:
             partial=partial, scoring_version=SCORING_VERSION,
             feature_extractor_version=self._extractor_version(),
             builder_version=episode.builder_version,
-            classifier_version=episode.classifier_version, reason_codes=ev.reason_codes)
+            classifier_version=episode.classifier_version, reason_codes=ev.reason_codes,
+            confounder_flags=tuple(getattr(episode, "confounder_flags", ())))
 
         processed = (self._state.processed_ids + (episode.episode_id,))[-self._params.dedup_max_ids:]
         processed_dec = (self._state.processed_decision_ids
@@ -867,14 +869,24 @@ class OutcomeModel:
                 "scoring_version": SCORING_VERSION,
             }
         if scope is ExportScope.RESEARCH:
+            cap = self._params.research_sample_cap
+            total = s.general.sample_count
+            exported = len(s.recent_samples)
             return {
                 "samples": [
                     {"physical": x.physical_score, "comfort": x.comfort_score,
                      "controller": x.controller_score, "data_quality": x.data_quality_score,
                      "performance": x.performance_score, "reason": x.reason,
-                     "partial": x.partial, "scoring_version": x.scoring_version}
+                     "partial": x.partial, "scoring_version": x.scoring_version,
+                     "confounder_codes": list(x.confounder_flags)}
                     for x in s.recent_samples
                 ],
+                "truncation_info": {
+                    "max_samples": cap,
+                    "total_samples": total,
+                    "exported_samples": exported,
+                    "truncated": total > cap,
+                },
                 "scoring_version": SCORING_VERSION, "model_version": MODEL_VERSION,
             }
         return {"unsupported": "raw_export_not_provided_by_model"}
@@ -1029,6 +1041,7 @@ def _sample_dict(x: OutcomeSample) -> dict:
         "feature_extractor_version": x.feature_extractor_version,
         "builder_version": x.builder_version, "classifier_version": x.classifier_version,
         "reason_codes": list(x.reason_codes),
+        "confounder_flags": list(x.confounder_flags),
     }
 
 
@@ -1043,7 +1056,8 @@ def _sample_from(d: Mapping[str, Any]) -> OutcomeSample:
         scoring_version=d["scoring_version"],
         feature_extractor_version=d["feature_extractor_version"],
         builder_version=d["builder_version"], classifier_version=d["classifier_version"],
-        reason_codes=tuple(d.get("reason_codes", [])))
+        reason_codes=tuple(d.get("reason_codes", [])),
+        confounder_flags=tuple(d.get("confounder_flags", [])))
 
 
 def outcome_model_definition():

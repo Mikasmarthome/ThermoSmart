@@ -8,13 +8,26 @@ from homeassistant.components.button import ButtonEntity
 from homeassistant.components.persistent_notification import async_create as _pn_create
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo
+from homeassistant.helpers.entity import DeviceInfo, EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, VERSION
-from .export import async_export_learning_data, build_export_notification_message
+from .export import (
+    async_export_learning_data,
+    async_export_support_data,
+    build_export_notification_message,
+    build_support_notification_message,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+_DEVICE_INFO = DeviceInfo(
+    identifiers={(DOMAIN, "global")},
+    name="ThermoSmart System",
+    manufacturer="ThermoSmart",
+    model="Global Control",
+    sw_version=VERSION,
+)
 
 
 async def async_setup_entry(
@@ -23,35 +36,59 @@ async def async_setup_entry(
     cfg = {**entry.data, **entry.options}
     if cfg.get("entry_type") != "system":
         return
-    async_add_entities([ThermoSmartExportButton(hass, entry)])
+    async_add_entities([
+        ThermoSmartResearchExportButton(hass, entry),
+        ThermoSmartSupportExportButton(hass, entry),
+    ])
 
 
-class ThermoSmartExportButton(ButtonEntity):
-    """Button that triggers a voluntary anonymized learning data export."""
+class ThermoSmartResearchExportButton(ButtonEntity):
+    """Button that triggers an anonymized learning-data research export."""
 
     _attr_has_entity_name = True
-    _attr_translation_key = "export_learning_data"
+    _attr_translation_key = "create_research_export"
     _attr_icon = "mdi:database-export-outline"
+    _attr_entity_category = EntityCategory.CONFIG
+    # Stable unique_id — unchanged from the original export button so existing
+    # HA entity registry entries are updated in-place (no orphan entity).
     _attr_unique_id = f"{DOMAIN}_export_learning_data"
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
         self._hass = hass
-        self._attr_device_info = DeviceInfo(
-            identifiers={(DOMAIN, "global")},
-            name="ThermoSmart System",
-            manufacturer="ThermoSmart",
-            model="Global Control",
-            sw_version=VERSION,
-        )
+        self._attr_device_info = _DEVICE_INFO
 
     async def async_press(self) -> None:
-        """Run the export and show a persistent notification with the file path."""
         filepath = await async_export_learning_data(self._hass)
         filename = os.path.basename(filepath)
         _pn_create(
             self._hass,
             message=build_export_notification_message(filename),
-            title="ThermoSmart — Learning Data Export",
-            notification_id="thermosmart_export",
+            title="ThermoSmart – Research-Export",
+            notification_id="thermosmart_research_export",
         )
-        _LOGGER.info("ThermoSmart: export button pressed → %s", filename)
+        _LOGGER.info("ThermoSmart: research export button pressed → %s", filename)
+
+
+class ThermoSmartSupportExportButton(ButtonEntity):
+    """Button that triggers a support-oriented diagnostics export."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "create_support_export"
+    _attr_icon = "mdi:face-agent"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_unique_id = f"{DOMAIN}_create_support_export"
+
+    def __init__(self, hass: HomeAssistant, entry: ConfigEntry) -> None:
+        self._hass = hass
+        self._attr_device_info = _DEVICE_INFO
+
+    async def async_press(self) -> None:
+        filepath = await async_export_support_data(self._hass)
+        filename = os.path.basename(filepath)
+        _pn_create(
+            self._hass,
+            message=build_support_notification_message(filename),
+            title="ThermoSmart – Support-Export",
+            notification_id="thermosmart_support_export",
+        )
+        _LOGGER.info("ThermoSmart: support export button pressed → %s", filename)

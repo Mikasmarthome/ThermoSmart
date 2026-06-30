@@ -2275,6 +2275,9 @@ class LearningShadowController:
             "weighted_progress_raw": 0.0,
             "maturity_cap_applied": False,
             "maturity_cap": 5.0,
+            "quality_cap_applied": False,
+            "outcome_quality": None,
+            "time_maturity_available": False,
             "models_with_real_data": 0,
             "models_total": _n_models,
             "onset_delay_updates": 0,
@@ -2317,8 +2320,7 @@ class LearningShadowController:
             onset_updates = counts.get("onset_delay", 0)
             outcome_updates = counts.get("outcome", 0)
 
-            # Maturity cap: outcome samples are the primary maturity signal.
-            # Each tier unlocks more progress; high values require broad data.
+            # Layer 1 — Maturity cap: outcome sample count and core-model coverage.
             if core_with_data == 0:
                 cap_pct, cap_reason = 5.0, "auxiliary_model_only"
             elif outcome_updates == 0:
@@ -2338,10 +2340,43 @@ class LearningShadowController:
             else:
                 cap_pct, cap_reason = 75.0, "insufficient_core_thermal_models"
 
-            cap_applied = raw_pct > cap_pct
-            progress_pct = round(min(raw_pct, cap_pct), 1)
+            # Layer 2 — Quality cap: poor or unstable outcomes limit progress even with
+            # many samples. Applied only when enough samples make the rates meaningful.
+            # Quality signals from OutcomeModel.diagnostics() — all optional, all safe.
+            quality_cap = 100.0
+            quality_reason = None
+            outcome_quality_val = None
+            quality_cap_applied = False
+            _QUALITY_GATE_MIN = 8
+            if outcome_updates >= _QUALITY_GATE_MIN:
+                try:
+                    _om = zr.orchestrator.models.get("outcome")
+                    if _om is not None:
+                        _od = _om.diagnostics()
+                        t_rate = _od.timeout_rate or 0.0
+                        o_rate = _od.overshoot_rate or 0.0
+                        dq = _od.general_data_quality
+                        _fc, _pc = _od.full_partial
+                        p_ratio = _pc / (_fc + _pc) if (_fc + _pc) > 0 else 0.0
+                        outcome_quality_val = round(dq, 3)
+                        if t_rate > 0.40 or o_rate > 0.35 or dq < 0.30:
+                            quality_cap = 50.0
+                            quality_reason = "unstable_outcomes"
+                        elif t_rate > 0.25 or o_rate > 0.25 or dq < 0.45 or p_ratio > 0.60:
+                            quality_cap = 65.0
+                            quality_reason = "outcome_quality"
+                except Exception:
+                    pass  # quality gate failure is non-fatal
 
-            # Next outcome sample count that unlocks the next progress tier.
+            # Layer 2 is binding only when it further restricts beyond layer 1.
+            quality_cap_applied = quality_cap < cap_pct
+            final_cap = min(cap_pct, quality_cap)
+            final_reason = quality_reason if quality_cap_applied else cap_reason
+
+            cap_applied = raw_pct > final_cap
+            progress_pct = round(min(raw_pct, final_cap), 1)
+
+            # Next outcome sample count that unlocks the next maturity tier.
             next_stage = None
             if core_with_data > 0:
                 for _t in (3, 8, 20, 50):
@@ -2349,14 +2384,14 @@ class LearningShadowController:
                         next_stage = _t
                         break
 
-            # Status uses capped progress so it stays consistent with the displayed value.
+            # Status uses the fully capped progress for user-facing truthfulness.
             if progress_pct == 0.0:
                 status = "cold_start"
                 reason = "no_valid_heating_episodes_yet"
             elif core_with_data == 0:
                 status = "collecting_data"
                 reason = "auxiliary_model_only"
-            elif cap_reason == "none" and models_with_data == _n_models:
+            elif final_reason == "none" and models_with_data == _n_models:
                 status = "learned"
                 reason = "sufficient_data"
             else:
@@ -2369,14 +2404,17 @@ class LearningShadowController:
                 "weighted_progress": True,
                 "weighted_progress_raw": raw_pct,
                 "maturity_cap_applied": cap_applied,
-                "maturity_cap": cap_pct,
+                "maturity_cap": final_cap,
+                "quality_cap_applied": quality_cap_applied,
+                "outcome_quality": outcome_quality_val,
+                "time_maturity_available": False,
                 "models_with_real_data": models_with_data,
                 "models_total": _n_models,
                 "onset_delay_updates": onset_updates,
                 "outcome_samples": outcome_updates,
                 "core_thermal_models_with_data": core_with_data,
                 "dominant_model": best_model if best_contrib > 0.0 else "none",
-                "progress_limited_by": cap_reason,
+                "progress_limited_by": final_reason,
                 "required_outcome_samples_for_next_stage": next_stage,
                 "bootstrap_excluded": True,
                 "reason": reason,

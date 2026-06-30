@@ -1,16 +1,19 @@
 """Outcome Adaptation Engine — passive trace foundation.
 
 Public surface:
-  contracts  — CandidateType, AdaptationLifecycle, AdaptationDirection,
-               SituationContext, OutcomeSignal, AdaptationGateResult,
-               AdaptationTrace, make_adaptation_id
-  gates      — evaluate_gates()
-  candidates — suggest_candidates()
-  trace      — traces_for_export(), filter_by_lifecycle()
-  history    — CandidateIdentity, make_candidate_key,
-               candidate_identity_from_trace, CandidateHistoryEntry,
-               accumulate_into_history, PromotionReadiness,
-               PromotionGateResult, evaluate_promotion_readiness
+  contracts          — CandidateType, AdaptationLifecycle, AdaptationDirection,
+                       SituationContext, OutcomeSignal, AdaptationGateResult,
+                       AdaptationTrace, make_adaptation_id
+  gates              — evaluate_gates()
+  candidates         — suggest_candidates()
+  trace              — traces_for_export(), filter_by_lifecycle()
+  history            — CandidateIdentity, make_candidate_key,
+                       candidate_identity_from_trace, CandidateHistoryEntry,
+                       accumulate_into_history, PromotionReadiness,
+                       PromotionGateResult, evaluate_promotion_readiness
+  history_store_schema — AdaptationHistoryState, HISTORY_SCHEMA_VERSION,
+                         serialize_history_state, deserialize_history_state,
+                         prune_history_entries
 
 No HA imports. No runtime state. No control modifications.
 """
@@ -37,6 +40,13 @@ from .history import (
     evaluate_promotion_readiness,
     make_candidate_key,
 )
+from .history_store_schema import (
+    HISTORY_SCHEMA_VERSION,
+    AdaptationHistoryState,
+    deserialize_history_state,
+    prune_history_entries,
+    serialize_history_state,
+)
 
 __all__ = [
     "AdaptationDirection",
@@ -59,4 +69,9 @@ __all__ = [
     "candidate_identity_from_trace",
     "evaluate_promotion_readiness",
     "make_candidate_key",
+    "HISTORY_SCHEMA_VERSION",
+    "AdaptationHistoryState",
+    "deserialize_history_state",
+    "prune_history_entries",
+    "serialize_history_state",
 ]

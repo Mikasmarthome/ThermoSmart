@@ -1,5 +1,37 @@
 # ThermoSmart – Release Notes
 
+## v1.2.0-beta.3 – Beta
+
+> ⚠️ **Beta release** — for testing only. Not recommended for critical heating setups without backup monitoring. Feedback and issue reports are welcome.
+
+### Fixed
+
+- Fixed a mismatch between the ThermoSmart card learning progress display and the official Learning Progress sensor.
+- Fixed Support Export confidence reporting so it now uses the same learning progress source as the sensor, climate attribute, and card.
+- Fixed Research Export outcome diagnostics to include truncation metadata and public-safe confounder codes.
+- Fixed Research Export output so internal confounder storage keys are no longer exposed as public research fields.
+- Added clearer diagnostics for temperature slope when there is not enough temperature history yet.
+
+### Changed
+
+- Made Learning Progress more conservative and more trustworthy.
+- Learning Progress now uses weighted model contributions, maturity caps, and outcome-quality gates.
+- Auxiliary TRV/onset-delay data alone can now only contribute a small amount of progress.
+- High Learning Progress now requires stronger model coverage and better outcome quality.
+- Outcome Score is hidden until enough accepted outcome samples exist.
+- Updated system entity icons for Research Export, Support Export, and Debug Log to match the SmartShading icon language.
+
+### Removed
+
+- Removed an unused root-level icon asset. Integration and branding icons used by Home Assistant/HACS remain unchanged.
+
+### Notes
+
+- This is a beta release.
+- The Outcome Adaptation Engine is not part of this release. Outcome-to-action feedback, similar-situation matching, bounded adaptive corrections, and adoption/rollback will be developed separately.
+
+---
+
 ## v1.2.0-beta.2 – Beta
 
 > ⚠️ **Beta release** — for testing only. Not recommended for critical heating setups without backup monitoring. Feedback and issue reports are welcome.

@@ -279,7 +279,18 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
         filtered = {k: v for k, v in raw.items() if k in _LE2_RESEARCH_SAFE_TOP_KEYS}
         # 2. Recursive strip of forbidden keys within allowed sections
         safe = _le2_strip_forbidden(filtered)
-        # 3. Final privacy scan (belt-and-suspenders)
+        # 3. Replace serialized outcome model with research-scoped export.
+        #    The raw serialization (serialize_state) uses internal confounder_flags and
+        #    has no truncation_info. The research export normalizes to confounder_codes
+        #    and adds truncation_info so consumers see a stable, documented format.
+        try:
+            from .learning.contracts import ExportScope
+            _om = zone_rt.orchestrator.models.get("outcome")
+            if _om is not None and isinstance(safe.get("models"), dict):
+                safe["models"]["outcome"] = dict(_om.export(ExportScope.RESEARCH))
+        except Exception:
+            pass  # non-fatal; raw outcome data remains
+        # 4. Final privacy scan (belt-and-suspenders)
         try:
             from .learning.privacy import scan_payload
             violations = scan_payload(safe)
@@ -455,7 +466,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
                 "active_control": getattr(coord, "_active_control", None),
                 "learning_enabled": getattr(coord, "_learning_enabled", None),
                 "current_mode": getattr(coord, "_current_mode", None),
-                "confidence": round(float(getattr(coord, "_confidence", 0.0) or 0.0), 3),
+                "confidence": round(float(((coord.data or {}).get("learning_confidence") or 0.0)), 3),
             }
             zone_info["runtime_health"] = _le2_health_data(coord)
             zone_info["runtime_pending"] = _le2_pending_data(coord, entry.entry_id)

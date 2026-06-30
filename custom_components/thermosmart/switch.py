@@ -222,7 +222,7 @@ class ThermoSmartGlobalDebugSwitch(SwitchEntity, RestoreEntity):
     """Global debug-log switch – sets the ThermoSmart logger to DEBUG at runtime."""
     _attr_has_entity_name = True
     _attr_translation_key = "debug_log"
-    _attr_icon = "mdi:bug-check"
+    _attr_icon = "mdi:bug-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_unique_id = DOMAIN_GLOBAL_DEBUG
 

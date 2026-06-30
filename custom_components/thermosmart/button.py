@@ -47,7 +47,7 @@ class ThermoSmartResearchExportButton(ButtonEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "create_research_export"
-    _attr_icon = "mdi:database-export-outline"
+    _attr_icon = "mdi:database-export"
     _attr_entity_category = EntityCategory.CONFIG
     # Stable unique_id — unchanged from the original export button so existing
     # HA entity registry entries are updated in-place (no orphan entity).
@@ -74,7 +74,7 @@ class ThermoSmartSupportExportButton(ButtonEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "create_support_export"
-    _attr_icon = "mdi:face-agent"
+    _attr_icon = "mdi:database-search"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_unique_id = f"{DOMAIN}_create_support_export"
 

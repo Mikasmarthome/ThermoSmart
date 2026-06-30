@@ -1787,12 +1787,14 @@ class ThermoSmartCoordinator(
         else:
             suppression_pct = 0
 
-        # Phase 19A-B: combined learning confidence from LE 2.0 only (display value).
+        # Learning progress from real per-zone model updates (display value, 0.0–1.0).
+        # Uses learning_progress_safe() so the value matches ThermoSmartConfidenceSensor.
         # Guarded: a learning failure must never become a heating failure -> neutral 0.0.
         learning_confidence = 0.0
         if self._le2_shadow is not None:
             try:
-                learning_confidence = float(self._le2_shadow.confidence_display())
+                _prog_pct, _ = self._le2_shadow.learning_progress_safe()
+                learning_confidence = _prog_pct / 100.0
             except Exception:
                 learning_confidence = 0.0
 

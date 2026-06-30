@@ -327,6 +327,12 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                     safe["adaptation_candidates"] = _export_list
         except Exception:
             pass
+        # 3c. Adaptation candidate history summary (always present; empty until
+        #     runtime accumulation is wired up — no artificial entries generated).
+        try:
+            safe["adaptation_candidate_history"] = _le2_adaptation_history_for_research([])
+        except Exception:
+            pass
         # 4. Final privacy scan (belt-and-suspenders)
         try:
             from .learning.privacy import scan_payload
@@ -432,6 +438,62 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
         }
     except Exception:
         return None
+
+
+def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
+    """Return adaptation candidate history summary for support export.
+
+    Currently returns zero counts — no runtime history accumulation is wired up
+    yet. The dict structure is stable and ready for future runtime binding.
+    Never raises.
+    """
+    try:
+        # No runtime accumulation yet — return neutral, structurally complete dict.
+        # When runtime history is wired, read accumulated entries via coord here.
+        return {
+            "entry_count": 0,
+            "promotion_ready_count": 0,
+            "blocked_count": 0,
+            "last_error": None,
+        }
+    except Exception as err:
+        return {
+            "entry_count": 0,
+            "promotion_ready_count": 0,
+            "blocked_count": 0,
+            "last_error": str(err),
+        }
+
+
+def _le2_adaptation_history_for_research(history_entries: list) -> list[dict]:
+    """Convert adaptation candidate history entries to research-safe export dicts.
+
+    Args:
+        history_entries: list of (CandidateHistoryEntry, span_days, confounder_ratio)
+            tuples. Pass [] when no runtime accumulation is available yet.
+
+    Returns public-safe dicts (see adaptation_history_entry_for_research_export).
+    Always returns a list (empty when no entries). Never raises.
+    """
+    if not history_entries:
+        return []
+    result: list[dict] = []
+    try:
+        from .learning.adaptation import adaptation_history_entry_for_research_export
+        for entry, span_days, confounder_ratio in history_entries:
+            try:
+                result.append(
+                    adaptation_history_entry_for_research_export(
+                        entry,
+                        span_days=span_days,
+                        confounder_ratio=confounder_ratio,
+                    )
+                )
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return result
 
 
 def _adaptation_situation_context(
@@ -678,11 +740,15 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["runtime_health"] = _le2_health_data(coord)
             zone_info["runtime_pending"] = _le2_pending_data(coord, entry.entry_id)
             zone_info["adaptation"] = _le2_adaptation_summary(coord, entry.entry_id)
+            zone_info["adaptation_history"] = _le2_adaptation_history_summary(
+                coord, entry.entry_id
+            )
         else:
             zone_info["runtime_state"] = None
             zone_info["runtime_health"] = None
             zone_info["runtime_pending"] = None
             zone_info["adaptation"] = None
+            zone_info["adaptation_history"] = None
 
         zones.append(zone_info)
 

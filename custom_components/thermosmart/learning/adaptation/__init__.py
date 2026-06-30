@@ -43,6 +43,7 @@ from .history import (
 from .history_store_schema import (
     HISTORY_SCHEMA_VERSION,
     AdaptationHistoryState,
+    adaptation_history_entry_for_research_export,
     deserialize_history_state,
     prune_history_entries,
     serialize_history_state,
@@ -71,6 +72,7 @@ __all__ = [
     "make_candidate_key",
     "HISTORY_SCHEMA_VERSION",
     "AdaptationHistoryState",
+    "adaptation_history_entry_for_research_export",
     "deserialize_history_state",
     "prune_history_entries",
     "serialize_history_state",

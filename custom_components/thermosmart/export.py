@@ -316,8 +316,9 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                         (_rejections > _attempts * 0.20) if _attempts > 0 else False
                     ),
                 )
+                _sit = _adaptation_situation_context(coord, zone_rt)
                 _traces = suggest_candidates(
-                    zone_id, _signal, SituationContext(), _od.last_update_ts or ""
+                    zone_id, _signal, _sit, _od.last_update_ts or ""
                 )
                 _export_list = traces_for_export(_traces)
                 if _export_list:
@@ -403,8 +404,16 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
                 (_rejections > _attempts * 0.20) if _attempts > 0 else False
             ),
         )
+        _sit = _adaptation_situation_context(coord, zone_rt)
+        try:
+            import dataclasses as _dc
+            _ctx_available = any(
+                getattr(_sit, f.name) is not None for f in _dc.fields(_sit)
+            )
+        except Exception:
+            _ctx_available = False
         _traces = suggest_candidates(
-            zone_id, _signal, SituationContext(), _od.last_update_ts or ""
+            zone_id, _signal, _sit, _od.last_update_ts or ""
         )
         shadow_count = sum(
             1 for t in _traces if t.lifecycle is AdaptationLifecycle.SHADOW
@@ -416,10 +425,98 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
             "candidate_count": shadow_count,
             "shadow_candidate_count": shadow_count,
             "rejected_candidate_count": rejected_count,
+            "context_available": _ctx_available,
             "last_error": None,
         }
     except Exception:
         return None
+
+
+def _adaptation_situation_context(coord: Any, zone_rt: Any) -> Any:
+    """Build an enriched SituationContext for passive adaptation candidates.
+
+    Reads from coordinator.data and the last OutcomeModel sample. All access
+    is defensive — missing data leaves the corresponding field None. Never raises;
+    falls back to an empty SituationContext on any unexpected error.
+    """
+    from .learning.adaptation import SituationContext
+    try:
+        from datetime import timezone
+        _OUTDOOR_EDGES = (-10.0, -5.0, 0.0, 5.0, 10.0, 15.0)
+
+        zdata = (getattr(coord, "data", None) or {}).get("zone", {}) or {}
+
+        # ── mode / preheat / target delta from coord.data ────────────────────
+        mode_context       = zdata.get("mode") or None
+        preheat_was_active = zdata.get("preheat_active")
+        preheat_raw        = zdata.get("preheat_minutes")
+        preheat_minutes_used = (
+            round(float(preheat_raw), 1) if preheat_raw is not None else None
+        )
+        gap = zdata.get("temperature_gap_c")
+        target_delta_c = round(float(gap), 2) if gap is not None else None
+
+        # ── zone operational state ────────────────────────────────────────────
+        active_control   = getattr(coord, "_active_control", None)
+        try:
+            learning_enabled = bool(
+                getattr(coord, "zone_cfg", {}).get("learning_enabled", True)
+            )
+        except Exception:
+            learning_enabled = None
+
+        # ── outdoor bucket: discretize outdoor_temp with FeatureExtractor edges
+        outdoor_bucket = None
+        outdoor_raw = zdata.get("outdoor_temp")
+        if outdoor_raw is not None:
+            try:
+                ot  = float(outdoor_raw)
+                idx = sum(1 for edge in _OUTDOOR_EDGES if ot >= edge)
+                outdoor_bucket = f"b{idx}"
+            except Exception:
+                pass
+
+        # ── controller_kind from last accepted outcome sample ─────────────────
+        controller_kind = None
+        try:
+            if zone_rt is not None:
+                _om = zone_rt.orchestrator.models.get("outcome")
+                if _om is not None:
+                    _state   = getattr(_om, "_state", None)
+                    _samples = getattr(_state, "recent_samples", ()) or ()
+                    if _samples:
+                        controller_kind = getattr(_samples[-1], "controller_kind", None)
+        except Exception:
+            pass
+
+        # ── time of day / weekday from export timestamp ───────────────────────
+        _now = datetime.now(tz=timezone.utc)
+        time_of_day_bucket = _now.hour
+        weekday            = _now.weekday()
+        is_weekend         = weekday >= 5
+
+        return SituationContext(
+            controller_kind=controller_kind,
+            outdoor_bucket=outdoor_bucket,
+            mode_context=mode_context,
+            time_of_day_bucket=time_of_day_bucket,
+            weekday=weekday,
+            is_weekend=is_weekend,
+            preheat_was_active=(
+                bool(preheat_was_active) if preheat_was_active is not None else None
+            ),
+            boost_was_active=None,        # not available at export time
+            target_delta_c=target_delta_c,
+            heat_loss_c_per_h=None,       # not available at export time
+            preheat_minutes_used=preheat_minutes_used,
+            active_control=(
+                bool(active_control) if active_control is not None else None
+            ),
+            learning_enabled=learning_enabled,
+        )
+    except Exception:
+        from .learning.adaptation import SituationContext
+        return SituationContext()
 
 
 def _resolve_clock(hass: HomeAssistant) -> datetime | None:

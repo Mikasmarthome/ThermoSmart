@@ -64,6 +64,8 @@ class SituationContext:
     target_delta_c:        Optional[float] = None   # target - start_temp
     heat_loss_c_per_h:     Optional[float] = None
     preheat_minutes_used:  Optional[float] = None
+    active_control:        Optional[bool]  = None   # zone in active control vs observation
+    learning_enabled:      Optional[bool]  = None   # learning switch state
 
     def to_dict(self) -> dict:
         return {
@@ -78,6 +80,8 @@ class SituationContext:
             "target_delta_c":       self.target_delta_c,
             "heat_loss_c_per_h":    self.heat_loss_c_per_h,
             "preheat_minutes_used": self.preheat_minutes_used,
+            "active_control":       self.active_control,
+            "learning_enabled":     self.learning_enabled,
         }
 
 

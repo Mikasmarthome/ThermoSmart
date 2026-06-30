@@ -306,14 +306,21 @@ class ThermoSmartTempSlopeSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        slope = self._zone.get("temp_slope", 0.0)
+        slope = self._zone.get("temp_slope")
+        if slope is None:
+            return {
+                "trend": "unknown",
+                "data_source": "zone_temperature_history",
+                "reason": "insufficient_history",
+                "zone_bound": True,
+            }
         if slope > 0.01:
             trend = "heating"
         elif slope < -0.01:
             trend = "cooling"
         else:
             trend = "stable"
-        return {"trend": trend}
+        return {"trend": trend, "data_source": "zone_temperature_history", "zone_bound": True}
 
 
 class ThermoSmartHeatingPowerSensor(_Base):

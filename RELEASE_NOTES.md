@@ -1,5 +1,55 @@
 # ThermoSmart – Release Notes
 
+## v1.2.0-beta.2 – Beta
+
+> ⚠️ **Beta release** — for testing only. Not recommended for critical heating setups without backup monitoring. Feedback and issue reports are welcome.
+
+This release improves entity grouping and UX clarity, fixes stale sensor values from the legacy learning snapshot, corrects learning progress reporting for new zones, and adds research export metadata for post-season analysis.
+
+---
+
+### Changed
+
+- Improved Home Assistant entity grouping for system and zone devices.
+- Research and Support export actions are now shown as configuration actions.
+- Debug logging is shown as a diagnostic control.
+- Technical zone learning sensors are grouped as diagnostics where appropriate.
+
+### Fixed
+
+- Fixed stale legacy learning values appearing as current sensor data.
+- `Outcome Score` / `Heizergebnis` now reads from the current per-zone learning engine.
+- `Learning Progress` / `Lernfortschritt` now reflects real per-zone model updates instead of bootstrap or fallback confidence values.
+- New zones without valid heating data now start at `0.0 %` learning progress.
+- Fixed export timestamp handling.
+
+### Export
+
+- Added separate Research and Support export actions.
+- Research and Support exports cover all ThermoSmart zones in one system-wide export.
+- Added privacy-safe export structure without entity IDs, room names, device IDs, secrets, personal data, or internal engine names.
+- Added outcome export metadata: `truncation_info` (`max_samples`, `total_samples`, `exported_samples`, `truncated`) and `confounder_codes` per sample.
+
+### Notes
+
+- This is a beta release.
+- Outcome scoring is current and exportable, but direct outcome-to-action adaptation is intentionally not part of this beta.
+- Future learning work will add bounded outcome-based adaptation and similar-situation handling.
+
+### Compatibility
+
+- **Existing installations** — entities, unique IDs, and config entries are fully preserved.
+- **Config / Options** — existing settings remain valid.
+- **Export format** — backward-compatible; new fields use safe defaults for older stored samples.
+
+### Upgrade
+
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+
+To install a pre-release via HACS: HACS → Integrations → ThermoSmart → ⋮ → Redownload → enable **Show beta versions**.
+
+---
+
 ## v1.2.0-beta.1 – Beta
 
 > ⚠️ **Beta release** — for testing only. Not recommended for critical heating setups without backup monitoring. Feedback and issue reports are welcome.

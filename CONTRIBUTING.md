@@ -41,16 +41,9 @@ Direct pull requests against `main` are only accepted if explicitly agreed with 
 
 ## Local Testing
 
-ThermoSmart has an automated test suite. Before submitting a pull request, run the relevant tests locally if possible.
-
-```bash
-pip install -r requirements_test.txt
-python -m pytest tests/ --ignore=tests/test_config_flow.py --ignore=tests/test_options_flow.py -q
-```
-
 The CI workflow runs HACS validation and hassfest on every push and pull request.
 
-For feature or integration testing that cannot be covered by automated tests, use a live Home Assistant instance:
+For feature or integration testing, use a live Home Assistant instance:
 
 1. Copy the contents of `custom_components/thermosmart/` into your Home Assistant `custom_components/` directory.
 2. Restart Home Assistant fully.

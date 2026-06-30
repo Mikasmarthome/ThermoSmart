@@ -290,6 +290,40 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                 safe["models"]["outcome"] = dict(_om.export(ExportScope.RESEARCH))
         except Exception:
             pass  # non-fatal; raw outcome data remains
+        # 3b. Passive adaptation candidates (shadow-only; no control modification).
+        try:
+            from .learning.adaptation import (
+                OutcomeSignal, SituationContext, suggest_candidates, traces_for_export,
+            )
+            _om2 = zone_rt.orchestrator.models.get("outcome")
+            if _om2 is not None:
+                _od = _om2.diagnostics()
+                _fc, _pc = _od.full_partial
+                _total = _fc + _pc
+                _rejections = sum(_od.rejection_counts.values()) if _od.rejection_counts else 0
+                _attempts = _total + _rejections
+                _signal = OutcomeSignal(
+                    sample_count=_total,
+                    timeout_rate=_od.timeout_rate,
+                    overshoot_rate=_od.overshoot_rate,
+                    reached_rate=_od.reached_rate,
+                    general_data_quality=_od.general_data_quality,
+                    aggregate_reliability=getattr(
+                        getattr(_om2, "_state", None), "aggregate_reliability", 0.0
+                    ),
+                    partial_ratio=(_pc / _total) if _total > 0 else 0.0,
+                    confounder_contamination=(
+                        (_rejections > _attempts * 0.20) if _attempts > 0 else False
+                    ),
+                )
+                _traces = suggest_candidates(
+                    zone_id, _signal, SituationContext(), _od.last_update_ts or ""
+                )
+                _export_list = traces_for_export(_traces)
+                if _export_list:
+                    safe["adaptation_candidates"] = _export_list
+        except Exception:
+            pass
         # 4. Final privacy scan (belt-and-suspenders)
         try:
             from .learning.privacy import scan_payload
@@ -328,6 +362,62 @@ def _le2_pending_data(coord, zone_id: str) -> dict | None:
         if rt is None:
             return None
         return rt.pending_attribution_summary(zone_id)
+    except Exception:
+        return None
+
+
+def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
+    """Return passive adaptation candidate counts for support export, or None.
+
+    Summary only — no trace details. Never modifies control state.
+    """
+    try:
+        from .learning.adaptation import (
+            OutcomeSignal, SituationContext, suggest_candidates, AdaptationLifecycle,
+        )
+        rt = _le2_runtime(coord)
+        if rt is None:
+            return None
+        zone_rt = rt._zones.get(zone_id)
+        if zone_rt is None:
+            return None
+        _om = zone_rt.orchestrator.models.get("outcome")
+        if _om is None:
+            return None
+        _od = _om.diagnostics()
+        _fc, _pc = _od.full_partial
+        _total = _fc + _pc
+        _rejections = sum(_od.rejection_counts.values()) if _od.rejection_counts else 0
+        _attempts = _total + _rejections
+        _signal = OutcomeSignal(
+            sample_count=_total,
+            timeout_rate=_od.timeout_rate,
+            overshoot_rate=_od.overshoot_rate,
+            reached_rate=_od.reached_rate,
+            general_data_quality=_od.general_data_quality,
+            aggregate_reliability=getattr(
+                getattr(_om, "_state", None), "aggregate_reliability", 0.0
+            ),
+            partial_ratio=(_pc / _total) if _total > 0 else 0.0,
+            confounder_contamination=(
+                (_rejections > _attempts * 0.20) if _attempts > 0 else False
+            ),
+        )
+        _traces = suggest_candidates(
+            zone_id, _signal, SituationContext(), _od.last_update_ts or ""
+        )
+        shadow_count = sum(
+            1 for t in _traces if t.lifecycle is AdaptationLifecycle.SHADOW
+        )
+        rejected_count = sum(
+            1 for t in _traces if t.lifecycle is AdaptationLifecycle.REJECTED
+        )
+        return {
+            "candidate_count": shadow_count,
+            "shadow_candidate_count": shadow_count,
+            "rejected_candidate_count": rejected_count,
+            "last_error": None,
+        }
     except Exception:
         return None
 
@@ -470,10 +560,12 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             }
             zone_info["runtime_health"] = _le2_health_data(coord)
             zone_info["runtime_pending"] = _le2_pending_data(coord, entry.entry_id)
+            zone_info["adaptation"] = _le2_adaptation_summary(coord, entry.entry_id)
         else:
             zone_info["runtime_state"] = None
             zone_info["runtime_health"] = None
             zone_info["runtime_pending"] = None
+            zone_info["adaptation"] = None
 
         zones.append(zone_info)
 

@@ -53,4 +53,7 @@ if sys.platform == "win32":
         # Item 11 long-run performance simulation (30d/90d/180d): excluded on Windows.
         # 180d × 51 840 steps × ~5 ms = ~4 min per test.
         "test_s1a_item11_perf_long_run.py",
+        # Item 20 long-run stability simulation (365d/1095d): excluded on Windows.
+        # 365d ≈ 11 min per test; 1095d ≈ 33 min per test.
+        "test_s1a_item20_long_run.py",
     ]

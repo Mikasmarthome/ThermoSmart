@@ -1377,3 +1377,236 @@ def scenario_clean_heat_loss_30d(*, seed: int = 42) -> ScenarioConfig:
         model_snapshot_interval_steps=_steps_per_day(300.0),
         restart_steps=_restart_steps_days(7, 14, 21),
     )
+
+
+# ── Item 20: Full-Year (365d) and 3-Year (1095d) Scenarios ───────────────────
+#
+# Start: 2024-01-01 00:00 UTC — full calendar year covers all four seasons:
+# winter (Jan–Mar), spring (Apr–May), summer (Jun–Aug, outdoor ~18-22°C
+# → coordinator enters summer mode), autumn (Sep–Nov), back to winter.
+#
+# _outdoor_seasonal uses % 365.0 internally, so multi-year runs repeat cleanly.
+#
+# 365d restart schedule: days 30, 90, 180, 270, 330 (5 restarts)
+# 1095d restart schedule: every 90 days — 90, 180, ..., 1080 (12 restarts)
+
+_CALENDAR_YEAR_START_UTC = datetime(2024, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+
+def scenario_s1i_365d_profile_a(*, seed: int = 42) -> ScenarioConfig:
+    """Item 20 / 1-year run: Profile A (fast insulated), full calendar year."""
+    start = _CALENDAR_YEAR_START_UTC
+    duration_s = 365 * 24 * 3600
+    return ScenarioConfig(
+        name="S1I-365d-ProfileA",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1i_a"],
+        sensor_entity="sensor.room_s1i_a",
+        outdoor_temp_fn=_outdoor_seasonal(
+            start, base_winter_c=-3.0, base_summer_c=22.0, day_amplitude=4.0
+        ),
+        solar_gain_fn=_solar_gain(120.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(30, 90, 180, 270, 330),
+    )
+
+
+def scenario_s1i_365d_profile_c(*, seed: int = 42) -> ScenarioConfig:
+    """Item 20 / 1-year run: Profile C (difficult), window events + TRV faults, full year."""
+    start = _CALENDAR_YEAR_START_UTC
+    duration_s = 365 * 24 * 3600
+    n_steps = int(duration_s / 300.0)
+    step_s = 300.0
+    win_sched = _window_schedule_random(
+        n_steps, seed=seed + 3,
+        mean_open_duration_steps=6,
+        mean_closed_duration_steps=72,
+    )
+    _fault: list = []
+    for fault_day in (45, 200):
+        fs = int(fault_day * 86400 / step_s)
+        rs = fs + 144  # 12h unavailability
+        _fault.append((fs, "climate.trv_s1i_c", False))
+        if rs < n_steps:
+            _fault.append((rs, "climate.trv_s1i_c", True))
+    return ScenarioConfig(
+        name="S1I-365d-ProfileC",
+        room_profile=PROFILE_DIFFICULT,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=step_s,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1i_c"],
+        sensor_entity="sensor.room_s1i_c",
+        outdoor_temp_fn=_outdoor_seasonal(
+            start, base_winter_c=-5.0, base_summer_c=20.0, day_amplitude=5.0
+        ),
+        solar_gain_fn=_solar_gain(50.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        window_schedule=win_sched,
+        fault_schedule=_fault,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(30, 90, 180, 270, 330),
+    )
+
+
+def scenario_s1i_365d_trvonly(*, seed: int = 42) -> ScenarioConfig:
+    """Item 20 / 1-year run: Minimal TRV-only setup, full calendar year.
+
+    Hard gate: minimal setup must remain fully functional for an entire year
+    with factory-default confidence thresholds and no boost seeding.
+    """
+    start = _CALENDAR_YEAR_START_UTC
+    duration_s = 365 * 24 * 3600
+    return ScenarioConfig(
+        name="S1I-365d-TRVonly",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1i_min"],
+        sensor_entity="sensor.room_s1i_min",
+        outdoor_temp_fn=_outdoor_seasonal(
+            start, base_winter_c=-3.0, base_summer_c=22.0, day_amplitude=4.0
+        ),
+        solar_gain_fn=_solar_gain(120.0),
+        learning_mode=True,
+        active_control=True,
+        seed_boost_model=False,
+        zone_cfg_overrides={
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0),
+        restart_steps=_restart_steps_days(30, 90, 180, 270, 330),
+    )
+
+
+def scenario_s1i_1095d_profile_a(*, seed: int = 42) -> ScenarioConfig:
+    """Item 20 / 3-year run: Profile A, 1095 days, restart every 90d.
+
+    Proves long-term stability: retention bounds storage, model doesn't drift,
+    no performance degradation in later years.
+    """
+    start = _CALENDAR_YEAR_START_UTC
+    duration_s = 1095 * 24 * 3600
+    restart_days = list(range(90, 1095, 90))  # 90, 180, ..., 1080 → 12 restarts
+    return ScenarioConfig(
+        name="S1I-1095d-ProfileA",
+        room_profile=PROFILE_FAST_INSULATED,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=300.0,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1i_3y_a"],
+        sensor_entity="sensor.room_s1i_3y_a",
+        outdoor_temp_fn=_outdoor_seasonal(
+            start, base_winter_c=-3.0, base_summer_c=22.0, day_amplitude=4.0
+        ),
+        solar_gain_fn=_solar_gain(120.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        model_snapshot_interval_steps=_steps_per_day(300.0) * 7,  # weekly snapshots
+        restart_steps=_restart_steps_days(*restart_days),
+    )
+
+
+def scenario_s1i_1095d_profile_c_stressed(*, seed: int = 42) -> ScenarioConfig:
+    """Item 20 / 3-year stressed run: Profile C + heavy faults, 1095 days.
+
+    Exercises retention + failure recovery over 3 years.  TRV faults every 60d
+    (12h each); window events at 2× normal rate.
+    """
+    start = _CALENDAR_YEAR_START_UTC
+    duration_s = 1095 * 24 * 3600
+    n_steps = int(duration_s / 300.0)
+    step_s = 300.0
+    win_sched = _window_schedule_random(
+        n_steps, seed=seed + 11,
+        mean_open_duration_steps=6,
+        mean_closed_duration_steps=36,  # ~3h between events (2× normal rate)
+    )
+    _fault3y: list = []
+    for fault_day in range(30, 1095, 60):  # fault every 60d
+        fs = int(fault_day * 86400 / step_s)
+        rs = fs + 144
+        _fault3y.append((fs, "climate.trv_s1i_3y_c", False))
+        if rs < n_steps:
+            _fault3y.append((rs, "climate.trv_s1i_3y_c", True))
+    restart_days = list(range(90, 1095, 90))
+    return ScenarioConfig(
+        name="S1I-1095d-ProfileC-Stressed",
+        room_profile=PROFILE_DIFFICULT,
+        initial_room_temp=17.0,
+        start_utc=start,
+        tz_offset_hours=1.0,
+        step_s=step_s,
+        duration_s=duration_s,
+        climate_entities=["climate.trv_s1i_3y_c"],
+        sensor_entity="sensor.room_s1i_3y_c",
+        outdoor_temp_fn=_outdoor_seasonal(
+            start, base_winter_c=-5.0, base_summer_c=20.0, day_amplitude=5.0
+        ),
+        solar_gain_fn=_solar_gain(50.0),
+        learning_mode=True,
+        active_control=True,
+        zone_cfg_overrides={
+            "boost_bootstrap_prior_c": 1.5,
+            "night_temp": 14.0,
+            "comfort_temp": 21.0,
+            "sched_wd_morning": "06:00",
+            "sched_wd_night": "22:00",
+            "sched_we_morning": "07:00",
+            "sched_we_night": "22:00",
+        },
+        seed=seed,
+        window_schedule=win_sched,
+        fault_schedule=_fault3y,
+        model_snapshot_interval_steps=_steps_per_day(300.0) * 7,
+        restart_steps=_restart_steps_days(*restart_days),
+    )

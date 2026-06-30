@@ -1,5 +1,63 @@
 # ThermoSmart – Release Notes
 
+## v1.2.0-beta.1 – Beta
+
+> ⚠️ **Beta release** — for testing only. Not recommended for critical heating setups without backup monitoring. Feedback and issue reports are welcome.
+
+This is the first beta release towards v1.2.0. It extends the adaptive learning foundations, improves long-term stability, and hardens control, storage, config, and privacy behaviour across the board.
+
+---
+
+### Highlights
+
+**Extended Adaptive Learning**
+- New Learning Engine 2.0 (LE2) foundations with improved model architecture covering heat rate, heat loss, afterheat, boost, forecast, and outcome
+- Confidence-gated control: adaptive influence is bounded and safe — learning observes passively by default until Active Control is enabled by the user
+- Restart and restore robustness: learning state survives HA restarts and zone reloads without data loss
+
+**Long-Term Stability**
+- Validated over simulated full-year and 3-year heating cycles including seasonal transitions and TRV fault scenarios
+- Storage retention prevents unbounded growth; validated at < 1 KB/day in long-term stressed scenarios
+
+**Config / Options UX**
+- Section-based Options Hub: edit devices, schedule, presence, or weather independently without re-running the full wizard
+
+**Storage, Diagnostics and Privacy**
+- Improved storage key separation between legacy and LE2 learning namespaces
+- Privacy-aware diagnostics and voluntary export features remain fully local — no automatic upload, no cloud dependency
+
+**Repository and Branding**
+- Updated integration logo across all brand asset locations
+- Repository structure aligned with HACS and hassfest expectations
+
+---
+
+### Compatibility
+
+- **Existing installations** — entities, unique IDs, and config entries are fully preserved
+- **Config / Options** — existing settings remain valid; new optional fields receive defaults automatically
+- **TRV-only minimal setup** — continues to work without any external sensors
+- **Optional sensors** — remain optional; no reconfiguration required
+- **Automations** — existing entity ID-based automations should continue to work without changes
+
+---
+
+### Upgrade
+
+HACS → Integrations → ThermoSmart → Update → Restart Home Assistant.
+
+To install a pre-release via HACS: HACS → Integrations → ThermoSmart → ⋮ → Redownload → enable **Show beta versions**.
+
+---
+
+### Notes
+
+- Learning starts with low confidence and improves over time as observations accumulate. No manual seeding required.
+- Active Control should be enabled intentionally after reviewing behaviour in Observation mode.
+- Diagnostics and export features are local-only and privacy-aware.
+
+---
+
 ## v1.1.1 – Patch
 
 Patch release for v1.1.0. No new features, no configuration changes, no migration required.

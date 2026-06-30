@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Krok 1 / 4 – Zariadenia a senzory",
+        "title": "Nastavenia",
+        "menu_options": {
+          "devices": "Zariadenia a senzory",
+          "schedule": "Teploty a plán",
+          "presence": "Prítomnosť a učenie",
+          "weather": "Počasie a vonkajšie senzory"
+        }
+      },
+      "devices": {
+        "title": "Zariadenia a senzory",
         "description": "Kalibračné entity a prepínače quirk sa rozpoznajú automaticky.",
         "data": {
           "name": "Názov zóny",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Krok 2 / 4 – Teploty a plán",
+        "title": "Teploty a plán",
         "description": "Denný priebeh: Noc → Komfort → Noc\n\nKeď sú všetky osoby preč, ThermoSmart automaticky prepne na teplotu neprítomnosti – bez ohľadu na plán.",
         "data": {
           "comfort_temp": "Komfortná teplota",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Krok 3 / 4 – Prítomnosť a učenie",
+        "title": "Prítomnosť a učenie",
         "description": "Kto je doma? ThermoSmart automaticky prepne do režimu neprítomnosti, keď všetci odídu.",
         "data": {
           "presence_persons": "Osoby na detekciu prítomnosti",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Krok 4 / 4 – Počasie a vonkajšie senzory",
+        "title": "Počasie a vonkajšie senzory",
         "description": "Všetky polia sú voliteľné. Vlastné senzory majú prednosť pred entitou počasia.",
         "data": {
           "weather_entity": "Entita počasia",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Dovolenka",
-              "sleep":    "Noc"
+              "sleep": "Noc"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Aktívne ovládanie"
       },
-      "learning": { "name": "Režim učenia" },
-      "vacation_mode": { "name": "Dovolenkový režim" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Režim učenia"
+      },
+      "vacation_mode": {
+        "name": "Dovolenkový režim"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Režim vykurovania",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Komfort",
-          "eco":      "Eco",
-          "night":    "Noc",
-          "away":     "Neprítomný",
+          "auto": "Auto",
+          "comfort": "Komfort",
+          "eco": "Eco",
+          "night": "Noc",
+          "away": "Neprítomný",
           "vacation": "Dovolenka"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Letný režim",
         "state": {
           "automatic": "Automaticky",
-          "on":        "Zapnuté",
-          "off":       "Vypnuté"
+          "on": "Zapnuté",
+          "off": "Vypnuté"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Cieľová teplota" },
-      "trv_setpoint": { "name": "Nastavená hodnota TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Cieľová teplota"
+      },
+      "trv_setpoint": {
+        "name": "Nastavená hodnota TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Skóre výsledku",
         "state": {
           "learning": "Prebieha učenie"
         }
       },
-      "preheat_minutes": { "name": "Čas predohrevu" },
-      "confidence": { "name": "Pokrok učenia" },
-      "weather_offset": { "name": "Korekcia počasia" },
+      "preheat_minutes": {
+        "name": "Čas predohrevu"
+      },
+      "confidence": {
+        "name": "Pokrok učenia"
+      },
+      "weather_offset": {
+        "name": "Korekcia počasia"
+      },
       "status": {
         "name": "Stav",
         "state": {
-          "disabled":              "Deaktivované",
-          "observation_mode":      "Pozorovací režim",
+          "disabled": "Deaktivované",
+          "observation_mode": "Pozorovací režim",
           "controlling_no_learning": "Aktívne ovládanie (učenie vyp.)",
-          "heating_failure":       "Porucha vykurovania!",
-          "preheating":            "Predohrievanie",
-          "summer":                "Leto – vykurovanie vyp.",
-          "window_open":           "Okno otvorené",
-          "vacation":              "Dovolenka",
-          "away":                  "Neprítomný",
-          "heating":               "Vykurovanie",
-          "idle":                  "Teplota udržiavaná",
-          "active":                "Aktívne"
+          "heating_failure": "Porucha vykurovania!",
+          "preheating": "Predohrievanie",
+          "summer": "Leto – vykurovanie vyp.",
+          "window_open": "Okno otvorené",
+          "vacation": "Dovolenka",
+          "away": "Neprítomný",
+          "heating": "Vykurovanie",
+          "idle": "Teplota udržiavaná",
+          "active": "Aktívne"
         }
       },
-      "temp_slope": { "name": "Sklon teploty" },
-      "temp_ema_1h": { "name": "Teplota EMA 1h" },
+      "temp_slope": {
+        "name": "Sklon teploty"
+      },
+      "temp_ema_1h": {
+        "name": "Teplota EMA 1h"
+      },
       "heat_loss": {
         "name": "Tepelné straty",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Prebieha učenie"
         }
       },
-      "sun_intensity": { "name": "Solárny tepelný zisk" },
+      "sun_intensity": {
+        "name": "Solárny tepelný zisk"
+      },
       "window_cooling_rate": {
         "name": "Rýchlosť ochladzovania cez okno",
         "state": {
           "learning": "Prebieha učenie"
         }
       },
-      "trv_observations": { "name": "Pozorovania TRV" }
+      "trv_observations": {
+        "name": "Pozorovania TRV"
+      }
     }
   }
 }

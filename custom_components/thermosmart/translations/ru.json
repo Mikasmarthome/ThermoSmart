@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Шаг 1 / 4 – Устройства и датчики",
+        "title": "Настройки",
+        "menu_options": {
+          "devices": "Устройства и датчики",
+          "schedule": "Температуры и расписание",
+          "presence": "Присутствие и обучение",
+          "weather": "Погода и внешние датчики"
+        }
+      },
+      "devices": {
+        "title": "Устройства и датчики",
         "description": "Калибровочные объекты и переключатели исключений обнаруживаются автоматически.",
         "data": {
           "name": "Название зоны",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Шаг 2 / 4 – Температуры и расписание",
+        "title": "Температуры и расписание",
         "description": "Суточный цикл: Ночь → Комфорт → Ночь\n\nКогда все лица отсутствуют, ThermoSmart автоматически переключается на температуру отсутствия – независимо от расписания.",
         "data": {
           "comfort_temp": "Температура комфорта",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Шаг 3 / 4 – Присутствие и обучение",
+        "title": "Присутствие и обучение",
         "description": "Кто дома? ThermoSmart автоматически переключается в режим отсутствия, когда все уходят.",
         "data": {
           "presence_persons": "Люди для определения присутствия",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Шаг 4 / 4 – Погода и внешние датчики",
+        "title": "Погода и внешние датчики",
         "description": "Все поля необязательны. Собственные датчики имеют приоритет над объектом погоды.",
         "data": {
           "weather_entity": "Объект погоды",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Авто",
+              "auto": "Авто",
               "vacation": "Отпуск",
-              "sleep":    "Ночь"
+              "sleep": "Ночь"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Активное управление"
       },
-      "learning": { "name": "Режим обучения" },
-      "vacation_mode": { "name": "Режим отпуска" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Режим обучения"
+      },
+      "vacation_mode": {
+        "name": "Режим отпуска"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Режим отопления",
         "state": {
-          "auto":     "Авто",
-          "comfort":  "Комфорт",
-          "eco":      "Eco",
-          "night":    "Ночь",
-          "away":     "Отсутствую",
+          "auto": "Авто",
+          "comfort": "Комфорт",
+          "eco": "Eco",
+          "night": "Ночь",
+          "away": "Отсутствую",
           "vacation": "Отпуск"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Летний режим",
         "state": {
           "automatic": "Автоматически",
-          "on":        "Включено",
-          "off":       "Выключено"
+          "on": "Включено",
+          "off": "Выключено"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Целевая температура" },
-      "trv_setpoint": { "name": "Уставка TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Целевая температура"
+      },
+      "trv_setpoint": {
+        "name": "Уставка TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Оценка результата",
         "state": {
           "learning": "Обучение"
         }
       },
-      "preheat_minutes": { "name": "Время предварительного нагрева" },
-      "confidence": { "name": "Прогресс обучения" },
-      "weather_offset": { "name": "Поправка на погоду" },
+      "preheat_minutes": {
+        "name": "Время предварительного нагрева"
+      },
+      "confidence": {
+        "name": "Прогресс обучения"
+      },
+      "weather_offset": {
+        "name": "Поправка на погоду"
+      },
       "status": {
         "name": "Состояние",
         "state": {
-          "disabled":              "Отключено",
-          "observation_mode":      "Режим наблюдения",
+          "disabled": "Отключено",
+          "observation_mode": "Режим наблюдения",
           "controlling_no_learning": "Активное управление (обучение выкл.)",
-          "heating_failure":       "Неисправность отопления!",
-          "preheating":            "Предварительный нагрев",
-          "summer":                "Лето – отопление выкл.",
-          "window_open":           "Окно открыто",
-          "vacation":              "Отпуск",
-          "away":                  "Отсутствую",
-          "heating":               "Отопление",
-          "idle":                  "Температура поддерживается",
-          "active":                "Активно"
+          "heating_failure": "Неисправность отопления!",
+          "preheating": "Предварительный нагрев",
+          "summer": "Лето – отопление выкл.",
+          "window_open": "Окно открыто",
+          "vacation": "Отпуск",
+          "away": "Отсутствую",
+          "heating": "Отопление",
+          "idle": "Температура поддерживается",
+          "active": "Активно"
         }
       },
-      "temp_slope": { "name": "Наклон температуры" },
-      "temp_ema_1h": { "name": "Температура EMA 1ч" },
+      "temp_slope": {
+        "name": "Наклон температуры"
+      },
+      "temp_ema_1h": {
+        "name": "Температура EMA 1ч"
+      },
       "heat_loss": {
         "name": "Теплопотери",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Обучение"
         }
       },
-      "sun_intensity": { "name": "Солнечный тепловой прирост" },
+      "sun_intensity": {
+        "name": "Солнечный тепловой прирост"
+      },
       "window_cooling_rate": {
         "name": "Скорость охлаждения через окно",
         "state": {
           "learning": "Обучение"
         }
       },
-      "trv_observations": { "name": "Наблюдения TRV" }
+      "trv_observations": {
+        "name": "Наблюдения TRV"
+      }
     }
   }
 }

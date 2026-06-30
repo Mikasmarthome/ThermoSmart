@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Steg 1 / 4 – Enheter & Sensorer",
+        "title": "Inställningar",
+        "menu_options": {
+          "devices": "Enheter & Sensorer",
+          "schedule": "Temperaturer & Schema",
+          "presence": "Närvaro & Inlärning",
+          "weather": "Väder & Utomhussensorer"
+        }
+      },
+      "devices": {
+        "title": "Enheter & Sensorer",
         "description": "Kalibreringsentiteter och quirk-brytare upptäcks automatiskt.",
         "data": {
           "name": "Zonnamn",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Steg 2 / 4 – Temperaturer & Schema",
+        "title": "Temperaturer & Schema",
         "description": "Dagligt flöde: Natt → Komfort → Natt\n\nNär alla personer är borta växlar ThermoSmart automatiskt till borta-temperaturen – oavsett schemat.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Steg 3 / 4 – Närvaro & Inlärning",
+        "title": "Närvaro & Inlärning",
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Steg 4 / 4 – Väder & Utomhussensorer",
+        "title": "Väder & Utomhussensorer",
         "description": "Alla fält valfria. Egna sensorer har företräde framför väderentiteten.",
         "data": {
           "weather_entity": "Väderentitet",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Semester",
-              "sleep":    "Natt"
+              "sleep": "Natt"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Aktiv styrning"
       },
-      "learning": { "name": "Inlärningsläge" },
-      "vacation_mode": { "name": "Semesterläge" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Inlärningsläge"
+      },
+      "vacation_mode": {
+        "name": "Semesterläge"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Uppvärmningsläge",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Komfort",
-          "eco":      "Eco",
-          "night":    "Natt",
-          "away":     "Borta",
+          "auto": "Auto",
+          "comfort": "Komfort",
+          "eco": "Eco",
+          "night": "Natt",
+          "away": "Borta",
           "vacation": "Semester"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Sommarläge",
         "state": {
           "automatic": "Automatisk",
-          "on":        "På",
-          "off":       "Av"
+          "on": "På",
+          "off": "Av"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Måltemperatur" },
-      "trv_setpoint": { "name": "TRV-börvärde" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Måltemperatur"
+      },
+      "trv_setpoint": {
+        "name": "TRV-börvärde"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Resultatpoäng",
         "state": {
           "learning": "Lär sig"
         }
       },
-      "preheat_minutes": { "name": "Förvärmingstid" },
-      "confidence": { "name": "Inlärningsframsteg" },
-      "weather_offset": { "name": "Väderkorrigering" },
+      "preheat_minutes": {
+        "name": "Förvärmingstid"
+      },
+      "confidence": {
+        "name": "Inlärningsframsteg"
+      },
+      "weather_offset": {
+        "name": "Väderkorrigering"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Inaktiverad",
-          "observation_mode":      "Observationsläge",
+          "disabled": "Inaktiverad",
+          "observation_mode": "Observationsläge",
           "controlling_no_learning": "Aktiv styrning (inlärning av)",
-          "heating_failure":       "Uppvärmningsfel!",
-          "preheating":            "Förvärmer",
-          "summer":                "Sommar – uppvärmning av",
-          "window_open":           "Fönster öppet",
-          "vacation":              "Semester",
-          "away":                  "Borta",
-          "heating":               "Uppvärmning pågår",
-          "idle":                  "Temperatur upprätthållen",
-          "active":                "Aktiv"
+          "heating_failure": "Uppvärmningsfel!",
+          "preheating": "Förvärmer",
+          "summer": "Sommar – uppvärmning av",
+          "window_open": "Fönster öppet",
+          "vacation": "Semester",
+          "away": "Borta",
+          "heating": "Uppvärmning pågår",
+          "idle": "Temperatur upprätthållen",
+          "active": "Aktiv"
         }
       },
-      "temp_slope": { "name": "Temperaturlutning" },
-      "temp_ema_1h": { "name": "Temperatur EMA 1h" },
+      "temp_slope": {
+        "name": "Temperaturlutning"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatur EMA 1h"
+      },
       "heat_loss": {
         "name": "Värmeförlust",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Lär sig"
         }
       },
-      "sun_intensity": { "name": "Solvärmeinflöde" },
+      "sun_intensity": {
+        "name": "Solvärmeinflöde"
+      },
       "window_cooling_rate": {
         "name": "Avkylningshastighet fönster",
         "state": {
           "learning": "Lär sig"
         }
       },
-      "trv_observations": { "name": "TRV-observationer" }
+      "trv_observations": {
+        "name": "TRV-observationer"
+      }
     }
   }
 }

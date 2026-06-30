@@ -224,7 +224,9 @@ class ThermoSmartClimate(CoordinatorEntity, ClimateEntity, RestoreEntity):
             "outdoor_temperature":  z.get("outdoor_temp"),
             "trv_setpoint":         trv,
             "boost_delta":          f"+{boost_delta}°C" if boost_delta > 0 else "0°C",
-            "boost_factor":         z.get("boost_factor", 1.0),
+            "boost_factor":            z.get("boost_factor", 1.0),            # compat: 1.0=neutral
+            "boost_offset_c":          z.get("boost_offset_c", 0.0),          # LE2 raw prediction: 0.0=neutral
+            "applied_boost_offset_c":  z.get("applied_boost_offset_c", 0.0),  # confirmed dispatch truth: 0.0=not applied
             "observation_mode":     not self.coordinator._active_control,
             "window_open":          bool(z.get("window_open", False)),
             "summer_mode":          self.coordinator._is_summer,

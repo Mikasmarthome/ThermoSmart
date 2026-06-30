@@ -29,6 +29,91 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 
+# ── Dispatch statistics (privacy-safe, no entity IDs) ────────────────────────
+
+class _DispatchStats:
+    """Accumulates per-entity dispatch results without exposing entity IDs."""
+    __slots__ = ("targets_total", "targets_succeeded", "targets_failed",
+                 "failure_reasons", "effective_setpoints",
+                 "effective_setpoints_by_entity")
+
+    def __init__(self) -> None:
+        self.targets_total: int = 0
+        self.targets_succeeded: int = 0
+        self.targets_failed: int = 0
+        self.failure_reasons: list = []
+        self.effective_setpoints: list = []  # actual per-device °C values written (successes only)
+        # entity_id → effective °C written (successes only; keyed for counterfactual baseline).
+        self.effective_setpoints_by_entity: dict = {}
+
+    def record(self, exc=None, *, effective_c=None, entity_id: str | None = None) -> None:
+        """Record one dispatch attempt; pass exc to mark it as failed.
+
+        effective_c: actual setpoint °C that was written (for success, ignored on failure).
+        entity_id: entity whose setpoint was written; populates effective_setpoints_by_entity.
+        """
+        self.targets_total += 1
+        if exc is not None:
+            self.targets_failed += 1
+            self.failure_reasons.append(_normalize_dispatch_error(exc))
+        else:
+            self.targets_succeeded += 1
+            if effective_c is not None:
+                self.effective_setpoints.append(float(effective_c))
+                if entity_id is not None:
+                    self.effective_setpoints_by_entity[entity_id] = float(effective_c)
+
+    def record_gather(self, results) -> None:
+        """Process the list of results from asyncio.gather(return_exceptions=True).
+
+        For per-entity effective setpoint tracking, use record() directly with effective_c.
+        """
+        for r in results:
+            if isinstance(r, BaseException):
+                self.targets_failed += 1
+                self.failure_reasons.append(_normalize_dispatch_error(r))
+            else:
+                self.targets_succeeded += 1
+        self.targets_total += len(results)
+
+    def merge(self, other: "_DispatchStats") -> "_DispatchStats":
+        merged = _DispatchStats()
+        merged.targets_total = self.targets_total + other.targets_total
+        merged.targets_succeeded = self.targets_succeeded + other.targets_succeeded
+        merged.targets_failed = self.targets_failed + other.targets_failed
+        merged.failure_reasons = self.failure_reasons + other.failure_reasons
+        merged.effective_setpoints = self.effective_setpoints + other.effective_setpoints
+        merged.effective_setpoints_by_entity = {
+            **self.effective_setpoints_by_entity, **other.effective_setpoints_by_entity}
+        return merged
+
+    @property
+    def status(self) -> str:
+        if self.targets_total == 0:
+            return "not_attempted"
+        if self.targets_failed == 0:
+            return "fully_succeeded"
+        if self.targets_succeeded == 0:
+            return "failed"
+        return "partially_succeeded"
+
+
+def _normalize_dispatch_error(exc: BaseException) -> str:
+    """Return a privacy-safe dispatch error label (no entity IDs, no service payloads)."""
+    try:
+        from homeassistant.exceptions import (
+            ServiceNotFound, ServiceValidationError, HomeAssistantError)
+        if isinstance(exc, ServiceNotFound):
+            return "service_not_found"
+        if isinstance(exc, ServiceValidationError):
+            return "service_validation_error"
+        if isinstance(exc, HomeAssistantError):
+            return "ha_service_error"
+    except ImportError:
+        pass
+    return type(exc).__name__
+
+
 class TRVControlMixin:
     """TRV-Steuerung, automatische Kalibrierung, Quirk-Management und Geräteerkennung."""
 
@@ -488,16 +573,107 @@ class TRVControlMixin:
             pass
         return value
 
+    def resolve_device_effective_setpoint(
+        self, entity_id: str, state, setpoint: float, profile=None
+    ) -> float:
+        """Compute the effective setpoint after all per-device transforms.
+
+        Single authority for both the dispatch path and the counterfactual baseline:
+
+            device_applied_boost = resolve_device_effective_setpoint(eid, state, baseline + boost)
+                                 - resolve_device_effective_setpoint(eid, state, baseline)
+
+        Transform order (matches _apply_temperature exactly — no drift possible):
+          1. HA min_temp clamp
+          2. Profile minimum_setpoint clamp
+          3. Step-snap (target_temp_step attribute)
+          4. Re-clamp min after snap (prevents snap from going below device/profile floor)
+          5. HA max_temp clamp (device ceiling)
+          6. Profile maximum_setpoint clamp (may be stricter than HA max)
+
+        Args:
+            entity_id: for step-snap debug logging.
+            state: HA state object with .attributes dict.
+            setpoint: input °C (e.g. tpi_baseline_setpoint or baseline + approved_boost).
+            profile: DeviceProfile or None.
+        Returns:
+            Effective °C after all per-device clamps, snap, and ceiling.
+        """
+        eff = setpoint
+        # 1. HA min_temp clamp
+        try:
+            dev_min = float(state.attributes.get("min_temp", 0))
+            if 0 < dev_min <= 30 and dev_min > eff:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to device min_temp",
+                    self.zone_name, entity_id, eff, dev_min,
+                )
+                eff = dev_min
+        except (TypeError, ValueError):
+            pass
+        # 2. Profile minimum_setpoint clamp
+        if profile is not None and getattr(profile, "minimum_setpoint", None) is not None:
+            if profile.minimum_setpoint > eff:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to profile minimum_setpoint",
+                    self.zone_name, entity_id, eff, profile.minimum_setpoint,
+                )
+                eff = profile.minimum_setpoint
+        # 3. Step-snap (target_temp_step attribute)
+        eff = self._snap_to_device_step(entity_id, state, eff)
+        # 4. Re-clamp min after snap (snap may have rounded down below floor)
+        try:
+            dev_min = float(state.attributes.get("min_temp", 0))
+            if 0 < dev_min <= 30 and dev_min > eff:
+                eff = dev_min
+        except (TypeError, ValueError):
+            pass
+        if profile is not None and getattr(profile, "minimum_setpoint", None) is not None:
+            if profile.minimum_setpoint > eff:
+                eff = profile.minimum_setpoint
+        # 5. HA max_temp clamp (device ceiling, applied after step-snap)
+        try:
+            dev_max = float(state.attributes.get("max_temp", 0))
+            if dev_max > 0 and eff > dev_max:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to device max_temp",
+                    self.zone_name, entity_id, eff, dev_max,
+                )
+                eff = dev_max
+        except (TypeError, ValueError):
+            pass
+        # 6. Profile maximum_setpoint clamp (may be stricter than HA max)
+        if profile is not None and getattr(profile, "maximum_setpoint", None) is not None:
+            if eff > profile.maximum_setpoint:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                    " due to profile maximum_setpoint",
+                    self.zone_name, entity_id, eff, profile.maximum_setpoint,
+                )
+                eff = profile.maximum_setpoint
+        return eff
+
     # ── Temperatur schreiben ──────────────────────────────────────────
 
-    async def _apply_temperature(self, cfg: dict, recommendation: dict) -> None:
-        """TRV-Setpoints schreiben oder 5°C bei geöffnetem Fenster setzen."""
+    async def _apply_temperature(self, cfg: dict, recommendation: dict) -> "_DispatchStats":
+        """TRV-Setpoints schreiben oder 5°C bei geöffnetem Fenster setzen.
+
+        _last_written_setpoints is updated only for entities where the service call
+        actually succeeded.  This prevents false manual-override detection after a
+        failed dispatch, since the manual-override listener compares the TRV's
+        echoed state against _last_written_setpoints.
+        """
+        stats = _DispatchStats()
         target = recommendation.get("adjusted_target")
 
         if target is None:
             if recommendation.get("window_open"):
-                tasks = []
                 effective_frost = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
+                # Collect (entity_id, frost_temp, coro) so results can be paired with entities.
+                _frost_pending: list = []
                 for entity_id in cfg.get("climate_entities", []):
                     state = self._get_trv_state(entity_id)
                     if state is None:
@@ -544,31 +720,42 @@ class TRVControlMixin:
                             continue
                     except (TypeError, ValueError):
                         pass
-                    self._last_written_setpoints[entity_id] = frost_temp
-                    tasks.append(self.hass.services.async_call(
+                    _frost_pending.append((entity_id, frost_temp, self.hass.services.async_call(
                         "climate", "set_temperature",
                         {"entity_id": entity_id, "temperature": frost_temp},
                         blocking=True,
-                    ))
-                if tasks:
-                    await asyncio.gather(*tasks, return_exceptions=True)
+                    )))
+                if _frost_pending:
+                    _results = await asyncio.gather(
+                        *[coro for _, _, coro in _frost_pending], return_exceptions=True)
+                    for (eid, sp, _), result in zip(_frost_pending, _results):
+                        if isinstance(result, BaseException):
+                            _LOGGER.debug(
+                                "ThermoSmart '%s': window-open setpoint failed for %s: %s",
+                                self.zone_name, eid, result,
+                            )
+                            stats.record(result)
+                        else:
+                            self._last_written_setpoints[eid] = sp  # success only
+                            stats.record(None)
                 # Immediately reflect the written frost temp in the sensor display.
                 # Without this, the display fallback (which runs before _apply_temperature)
                 # would show the stale pre-window-open setpoint for one full cycle.
                 recommendation["trv_setpoint"] = effective_frost
-            return
+            return stats
 
         if not (5.0 <= target <= 30.0):
             _LOGGER.warning(
                 "ThermoSmart '%s': Ziel %.1f°C außerhalb Sicherheitsbereich",
                 self.zone_name, target,
             )
-            return
+            return stats
 
         trv_setpoint = recommendation.get("trv_setpoint", target)
         tolerance = cfg.get("temp_tolerance", 0.5)
 
-        tasks = []
+        # Collect gather-path entities so results can be paired with entity IDs and setpoints.
+        _sp_pending: list = []  # (entity_id, effective_setpoint, coro)
         for entity_id in cfg.get("climate_entities", []):
             state = self._get_trv_state(entity_id)
             if state is None:
@@ -580,33 +767,8 @@ class TRVControlMixin:
                     self.zone_name, entity_id,
                 )
                 continue
-            effective_setpoint = trv_setpoint
-            try:
-                device_min = float(state.attributes.get("min_temp", 0))
-                if 0 < device_min <= 30 and device_min > effective_setpoint:
-                    _LOGGER.debug(
-                        "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C due to device min_temp",
-                        self.zone_name, entity_id, effective_setpoint, device_min,
-                    )
-                    effective_setpoint = device_min
-            except (TypeError, ValueError):
-                pass
-            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
-                _LOGGER.debug(
-                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C due to profile minimum_setpoint",
-                    self.zone_name, entity_id, effective_setpoint, _profile.minimum_setpoint,
-                )
-                effective_setpoint = _profile.minimum_setpoint
-            effective_setpoint = self._snap_to_device_step(entity_id, state, effective_setpoint)
-            # Final clamp: snap must not fall below device or profile minimum
-            try:
-                _dev_min = float(state.attributes.get("min_temp", 0))
-                if 0 < _dev_min <= 30 and _dev_min > effective_setpoint:
-                    effective_setpoint = _dev_min
-            except (TypeError, ValueError):
-                pass
-            if _profile is not None and _profile.minimum_setpoint is not None and _profile.minimum_setpoint > effective_setpoint:
-                effective_setpoint = _profile.minimum_setpoint
+            effective_setpoint = self.resolve_device_effective_setpoint(
+                entity_id, state, trv_setpoint, _profile)
             current_setpoint = state.attributes.get("temperature")
             if current_setpoint is not None:
                 try:
@@ -618,7 +780,7 @@ class TRVControlMixin:
                 "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",
                 self.zone_name, entity_id, effective_setpoint, target, effective_setpoint - target,
             )
-            self._last_written_setpoints[entity_id] = effective_setpoint
+            # Note: _last_written_setpoints is updated below only after confirmed success.
 
             if _profile is not None and _profile.setpoint_method == SETPOINT_HVAC_FIRST:
                 # Sequential write: set HVAC mode first, wait, then write setpoint.
@@ -639,47 +801,60 @@ class TRVControlMixin:
                         )
                     if _profile.setpoint_delay_seconds > 0.0:
                         await asyncio.sleep(_profile.setpoint_delay_seconds)
+                _hvac_first_exc = None
                 try:
                     await self.hass.services.async_call(
                         "climate", "set_temperature",
                         {"entity_id": entity_id, "temperature": effective_setpoint},
                         blocking=True,
                     )
+                    self._last_written_setpoints[entity_id] = effective_setpoint  # success only
                 except Exception as err:
                     _LOGGER.debug(
                         "ThermoSmart '%s': HVAC_FIRST setpoint failed for %s: %s",
                         self.zone_name, entity_id, err,
                     )
+                    _hvac_first_exc = err
+                stats.record(_hvac_first_exc,
+                             effective_c=effective_setpoint if _hvac_first_exc is None else None,
+                             entity_id=entity_id if _hvac_first_exc is None else None)
             else:
-                tasks.append(self.hass.services.async_call(
+                _sp_pending.append((entity_id, effective_setpoint, self.hass.services.async_call(
                     "climate", "set_temperature",
                     {"entity_id": entity_id, "temperature": effective_setpoint},
                     blocking=True,
-                ))
+                )))
 
-        if tasks:
-            results = await asyncio.gather(*tasks, return_exceptions=True)
-            for result in results:
-                if isinstance(result, Exception):
+        if _sp_pending:
+            _gather_results = await asyncio.gather(
+                *[coro for _, _, coro in _sp_pending], return_exceptions=True)
+            for (eid, sp, _), result in zip(_sp_pending, _gather_results):
+                if isinstance(result, BaseException):
                     _LOGGER.debug(
                         "ThermoSmart '%s': Temperatur-Setpoint fehlgeschlagen: %s",
                         self.zone_name, result,
                     )
+                    stats.record(result)
+                else:
+                    self._last_written_setpoints[eid] = sp  # success only
+                    stats.record(None, effective_c=sp, entity_id=eid)
 
         if trv_setpoint > target:
             if self.zone_id not in self._boost_active:
                 self._boost_active[self.zone_id] = {
                     "target": target,
                     "setpoint": trv_setpoint,
-                    "started": dt_util.now(),
+                    "started": self._now_local(),
                 }
             else:
                 self._boost_active[self.zone_id]["target"] = target
                 self._boost_active[self.zone_id]["setpoint"] = trv_setpoint
 
+        return stats
+
     # ── Direkte Ventilsteuerung (TPI) ────────────────────────────────
 
-    async def _async_set_valve_percent(self, cfg: dict, duty_cycle: float) -> bool:
+    async def _async_set_valve_percent(self, cfg: dict, duty_cycle: float) -> "_DispatchStats":
         """Schreibt TPI Duty-Cycle direkt als Ventilprozent (0–100%) auf unterstützte TRVs.
 
         Unterstützte Entities: valve_position, pi_heating_demand, heating_demand, level.
@@ -690,14 +865,16 @@ class TRVControlMixin:
         Beim Schließen (neuer Wert < letzter Wert) kurz weiter öffnen und dann
         auf Zielwert setzen – verhindert steckende Motoren bei kleinen Schließbewegungen.
 
-        Returns True wenn mindestens ein Ventil geschrieben wurde.
+        Returns _DispatchStats with per-valve write counts.
+        Individual valve writes use blocking=False (fire-and-forget at device level)
+        but the service call itself is awaited so exceptions are captured in stats.
         """
+        stats = _DispatchStats()
         valve_map = getattr(self, "_auto_valve_map", {})
         if not valve_map:
-            return False
+            return stats
 
         target_pct = max(0, min(100, round(duty_cycle)))
-        wrote_any = False
 
         for climate_id in cfg.get("climate_entities", []):
             valve_entity = valve_map.get(climate_id)
@@ -733,15 +910,19 @@ class TRVControlMixin:
                     "ThermoSmart '%s': Valve-Bump %s → %d%% → %d%%",
                     self.zone_name, valve_entity, bump_pct, target_pct,
                 )
-                await self.hass.services.async_call(
-                    "number", "set_value",
-                    {"entity_id": valve_entity, "value": bump_val},
-                    blocking=False,
-                )
+                try:
+                    await self.hass.services.async_call(
+                        "number", "set_value",
+                        {"entity_id": valve_entity, "value": bump_val},
+                        blocking=False,
+                    )
+                except Exception:
+                    pass  # bump is a transient motor-unstick; not tracked in stats
                 await asyncio.sleep(TPI_VALVE_BUMP_DELAY)
 
             if current_pct == target_pct:
-                wrote_any = True
+                # Already at target — no write needed; counts as a "no-op success".
+                # Not added to stats because no command was issued.
                 continue
 
             write_val = round(target_pct / 100, 2) if is_fractional else target_pct
@@ -749,16 +930,25 @@ class TRVControlMixin:
                 "ThermoSmart '%s': Ventil %s → %d%%",
                 self.zone_name, valve_entity, target_pct,
             )
-            self.hass.async_create_task(
-                self.hass.services.async_call(
+            # Await the service call so exceptions are captured in stats.
+            # blocking=False means HA does not wait for device acknowledgement (fire-and-forget
+            # at device level), but the Python coroutine returns quickly after queuing the call.
+            _valve_exc = None
+            try:
+                await self.hass.services.async_call(
                     "number", "set_value",
                     {"entity_id": valve_entity, "value": write_val},
                     blocking=False,
                 )
-            )
-            wrote_any = True
+            except Exception as err:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': valve write failed for %s: %s",
+                    self.zone_name, valve_entity, err,
+                )
+                _valve_exc = err
+            stats.record(_valve_exc)
 
-        return wrote_any
+        return stats
 
     # ── External Temperature Input (TRVZB) ───────────────────────────
 
@@ -846,7 +1036,7 @@ class TRVControlMixin:
             return
 
         ext_map: dict[str, str] = getattr(self, "_auto_ext_temp_map", {})
-        now = dt_util.now()
+        now = self._now_local()
 
         # Zone-wide sensor availability check
         sensors_available = any(

@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Schritt 1 / 4 – Geräte & Sensoren",
+        "title": "Einstellungen",
+        "menu_options": {
+          "devices": "Geräte & Sensoren",
+          "schedule": "Temperaturen & Zeitplan",
+          "presence": "Präsenz & Lernen",
+          "weather": "Wetter & Außensensoren"
+        }
+      },
+      "devices": {
+        "title": "Geräte & Sensoren",
         "description": "Kalibrierungs-Entities und Quirk-Switches erkennt ThermoSmart automatisch.",
         "data": {
           "name": "Zonenname",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Schritt 2 / 4 – Temperaturen & Zeitplan",
+        "title": "Temperaturen & Zeitplan",
         "description": "Tagesablauf: Nacht → Komfort → Nacht\n\nWenn alle Personen abwesend sind, schaltet ThermoSmart automatisch auf die Abwesenheitstemperatur – unabhängig vom Zeitplan.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -150,14 +159,14 @@
           "sched_wd_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
           "sched_we_morning": "Komforttemperatur soll zu dieser Uhrzeit erreicht sein – ThermoSmart heizt automatisch früher vor",
           "sched_we_night": "Ab dieser Uhrzeit gilt die Nachttemperatur",
-          "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist (Schritt 3). Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
+          "away_temp": "Wird nur automatisch angewendet wenn die Präsenzerkennung konfiguriert ist. Kann auch manuell über den Heizmodus-Selector gesetzt werden.",
           "eco_temp": "Wird verwendet wenn der Heizmodus-Selector manuell auf 'Eco' gesetzt wird. Wird nicht automatisch aktiviert.",
           "window_open_temp": "Zieltemperatur, solange ein Fenster geöffnet ist. Für Thermostate, die sehr niedrige Sollwerte nicht unterstützen, kann z. B. 10 °C verwendet werden.",
           "temp_tolerance": "Mindeständerung des berechneten TRV-Sollwerts, bevor ThermoSmart einen neuen Wert an das Thermostat sendet. Reduziert unnötige Schreibvorgänge. 0,5 °C funktioniert gut für die meisten Räume."
         }
       },
       "presence": {
-        "title": "Schritt 3 / 4 – Präsenz & Lernen",
+        "title": "Präsenz & Lernen",
         "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Schritt 4 / 4 – Wetter & Außensensoren",
+        "title": "Wetter & Außensensoren",
         "description": "Alle Felder optional. Eigene Sensoren haben Vorrang vor der Wetter-Entity.",
         "data": {
           "weather_entity": "Wetter-Entity",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Urlaub",
-              "sleep":    "Nacht"
+              "sleep": "Nacht"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Aktive Steuerung"
       },
-      "learning": { "name": "Lernmodus" },
-      "vacation_mode": { "name": "Urlaubsmodus" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Lernmodus"
+      },
+      "vacation_mode": {
+        "name": "Urlaubsmodus"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Heizmodus",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Komfort",
-          "eco":      "Eco",
-          "night":    "Nacht",
-          "away":     "Abwesend",
+          "auto": "Auto",
+          "comfort": "Komfort",
+          "eco": "Eco",
+          "night": "Nacht",
+          "away": "Abwesend",
           "vacation": "Urlaub"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Sommermodus",
         "state": {
           "automatic": "Automatisch",
-          "on":        "An",
-          "off":       "Aus"
+          "on": "An",
+          "off": "Aus"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Zieltemperatur" },
-      "trv_setpoint": { "name": "TRV-Sollwert" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Zieltemperatur"
+      },
+      "trv_setpoint": {
+        "name": "TRV-Sollwert"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Heizergebnis",
         "state": {
           "learning": "Wird gelernt"
         }
       },
-      "preheat_minutes": { "name": "Vorheizzeit" },
-      "confidence": { "name": "Lernfortschritt" },
-      "weather_offset": { "name": "Wetterkorrektur" },
+      "preheat_minutes": {
+        "name": "Vorheizzeit"
+      },
+      "confidence": {
+        "name": "Lernfortschritt"
+      },
+      "weather_offset": {
+        "name": "Wetterkorrektur"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Deaktiviert",
-          "observation_mode":      "Beobachtungsmodus",
+          "disabled": "Deaktiviert",
+          "observation_mode": "Beobachtungsmodus",
           "controlling_no_learning": "Aktive Steuerung (Lernen aus)",
-          "heating_failure":       "Heizungsausfall!",
-          "preheating":            "Vorheizen",
-          "summer":                "Sommer – Heizung aus",
-          "window_open":           "Fenster offen",
-          "vacation":              "Urlaub",
-          "away":                  "Abwesend",
-          "heating":               "Heizend",
-          "idle":                  "Temperatur gehalten",
-          "active":                "Aktiv"
+          "heating_failure": "Heizungsausfall!",
+          "preheating": "Vorheizen",
+          "summer": "Sommer – Heizung aus",
+          "window_open": "Fenster offen",
+          "vacation": "Urlaub",
+          "away": "Abwesend",
+          "heating": "Heizend",
+          "idle": "Temperatur gehalten",
+          "active": "Aktiv"
         }
       },
-      "temp_slope": { "name": "Temperatur Slope" },
-      "temp_ema_1h": { "name": "Temperatur EMA 1h" },
+      "temp_slope": {
+        "name": "Temperatur Slope"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatur EMA 1h"
+      },
       "heat_loss": {
         "name": "Wärmeverlust",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Wird gelernt"
         }
       },
-      "sun_intensity": { "name": "Solar-Wärmeeintrag" },
+      "sun_intensity": {
+        "name": "Solar-Wärmeeintrag"
+      },
       "window_cooling_rate": {
         "name": "Fenster Abkühlrate",
         "state": {
           "learning": "Wird gelernt"
         }
       },
-      "trv_observations": { "name": "TRV Beobachtungen" }
+      "trv_observations": {
+        "name": "TRV Beobachtungen"
+      }
     }
   }
 }

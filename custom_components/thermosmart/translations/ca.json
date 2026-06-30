@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Pas 1 / 4 – Dispositius i sensors",
+        "title": "Configuració",
+        "menu_options": {
+          "devices": "Dispositius i sensors",
+          "schedule": "Temperatures i horari",
+          "presence": "Presència i aprenentatge",
+          "weather": "Meteorologia i sensors exteriors"
+        }
+      },
+      "devices": {
+        "title": "Dispositius i sensors",
         "description": "Les entitats de calibratge i els interruptors de quirk es detecten automàticament.",
         "data": {
           "name": "Nom de la zona",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Pas 2 / 4 – Temperatures i horari",
+        "title": "Temperatures i horari",
         "description": "Flux diari: Nit → Confort → Nit\n\nQuan totes les persones estan absents, ThermoSmart canvia automàticament a la temperatura d'absència, independentment de l'horari.",
         "data": {
           "comfort_temp": "Temperatura de confort",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Pas 3 / 4 – Presència i aprenentatge",
+        "title": "Presència i aprenentatge",
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Pas 4 / 4 – Meteorologia i sensors exteriors",
+        "title": "Meteorologia i sensors exteriors",
         "description": "Tots els camps són opcionals. Els sensors propis tenen prioritat sobre l'entitat meteorològica.",
         "data": {
           "weather_entity": "Entitat meteorològica",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vacances",
-              "sleep":    "Nit"
+              "sleep": "Nit"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Control actiu"
       },
-      "learning": { "name": "Mode aprenentatge" },
-      "vacation_mode": { "name": "Mode vacances" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Mode aprenentatge"
+      },
+      "vacation_mode": {
+        "name": "Mode vacances"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Mode de calefacció",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Confort",
-          "eco":      "Eco",
-          "night":    "Nit",
-          "away":     "Absent",
+          "auto": "Auto",
+          "comfort": "Confort",
+          "eco": "Eco",
+          "night": "Nit",
+          "away": "Absent",
           "vacation": "Vacances"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Mode estiu",
         "state": {
           "automatic": "Automàtic",
-          "on":        "Activat",
-          "off":       "Desactivat"
+          "on": "Activat",
+          "off": "Desactivat"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Temperatura objectiu" },
-      "trv_setpoint": { "name": "Consigna TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Temperatura objectiu"
+      },
+      "trv_setpoint": {
+        "name": "Consigna TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Puntuació de resultat",
         "state": {
           "learning": "S'aprèn"
         }
       },
-      "preheat_minutes": { "name": "Temps de preescalfament" },
-      "confidence": { "name": "Progrés d'aprenentatge" },
-      "weather_offset": { "name": "Correcció meteorològica" },
+      "preheat_minutes": {
+        "name": "Temps de preescalfament"
+      },
+      "confidence": {
+        "name": "Progrés d'aprenentatge"
+      },
+      "weather_offset": {
+        "name": "Correcció meteorològica"
+      },
       "status": {
         "name": "Estat",
         "state": {
-          "disabled":              "Desactivat",
-          "observation_mode":      "Mode observació",
+          "disabled": "Desactivat",
+          "observation_mode": "Mode observació",
           "controlling_no_learning": "Control actiu (aprenentatge desactivat)",
-          "heating_failure":       "Error de calefacció!",
-          "preheating":            "Preescalfant",
-          "summer":                "Estiu – calefacció apagada",
-          "window_open":           "Finestra oberta",
-          "vacation":              "Vacances",
-          "away":                  "Absent",
-          "heating":               "Escalfant",
-          "idle":                  "Temperatura mantinguda",
-          "active":                "Actiu"
+          "heating_failure": "Error de calefacció!",
+          "preheating": "Preescalfant",
+          "summer": "Estiu – calefacció apagada",
+          "window_open": "Finestra oberta",
+          "vacation": "Vacances",
+          "away": "Absent",
+          "heating": "Escalfant",
+          "idle": "Temperatura mantinguda",
+          "active": "Actiu"
         }
       },
-      "temp_slope": { "name": "Pendent de temperatura" },
-      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "temp_slope": {
+        "name": "Pendent de temperatura"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatura EMA 1h"
+      },
       "heat_loss": {
         "name": "Pèrdua de calor",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "S'aprèn"
         }
       },
-      "sun_intensity": { "name": "Guany solar" },
+      "sun_intensity": {
+        "name": "Guany solar"
+      },
       "window_cooling_rate": {
         "name": "Taxa de refredament per finestra",
         "state": {
           "learning": "S'aprèn"
         }
       },
-      "trv_observations": { "name": "Observacions TRV" }
+      "trv_observations": {
+        "name": "Observacions TRV"
+      }
     }
   }
 }

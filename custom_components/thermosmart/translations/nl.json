@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Stap 1 / 4 – Apparaten & Sensoren",
+        "title": "Instellingen",
+        "menu_options": {
+          "devices": "Apparaten & Sensoren",
+          "schedule": "Temperaturen & Schema",
+          "presence": "Aanwezigheid & Leren",
+          "weather": "Weer & Buitensensoren"
+        }
+      },
+      "devices": {
+        "title": "Apparaten & Sensoren",
         "description": "Kalibratie-entiteiten en quirk-schakelaars worden automatisch gedetecteerd.",
         "data": {
           "name": "Zonenaam",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Stap 2 / 4 – Temperaturen & Schema",
+        "title": "Temperaturen & Schema",
         "description": "Dagverloop: Nacht → Comfort → Nacht\n\nAls alle personen afwezig zijn, schakelt ThermoSmart automatisch naar de afwezigheidstemperatuur – ongeacht het schema.",
         "data": {
           "comfort_temp": "Comforttemperatuur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Stap 3 / 4 – Aanwezigheid & Leren",
+        "title": "Aanwezigheid & Leren",
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Stap 4 / 4 – Weer & Buitensensoren",
+        "title": "Weer & Buitensensoren",
         "description": "Alle velden optioneel. Eigen sensoren hebben voorrang op de weer-entiteit.",
         "data": {
           "weather_entity": "Weer-entiteit",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vakantie",
-              "sleep":    "Nacht"
+              "sleep": "Nacht"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Actieve bediening"
       },
-      "learning": { "name": "Leermodus" },
-      "vacation_mode": { "name": "Vakantiemodus" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Leermodus"
+      },
+      "vacation_mode": {
+        "name": "Vakantiemodus"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Verwarmingsmodus",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Comfort",
-          "eco":      "Eco",
-          "night":    "Nacht",
-          "away":     "Afwezig",
+          "auto": "Auto",
+          "comfort": "Comfort",
+          "eco": "Eco",
+          "night": "Nacht",
+          "away": "Afwezig",
           "vacation": "Vakantie"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Zomermodus",
         "state": {
           "automatic": "Automatisch",
-          "on":        "Aan",
-          "off":       "Uit"
+          "on": "Aan",
+          "off": "Uit"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Doeltemperatuur" },
-      "trv_setpoint": { "name": "TRV-instelpunt" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Doeltemperatuur"
+      },
+      "trv_setpoint": {
+        "name": "TRV-instelpunt"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Resultaatscore",
         "state": {
           "learning": "Aan het leren"
         }
       },
-      "preheat_minutes": { "name": "Voorverwarmingstijd" },
-      "confidence": { "name": "Leervoortgang" },
-      "weather_offset": { "name": "Weercorrectie" },
+      "preheat_minutes": {
+        "name": "Voorverwarmingstijd"
+      },
+      "confidence": {
+        "name": "Leervoortgang"
+      },
+      "weather_offset": {
+        "name": "Weercorrectie"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Uitgeschakeld",
-          "observation_mode":      "Observatiemodus",
+          "disabled": "Uitgeschakeld",
+          "observation_mode": "Observatiemodus",
           "controlling_no_learning": "Actieve sturing (leren uit)",
-          "heating_failure":       "Verwarmingsstoring!",
-          "preheating":            "Voorverwarming",
-          "summer":                "Zomer – verwarming uit",
-          "window_open":           "Raam open",
-          "vacation":              "Vakantie",
-          "away":                  "Afwezig",
-          "heating":               "Verwarming actief",
-          "idle":                  "Temperatuur gehandhaafd",
-          "active":                "Actief"
+          "heating_failure": "Verwarmingsstoring!",
+          "preheating": "Voorverwarming",
+          "summer": "Zomer – verwarming uit",
+          "window_open": "Raam open",
+          "vacation": "Vakantie",
+          "away": "Afwezig",
+          "heating": "Verwarming actief",
+          "idle": "Temperatuur gehandhaafd",
+          "active": "Actief"
         }
       },
-      "temp_slope": { "name": "Temperatuurhelling" },
-      "temp_ema_1h": { "name": "Temperatuur EMA 1u" },
+      "temp_slope": {
+        "name": "Temperatuurhelling"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatuur EMA 1u"
+      },
       "heat_loss": {
         "name": "Warmteverlies",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Aan het leren"
         }
       },
-      "sun_intensity": { "name": "Zonnewinst" },
+      "sun_intensity": {
+        "name": "Zonnewinst"
+      },
       "window_cooling_rate": {
         "name": "Afkoelsnelheid raam",
         "state": {
           "learning": "Aan het leren"
         }
       },
-      "trv_observations": { "name": "TRV-observaties" }
+      "trv_observations": {
+        "name": "TRV-observaties"
+      }
     }
   }
 }

@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "第 1 步 / 4 – 设备和传感器",
+        "title": "设置",
+        "menu_options": {
+          "devices": "设备和传感器",
+          "schedule": "温度和计划",
+          "presence": "在家检测和学习",
+          "weather": "天气和室外传感器"
+        }
+      },
+      "devices": {
+        "title": "设备和传感器",
         "description": "校准实体和 quirk 开关会自动检测。",
         "data": {
           "name": "区域名称",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "第 2 步 / 4 – 温度和计划",
+        "title": "温度和计划",
         "description": "每日流程：夜间 → 舒适 → 夜间\n\n当所有人员离开时，ThermoSmart 会自动切换到离家温度——与计划无关。",
         "data": {
           "comfort_temp": "舒适温度",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "第 3 步 / 4 – 在家检测和学习",
+        "title": "在家检测和学习",
         "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
         "data": {
           "presence_persons": "用于检测在家状态的人员",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "第 4 步 / 4 – 天气和室外传感器",
+        "title": "天气和室外传感器",
         "description": "所有字段均为可选。自有传感器优先于天气实体。",
         "data": {
           "weather_entity": "天气实体",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "自动",
+              "auto": "自动",
               "vacation": "假期",
-              "sleep":    "夜间"
+              "sleep": "夜间"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "主动控制"
       },
-      "learning": { "name": "学习模式" },
-      "vacation_mode": { "name": "假期模式" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "学习模式"
+      },
+      "vacation_mode": {
+        "name": "假期模式"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "供暖模式",
         "state": {
-          "auto":     "自动",
-          "comfort":  "舒适",
-          "eco":      "节能",
-          "night":    "夜间",
-          "away":     "离家",
+          "auto": "自动",
+          "comfort": "舒适",
+          "eco": "节能",
+          "night": "夜间",
+          "away": "离家",
           "vacation": "假期"
         }
       },
@@ -232,43 +247,59 @@
         "name": "夏季模式",
         "state": {
           "automatic": "自动",
-          "on":        "开启",
-          "off":       "关闭"
+          "on": "开启",
+          "off": "关闭"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "目标温度" },
-      "trv_setpoint": { "name": "TRV 设定值" },
-      "tpi_duty_cycle": { "name": "TPI 占空比" },
+      "adjusted_target": {
+        "name": "目标温度"
+      },
+      "trv_setpoint": {
+        "name": "TRV 设定值"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI 占空比"
+      },
       "outcome_score": {
         "name": "结果评分",
         "state": {
           "learning": "学习中"
         }
       },
-      "preheat_minutes": { "name": "预热时间" },
-      "confidence": { "name": "学习进度" },
-      "weather_offset": { "name": "天气修正" },
+      "preheat_minutes": {
+        "name": "预热时间"
+      },
+      "confidence": {
+        "name": "学习进度"
+      },
+      "weather_offset": {
+        "name": "天气修正"
+      },
       "status": {
         "name": "状态",
         "state": {
-          "disabled":              "已禁用",
-          "observation_mode":      "观察模式",
+          "disabled": "已禁用",
+          "observation_mode": "观察模式",
           "controlling_no_learning": "主动控制（学习已关闭）",
-          "heating_failure":       "供暖故障！",
-          "preheating":            "预热中",
-          "summer":                "夏季 – 供暖已关闭",
-          "window_open":           "窗户已打开",
-          "vacation":              "假期",
-          "away":                  "离家",
-          "heating":               "供暖中",
-          "idle":                  "温度已维持",
-          "active":                "活跃"
+          "heating_failure": "供暖故障！",
+          "preheating": "预热中",
+          "summer": "夏季 – 供暖已关闭",
+          "window_open": "窗户已打开",
+          "vacation": "假期",
+          "away": "离家",
+          "heating": "供暖中",
+          "idle": "温度已维持",
+          "active": "活跃"
         }
       },
-      "temp_slope": { "name": "温度斜率" },
-      "temp_ema_1h": { "name": "温度 EMA 1小时" },
+      "temp_slope": {
+        "name": "温度斜率"
+      },
+      "temp_ema_1h": {
+        "name": "温度 EMA 1小时"
+      },
       "heat_loss": {
         "name": "热量损失",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "学习中"
         }
       },
-      "sun_intensity": { "name": "太阳热增益" },
+      "sun_intensity": {
+        "name": "太阳热增益"
+      },
       "window_cooling_rate": {
         "name": "窗户冷却速率",
         "state": {
           "learning": "学习中"
         }
       },
-      "trv_observations": { "name": "TRV 观测值" }
+      "trv_observations": {
+        "name": "TRV 观测值"
+      }
     }
   }
 }

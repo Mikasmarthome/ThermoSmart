@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Korak 1 / 4 – Naprave in senzorji",
+        "title": "Nastavitve",
+        "menu_options": {
+          "devices": "Naprave in senzorji",
+          "schedule": "Temperature in urnik",
+          "presence": "Prisotnost in učenje",
+          "weather": "Vreme in zunanji senzorji"
+        }
+      },
+      "devices": {
+        "title": "Naprave in senzorji",
         "description": "Kalibracijske entitete in stikala quirk se zaznajo samodejno.",
         "data": {
           "name": "Ime cone",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Korak 2 / 4 – Temperature in urnik",
+        "title": "Temperature in urnik",
         "description": "Dnevni potek: Noč → Udobje → Noč\n\nKo so vse osebe odsotne, ThermoSmart samodejno preklopi na temperaturo odsotnosti – ne glede na urnik.",
         "data": {
           "comfort_temp": "Temperatura udobja",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Korak 3 / 4 – Prisotnost in učenje",
+        "title": "Prisotnost in učenje",
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Korak 4 / 4 – Vreme in zunanji senzorji",
+        "title": "Vreme in zunanji senzorji",
         "description": "Vsa polja so neobvezna. Lastni senzorji imajo prednost pred vremensko entiteto.",
         "data": {
           "weather_entity": "Vremenska entiteta",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Samodejno",
+              "auto": "Samodejno",
               "vacation": "Počitnice",
-              "sleep":    "Noč"
+              "sleep": "Noč"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Aktivno krmiljenje"
       },
-      "learning": { "name": "Način učenja" },
-      "vacation_mode": { "name": "Počitniški način" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Način učenja"
+      },
+      "vacation_mode": {
+        "name": "Počitniški način"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Način ogrevanja",
         "state": {
-          "auto":     "Samodejno",
-          "comfort":  "Udobje",
-          "eco":      "Eco",
-          "night":    "Noč",
-          "away":     "Odsoten",
+          "auto": "Samodejno",
+          "comfort": "Udobje",
+          "eco": "Eco",
+          "night": "Noč",
+          "away": "Odsoten",
           "vacation": "Počitnice"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Poletni način",
         "state": {
           "automatic": "Samodejno",
-          "on":        "Vklopljeno",
-          "off":       "Izklopljeno"
+          "on": "Vklopljeno",
+          "off": "Izklopljeno"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Ciljna temperatura" },
-      "trv_setpoint": { "name": "Nastavitvena vrednost TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Ciljna temperatura"
+      },
+      "trv_setpoint": {
+        "name": "Nastavitvena vrednost TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Rezultatna ocena",
         "state": {
           "learning": "Učenje"
         }
       },
-      "preheat_minutes": { "name": "Čas predgrevanja" },
-      "confidence": { "name": "Napredek učenja" },
-      "weather_offset": { "name": "Vremenski odmik" },
+      "preheat_minutes": {
+        "name": "Čas predgrevanja"
+      },
+      "confidence": {
+        "name": "Napredek učenja"
+      },
+      "weather_offset": {
+        "name": "Vremenski odmik"
+      },
       "status": {
         "name": "Stanje",
         "state": {
-          "disabled":              "Deaktivirano",
-          "observation_mode":      "Način opazovanja",
+          "disabled": "Deaktivirano",
+          "observation_mode": "Način opazovanja",
           "controlling_no_learning": "Aktivno krmiljenje (učenje izklop.)",
-          "heating_failure":       "Napaka ogrevanja!",
-          "preheating":            "Predgrevanje",
-          "summer":                "Poletje – ogrevanje izklop.",
-          "window_open":           "Okno odprto",
-          "vacation":              "Počitnice",
-          "away":                  "Odsoten",
-          "heating":               "Ogrevanje",
-          "idle":                  "Temperatura vzdrževana",
-          "active":                "Aktivno"
+          "heating_failure": "Napaka ogrevanja!",
+          "preheating": "Predgrevanje",
+          "summer": "Poletje – ogrevanje izklop.",
+          "window_open": "Okno odprto",
+          "vacation": "Počitnice",
+          "away": "Odsoten",
+          "heating": "Ogrevanje",
+          "idle": "Temperatura vzdrževana",
+          "active": "Aktivno"
         }
       },
-      "temp_slope": { "name": "Naklon temperature" },
-      "temp_ema_1h": { "name": "Temperatura EMA 1h" },
+      "temp_slope": {
+        "name": "Naklon temperature"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatura EMA 1h"
+      },
       "heat_loss": {
         "name": "Toplotne izgube",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Učenje"
         }
       },
-      "sun_intensity": { "name": "Solarni toplotni dobitek" },
+      "sun_intensity": {
+        "name": "Solarni toplotni dobitek"
+      },
       "window_cooling_rate": {
         "name": "Hitrost ohlajanja skozi okno",
         "state": {
           "learning": "Učenje"
         }
       },
-      "trv_observations": { "name": "Opazovanja TRV" }
+      "trv_observations": {
+        "name": "Opazovanja TRV"
+      }
     }
   }
 }

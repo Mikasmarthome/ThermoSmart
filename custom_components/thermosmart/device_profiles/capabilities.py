@@ -60,3 +60,4 @@ class DeviceProfile:
     calibration_sync: bool = True
     calibration_plausibility_limit: float = 7.0
     minimum_setpoint: float | None = None
+    maximum_setpoint: float | None = None

@@ -152,6 +152,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "learning_engine" not in hass.data[DOMAIN]:
         learning_engine = LearningEngine(hass)
         await learning_engine.async_load()
+        # Phase 19A-B: LE 2.0 is the single active learning engine. The legacy engine
+        # is frozen immediately after load — read-only, no further state mutation and no
+        # store write (store is never deleted or migrated). Its loaded values may still
+        # be READ by not-yet-transferred truths until each read is transferred to LE 2.0.
+        learning_engine.freeze()
 
         # Veraltete Zonen bereinigen (nicht mehr in Config-Entries vorhanden)
         active_zone_ids = {
@@ -207,10 +212,32 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator.setup_event_listeners()
     entry.async_on_unload(coordinator.cleanup_event_listeners)
 
-    hass.data[DOMAIN][entry.entry_id] = {
+    entry_store: dict = {
         "coordinator": coordinator,
         "weather_engine": weather_engine,
     }
+    hass.data[DOMAIN][entry.entry_id] = entry_store
+
+    # ── LE 2.0 passive shadow runtime (no control effect) ───────────
+    # Setup failure here must never fail the zone or affect heating.
+    try:
+        from .learning.runtime.ha_integration import LearningShadowController
+        from .learning.runtime.lifecycle import LearningRuntimeMode
+
+        le2_shadow = LearningShadowController(
+            hass, entry.entry_id,
+            clock=coordinator._clock,
+            mode=LearningRuntimeMode.CONTROL,
+        )
+        await le2_shadow.async_setup()
+        coordinator.attach_le2_shadow(le2_shadow)
+        entry_store["le2_shadow"] = le2_shadow
+        # NOTE: the flush/unload happens via the awaited call in async_unload_entry
+        # (block-on-finish), never as a fire-and-forget task, so pending state is
+        # guaranteed written by the time the unload completes.
+        _LOGGER.debug("ThermoSmart: LE 2.0 shadow runtime attached (passive)")
+    except Exception as err:  # learning is strictly optional and passive
+        _LOGGER.warning("ThermoSmart: LE 2.0 shadow setup skipped: %s", type(err).__name__)
 
     await hass.config_entries.async_forward_entry_setups(entry, ZONE_PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -231,6 +258,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
         if coordinator := entry_data.get("coordinator"):
             await coordinator._async_restore_temp_source()
+        # flush + unload the passive LE 2.0 shadow runtime (guarded)
+        if le2_shadow := entry_data.get("le2_shadow"):
+            try:
+                await le2_shadow.async_unload()
+            except Exception:  # never block unload on learning
+                pass
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, platforms):
         hass.data[DOMAIN].pop(entry.entry_id, {})

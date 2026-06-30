@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Step 1 / 4 – Devices & Sensors",
+        "title": "Settings",
+        "menu_options": {
+          "devices": "Devices & Sensors",
+          "schedule": "Temperatures & Schedule",
+          "presence": "Presence & Learning",
+          "weather": "Weather & Outdoor Sensors"
+        }
+      },
+      "devices": {
+        "title": "Devices & Sensors",
         "description": "Calibration entities and quirk switches are detected automatically.",
         "data": {
           "name": "Zone name",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Step 2 / 4 – Temperatures & Schedule",
+        "title": "Temperatures & Schedule",
         "description": "Daily flow: Night → Comfort → Night\n\nWhen all persons are away, ThermoSmart automatically switches to the away temperature – regardless of the schedule.",
         "data": {
           "comfort_temp": "Comfort temperature",
@@ -150,14 +159,14 @@
           "sched_wd_night": "Night temperature applies from this time",
           "sched_we_morning": "Comfort temperature should be reached by this time – ThermoSmart preheats automatically in advance",
           "sched_we_night": "Night temperature applies from this time",
-          "away_temp": "Only applied automatically when presence detection is configured (Step 3). Can also be set manually via the mode select.",
+          "away_temp": "Only applied automatically when presence detection is configured. Can also be set manually via the mode select.",
           "eco_temp": "Used when the mode select is manually set to 'Eco'. Not applied automatically.",
           "window_open_temp": "Target temperature while a window is open. For thermostats that do not support very low setpoints, use a higher value such as 10 °C.",
           "temp_tolerance": "Minimum change in the calculated TRV setpoint before ThermoSmart sends a new update. This reduces unnecessary writes to the thermostat. 0.5 °C works well for most rooms."
         }
       },
       "presence": {
-        "title": "Step 3 / 4 – Presence & Learning",
+        "title": "Presence & Learning",
         "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Step 4 / 4 – Weather & Outdoor Sensors",
+        "title": "Weather & Outdoor Sensors",
         "description": "All fields optional. Own sensors take priority over the weather entity.",
         "data": {
           "weather_entity": "Weather entity",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vacation",
-              "sleep":    "Night"
+              "sleep": "Night"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Active Control"
       },
-      "learning": { "name": "Learning mode" },
-      "vacation_mode": { "name": "Vacation Mode" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Learning mode"
+      },
+      "vacation_mode": {
+        "name": "Vacation Mode"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Heating mode",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Comfort",
-          "eco":      "Eco",
-          "night":    "Night",
-          "away":     "Away",
+          "auto": "Auto",
+          "comfort": "Comfort",
+          "eco": "Eco",
+          "night": "Night",
+          "away": "Away",
           "vacation": "Vacation"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Summer Mode",
         "state": {
           "automatic": "Automatic",
-          "on":        "On",
-          "off":       "Off"
+          "on": "On",
+          "off": "Off"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Target temperature" },
-      "trv_setpoint": { "name": "TRV setpoint" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Target temperature"
+      },
+      "trv_setpoint": {
+        "name": "TRV setpoint"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Outcome Score",
         "state": {
           "learning": "Learning"
         }
       },
-      "preheat_minutes": { "name": "Preheat time" },
-      "confidence": { "name": "Learning progress" },
-      "weather_offset": { "name": "Weather correction" },
+      "preheat_minutes": {
+        "name": "Preheat time"
+      },
+      "confidence": {
+        "name": "Learning progress"
+      },
+      "weather_offset": {
+        "name": "Weather correction"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Disabled",
-          "observation_mode":      "Observation mode",
+          "disabled": "Disabled",
+          "observation_mode": "Observation mode",
           "controlling_no_learning": "Controlling (learning off)",
-          "heating_failure":       "Heating failure!",
-          "preheating":            "Preheating",
-          "summer":                "Summer – heating off",
-          "window_open":           "Window open",
-          "vacation":              "Vacation",
-          "away":                  "Away",
-          "heating":               "Heating",
-          "idle":                  "Temperature maintained",
-          "active":                "Active"
+          "heating_failure": "Heating failure!",
+          "preheating": "Preheating",
+          "summer": "Summer – heating off",
+          "window_open": "Window open",
+          "vacation": "Vacation",
+          "away": "Away",
+          "heating": "Heating",
+          "idle": "Temperature maintained",
+          "active": "Active"
         }
       },
-      "temp_slope": { "name": "Temperature slope" },
-      "temp_ema_1h": { "name": "Temperature EMA 1h" },
+      "temp_slope": {
+        "name": "Temperature slope"
+      },
+      "temp_ema_1h": {
+        "name": "Temperature EMA 1h"
+      },
       "heat_loss": {
         "name": "Heat loss",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Learning"
         }
       },
-      "sun_intensity": { "name": "Solar heat gain" },
+      "sun_intensity": {
+        "name": "Solar heat gain"
+      },
       "window_cooling_rate": {
         "name": "Window cooling rate",
         "state": {
           "learning": "Learning"
         }
       },
-      "trv_observations": { "name": "TRV observations" }
+      "trv_observations": {
+        "name": "TRV observations"
+      }
     }
   }
 }

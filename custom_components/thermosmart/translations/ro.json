@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Pasul 1 / 4 – Dispozitive și senzori",
+        "title": "Setări",
+        "menu_options": {
+          "devices": "Dispozitive și senzori",
+          "schedule": "Temperaturi și program",
+          "presence": "Prezență și învățare",
+          "weather": "Vreme și senzori exteriori"
+        }
+      },
+      "devices": {
+        "title": "Dispozitive și senzori",
         "description": "Entitățile de calibrare și comutatoarele quirk sunt detectate automat.",
         "data": {
           "name": "Numele zonei",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Pasul 2 / 4 – Temperaturi și program",
+        "title": "Temperaturi și program",
         "description": "Flux zilnic: Noapte → Confort → Noapte\n\nCând toate persoanele sunt absente, ThermoSmart trece automat la temperatura de absență – indiferent de program.",
         "data": {
           "comfort_temp": "Temperatură de confort",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Pasul 3 / 4 – Prezență și învățare",
+        "title": "Prezență și învățare",
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Pasul 4 / 4 – Vreme și senzori exteriori",
+        "title": "Vreme și senzori exteriori",
         "description": "Toate câmpurile sunt opționale. Senzorii proprii au prioritate față de entitatea meteo.",
         "data": {
           "weather_entity": "Entitate meteo",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vacanță",
-              "sleep":    "Noapte"
+              "sleep": "Noapte"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Control activ"
       },
-      "learning": { "name": "Mod învățare" },
-      "vacation_mode": { "name": "Mod vacanță" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Mod învățare"
+      },
+      "vacation_mode": {
+        "name": "Mod vacanță"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Mod de încălzire",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Confort",
-          "eco":      "Eco",
-          "night":    "Noapte",
-          "away":     "Absent",
+          "auto": "Auto",
+          "comfort": "Confort",
+          "eco": "Eco",
+          "night": "Noapte",
+          "away": "Absent",
           "vacation": "Vacanță"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Mod vară",
         "state": {
           "automatic": "Automat",
-          "on":        "Activat",
-          "off":       "Dezactivat"
+          "on": "Activat",
+          "off": "Dezactivat"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Temperatură țintă" },
-      "trv_setpoint": { "name": "Punct de reglaj TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Temperatură țintă"
+      },
+      "trv_setpoint": {
+        "name": "Punct de reglaj TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Scor de rezultat",
         "state": {
           "learning": "Învaţă"
         }
       },
-      "preheat_minutes": { "name": "Timp de preîncălzire" },
-      "confidence": { "name": "Progres de învățare" },
-      "weather_offset": { "name": "Corecție meteo" },
+      "preheat_minutes": {
+        "name": "Timp de preîncălzire"
+      },
+      "confidence": {
+        "name": "Progres de învățare"
+      },
+      "weather_offset": {
+        "name": "Corecție meteo"
+      },
       "status": {
         "name": "Stare",
         "state": {
-          "disabled":              "Dezactivat",
-          "observation_mode":      "Mod observație",
+          "disabled": "Dezactivat",
+          "observation_mode": "Mod observație",
           "controlling_no_learning": "Control activ (învățare dezactivată)",
-          "heating_failure":       "Defecțiune încălzire!",
-          "preheating":            "Preîncălzire",
-          "summer":                "Vară – încălzire oprită",
-          "window_open":           "Fereastră deschisă",
-          "vacation":              "Vacanță",
-          "away":                  "Absent",
-          "heating":               "Încălzire",
-          "idle":                  "Temperatură menținută",
-          "active":                "Activ"
+          "heating_failure": "Defecțiune încălzire!",
+          "preheating": "Preîncălzire",
+          "summer": "Vară – încălzire oprită",
+          "window_open": "Fereastră deschisă",
+          "vacation": "Vacanță",
+          "away": "Absent",
+          "heating": "Încălzire",
+          "idle": "Temperatură menținută",
+          "active": "Activ"
         }
       },
-      "temp_slope": { "name": "Pantă temperatură" },
-      "temp_ema_1h": { "name": "Temperatură EMA 1h" },
+      "temp_slope": {
+        "name": "Pantă temperatură"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatură EMA 1h"
+      },
       "heat_loss": {
         "name": "Pierdere de căldură",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Învaţă"
         }
       },
-      "sun_intensity": { "name": "Câștig termic solar" },
+      "sun_intensity": {
+        "name": "Câștig termic solar"
+      },
       "window_cooling_rate": {
         "name": "Rată de răcire ferestră",
         "state": {
           "learning": "Învaţă"
         }
       },
-      "trv_observations": { "name": "Observații TRV" }
+      "trv_observations": {
+        "name": "Observații TRV"
+      }
     }
   }
 }

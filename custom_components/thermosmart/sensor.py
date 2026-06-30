@@ -132,7 +132,9 @@ class ThermoSmartTRVSetpointSensor(_Base):
         return {
             "target_temperature": target,
             "boost_delta": f"+{boost}°C" if boost > 0 else "0°C",
-            "boost_factor": z.get("boost_factor", 1.0),
+            "boost_factor":           z.get("boost_factor", 1.0),           # compat: 1.0=neutral
+            "boost_offset_c":         z.get("boost_offset_c", 0.0),         # LE2 raw prediction: 0.0=neutral
+            "applied_boost_offset_c": z.get("applied_boost_offset_c", 0.0), # confirmed dispatch truth
             "boost_active": boost > 0,
         }
 
@@ -170,22 +172,23 @@ class ThermoSmartConfidenceSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict:
-        le = self.coordinator.learning_engine
-        if le is None:
+        # Phase 19A-B: confidence breakdown is sourced from LE 2.0 (display adapter),
+        # never from the frozen legacy engine. No LE 2.0 => neutral empty attributes.
+        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        if shadow is None:
             return {}
-        breakdown = le.get_confidence_breakdown(self.coordinator.zone_id)
-        phase = le.get_cold_start_phase(self.coordinator.zone_id)
-        stats = le.get_stats(self.coordinator.zone_id)
+        breakdown = shadow.confidence_display_attributes()
+        combined = self._zone.get("learning_confidence", 0.0)
+        phase = "learning" if combined < 0.5 else "confident"
         return {
             "learning_phase": phase,
-            "room_patterns_%": breakdown["room_patterns_%"],
-            "trv_efficiency_%": breakdown["trv_efficiency_%"],
-            "window_cooling_%": breakdown["window_cooling_%"],
-            "forecast_confidence_%": breakdown["forecast_confidence_%"],
-            "total_observations": breakdown["total_observations"],
-            "trv_observations": breakdown["trv_observations"],
-            "window_events": breakdown["window_events"],
-            "oldest_observation": stats.get("oldest"),
+            "room_patterns_%": breakdown.get("room_patterns_%", 0.0),
+            "trv_efficiency_%": breakdown.get("trv_efficiency_%", 0.0),
+            "window_cooling_%": breakdown.get("window_cooling_%", 0.0),
+            "forecast_confidence_%": breakdown.get("forecast_confidence_%", 0.0),
+            "total_observations": breakdown.get("total_observations", 0),
+            "trv_observations": breakdown.get("trv_observations", 0),
+            "window_events": breakdown.get("window_events", 0),
         }
 
 
@@ -316,7 +319,11 @@ class ThermoSmartTempSlopeSensor(_Base):
 
 
 class ThermoSmartHeatingPowerSensor(_Base):
-    """Average heating rate (K/min) learned from heating phases."""
+    """Average heating rate (K/min) — LE 2.0 source, compatibility unit kept.
+
+    Value is LE 2.0 HEAT_RATE (°C/h) divided by 60 for backwards-compatible
+    K/min display.  LE v1 is no longer read for this value.
+    """
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "heating_power"
 
@@ -329,25 +336,29 @@ class ThermoSmartHeatingPowerSensor(_Base):
 
     @property
     def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
-            return None
-        stats = le.get_stats(self.coordinator.zone_id)
-        return stats.get("avg_heat_rate_per_min")
+        sh = getattr(self.coordinator, "_le2_shadow", None)
+        if sh is not None:
+            rate_c_per_h, status = sh.read_heat_rate_safe()
+            if status == "valid" and rate_c_per_h > 0:
+                return round(rate_c_per_h / 60.0, 5)
+        # No shadow or no valid rate: entity shows "unavailable".
+        # LE v1 is NOT read — its heat rate is historical data only.
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {"data_status": "learning"}
-        stats = le.get_stats(self.coordinator.zone_id)
-        attrs: dict[str, Any] = {
-            "measurements": stats.get("with_heat_rate", 0),
-            "boost_factor": self.coordinator.learning_engine.get_boost_factor(self.coordinator.zone_id),
-        }
-        if stats.get("avg_heat_rate_per_min") is None:
-            attrs["data_status"] = "learning"
-        return attrs
+        sh = getattr(self.coordinator, "_le2_shadow", None)
+        if sh is not None:
+            rate_c_per_h, status = sh.read_heat_rate_safe()
+            attrs: dict[str, Any] = {
+                "source": "le2",
+                "rate_per_hour_K": round(rate_c_per_h, 4) if rate_c_per_h else None,
+                "status": status,
+            }
+            if status != "valid":
+                attrs["data_status"] = "learning"
+            return attrs
+        return {"source": "unavailable", "data_status": "learning"}
 
 
 class ThermoSmartTpiSensor(_Base):
@@ -388,10 +399,10 @@ class ThermoSmartTpiSensor(_Base):
 
 
 class ThermoSmartHeatLossRateSensor(_Base):
-    """Learned heat loss rate (°C/min) – how fast the room cools down.
+    """Learned heat loss rate (K/min) — LE 2.0 source, compatibility unit kept.
 
-    Used for preheat calculation: effective heating rate =
-    heating rate minus heat loss rate.
+    Value is LE 2.0 HEAT_LOSS_RATE (°C/h) divided by 60 for backwards-compatible
+    K/min display.  LE v1 is no longer read for this value when shadow is attached.
     """
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "heat_loss"
@@ -405,30 +416,29 @@ class ThermoSmartHeatLossRateSensor(_Base):
 
     @property
     def native_value(self):
-        le = self.coordinator.learning_engine
-        if le is None:
-            return None
-        return le.get_heat_loss_rate(self.coordinator.zone_id)
+        sh = getattr(self.coordinator, "_le2_shadow", None)
+        if sh is not None:
+            rate_c_per_h, status = sh.read_heat_loss_rate_safe()
+            if status == "valid" and rate_c_per_h >= 0:
+                return round(rate_c_per_h / 60.0, 5)
+        # No shadow or no valid rate: entity shows "unavailable".
+        # LE v1 is NOT read — its heat loss rate is historical data only.
+        return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        le = self.coordinator.learning_engine
-        if le is None:
-            return {"data_status": "learning"}
-        zone_id = self.coordinator.zone_id
-        rate = le.get_heat_loss_rate(zone_id)
-        rate_per_h = round(rate * 60, 3) if rate else None
-        obs_count = sum(
-            1 for o in le._observations.get(zone_id, []) if o.get("cool_rate")
-        )
-        attrs: dict[str, Any] = {
-            "rate_per_hour_K": rate_per_h,
-            "ema_active": zone_id in le._heat_loss_ema,
-            "measurements": obs_count,
-        }
-        if rate is None:
-            attrs["data_status"] = "learning"
-        return attrs
+        sh = getattr(self.coordinator, "_le2_shadow", None)
+        if sh is not None:
+            rate_c_per_h, status = sh.read_heat_loss_rate_safe()
+            attrs: dict[str, Any] = {
+                "source": "le2",
+                "rate_per_hour_K": round(rate_c_per_h, 4) if rate_c_per_h else None,
+                "status": status,
+            }
+            if status != "valid":
+                attrs["data_status"] = "learning"
+            return attrs
+        return {"source": "unavailable", "data_status": "learning"}
 
 
 class ThermoSmartSunIntensitySensor(_Base):

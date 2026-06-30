@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "1. lépés / 4 – Eszközök és érzékelők",
+        "title": "Beállítások",
+        "menu_options": {
+          "devices": "Eszközök és érzékelők",
+          "schedule": "Hőmérsékletek és ütemterv",
+          "presence": "Jelenlét és tanulás",
+          "weather": "Időjárás és kültéri érzékelők"
+        }
+      },
+      "devices": {
+        "title": "Eszközök és érzékelők",
         "description": "A kalibrációs entitások és a quirk kapcsolók automatikusan felismerhetők.",
         "data": {
           "name": "Zóna neve",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "2. lépés / 4 – Hőmérsékletek és ütemterv",
+        "title": "Hőmérsékletek és ütemterv",
         "description": "Napi folyamat: Éjszaka → Komfort → Éjszaka\n\nHa minden személy távol van, a ThermoSmart automatikusan a távolléti hőmérsékletre vált – az ütemtervtől függetlenül.",
         "data": {
           "comfort_temp": "Kényelmi hőmérséklet",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "3. lépés / 4 – Jelenlét és tanulás",
+        "title": "Jelenlét és tanulás",
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "4. lépés / 4 – Időjárás és kültéri érzékelők",
+        "title": "Időjárás és kültéri érzékelők",
         "description": "Minden mező opcionális. A saját érzékelők elsőbbséget élveznek az időjárás entitással szemben.",
         "data": {
           "weather_entity": "Időjárás entitás",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Vakáció",
-              "sleep":    "Éjszaka"
+              "sleep": "Éjszaka"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Aktív vezérlés"
       },
-      "learning": { "name": "Tanulási mód" },
-      "vacation_mode": { "name": "Vakációs mód" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Tanulási mód"
+      },
+      "vacation_mode": {
+        "name": "Vakációs mód"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Fűtési mód",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Kényelmi",
-          "eco":      "Eco",
-          "night":    "Éjszaka",
-          "away":     "Távol",
+          "auto": "Auto",
+          "comfort": "Kényelmi",
+          "eco": "Eco",
+          "night": "Éjszaka",
+          "away": "Távol",
           "vacation": "Vakáció"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Nyári mód",
         "state": {
           "automatic": "Automatikus",
-          "on":        "Be",
-          "off":       "Ki"
+          "on": "Be",
+          "off": "Ki"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Célhőmérséklet" },
-      "trv_setpoint": { "name": "TRV beállítási pont" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Célhőmérséklet"
+      },
+      "trv_setpoint": {
+        "name": "TRV beállítási pont"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Eredménypontszám",
         "state": {
           "learning": "Tanulás"
         }
       },
-      "preheat_minutes": { "name": "Előmelegítési idő" },
-      "confidence": { "name": "Tanulási előrehaladás" },
-      "weather_offset": { "name": "Időjárás-korrekció" },
+      "preheat_minutes": {
+        "name": "Előmelegítési idő"
+      },
+      "confidence": {
+        "name": "Tanulási előrehaladás"
+      },
+      "weather_offset": {
+        "name": "Időjárás-korrekció"
+      },
       "status": {
         "name": "Állapot",
         "state": {
-          "disabled":              "Letiltva",
-          "observation_mode":      "Megfigyelési mód",
+          "disabled": "Letiltva",
+          "observation_mode": "Megfigyelési mód",
           "controlling_no_learning": "Aktív vezérlés (tanulás ki)",
-          "heating_failure":       "Fűtési hiba!",
-          "preheating":            "Előmelegítés",
-          "summer":                "Nyár – fűtés ki",
-          "window_open":           "Ablak nyitva",
-          "vacation":              "Vakáció",
-          "away":                  "Távol",
-          "heating":               "Fűtés",
-          "idle":                  "Hőmérséklet fenntartva",
-          "active":                "Aktív"
+          "heating_failure": "Fűtési hiba!",
+          "preheating": "Előmelegítés",
+          "summer": "Nyár – fűtés ki",
+          "window_open": "Ablak nyitva",
+          "vacation": "Vakáció",
+          "away": "Távol",
+          "heating": "Fűtés",
+          "idle": "Hőmérséklet fenntartva",
+          "active": "Aktív"
         }
       },
-      "temp_slope": { "name": "Hőmérséklet meredeksége" },
-      "temp_ema_1h": { "name": "Hőmérséklet EMA 1h" },
+      "temp_slope": {
+        "name": "Hőmérséklet meredeksége"
+      },
+      "temp_ema_1h": {
+        "name": "Hőmérséklet EMA 1h"
+      },
       "heat_loss": {
         "name": "Hőveszteség",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Tanulás"
         }
       },
-      "sun_intensity": { "name": "Napenergia-nyereség" },
+      "sun_intensity": {
+        "name": "Napenergia-nyereség"
+      },
       "window_cooling_rate": {
         "name": "Ablakon keresztüli hűtési sebesség",
         "state": {
           "learning": "Tanulás"
         }
       },
-      "trv_observations": { "name": "TRV-megfigyelések" }
+      "trv_observations": {
+        "name": "TRV-megfigyelések"
+      }
     }
   }
 }

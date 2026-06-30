@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Крок 1 / 4 – Пристрої та датчики",
+        "title": "Налаштування",
+        "menu_options": {
+          "devices": "Пристрої та датчики",
+          "schedule": "Температури та розклад",
+          "presence": "Присутність та навчання",
+          "weather": "Погода та зовнішні датчики"
+        }
+      },
+      "devices": {
+        "title": "Пристрої та датчики",
         "description": "Калібрувальні об'єкти та перемикачі виключень визначаються автоматично.",
         "data": {
           "name": "Назва зони",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Крок 2 / 4 – Температури та розклад",
+        "title": "Температури та розклад",
         "description": "Добовий цикл: Ніч → Комфорт → Ніч\n\nКоли всі особи відсутні, ThermoSmart автоматично перемикається на температуру відсутності – незалежно від розкладу.",
         "data": {
           "comfort_temp": "Температура комфорту",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Крок 3 / 4 – Присутність та навчання",
+        "title": "Присутність та навчання",
         "description": "Хто вдома? ThermoSmart автоматично перемикається в режим відсутності, коли всі йдуть.",
         "data": {
           "presence_persons": "Люди для визначення присутності",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Крок 4 / 4 – Погода та зовнішні датчики",
+        "title": "Погода та зовнішні датчики",
         "description": "Всі поля необов'язкові. Власні датчики мають пріоритет над об'єктом погоди.",
         "data": {
           "weather_entity": "Об'єкт погоди",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Авто",
+              "auto": "Авто",
               "vacation": "Відпустка",
-              "sleep":    "Ніч"
+              "sleep": "Ніч"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Активне керування"
       },
-      "learning": { "name": "Режим навчання" },
-      "vacation_mode": { "name": "Режим відпустки" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Режим навчання"
+      },
+      "vacation_mode": {
+        "name": "Режим відпустки"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Режим опалення",
         "state": {
-          "auto":     "Авто",
-          "comfort":  "Комфорт",
-          "eco":      "Eco",
-          "night":    "Ніч",
-          "away":     "Відсутній",
+          "auto": "Авто",
+          "comfort": "Комфорт",
+          "eco": "Eco",
+          "night": "Ніч",
+          "away": "Відсутній",
           "vacation": "Відпустка"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Літній режим",
         "state": {
           "automatic": "Автоматично",
-          "on":        "Увімкнено",
-          "off":       "Вимкнено"
+          "on": "Увімкнено",
+          "off": "Вимкнено"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Цільова температура" },
-      "trv_setpoint": { "name": "Уставка TRV" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Цільова температура"
+      },
+      "trv_setpoint": {
+        "name": "Уставка TRV"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Оцінка результату",
         "state": {
           "learning": "Навчання"
         }
       },
-      "preheat_minutes": { "name": "Час попереднього нагріву" },
-      "confidence": { "name": "Прогрес навчання" },
-      "weather_offset": { "name": "Поправка на погоду" },
+      "preheat_minutes": {
+        "name": "Час попереднього нагріву"
+      },
+      "confidence": {
+        "name": "Прогрес навчання"
+      },
+      "weather_offset": {
+        "name": "Поправка на погоду"
+      },
       "status": {
         "name": "Стан",
         "state": {
-          "disabled":              "Вимкнено",
-          "observation_mode":      "Режим спостереження",
+          "disabled": "Вимкнено",
+          "observation_mode": "Режим спостереження",
           "controlling_no_learning": "Активне керування (навчання вимк.)",
-          "heating_failure":       "Несправність опалення!",
-          "preheating":            "Попереднє нагрівання",
-          "summer":                "Літо – опалення вимк.",
-          "window_open":           "Вікно відкрито",
-          "vacation":              "Відпустка",
-          "away":                  "Відсутній",
-          "heating":               "Опалення",
-          "idle":                  "Температура підтримується",
-          "active":                "Активно"
+          "heating_failure": "Несправність опалення!",
+          "preheating": "Попереднє нагрівання",
+          "summer": "Літо – опалення вимк.",
+          "window_open": "Вікно відкрито",
+          "vacation": "Відпустка",
+          "away": "Відсутній",
+          "heating": "Опалення",
+          "idle": "Температура підтримується",
+          "active": "Активно"
         }
       },
-      "temp_slope": { "name": "Нахил температури" },
-      "temp_ema_1h": { "name": "Температура EMA 1год" },
+      "temp_slope": {
+        "name": "Нахил температури"
+      },
+      "temp_ema_1h": {
+        "name": "Температура EMA 1год"
+      },
       "heat_loss": {
         "name": "Тепловтрати",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Навчання"
         }
       },
-      "sun_intensity": { "name": "Сонячне теплове надходження" },
+      "sun_intensity": {
+        "name": "Сонячне теплове надходження"
+      },
       "window_cooling_rate": {
         "name": "Швидкість охолодження через вікно",
         "state": {
           "learning": "Навчання"
         }
       },
-      "trv_observations": { "name": "Спостереження TRV" }
+      "trv_observations": {
+        "name": "Спостереження TRV"
+      }
     }
   }
 }

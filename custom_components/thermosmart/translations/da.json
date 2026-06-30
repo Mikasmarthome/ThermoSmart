@@ -107,7 +107,16 @@
   "options": {
     "step": {
       "init": {
-        "title": "Trin 1 / 4 – Enheder og sensorer",
+        "title": "Indstillinger",
+        "menu_options": {
+          "devices": "Enheder og sensorer",
+          "schedule": "Temperaturer og tidsplan",
+          "presence": "Tilstedeværelse og læring",
+          "weather": "Vejr og udendørs sensorer"
+        }
+      },
+      "devices": {
+        "title": "Enheder og sensorer",
         "description": "Kalibreringsenheder og quirk-afbrydere registreres automatisk.",
         "data": {
           "name": "Zonenavn",
@@ -128,7 +137,7 @@
         }
       },
       "schedule": {
-        "title": "Trin 2 / 4 – Temperaturer og tidsplan",
+        "title": "Temperaturer og tidsplan",
         "description": "Dagligt forløb: Nat → Komfort → Nat\n\nNår alle personer er væk, skifter ThermoSmart automatisk til fraværstemperaturen – uanset tidsplanen.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -157,7 +166,7 @@
         }
       },
       "presence": {
-        "title": "Trin 3 / 4 – Tilstedeværelse og læring",
+        "title": "Tilstedeværelse og læring",
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
@@ -169,7 +178,7 @@
         }
       },
       "weather": {
-        "title": "Trin 4 / 4 – Vejr og udendørs sensorer",
+        "title": "Vejr og udendørs sensorer",
         "description": "Alle felter er valgfrie. Egne sensorer har forrang over vejrenheden.",
         "data": {
           "weather_entity": "Vejrenhed",
@@ -200,9 +209,9 @@
         "state_attributes": {
           "preset_mode": {
             "state": {
-              "auto":     "Auto",
+              "auto": "Auto",
               "vacation": "Ferie",
-              "sleep":    "Nat"
+              "sleep": "Nat"
             }
           }
         }
@@ -212,19 +221,25 @@
       "active_control": {
         "name": "Aktiv styring"
       },
-      "learning": { "name": "Læringstilstand" },
-      "vacation_mode": { "name": "Ferietilstand" },
-      "debug_log": { "name": "Debug Log" }
+      "learning": {
+        "name": "Læringstilstand"
+      },
+      "vacation_mode": {
+        "name": "Ferietilstand"
+      },
+      "debug_log": {
+        "name": "Debug Log"
+      }
     },
     "select": {
       "mode": {
         "name": "Varmetilstand",
         "state": {
-          "auto":     "Auto",
-          "comfort":  "Komfort",
-          "eco":      "Eco",
-          "night":    "Nat",
-          "away":     "Fraværende",
+          "auto": "Auto",
+          "comfort": "Komfort",
+          "eco": "Eco",
+          "night": "Nat",
+          "away": "Fraværende",
           "vacation": "Ferie"
         }
       },
@@ -232,43 +247,59 @@
         "name": "Sommertilstand",
         "state": {
           "automatic": "Automatisk",
-          "on":        "Til",
-          "off":       "Fra"
+          "on": "Til",
+          "off": "Fra"
         }
       }
     },
     "sensor": {
-      "adjusted_target": { "name": "Måltemperatur" },
-      "trv_setpoint": { "name": "TRV-indstillingspunkt" },
-      "tpi_duty_cycle": { "name": "TPI Duty-Cycle" },
+      "adjusted_target": {
+        "name": "Måltemperatur"
+      },
+      "trv_setpoint": {
+        "name": "TRV-indstillingspunkt"
+      },
+      "tpi_duty_cycle": {
+        "name": "TPI Duty-Cycle"
+      },
       "outcome_score": {
         "name": "Resultatscore",
         "state": {
           "learning": "Lærer"
         }
       },
-      "preheat_minutes": { "name": "Forvarmingstid" },
-      "confidence": { "name": "Læringsfremdrift" },
-      "weather_offset": { "name": "Vejrkorrigering" },
+      "preheat_minutes": {
+        "name": "Forvarmingstid"
+      },
+      "confidence": {
+        "name": "Læringsfremdrift"
+      },
+      "weather_offset": {
+        "name": "Vejrkorrigering"
+      },
       "status": {
         "name": "Status",
         "state": {
-          "disabled":              "Deaktiveret",
-          "observation_mode":      "Observationstilstand",
+          "disabled": "Deaktiveret",
+          "observation_mode": "Observationstilstand",
           "controlling_no_learning": "Aktiv styring (læring slukket)",
-          "heating_failure":       "Varmefejl!",
-          "preheating":            "Forvarmer",
-          "summer":                "Sommer – varme slukket",
-          "window_open":           "Vindue åbent",
-          "vacation":              "Ferie",
-          "away":                  "Fraværende",
-          "heating":               "Varmer",
-          "idle":                  "Temperatur opretholdt",
-          "active":                "Aktiv"
+          "heating_failure": "Varmefejl!",
+          "preheating": "Forvarmer",
+          "summer": "Sommer – varme slukket",
+          "window_open": "Vindue åbent",
+          "vacation": "Ferie",
+          "away": "Fraværende",
+          "heating": "Varmer",
+          "idle": "Temperatur opretholdt",
+          "active": "Aktiv"
         }
       },
-      "temp_slope": { "name": "Temperaturhældning" },
-      "temp_ema_1h": { "name": "Temperatur EMA 1h" },
+      "temp_slope": {
+        "name": "Temperaturhældning"
+      },
+      "temp_ema_1h": {
+        "name": "Temperatur EMA 1h"
+      },
       "heat_loss": {
         "name": "Varmetab",
         "state": {
@@ -281,14 +312,18 @@
           "learning": "Lærer"
         }
       },
-      "sun_intensity": { "name": "Solvarmeindvinding" },
+      "sun_intensity": {
+        "name": "Solvarmeindvinding"
+      },
       "window_cooling_rate": {
         "name": "Vinduesafkølingshastighed",
         "state": {
           "learning": "Lærer"
         }
       },
-      "trv_observations": { "name": "TRV-observationer" }
+      "trv_observations": {
+        "name": "TRV-observationer"
+      }
     }
   }
 }

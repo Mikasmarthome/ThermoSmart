@@ -2254,8 +2254,13 @@ class LearningShadowController:
     def learning_progress_safe(self) -> tuple[float, dict]:
         """Learning progress from zone-specific real model updates (0.0–100.0 %, attributes).
 
-        Weighted formula: core thermal models (heat_rate, heat_loss, afterheat, outcome)
-        carry 95 % of the weight; onset_delay (auxiliary TRV-response metric) at most 5 %.
+        Two-layer formula:
+        1. Weighted raw score: core thermal models carry 95 % of the weight;
+           onset_delay (auxiliary TRV-response metric) at most 5 %.
+        2. Maturity cap: the displayed value is bounded by outcome sample count and
+           core model coverage. Progress stays conservative until real heating quality
+           is confirmed by accepted outcome evaluations across many situations.
+
         Only episode-driven model updates count; bootstrap, priors, and the confidence
         aggregator output are explicitly excluded.
 
@@ -2267,6 +2272,9 @@ class LearningShadowController:
             "data_source": "current_learning_engine",
             "progress_status": "cold_start",
             "weighted_progress": True,
+            "weighted_progress_raw": 0.0,
+            "maturity_cap_applied": False,
+            "maturity_cap": 5.0,
             "models_with_real_data": 0,
             "models_total": _n_models,
             "onset_delay_updates": 0,
@@ -2274,6 +2282,7 @@ class LearningShadowController:
             "core_thermal_models_with_data": 0,
             "dominant_model": "none",
             "progress_limited_by": "no_data",
+            "required_outcome_samples_for_next_stage": 3,
             "bootstrap_excluded": True,
             "reason": "no_valid_heating_episodes_yet",
         }
@@ -2304,42 +2313,71 @@ class LearningShadowController:
                     best_contrib = contrib
                     best_model = model
 
-            progress_pct = round(total_weighted * 100.0, 1)
+            raw_pct = round(total_weighted * 100.0, 1)
             onset_updates = counts.get("onset_delay", 0)
             outcome_updates = counts.get("outcome", 0)
 
+            # Maturity cap: outcome samples are the primary maturity signal.
+            # Each tier unlocks more progress; high values require broad data.
+            if core_with_data == 0:
+                cap_pct, cap_reason = 5.0, "auxiliary_model_only"
+            elif outcome_updates == 0:
+                cap_pct, cap_reason = 15.0, "no_outcome_samples"
+            elif outcome_updates < 3:
+                cap_pct, cap_reason = 20.0, "insufficient_outcome_samples"
+            elif outcome_updates < 8:
+                cap_pct, cap_reason = 35.0, "early_learning_stage"
+            elif outcome_updates < 20:
+                cap_pct, cap_reason = 55.0, "early_learning_stage"
+            elif outcome_updates < 50:
+                cap_pct, cap_reason = 75.0, "limited_outcome_data"
+            elif core_with_data >= 4:
+                cap_pct, cap_reason = 100.0, "none"
+            elif core_with_data >= 3:
+                cap_pct, cap_reason = 90.0, "insufficient_core_thermal_models"
+            else:
+                cap_pct, cap_reason = 75.0, "insufficient_core_thermal_models"
+
+            cap_applied = raw_pct > cap_pct
+            progress_pct = round(min(raw_pct, cap_pct), 1)
+
+            # Next outcome sample count that unlocks the next progress tier.
+            next_stage = None
+            if core_with_data > 0:
+                for _t in (3, 8, 20, 50):
+                    if outcome_updates < _t:
+                        next_stage = _t
+                        break
+
+            # Status uses capped progress so it stays consistent with the displayed value.
             if progress_pct == 0.0:
                 status = "cold_start"
                 reason = "no_valid_heating_episodes_yet"
-                limited_by = "no_data"
             elif core_with_data == 0:
                 status = "collecting_data"
                 reason = "auxiliary_model_only"
-                limited_by = "auxiliary_model_only"
-            elif outcome_updates == 0:
-                status = "learning"
-                reason = "partial_data"
-                limited_by = "no_outcome_samples"
-            elif core_with_data < len(_core):
-                status = "learning"
-                reason = "partial_data"
-                limited_by = "insufficient_core_thermal_models"
-            else:
+            elif cap_reason == "none" and models_with_data == _n_models:
                 status = "learned"
                 reason = "sufficient_data"
-                limited_by = "none"
+            else:
+                status = "learning"
+                reason = "partial_data"
 
             return progress_pct, {
                 "data_source": "current_learning_engine",
                 "progress_status": status,
                 "weighted_progress": True,
+                "weighted_progress_raw": raw_pct,
+                "maturity_cap_applied": cap_applied,
+                "maturity_cap": cap_pct,
                 "models_with_real_data": models_with_data,
                 "models_total": _n_models,
                 "onset_delay_updates": onset_updates,
                 "outcome_samples": outcome_updates,
                 "core_thermal_models_with_data": core_with_data,
                 "dominant_model": best_model if best_contrib > 0.0 else "none",
-                "progress_limited_by": limited_by,
+                "progress_limited_by": cap_reason,
+                "required_outcome_samples_for_next_stage": next_stage,
                 "bootstrap_excluded": True,
                 "reason": reason,
             }

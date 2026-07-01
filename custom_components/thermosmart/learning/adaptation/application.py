@@ -1,18 +1,19 @@
-"""Pure application-readiness architecture for passive adaptation candidates.
+"""Pure application-readiness and application-plan architecture for passive
+adaptation candidates.
 
-Defines the gate structure that would gate real candidate application.
+Defines the gate structure and bounded planning layer for candidate application.
 No control modification is performed — application_enabled is always False
-in this foundation step.
+in real runtime. The Application Layer is runtime-disabled by default.
 
 No HA imports. No runtime state. No control modifications.
-All dataclasses are frozen; the main function is pure and never raises.
+All dataclasses are frozen; all functions are pure and never raise.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Optional
 
-from .contracts import AdaptationLifecycle, CandidateType
+from .contracts import AdaptationDirection, AdaptationLifecycle, CandidateType
 from .history import CandidateHistoryEntry, PromotionGateResult, PromotionReadiness
 
 # ── Allowlist — types theoretically applicable in the future ──────────────────
@@ -61,6 +62,7 @@ class ApplicationPolicy:
     application_enabled: bool = False          # global kill-switch; False by design
     max_confounder_ratio: float = 0.15         # above this → block application
     min_cooldown_days: float = 7.0             # min days between applications of same key
+    monitoring_window_hours: float = 48.0      # post-apply monitoring window length
 
 
 # ── Runtime context ───────────────────────────────────────────────────────────
@@ -298,4 +300,186 @@ def evaluate_application_readiness(
         max_cumulative_delta=max_cum_out,
         blocking_reasons=tuple(reasons),
         safety_reasons=tuple(safety),
+    )
+
+
+# ── Application Plan ──────────────────────────────────────────────────────────
+
+# Bounded planning constants for PREHEAT_DELTA_MIN
+_PLAN_PREHEAT_MAX_STEP       = _TYPE_STEP_LIMITS[CandidateType.PREHEAT_DELTA_MIN]       # 5.0 min
+_PLAN_PREHEAT_MAX_CUMULATIVE = _TYPE_CUMULATIVE_LIMITS[CandidateType.PREHEAT_DELTA_MIN] # 15.0 min
+
+# Directions supported in the PREHEAT bounded plan
+_PLAN_SUPPORTED_DIRECTIONS: frozenset[AdaptationDirection] = frozenset({
+    AdaptationDirection.INCREASE,
+    AdaptationDirection.DECREASE,
+})
+
+
+@dataclass(frozen=True)
+class ApplicationPlan:
+    """Pure, bounded application plan for a PREHEAT_DELTA_MIN candidate.
+
+    Describes what would theoretically be applied, how it is bounded, and
+    what monitoring would be required after application.
+
+    No control modification is performed by this object.
+    application_enabled mirrors the policy kill-switch — always False in
+    real runtime.  would_apply is only True in tests with an explicit
+    ApplicationPolicy(application_enabled=True).
+    """
+    candidate_key: str
+    candidate_type_value: str               # CandidateType.value
+    direction_value: str                    # AdaptationDirection.value
+    requested_delta_min: Optional[float]    # raw proposed delta from runtime context
+    bounded_delta_min: Optional[float]      # capped to ±max_step; preserves sign
+    current_cumulative_delta_min: Optional[float]   # prior cumulative drift
+    next_cumulative_delta_min: Optional[float]       # current + bounded (if known)
+    would_apply: bool                       # True only when kill-switch enabled + all gates pass
+    application_enabled: bool               # mirrors kill-switch; always False in real runtime
+    blocking_reasons: tuple[str, ...]       # all reasons (decision-level + plan-level)
+    monitoring_required: bool               # always True — contract for the Application Layer
+    rollback_supported: bool                # always True — contract for the Application Layer
+    monitoring_window_hours: float          # length of post-apply observation window
+    rollback_reason: Optional[str]          # None in plan phase; populated post-apply
+
+    def to_dict(self) -> dict:
+        """Public-safe, read-only serialization. No control fields."""
+        return {
+            "candidate_key":               self.candidate_key,
+            "candidate_type":              self.candidate_type_value,
+            "direction":                   self.direction_value,
+            "requested_delta_min":         self.requested_delta_min,
+            "bounded_delta_min":           self.bounded_delta_min,
+            "current_cumulative_delta_min": self.current_cumulative_delta_min,
+            "next_cumulative_delta_min":   self.next_cumulative_delta_min,
+            "would_apply":                 self.would_apply,
+            "application_enabled":         self.application_enabled,
+            "blocking_reasons":            list(self.blocking_reasons),
+            "monitoring_required":         self.monitoring_required,
+            "rollback_supported":          self.rollback_supported,
+            "monitoring_window_hours":     self.monitoring_window_hours,
+            "rollback_reason":             self.rollback_reason,
+        }
+
+
+def build_preheat_application_plan(
+    *,
+    history_entry: CandidateHistoryEntry,
+    promotion_result: PromotionGateResult,
+    application_decision: ApplicationDecision,
+    policy: Optional[ApplicationPolicy] = None,
+    runtime_context: Optional[ApplicationRuntimeContext] = None,
+) -> ApplicationPlan:
+    """Build a bounded application plan for a PREHEAT_DELTA_MIN candidate.
+
+    Pure function — no HA imports, no control modification, no side effects.
+    Only PREHEAT_DELTA_MIN is handled; all other types return a plan blocked
+    with "plan_type_not_supported".
+
+    The plan computes a bounded delta (capped to ±5 min) and a projected
+    cumulative drift. application_enabled mirrors the kill-switch from the
+    pre-evaluated ApplicationDecision — it is always False in real runtime.
+
+    would_apply is True only when:
+      - application_decision.application_enabled is True (tests only)
+      - application_decision.would_allow_if_enabled is True
+      - no plan-level gate blocks (direction, delta, cumulative)
+
+    No control modification of any kind is performed or implied.
+    monitoring_required and rollback_supported are
+    always True as structural contracts for a future Application Layer.
+
+    Args:
+        history_entry:        accumulated candidate history (SHADOW lifecycle).
+        promotion_result:     output of evaluate_promotion_readiness().
+        application_decision: output of evaluate_application_readiness().
+        policy:               limits; defaults to ApplicationPolicy().
+        runtime_context:      live snapshot providing proposed_delta and
+                              current_cumulative_delta; None → plan blocks
+                              with "missing_requested_delta".
+
+    Returns:
+        ApplicationPlan describing what would be applied if enabled.
+        Never raises.
+    """
+    _policy = policy or ApplicationPolicy()
+    ctype = history_entry.candidate_type
+    direction = history_entry.direction
+
+    plan_reasons: list[str] = []
+
+    # ── Plan gate 1: only PREHEAT_DELTA_MIN ──────────────────────────────────
+    is_preheat = (ctype is CandidateType.PREHEAT_DELTA_MIN)
+    if not is_preheat:
+        plan_reasons.append(f"plan_type_not_supported:{ctype.value}")
+
+    # ── Plan gate 2: direction must be INCREASE or DECREASE ──────────────────
+    direction_ok = direction in _PLAN_SUPPORTED_DIRECTIONS
+    if not direction_ok:
+        plan_reasons.append(f"unsupported_direction:{direction.value}")
+
+    # ── Plan gate 3: requested delta from runtime context ─────────────────────
+    requested_delta: Optional[float] = None
+    bounded_delta: Optional[float] = None
+
+    if is_preheat:
+        if runtime_context is None or runtime_context.proposed_delta is None:
+            plan_reasons.append("missing_requested_delta")
+        else:
+            requested_delta = runtime_context.proposed_delta
+            if direction_ok:
+                # Validate sign-direction consistency
+                if direction is AdaptationDirection.INCREASE and requested_delta < 0:
+                    plan_reasons.append("direction_delta_mismatch:increase_but_negative")
+                elif direction is AdaptationDirection.DECREASE and requested_delta > 0:
+                    plan_reasons.append("direction_delta_mismatch:decrease_but_positive")
+                else:
+                    # Bound to ±max_step — preserves sign
+                    sign = 1.0 if requested_delta >= 0 else -1.0
+                    bounded_delta = sign * min(abs(requested_delta), _PLAN_PREHEAT_MAX_STEP)
+
+    # ── Plan gate 4: cumulative limit check with bounded delta ─────────────────
+    current_cumulative: Optional[float] = (
+        runtime_context.current_cumulative_delta
+        if runtime_context is not None else None
+    )
+    next_cumulative: Optional[float] = None
+
+    if is_preheat and bounded_delta is not None and current_cumulative is not None:
+        next_cumulative = current_cumulative + bounded_delta
+        if abs(next_cumulative) > _PLAN_PREHEAT_MAX_CUMULATIVE:
+            plan_reasons.append(
+                f"plan_cumulative_exceeds_limit:"
+                f"{abs(next_cumulative):.1f}>{_PLAN_PREHEAT_MAX_CUMULATIVE:.1f}"
+            )
+
+    # ── Combine: decision-level reasons + plan-level reasons ─────────────────
+    all_reasons = list(application_decision.blocking_reasons) + plan_reasons
+
+    # ── would_apply: kill-switch AND readiness AND no plan-level blocks ───────
+    # In real runtime application_decision.application_enabled is always False.
+    # Only an explicit ApplicationPolicy(application_enabled=True) in tests
+    # can make would_apply True.
+    would_apply = (
+        application_decision.application_enabled
+        and application_decision.would_allow_if_enabled
+        and len(plan_reasons) == 0
+    )
+
+    return ApplicationPlan(
+        candidate_key=history_entry.candidate_key,
+        candidate_type_value=ctype.value,
+        direction_value=direction.value,
+        requested_delta_min=requested_delta,
+        bounded_delta_min=bounded_delta,
+        current_cumulative_delta_min=current_cumulative,
+        next_cumulative_delta_min=next_cumulative,
+        would_apply=would_apply,
+        application_enabled=application_decision.application_enabled,
+        blocking_reasons=tuple(all_reasons),
+        monitoring_required=True,
+        rollback_supported=True,
+        monitoring_window_hours=_policy.monitoring_window_hours,
+        rollback_reason=None,
     )

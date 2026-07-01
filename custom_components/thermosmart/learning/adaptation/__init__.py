@@ -54,9 +54,11 @@ from .history_store_schema import (
 )
 from .application import (
     ApplicationDecision,
+    ApplicationPlan,
     ApplicationPolicy,
     ApplicationRuntimeContext,
     application_readiness_preview,
+    build_preheat_application_plan,
     evaluate_application_readiness,
 )
 
@@ -89,8 +91,10 @@ __all__ = [
     "prune_history_entries",
     "serialize_history_state",
     "ApplicationDecision",
+    "ApplicationPlan",
     "ApplicationPolicy",
     "ApplicationRuntimeContext",
     "application_readiness_preview",
+    "build_preheat_application_plan",
     "evaluate_application_readiness",
 ]

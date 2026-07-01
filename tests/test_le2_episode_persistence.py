@@ -347,18 +347,30 @@ def test_t14_no_save_or_store_calls_in_module():
 # ── T15/T16: N/A — no runtime wiring added in this step ──────────────────
 
 def test_t15_t16_no_runtime_wiring_added_this_step():
-    """Explicit static confirmation that this foundation-only step did not
-    wire episode persistence into the live runtime cycle (lifecycle.py) or
-    the HA integration layer (ha_integration.py) — matching the report's
-    Option C decision."""
+    """Explicit static confirmation that append_completed_episode()/
+    append_completed_episodes() are never actually CALLED from the live
+    runtime cycle (lifecycle.py) or the HA integration layer
+    (ha_integration.py) — matching the report's Option C decision.
+
+    A later step legitimately references "episode_persistence.py" by name in
+    an ha_integration.py code COMMENT (documenting the future hook point) —
+    that is prose, not wiring, so this check looks for the actual invocation
+    pattern (a call with parentheses) rather than the bare module name."""
     import custom_components.thermosmart.learning.runtime.lifecycle as _lifecycle_mod
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha_mod
     lifecycle_source = inspect.getsource(_lifecycle_mod)
     ha_source = inspect.getsource(_ha_mod)
-    assert "episode_persistence" not in lifecycle_source
-    assert "append_completed_episode" not in lifecycle_source
-    assert "episode_persistence" not in ha_source
-    assert "append_completed_episode" not in ha_source
+    assert "from ..storage.episode_persistence import" not in lifecycle_source
+    assert "from ..storage import episode_persistence" not in lifecycle_source
+    assert "from ..storage.episode_persistence import" not in ha_source
+    assert "from ..storage import episode_persistence" not in ha_source
+    for source in (lifecycle_source, ha_source):
+        for line in source.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith('"""'):
+                continue  # comment/docstring mention is documentation, not wiring
+            assert "append_completed_episode(" not in stripped
+            assert "append_completed_episodes(" not in stripped
 
 
 # ── T17: Save error non-fatal — covered at the design level ──────────────

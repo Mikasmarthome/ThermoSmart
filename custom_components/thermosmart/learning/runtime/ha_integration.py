@@ -300,6 +300,14 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: capture storage foundation stays unavailable
+        # Episode history — in-memory with persistent backing store, reached via the
+        # LearningCaptureStores facade above (EpisodesStore). No runtime append hook
+        # exists yet — nothing in run_cycle() calls append_completed_episode() in this
+        # step (see episode_persistence.py's own docstring for why); this only wires
+        # load/save so a future hook has an already-tested attachment point.
+        self._episode_history: dict = {}  # episode_id -> flat serialized episode entry
+        self._episode_save_needed: bool = False
+        self._episode_last_error: Optional[str] = None
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -338,6 +346,8 @@ class LearningShadowController:
         await self._async_load_adaptation_history_safe()
         # Load persisted application lifecycle state (non-fatal; no real entries yet)
         await self._async_load_application_lifecycle_safe()
+        # Load persisted episode history (non-fatal; no runtime writer yet)
+        await self._async_load_episode_history_safe()
         return setup_ok
 
     def observe_safe(self, recommendation: Mapping[str, Any], *,
@@ -603,6 +613,71 @@ class LearningShadowController:
             ).to_dict()
         except Exception:
             return None
+
+    async def _async_load_episode_history_safe(self) -> None:
+        """Load persisted episode history via LearningCaptureStores.episodes_store().
+
+        Non-fatal on missing/corrupt store. Each stored entry is validated with
+        deserialize_episode() (from episode_serialization.py) before being kept —
+        a malformed or schema-mismatched entry is silently dropped, never crashes
+        the load. No runtime writer populates this store yet in this step.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            store = self._capture_stores.episodes_store()
+            raw = await store.load()
+            if raw is None:
+                return
+            raw_entries = raw.get("episodes") if isinstance(raw, Mapping) else None
+            if not isinstance(raw_entries, Mapping):
+                return
+            from ..storage.episode_serialization import deserialize_episode
+            rebuilt: dict = {}
+            for eid, entry in raw_entries.items():
+                if not isinstance(entry, Mapping):
+                    continue  # malformed -> skip
+                if deserialize_episode(entry) is None:
+                    continue  # unknown type / schema mismatch / malformed -> skip
+                rebuilt[eid] = dict(entry)
+            self._episode_history = rebuilt
+        except Exception as err:
+            self._episode_last_error = str(err)
+
+    async def _async_save_episode_history_safe(self) -> None:
+        """Persist episode history best-effort. Non-fatal on error.
+
+        Dirty flag remains True when save fails, ensuring the next opportunity
+        retries. Nothing in this step ever sets _episode_save_needed — this
+        method exists so a future runtime append hook can rely on an
+        already-tested save path via the existing periodic save trigger.
+        """
+        if self._capture_stores is None or not self._episode_save_needed:
+            return
+        try:
+            store = self._capture_stores.episodes_store()
+            await store.save({"episodes": dict(self._episode_history)})
+            self._episode_save_needed = False
+        except Exception as err:
+            self._episode_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def episode_history_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory episode history.
+
+        Keys are episode_id strings; values are flat, versioned serialized
+        episode entry dicts (see episode_serialization.py). Empty until a
+        future runtime append hook and/or a successful store load populate it.
+        Never raises.
+        """
+        try:
+            return dict(self._episode_history)
+        except Exception:
+            return {}
+
+    def episode_last_error(self) -> Optional[str]:
+        """Return the last error message from episode history load/save, or None."""
+        return self._episode_last_error
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -2433,6 +2508,7 @@ class LearningShadowController:
             self._record_error("save", err)
         await self._async_save_adaptation_history_safe()
         await self._async_save_application_lifecycle_safe()
+        await self._async_save_episode_history_safe()
 
     async def async_flush(self) -> None:
         try:
@@ -2450,6 +2526,8 @@ class LearningShadowController:
         await self._async_save_adaptation_history_safe()
         # Flush application lifecycle state (best-effort; saves if dirty)
         await self._async_save_application_lifecycle_safe()
+        # Flush episode history (best-effort; saves if dirty)
+        await self._async_save_episode_history_safe()
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.

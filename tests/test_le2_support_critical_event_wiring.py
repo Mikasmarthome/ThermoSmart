@@ -493,12 +493,21 @@ def test_t14_no_runtime_hook_in_coordinator():
 
 
 def test_t14_no_live_call_site_for_record_method_in_ha_integration():
-    """The method exists and is defined, but nothing else in ha_integration.py
-    (outside its own definition/docstring) calls it — no live producer yet."""
+    """At the time this wiring step was built, the method existed but had no
+    caller. A later, separately-approved step ("Support Critical Event
+    Producers Increment 1") legitimately added exactly ONE call site — the
+    storage/setup landmark helper (_record_storage_landmark_event_safe) used
+    only from the load/save methods themselves. That is intentional,
+    non-runtime, non-control wiring, not a coordinator/lifecycle producer —
+    still unlike record_completed_episode_safe(), it is not bound as a
+    LearningRuntime sink and no coordinator/control path calls it."""
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha
     source = inspect.getsource(_ha)
     call_count = source.count("self.record_support_critical_event_safe(")
-    assert call_count == 0  # unlike record_completed_episode_safe, not bound as a sink
+    assert call_count == 1
+    assert "self.record_support_critical_event_safe(" in inspect.getsource(
+        _ha.LearningShadowController._record_storage_landmark_event_safe
+    )
 
 
 # ── T15: No raw store referenced by the new wiring ─────────────────────────

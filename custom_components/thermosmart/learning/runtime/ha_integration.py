@@ -314,15 +314,19 @@ class LearningShadowController:
         self._episode_save_needed: bool = False
         self._episode_last_error: Optional[str] = None
         # Support Critical Events — in-memory with persistent backing store, reached
-        # via the same LearningCaptureStores facade (SupportCriticalEventStore). No
-        # runtime producer exists yet — nothing anywhere calls
-        # record_support_critical_event_safe() in this step (see
-        # support_event_persistence.py's own docstring for why); this only wires
-        # load/save so a future, separately-approved instrumentation step has an
-        # already-tested attachment point.
+        # via the same LearningCaptureStores facade (SupportCriticalEventStore).
+        # Storage/setup landmark events (store loaded/empty/load-failed,
+        # save-failed/save-recovered) are recorded from within the load/save
+        # methods themselves in this step — no coordinator/runtime/control-path
+        # producer exists yet (see support_event_persistence.py's own docstring).
         self._support_critical_events: dict = {}  # event_id -> flat serialized support event entry
         self._support_critical_events_save_needed: bool = False
         self._support_critical_events_last_error: Optional[str] = None
+        # Tracks whether a storage_save_failed landmark has already been recorded
+        # for the CURRENT failure streak — prevents re-recording one every
+        # periodic save attempt while the underlying problem persists, and gates
+        # the single storage_save_recovered landmark on the next success.
+        self._support_critical_events_save_failure_notified: bool = False
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -733,6 +737,51 @@ class LearningShadowController:
         except Exception as err:
             self._episode_last_error = str(err)
 
+    # 6h — avoids flooding the 48h critical-event timeline with a repeated
+    # "store loaded"/"store empty"/"load failed" landmark on every HA restart
+    # when restarts happen frequently (e.g. during setup/troubleshooting).
+    _STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S = 6 * 3600
+
+    def _record_storage_landmark_event_safe(
+        self, *, event_type: Any, severity: Any, reason: str, summary: str,
+        details: Mapping[str, Any], dedupe_window_s: Optional[float] = None,
+    ) -> None:
+        """Build and record ONE storage/setup landmark Support Critical Event.
+
+        Pure hand-off to record_support_critical_event_safe() — never touches
+        storage itself (no save triggered here), so this can never recurse
+        into the save path it may be called from. When ``dedupe_window_s`` is
+        given, skips recording if an event with the same (event_type, reason)
+        already exists in the current in-memory snapshot within that window
+        — used for the load-outcome landmarks, which would otherwise repeat
+        once per HA restart. Save-failure/-recovery landmarks pass no window
+        here; they are already deduped by the caller's own state flag
+        (``_support_critical_events_save_failure_notified``), which is a
+        precise state-transition signal rather than a time window. Never
+        raises: any failure here is swallowed — a missing landmark is
+        strictly less important than the load/save operation it decorates.
+        """
+        try:
+            from datetime import datetime
+            from .. import support_event_schemas as _schemas
+            from ..storage.support_event_serialization import SUPPORT_EVENT_SCHEMA_VERSION
+
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            event_id = f"storage_landmark_{event_type.value}_{int(now_utc.timestamp() * 1000)}"
+            candidate = _schemas.SupportCriticalEvent(
+                schema_version=SUPPORT_EVENT_SCHEMA_VERSION, event_id=event_id,
+                event_type=event_type, ts=now_utc, severity=severity,
+                reason=reason, summary=summary, details=dict(details),
+            )
+            if dedupe_window_s is not None:
+                from ..storage.support_event_persistence import is_recent_duplicate
+                recent = list(self._support_critical_events.values())
+                if is_recent_duplicate(candidate, recent, window_s=dedupe_window_s):
+                    return
+            self.record_support_critical_event_safe(candidate)
+        except Exception:
+            pass  # landmark recording is best-effort; never affects load/save itself
+
     async def _async_load_support_critical_events_safe(self) -> None:
         """Load persisted support critical events via
         LearningCaptureStores.support_critical_events_store().
@@ -740,49 +789,114 @@ class LearningShadowController:
         Non-fatal on missing/corrupt store. Each stored entry is validated with
         deserialize_support_event() (from support_event_serialization.py)
         before being kept — a malformed or schema-mismatched entry is silently
-        dropped, never crashes the load. No runtime writer populates this
-        store yet in this step.
+        dropped (counted), never crashes the load.
+
+        Records exactly one storage/setup landmark event for this load
+        outcome (loaded-with-data / loaded-empty / load-failed), deduped
+        against the just-loaded snapshot so frequent HA restarts don't flood
+        the 48h timeline with repeated identical landmarks. This is the ONLY
+        event producer in this step — still no coordinator/runtime/control
+        path involved.
         """
         if self._capture_stores is None:
             return
+        from .. import support_event_schemas as _schemas
+
+        records_loaded = 0
+        malformed_skipped = 0
+        load_error: Optional[Exception] = None
         try:
             store = self._capture_stores.support_critical_events_store()
             raw = await store.load()
-            if raw is None:
-                return
-            raw_entries = raw.get("events") if isinstance(raw, Mapping) else None
-            if not isinstance(raw_entries, Mapping):
-                return
-            from ..storage.support_event_serialization import deserialize_support_event
-            rebuilt: dict = {}
-            for eid, entry in raw_entries.items():
-                if not isinstance(entry, Mapping):
-                    continue  # malformed -> skip
-                if deserialize_support_event(entry) is None:
-                    continue  # unknown type / schema mismatch / malformed -> skip
-                rebuilt[eid] = dict(entry)
-            self._support_critical_events = rebuilt
+            if raw is not None:
+                raw_entries = raw.get("events") if isinstance(raw, Mapping) else None
+                if isinstance(raw_entries, Mapping):
+                    from ..storage.support_event_serialization import deserialize_support_event
+                    rebuilt: dict = {}
+                    for eid, entry in raw_entries.items():
+                        if not isinstance(entry, Mapping):
+                            malformed_skipped += 1
+                            continue  # malformed -> skip
+                        if deserialize_support_event(entry) is None:
+                            malformed_skipped += 1
+                            continue  # unknown type / schema mismatch / malformed -> skip
+                        rebuilt[eid] = dict(entry)
+                    self._support_critical_events = rebuilt
+                    records_loaded = len(rebuilt)
         except Exception as err:
             self._support_critical_events_last_error = str(err)
+            load_error = err
+
+        if load_error is not None:
+            self._record_storage_landmark_event_safe(
+                event_type=_schemas.SupportEventType.STORAGE_RESTORE_FAILED,
+                severity=_schemas.SupportEventSeverity.WARNING,
+                reason="support_events_load_failed",
+                summary="Support critical event store failed to load",
+                details={"error_type": type(load_error).__name__},
+                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
+            )
+        elif records_loaded == 0:
+            self._record_storage_landmark_event_safe(
+                event_type=_schemas.SupportEventType.STORAGE_RESTORE,
+                severity=_schemas.SupportEventSeverity.INFO,
+                reason="support_events_empty",
+                summary="Support critical event store loaded (empty)",
+                details={"records_loaded": 0},
+                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
+            )
+        else:
+            self._record_storage_landmark_event_safe(
+                event_type=_schemas.SupportEventType.STORAGE_RESTORE,
+                severity=_schemas.SupportEventSeverity.INFO,
+                reason="support_events_loaded",
+                summary="Support critical event store loaded",
+                details={"records_loaded": records_loaded, "malformed_skipped": malformed_skipped},
+                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
+            )
 
     async def _async_save_support_critical_events_safe(self) -> None:
         """Persist support critical events best-effort. Non-fatal on error.
 
         Dirty flag remains True when save fails, ensuring the next opportunity
-        retries. Nothing in this step ever sets
-        _support_critical_events_save_needed — this method exists so a future
-        runtime producer can rely on an already-tested save path via the
-        existing periodic save trigger.
+        retries. On the FIRST failure of a failure streak, records one
+        storage_save_failed landmark and sets
+        ``_support_critical_events_save_failure_notified`` — subsequent
+        failures in the same streak record nothing further (no per-cycle
+        spam). On the next successful save after a notified failure, records
+        one storage_save_recovered landmark and clears the flag. Recording
+        a landmark here never triggers a second save within this call — it
+        only marks ``_support_critical_events_save_needed`` dirty again for
+        the NEXT periodic save opportunity, exactly like any other append.
         """
         if self._capture_stores is None or not self._support_critical_events_save_needed:
             return
+        from .. import support_event_schemas as _schemas
         try:
             store = self._capture_stores.support_critical_events_store()
             await store.save({"events": dict(self._support_critical_events)})
             self._support_critical_events_save_needed = False
+            if self._support_critical_events_save_failure_notified:
+                self._support_critical_events_save_failure_notified = False
+                self._record_storage_landmark_event_safe(
+                    event_type=_schemas.SupportEventType.STORAGE_SAVE_RECOVERED,
+                    severity=_schemas.SupportEventSeverity.INFO,
+                    reason="support_events_save_recovered",
+                    summary="Support critical event store save recovered",
+                    details={},
+                )
         except Exception as err:
             self._support_critical_events_last_error = str(err)
             # dirty flag remains — will retry on next save opportunity
+            if not self._support_critical_events_save_failure_notified:
+                self._support_critical_events_save_failure_notified = True
+                self._record_storage_landmark_event_safe(
+                    event_type=_schemas.SupportEventType.STORAGE_SAVE_FAILED,
+                    severity=_schemas.SupportEventSeverity.WARNING,
+                    reason="support_events_save_failed",
+                    summary="Support critical event store failed to save",
+                    details={"error_type": type(err).__name__},
+                )
 
     def support_critical_events_snapshot(self) -> dict:
         """Return a shallow copy of the current in-memory support critical events.

@@ -65,6 +65,9 @@ class SupportEventType(Enum):
     FALLBACK_USED = "fallback_used"
     RESTART_RESTORE = "restart_restore"
     STORAGE_RESTORE = "storage_restore"
+    STORAGE_RESTORE_FAILED = "storage_restore_failed"
+    STORAGE_SAVE_FAILED = "storage_save_failed"
+    STORAGE_SAVE_RECOVERED = "storage_save_recovered"
     OUTCOME_RESOLVED = "outcome_resolved"
 
 

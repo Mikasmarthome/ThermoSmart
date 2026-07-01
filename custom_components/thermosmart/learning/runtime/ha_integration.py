@@ -528,10 +528,17 @@ class LearningShadowController:
         if self._application_lifecycle_store is None:
             return
         try:
+            from ..adaptation.application_state import (
+                ApplicationLifecycleState, deserialize_application_lifecycle_state,
+            )
             raw = await self._application_lifecycle_store.load()
             if raw is None:
+                # No persisted data yet — initialize empty state so the Application Layer
+                # can add entries without having to guard against None first.
+                self._application_lifecycle_state = ApplicationLifecycleState(
+                    learning_zone_id=self._zone, updated_at="", entries={},
+                )
                 return
-            from ..adaptation.application_state import deserialize_application_lifecycle_state
             state = deserialize_application_lifecycle_state(raw, self._zone)
             self._application_lifecycle_state = state
         except Exception as err:

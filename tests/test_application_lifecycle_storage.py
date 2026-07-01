@@ -159,6 +159,9 @@ class _AsyncLifecycleHelper:
         try:
             raw = await self._store.load()
             if raw is None:
+                self._application_lifecycle_state = ApplicationLifecycleState(
+                    learning_zone_id=self._zone, updated_at="", entries={},
+                )
                 return
             state = deserialize_application_lifecycle_state(raw, self._zone)
             self._application_lifecycle_state = state
@@ -293,7 +296,7 @@ def test_t3_store_version_mismatch_raises_store_version_error():
 # ── T4: Missing Store → leerer State ─────────────────────────────────────────
 
 def test_t4_none_from_load_gives_empty_state():
-    """When store.load() returns None, state stays None (treated as fresh empty)."""
+    """When store.load() returns None, state is initialized as empty (not None)."""
 
     class _NullStore:
         async def load(self):
@@ -304,7 +307,8 @@ def test_t4_none_from_load_gives_empty_state():
     helper = _AsyncLifecycleHelper(_NullStore())
     asyncio.run(helper.load())
 
-    assert helper._application_lifecycle_state is None
+    assert isinstance(helper._application_lifecycle_state, ApplicationLifecycleState)
+    assert helper._application_lifecycle_state.entries == {}
     assert helper._application_lifecycle_last_error is None
 
 

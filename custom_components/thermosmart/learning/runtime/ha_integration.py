@@ -2648,198 +2648,79 @@ class LearningShadowController:
     # Fewer samples produce an unreliable average that must not be shown as a fact.
     _MIN_OUTCOME_DISPLAY_SAMPLES: int = 3
 
-    # Per-model contribution weights for learning progress (must sum to 1.0).
-    # Core thermal models carry 95 % of the weight; onset_delay is an auxiliary
-    # TRV-response metric and may contribute at most 5 %.
-    _PROGRESS_MODEL_WEIGHTS: dict[str, float] = {
-        "heat_rate":   0.25,
-        "heat_loss":   0.25,
-        "afterheat":   0.20,
-        "outcome":     0.25,
-        "onset_delay": 0.05,
-    }
-
-    # Per-model saturation thresholds: episode-driven model updates needed for full
-    # contribution of that model's weight. Prior/fallback state is excluded.
-    _PROGRESS_THRESHOLDS: dict[str, int] = {
-        "heat_rate":   10,
-        "heat_loss":   10,
-        "afterheat":   8,
-        "outcome":     8,
-        "onset_delay": 10,
-    }
-
     def learning_progress_safe(self) -> tuple[float, dict]:
-        """Learning progress from zone-specific real model updates (0.0–100.0 %, attributes).
+        """Learning progress from zone-specific real model updates (0.0-100.0 %, attributes).
 
-        Two-layer formula:
-        1. Weighted raw score: core thermal models carry 95 % of the weight;
-           onset_delay (auxiliary TRV-response metric) at most 5 %.
-        2. Maturity cap: the displayed value is bounded by outcome sample count and
-           core model coverage. Progress stays conservative until real heating quality
-           is confirmed by accepted outcome evaluations across many situations.
+        Delegates to the pure, calibrated ``compute_learning_progress()``
+        (learning_progress.py) — see that module's docstring for the full
+        rationale and the six weighted components (data volume, thermal
+        regime coverage, situation diversity, clean-episode ratio, outcome
+        validation, model confidence) plus the confounder penalty. This
+        method's only job is to gather each model's REAL, already-tracked
+        diagnostics/confidence into a ``ModelSignal`` per model — no new
+        data is invented here.
 
-        Only episode-driven model updates count; bootstrap, priors, and the confidence
-        aggregator output are explicitly excluded.
+        Only episode-driven model updates count toward ``accepted_updates``;
+        bootstrap/prior-only state never contributes (a model with zero
+        accepted updates is excluded from the confidence-average component).
 
-        Returns ``(progress_pct, attributes)`` where ``progress_pct`` is 0.0 when no
-        real heating data has been accumulated.
+        Returns ``(progress_pct, attributes)`` where ``progress_pct`` is 0.0
+        when no real heating data has been accumulated yet.
         """
-        _n_models = len(self._PROGRESS_THRESHOLDS)
-        _cold = {
-            "data_source": "current_learning_engine",
-            "progress_status": "cold_start",
-            "weighted_progress": True,
-            "weighted_progress_raw": 0.0,
-            "maturity_cap_applied": False,
-            "maturity_cap": 5.0,
-            "quality_cap_applied": False,
-            "outcome_quality": None,
-            "time_maturity_available": False,
-            "models_with_real_data": 0,
-            "models_total": _n_models,
-            "onset_delay_updates": 0,
-            "outcome_samples": 0,
-            "core_thermal_models_with_data": 0,
-            "dominant_model": "none",
-            "progress_limited_by": "no_data",
-            "required_outcome_samples_for_next_stage": 3,
-            "bootstrap_excluded": True,
-            "reason": "no_valid_heating_episodes_yet",
-        }
         if not self._enabled:
-            return 0.0, {**_cold, "reason": "learning_disabled"}
+            from .learning_progress import cold_learning_progress_result
+            return 0.0, {**cold_learning_progress_result("no_completed_episodes_yet"), "reason": "learning_disabled"}
         try:
+            from .learning_progress import ModelSignal, compute_learning_progress
+
             zr = self._runtime._zone(self._zone)
             counts = dict(zr.model_update_counts)
 
-            _core = {"heat_rate", "heat_loss", "afterheat", "outcome"}
-            models_with_data = 0
-            core_with_data = 0
-            total_weighted = 0.0
-            best_model = "none"
-            best_contrib = 0.0
-
-            for model, threshold in self._PROGRESS_THRESHOLDS.items():
-                n = counts.get(model, 0)
-                weight = self._PROGRESS_MODEL_WEIGHTS[model]
-                saturation = min(1.0, n / threshold) if threshold > 0 else 0.0
-                contrib = saturation * weight
-                total_weighted += contrib
-                if n > 0:
-                    models_with_data += 1
-                    if model in _core:
-                        core_with_data += 1
-                if contrib > best_contrib:
-                    best_contrib = contrib
-                    best_model = model
-
-            raw_pct = round(total_weighted * 100.0, 1)
-            onset_updates = counts.get("onset_delay", 0)
-            outcome_updates = counts.get("outcome", 0)
-
-            # Layer 1 — Maturity cap: outcome sample count and core-model coverage.
-            if core_with_data == 0:
-                cap_pct, cap_reason = 5.0, "auxiliary_model_only"
-            elif outcome_updates == 0:
-                cap_pct, cap_reason = 15.0, "no_outcome_samples"
-            elif outcome_updates < 3:
-                cap_pct, cap_reason = 20.0, "insufficient_outcome_samples"
-            elif outcome_updates < 8:
-                cap_pct, cap_reason = 35.0, "early_learning_stage"
-            elif outcome_updates < 20:
-                cap_pct, cap_reason = 55.0, "early_learning_stage"
-            elif outcome_updates < 50:
-                cap_pct, cap_reason = 75.0, "limited_outcome_data"
-            elif core_with_data >= 4:
-                cap_pct, cap_reason = 100.0, "none"
-            elif core_with_data >= 3:
-                cap_pct, cap_reason = 90.0, "insufficient_core_thermal_models"
-            else:
-                cap_pct, cap_reason = 75.0, "insufficient_core_thermal_models"
-
-            # Layer 2 — Quality cap: poor or unstable outcomes limit progress even with
-            # many samples. Applied only when enough samples make the rates meaningful.
-            # Quality signals from OutcomeModel.diagnostics() — all optional, all safe.
-            quality_cap = 100.0
-            quality_reason = None
-            outcome_quality_val = None
-            quality_cap_applied = False
-            _QUALITY_GATE_MIN = 8
-            if outcome_updates >= _QUALITY_GATE_MIN:
+            signals: dict[str, Any] = {}
+            for model_name in ("heat_rate", "heat_loss", "afterheat", "outcome", "onset_delay"):
+                accepted = counts.get(model_name, 0)
+                sample_counts: dict = {}
+                rejection_counts: dict = {}
+                outlier_counts: dict = {}
+                confidence_value: Optional[float] = None
+                general_data_quality: Optional[float] = None
+                timeout_rate: Optional[float] = None
+                overshoot_rate: Optional[float] = None
+                partial_ratio: Optional[float] = None
                 try:
-                    _om = zr.orchestrator.models.get("outcome")
-                    if _om is not None:
-                        _od = _om.diagnostics()
-                        t_rate = _od.timeout_rate or 0.0
-                        o_rate = _od.overshoot_rate or 0.0
-                        dq = _od.general_data_quality
-                        _fc, _pc = _od.full_partial
-                        p_ratio = _pc / (_fc + _pc) if (_fc + _pc) > 0 else 0.0
-                        outcome_quality_val = round(dq, 3)
-                        if t_rate > 0.40 or o_rate > 0.35 or dq < 0.30:
-                            quality_cap = 50.0
-                            quality_reason = "unstable_outcomes"
-                        elif t_rate > 0.25 or o_rate > 0.25 or dq < 0.45 or p_ratio > 0.60:
-                            quality_cap = 65.0
-                            quality_reason = "outcome_quality"
+                    model = zr.orchestrator.models.get(model_name)
+                    if model is not None:
+                        diag = model.diagnostics()
+                        sample_counts = dict(getattr(diag, "sample_counts", None) or {})
+                        rejection_counts = dict(getattr(diag, "rejection_counts", None) or {})
+                        outlier_counts = dict(getattr(diag, "outlier_counts", None) or {})
+                        if model_name == "outcome":
+                            general_data_quality = getattr(diag, "general_data_quality", None)
+                            timeout_rate = getattr(diag, "timeout_rate", None)
+                            overshoot_rate = getattr(diag, "overshoot_rate", None)
+                            fc, pc = getattr(diag, "full_partial", (0, 0))
+                            partial_ratio = (pc / (fc + pc)) if (fc + pc) > 0 else 0.0
+                        if accepted > 0:
+                            confidence_value = model.confidence().value
                 except Exception:
-                    pass  # quality gate failure is non-fatal
+                    pass  # a single model's diagnostics failure must not block the others
+                signals[model_name] = ModelSignal(
+                    accepted_updates=accepted,
+                    sample_counts=sample_counts,
+                    rejection_counts=rejection_counts,
+                    outlier_counts=outlier_counts,
+                    confidence_value=confidence_value,
+                    general_data_quality=general_data_quality,
+                    timeout_rate=timeout_rate,
+                    overshoot_rate=overshoot_rate,
+                    partial_ratio=partial_ratio,
+                )
 
-            # Layer 2 is binding only when it further restricts beyond layer 1.
-            quality_cap_applied = quality_cap < cap_pct
-            final_cap = min(cap_pct, quality_cap)
-            final_reason = quality_reason if quality_cap_applied else cap_reason
-
-            cap_applied = raw_pct > final_cap
-            progress_pct = round(min(raw_pct, final_cap), 1)
-
-            # Next outcome sample count that unlocks the next maturity tier.
-            next_stage = None
-            if core_with_data > 0:
-                for _t in (3, 8, 20, 50):
-                    if outcome_updates < _t:
-                        next_stage = _t
-                        break
-
-            # Status uses the fully capped progress for user-facing truthfulness.
-            if progress_pct == 0.0:
-                status = "cold_start"
-                reason = "no_valid_heating_episodes_yet"
-            elif core_with_data == 0:
-                status = "collecting_data"
-                reason = "auxiliary_model_only"
-            elif final_reason == "none" and models_with_data == _n_models:
-                status = "learned"
-                reason = "sufficient_data"
-            else:
-                status = "learning"
-                reason = "partial_data"
-
-            return progress_pct, {
-                "data_source": "current_learning_engine",
-                "progress_status": status,
-                "weighted_progress": True,
-                "weighted_progress_raw": raw_pct,
-                "maturity_cap_applied": cap_applied,
-                "maturity_cap": final_cap,
-                "quality_cap_applied": quality_cap_applied,
-                "outcome_quality": outcome_quality_val,
-                "time_maturity_available": False,
-                "models_with_real_data": models_with_data,
-                "models_total": _n_models,
-                "onset_delay_updates": onset_updates,
-                "outcome_samples": outcome_updates,
-                "core_thermal_models_with_data": core_with_data,
-                "dominant_model": best_model if best_contrib > 0.0 else "none",
-                "progress_limited_by": final_reason,
-                "required_outcome_samples_for_next_stage": next_stage,
-                "bootstrap_excluded": True,
-                "reason": reason,
-            }
+            return compute_learning_progress(signals)
         except Exception as err:
             self._record_error("learning_progress", err)
-        return 0.0, _cold
+            from .learning_progress import cold_learning_progress_result
+            return 0.0, cold_learning_progress_result("calculation_error")
 
     def diagnostics(self) -> dict:
         h = self._runtime.health()

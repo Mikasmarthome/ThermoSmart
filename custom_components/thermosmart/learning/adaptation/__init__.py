@@ -33,6 +33,9 @@ Public surface:
                        prune_application_state_entries,
                        application_state_entry_for_research_export,
                        summarize_application_lifecycle_state
+  orchestrator       — ApplicationOrchestrationMode, ApplicationOrchestratorPolicy,
+                       ApplicationOrchestrationResult,
+                       evaluate_application_orchestration
 
 No HA imports. No runtime state. No control modifications.
 """
@@ -99,6 +102,12 @@ from .application_state import (
     summarize_application_lifecycle_state,
     update_state_entry_from_evaluation,
 )
+from .orchestrator import (
+    ApplicationOrchestrationMode,
+    ApplicationOrchestrationResult,
+    ApplicationOrchestratorPolicy,
+    evaluate_application_orchestration,
+)
 
 __all__ = [
     "AdaptationDirection",
@@ -153,4 +162,8 @@ __all__ = [
     "serialize_application_lifecycle_state",
     "summarize_application_lifecycle_state",
     "update_state_entry_from_evaluation",
+    "ApplicationOrchestrationMode",
+    "ApplicationOrchestrationResult",
+    "ApplicationOrchestratorPolicy",
+    "evaluate_application_orchestration",
 ]

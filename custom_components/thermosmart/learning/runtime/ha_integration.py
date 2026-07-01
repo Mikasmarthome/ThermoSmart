@@ -254,7 +254,12 @@ class LearningShadowController:
             except Exception:  # store construction must never break setup
                 adapter = None
         self._runtime = LearningRuntime(
-            LearningRuntimeConfig(mode=mode), store=adapter, clock=self._utcnow_iso)
+            LearningRuntimeConfig(mode=mode), store=adapter, clock=self._utcnow_iso,
+            # Synchronous, memory-only episode hand-off (see
+            # record_completed_episode_safe()) — bound now, but only ever
+            # invoked later during observe_safe(), by which point every
+            # attribute it touches (_episode_history etc.) already exists.
+            episode_sink=self.record_completed_episode_safe)
         # The new decision pipeline runs read-only every cycle (no sink => it can never
         # dispatch). The existing coordinator remains the single real dispatch path.
         self._pipeline = DecisionPipeline(
@@ -678,6 +683,43 @@ class LearningShadowController:
     def episode_last_error(self) -> Optional[str]:
         """Return the last error message from episode history load/save, or None."""
         return self._episode_last_error
+
+    def record_completed_episode_safe(self, episode: Any) -> None:
+        """Synchronous, memory-only hand-off for one completed episode.
+
+        Bound as LearningRuntime's ``episode_sink`` — called from
+        ``run_cycle()``'s completed-episode loop. Never performs storage I/O
+        itself: appends into the in-memory ``_episode_history`` via the pure
+        ``append_completed_episode()`` (which also applies that episode
+        type's own RetentionPolicy immediately, from
+        ``self._capture_stores.episode_registry`` — no new/arbitrary
+        retention numbers). ``_episode_save_needed`` is set only when an
+        entry was actually appended and/or pruned — a duplicate
+        ``episode_id`` alone does not mark it dirty. The next
+        ``async_save_if_due()`` call flushes it; nothing here saves directly.
+
+        Never raises: a missing capture-store foundation, an unrecognised/
+        malformed episode, or any internal failure is captured in
+        ``_episode_last_error`` and swallowed — never propagated, never
+        touches ``_enabled``.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.episode_persistence import append_completed_episode
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            result = append_completed_episode(
+                {"episodes": self._episode_history},
+                episode,
+                episode_registry=self._capture_stores.episode_registry,
+                now_utc=now_utc,
+            )
+            if result.appended_episode_ids or result.pruned_episode_ids:
+                self._episode_history = result.updated_payload["episodes"]
+                self._episode_save_needed = True
+        except Exception as err:
+            self._episode_last_error = str(err)
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.

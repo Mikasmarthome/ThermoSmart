@@ -3,11 +3,13 @@
 Covers custom_components/thermosmart/learning/storage/episode_persistence.py:
   append_completed_episode, append_completed_episodes, prune_episode_entries.
 
-Foundation only (Option C) — see the module's own "Why no runtime wiring in
-this step" docstring section and the accompanying report for the reasoning.
-Nothing here writes to EpisodesStore; nothing in the live runtime calls this
-module yet. Tests T15/T16 (runtime wiring behavior) are therefore N/A and are
-represented instead by a static check that no such wiring exists yet.
+Originally a foundation-only module (Option C) with no runtime wiring — a
+later step ("LE2 Completed Episode Runtime Append Hook") legitimately wired
+append_completed_episode() into ha_integration.py's
+record_completed_episode_safe(). Tests T15/T16 now confirm the architectural
+boundary that wiring preserves: lifecycle.py (run_cycle()) still never calls
+episode_persistence.py directly — it only knows a generic episode_sink
+callback; the actual append call lives one layer up, in ha_integration.py.
 
 22 test groups:
   T1  — Completed heating episode appended
@@ -344,33 +346,41 @@ def test_t14_no_save_or_store_calls_in_module():
     assert "RawSegmentStore" not in code
 
 
-# ── T15/T16: N/A — no runtime wiring added in this step ──────────────────
+# ── T15/T16: lifecycle.py stays decoupled from episode_persistence.py ────
+#
+# A later step ("LE2 Completed Episode Runtime Append Hook") legitimately
+# wires append_completed_episode() into ha_integration.py's
+# record_completed_episode_safe() — that is expected, intentional wiring, not
+# a regression. What must remain true is the architectural boundary this
+# foundation was built to protect: lifecycle.py (the sensitive run_cycle()
+# hot path) never imports or calls episode_persistence.py directly — it only
+# knows about an optional, generic, synchronous "episode_sink" callback
+# (see LearningRuntime.__init__ / _emit_completed_episode()), fully decoupled
+# from storage/retention concerns.
 
-def test_t15_t16_no_runtime_wiring_added_this_step():
-    """Explicit static confirmation that append_completed_episode()/
-    append_completed_episodes() are never actually CALLED from the live
-    runtime cycle (lifecycle.py) or the HA integration layer
-    (ha_integration.py) — matching the report's Option C decision.
-
-    A later step legitimately references "episode_persistence.py" by name in
-    an ha_integration.py code COMMENT (documenting the future hook point) —
-    that is prose, not wiring, so this check looks for the actual invocation
-    pattern (a call with parentheses) rather than the bare module name."""
+def test_t15_t16_lifecycle_stays_decoupled_from_episode_persistence():
+    """lifecycle.py must never import or call episode_persistence.py directly
+    — it only knows the generic episode_sink callback abstraction. The actual
+    append_completed_episode() call lives in ha_integration.py, one layer up."""
     import custom_components.thermosmart.learning.runtime.lifecycle as _lifecycle_mod
-    import custom_components.thermosmart.learning.runtime.ha_integration as _ha_mod
     lifecycle_source = inspect.getsource(_lifecycle_mod)
-    ha_source = inspect.getsource(_ha_mod)
     assert "from ..storage.episode_persistence import" not in lifecycle_source
     assert "from ..storage import episode_persistence" not in lifecycle_source
-    assert "from ..storage.episode_persistence import" not in ha_source
-    assert "from ..storage import episode_persistence" not in ha_source
-    for source in (lifecycle_source, ha_source):
-        for line in source.splitlines():
-            stripped = line.strip()
-            if stripped.startswith("#") or stripped.startswith('"""'):
-                continue  # comment/docstring mention is documentation, not wiring
-            assert "append_completed_episode(" not in stripped
-            assert "append_completed_episodes(" not in stripped
+    for line in lifecycle_source.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("#") or stripped.startswith('"""'):
+            continue  # comment/docstring mention is documentation, not wiring
+        assert "append_completed_episode(" not in stripped
+        assert "append_completed_episodes(" not in stripped
+
+
+def test_t15_t16_ha_integration_now_legitimately_calls_append():
+    """Confirms the intentional wiring added by the runtime-hook step: exactly
+    one real call site in ha_integration.py, inside
+    record_completed_episode_safe(), never inside lifecycle.py."""
+    import custom_components.thermosmart.learning.runtime.ha_integration as _ha_mod
+    source = inspect.getsource(_ha_mod.LearningShadowController.record_completed_episode_safe)
+    assert "append_completed_episode(" in source
 
 
 # ── T17: Save error non-fatal — covered at the design level ──────────────

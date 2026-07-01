@@ -298,10 +298,19 @@ class LearningRuntime:
 
     def __init__(self, config: Optional[LearningRuntimeConfig] = None, *,
                  store: Optional[Any] = None,
-                 clock: Optional[Callable[[], str]] = None) -> None:
+                 clock: Optional[Callable[[], str]] = None,
+                 episode_sink: Optional[Callable[[Any], None]] = None) -> None:
         self._config = config or LearningRuntimeConfig()
         self._zones: dict[str, _ZoneRuntime] = {}
         self._store = store
+        # Optional, synchronous, memory-only sink for completed episodes (see
+        # run_cycle()'s completed-episode loop). No HA imports, no storage I/O,
+        # no async here — the sink itself (if provided) is responsible for
+        # staying synchronous and non-fatal; run_cycle() also wraps every call
+        # to it in its own try/except so a sink failure can never affect the
+        # cycle's real result. None (the default) makes this a pure no-op —
+        # existing/minimal setups and tests are unaffected.
+        self._episode_sink = episode_sink
         self._persistence = PersistenceOrchestrator(store, policy=self._config.save_policy) \
             if store is not None else None
         # Clock authority: explicit injection required. No hidden wall-clock fallback.
@@ -384,6 +393,24 @@ class LearningRuntime:
             self._zones[zone_id] = zr
         return zr
 
+    def _emit_completed_episode(self, episode: Any) -> None:
+        """Best-effort hand-off of one completed episode to the optional sink.
+
+        Synchronous, no storage I/O here — the sink itself (see
+        LearningShadowController.record_completed_episode_safe()) is required
+        to be synchronous and memory-only too. A missing sink is a silent
+        no-op. A sink exception is swallowed here so it can never affect
+        run_cycle()'s real result — the whole point of a narrowly-scoped
+        try/except at each call site rather than relying on run_cycle_safe()'s
+        coarser outer catch.
+        """
+        if self._episode_sink is None:
+            return
+        try:
+            self._episode_sink(episode)
+        except Exception:
+            pass
+
     # -- core cycle (pure-ish; mutates only LE2 state) ------------------
 
     def run_cycle(self, inp: RuntimeCycleInput) -> RuntimeCycleResult:
@@ -454,6 +481,13 @@ class LearningRuntime:
                     authoritative_change = True
                     zr.model_update_counts[ce.model_name] = \
                         zr.model_update_counts.get(ce.model_name, 0) + 1
+                # Episode-history hand-off (memory-only; see _emit_completed_episode()).
+                # Independent of `ok` — episode completion is a different fact than
+                # model acceptance, and persisting the history should not depend on
+                # it. Outcome is excluded here: only the confounder-augmented
+                # bound_episode below is persisted for outcome, never the raw one.
+                if ce.model_name != "outcome":
+                    self._emit_completed_episode(ce.episode)
                 # B2b-1: fan out the closed OutcomeEpisode to the BoostModel with its
                 # authoritative context — but ONLY when a boost was actually dispatched
                 # for this decision (a pending context exists). No context => no boost
@@ -466,6 +500,13 @@ class LearningRuntime:
                     # augmented episode feeds both the boost outcome and the baseline path.
                     extra_cf = self._runtime_confounders(zr, ce.episode, drec, snapshot)
                     bound_episode = self._augment_confounders(ce.episode, extra_cf)
+                    # Episode-history hand-off for outcome: the augmented bound_episode
+                    # (with runtime confounder flags), never the raw ce.episode. Emitted
+                    # immediately here, independent of the boost REACHED/non-REACHED/
+                    # baseline branching below — the outcome episode's own completion is
+                    # unrelated to whether/when the (possibly deferred) boost model
+                    # update resolves.
+                    self._emit_completed_episode(bound_episode)
                     if bctx is not None:
                         # B2b-3: derive a trustworthy expected_non_boost_duration_s from
                         # comparable historical NON-boost episodes completed before now

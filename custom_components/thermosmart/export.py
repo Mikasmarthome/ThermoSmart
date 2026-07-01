@@ -301,7 +301,6 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                 _fc, _pc = _od.full_partial
                 _total = _fc + _pc
                 _rejections = sum(_od.rejection_counts.values()) if _od.rejection_counts else 0
-                _attempts = _total + _rejections
                 _signal = OutcomeSignal(
                     sample_count=_total,
                     timeout_rate=_od.timeout_rate,
@@ -416,7 +415,6 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
         _fc, _pc = _od.full_partial
         _total = _fc + _pc
         _rejections = sum(_od.rejection_counts.values()) if _od.rejection_counts else 0
-        _attempts = _total + _rejections
         _signal = OutcomeSignal(
             sample_count=_total,
             timeout_rate=_od.timeout_rate,
@@ -427,9 +425,7 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
                 getattr(_om, "_state", None), "aggregate_reliability", 0.0
             ),
             partial_ratio=(_pc / _total) if _total > 0 else 0.0,
-            confounder_contamination=(
-                (_rejections > _attempts * 0.20) if _attempts > 0 else False
-            ),
+            confounder_contamination=(_rejections > 0),
         )
         _sit = _adaptation_situation_context(coord, zone_rt, last_update_ts=_od.last_update_ts)
         try:

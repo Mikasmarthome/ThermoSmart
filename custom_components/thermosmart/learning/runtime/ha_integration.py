@@ -235,7 +235,6 @@ class LearningShadowController:
                  mode: LearningRuntimeMode = LearningRuntimeMode.SHADOW,
                  clock: Optional[Clock] = None) -> None:
         self._zone = zone_id
-        self._hass = hass
         self._enabled = True
         self._errors = 0
         self._error_signatures: dict[str, int] = {}
@@ -456,11 +455,6 @@ class LearningShadowController:
             self._last_outcome_ts = new_ts
             self._adaptation_last_error = None
             self._adaptation_save_needed = True
-            # Schedule best-effort async save (fire-and-forget; never blocks heating)
-            try:
-                self._hass.async_create_task(self._async_save_adaptation_history_safe())
-            except Exception:
-                pass  # not in HA event loop (tests) — will save via async_save_if_due
         except Exception as err:
             self._adaptation_last_error = str(err)
 

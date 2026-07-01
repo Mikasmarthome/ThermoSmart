@@ -531,12 +531,20 @@ def test_t19_critical_incident_types_are_not_noise_prone():
 
 
 # ── T20/T21: No Support/Research export change ──────────────────────────────
+#
+# Later steps ("Support Critical Event Store State and Save Wiring", then
+# "Support Critical Event Timeline Export Summary") legitimately added
+# support-event state wiring and a "critical_events" support-export block —
+# expected, intentional additions for those later, separately-approved
+# steps, not a regression of THIS foundation step. What must remain true is
+# that the RESEARCH export function itself never references support events.
 
-def test_t20_export_module_source_unchanged_by_this_step():
+def test_t20_research_export_function_has_no_support_event_reference():
     import custom_components.thermosmart.export as _exp
-    source = inspect.getsource(_exp)
+    source = inspect.getsource(_exp.async_export_learning_data)
     assert "support_event" not in source.lower()
     assert "SupportCriticalEvent" not in source
+    assert "critical_events" not in source
 
 
 def test_t21_existing_research_export_helpers_still_importable():

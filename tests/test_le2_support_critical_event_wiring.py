@@ -524,13 +524,19 @@ def test_t16_run_cycle_has_no_support_event_store_io():
 
 
 # ── T17: No Support Export change ───────────────────────────────────────────
+#
+# A later step ("Support Critical Event Timeline Export Summary") legitimately
+# added a "critical_events" block to async_export_support_data(), reading
+# support_critical_events_snapshot() — that is expected, intentional wiring
+# for THIS wiring step's own state, not a regression. What must remain true
+# is that the RESEARCH export stays untouched by that later addition.
 
-def test_t17_export_module_unchanged_by_this_step():
+def test_t17_research_export_function_has_no_support_event_reference():
     import custom_components.thermosmart.export as _exp
-    source = inspect.getsource(_exp)
+    source = inspect.getsource(_exp.async_export_learning_data)
     assert "support_event" not in source.lower()
     assert "SupportCriticalEvent" not in source
-    assert "support_critical_events_snapshot" not in source
+    assert "critical_events" not in source
 
 
 # ── T18: Existing tests remain green (regression smoke-test) ───────────────

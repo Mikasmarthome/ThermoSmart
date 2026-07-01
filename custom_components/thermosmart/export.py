@@ -60,6 +60,17 @@ LE2 episode history:
   oldest/newest ages in hours, and the registry's own retention policy
   (max_records/max_age_days per type) to make boundedness visible.
 
+LE2 support critical event timeline (support export only):
+  Per-zone "critical_events" block — reads ONLY the already-in-memory
+  LearningShadowController.support_critical_events_snapshot(), no store
+  read. Each event is rendered via support_event_for_export() (drops
+  event_id, bounds "details"). A separate, smaller export cap (200) applies
+  on top of the store's own 750-record cap so a single export file stays
+  readable; any excess is reported via records_truncated, never silently
+  dropped. Coverage/retention metadata (coverage_start/end,
+  persistent_store_retention_h, full_window_covered, store_warmup) describes
+  the underlying data span, independent of the export cap.
+
 24h auto-delete:
   Export files are scheduled for deletion 24 hours after creation using
   async_call_later.  This schedule does NOT survive a Home Assistant restart.
@@ -73,7 +84,7 @@ import hashlib
 import json
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
@@ -596,6 +607,149 @@ def _episode_schema_version() -> int:
         return EPISODE_SCHEMA_VERSION
     except Exception:
         return None
+
+
+# Maximum events actually returned in the "events" list, independent of the
+# store's own 750-record cap. The store cap protects storage size; this
+# separate, smaller cap keeps a single support export file readable — 750
+# entries in a JSON file a user is asked to review before sharing is not
+# "small". Centralised so a later calibration pass has one place to change.
+_SUPPORT_EVENT_EXPORT_MAX_RECORDS = 200
+
+# Same eviction-priority direction as support_event_persistence.py's cap
+# eviction (INFO first, CRITICAL last) — re-declared locally rather than
+# importing that module's private rank map, since export.py should not reach
+# into another module's underscore-prefixed internals for a one-line lookup.
+_SUPPORT_EVENT_SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
+
+
+def _le2_critical_events_export(coord, *, now: datetime) -> dict:
+    """Return a small, bounded, public-safe Support Critical Event timeline
+    summary for support export.
+
+    Reads ONLY the already-in-memory
+    ``LearningShadowController.support_critical_events_snapshot()`` — no
+    store read here, no new events created, no runtime/coordinator touched.
+    Uses ``support_event_for_export()`` (support_event_serialization.py) per
+    entry, which already drops ``event_id`` and bounds ``details`` — this
+    function adds no additional per-event fields beyond what that helper
+    already produces.
+
+    The underlying store is already bounded (48h retention, 750-record cap,
+    severity-priority eviction — support_event_persistence.py). This export
+    applies a SEPARATE, smaller cap
+    (``_SUPPORT_EVENT_EXPORT_MAX_RECORDS`` = 200) to keep a single export
+    file readable; when more valid events exist than that cap, the kept
+    subset is chosen by the same severity-priority-then-recency ordering the
+    store itself uses for eviction (critical/newest preferred), and the
+    excess is reported via ``records_truncated``/``truncation_reason`` — no
+    event is silently dropped without being counted.
+
+    Never raises and never breaks the export: a missing/unattached LE2
+    shadow, a snapshot() failure, or an unexpected error anywhere in the
+    aggregation yields an explicit ``{"available": False, ...}`` block
+    instead of omitting the zone or failing the whole export. Malformed
+    individual entries (not a dict, or rejected by
+    ``support_event_for_export()``) are skipped and counted in
+    ``malformed_skipped_count`` — they never abort the summary.
+    """
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return {"available": False, "reason": "le2_shadow_unavailable"}
+        snapshot = shadow.support_critical_events_snapshot()
+        if not isinstance(snapshot, dict):
+            return {"available": False, "reason": "critical_events_unavailable"}
+
+        from .learning.storage.support_event_serialization import support_event_for_export
+        from .learning.storage.support_event_persistence import (
+            SUPPORT_EVENT_RETENTION_MAX_AGE_DAYS,
+        )
+
+        malformed_skipped = 0
+        candidates: list[tuple[dict, datetime | None]] = []
+        for entry in snapshot.values():
+            if not isinstance(entry, dict):
+                malformed_skipped += 1
+                continue
+            view = support_event_for_export(entry)
+            if view is None:
+                malformed_skipped += 1
+                continue
+            ts_raw = view.get("ts")
+            ts_parsed = None
+            if isinstance(ts_raw, str):
+                try:
+                    ts_text = ts_raw[:-1] + "+00:00" if ts_raw.endswith("Z") else ts_raw
+                    ts_parsed = datetime.fromisoformat(ts_text)
+                    if ts_parsed.tzinfo is None:
+                        ts_parsed = ts_parsed.replace(tzinfo=timezone.utc)
+                except Exception:
+                    ts_parsed = None
+            candidates.append((view, ts_parsed))
+
+        records_available = len(candidates)
+
+        # Selection when over the export cap: severity-priority first
+        # (critical kept over info), newest first as tiebreak — unknown-
+        # timestamp entries sort last within their severity (never preferred
+        # over a known-recent one), mirroring the store's own conservative
+        # "unknown -> not preferred" eviction stance.
+        def _sort_key(item):
+            view, ts_parsed = item
+            severity_rank = _SUPPORT_EVENT_SEVERITY_RANK.get(view.get("severity"), 0)
+            has_ts = ts_parsed is not None
+            return (-severity_rank, not has_ts, -(ts_parsed.timestamp() if has_ts else 0.0))
+
+        ordered = sorted(candidates, key=_sort_key)
+        kept = ordered[:_SUPPORT_EVENT_EXPORT_MAX_RECORDS]
+        records_truncated = records_available - len(kept)
+
+        # Display order: newest first, independent of the selection order above.
+        kept_sorted = sorted(
+            kept, key=lambda item: (item[1] is None, -(item[1].timestamp() if item[1] else 0.0)),
+        )
+        events = [view for view, _ts in kept_sorted]
+
+        known_ts = [ts for _view, ts in candidates if ts is not None]
+        coverage_start = min(known_ts).isoformat() if known_ts else None
+        coverage_end = max(known_ts).isoformat() if known_ts else None
+
+        retention_h = SUPPORT_EVENT_RETENTION_MAX_AGE_DAYS * 24
+        full_window_covered = None
+        store_warmup = None
+        if known_ts:
+            oldest_age_h = (now - min(known_ts)).total_seconds() / 3600.0
+            full_window_covered = oldest_age_h >= (retention_h - 1.0)  # 1h tolerance
+            store_warmup = not full_window_covered
+
+        block: dict = {
+            "available": True,
+            "requested_window_h": retention_h,
+            "coverage_scope": "persistent_support_critical_events",
+            "persistent_store_enabled": getattr(shadow, "capture_stores", None) is not None,
+            "persistent_store_retention_h": retention_h,
+            "records_available": records_available,
+            "records_exported": len(events),
+            "records_truncated": records_truncated,
+            "truncation_reason": "export_cap_exceeded" if records_truncated > 0 else None,
+            "coverage_start": coverage_start,
+            "coverage_end": coverage_end,
+            "full_window_covered": full_window_covered,
+            "store_warmup": store_warmup,
+            "malformed_skipped_count": malformed_skipped,
+            "events": events,
+        }
+        safe = _le2_strip_forbidden(block)
+        try:
+            from .learning.privacy import scan_payload
+            if scan_payload(safe):
+                return {"available": False, "reason": "privacy_scan_failed"}
+        except Exception:
+            pass  # scan itself failing is non-fatal — block already key-stripped
+        return safe
+    except Exception as err:
+        return {"available": False, "critical_events_error": str(err)}
 
 
 def _le2_pending_data(coord, zone_id: str) -> dict | None:
@@ -1244,6 +1398,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["orchestration_preview"] = _le2_orchestration_preview_summary(
                 coord, entry.entry_id
             )
+            zone_info["critical_events"] = _le2_critical_events_export(coord, now=ts)
         else:
             zone_info["runtime_state"] = None
             zone_info["runtime_health"] = None
@@ -1252,6 +1407,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["adaptation_history"] = None
             zone_info["adaptation_application"] = None
             zone_info["orchestration_preview"] = None
+            zone_info["critical_events"] = {"available": False, "reason": "no_coordinator"}
 
         zones.append(zone_info)
 

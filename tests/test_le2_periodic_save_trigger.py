@@ -71,6 +71,24 @@ def test_t1_call_site_is_inside_async_update_data_not_observe_safe_block():
     assert "except Exception:" in between
 
 
+def test_t1_save_guard_is_independent_of_learning_mode_toggle():
+    """The save call's OWN guard line must not reference _learning_mode_on —
+    it must run whenever a shadow is attached, regardless of whether learning
+    is currently toggled on, so dirty state from an earlier cycle still gets
+    flushed after learning is later disabled."""
+    source = inspect.getsource(_coordinator_module.ThermoSmartCoordinator._async_update_data)
+    save_idx = source.index("await self._le2_shadow.async_save_if_due()")
+    before = source[:save_idx]
+    # The last few lines before the call are "if ...:" / "try:" — find the
+    # nearest "if" line among them, which is this call's own guard.
+    recent_lines = [ln.strip() for ln in before.strip().splitlines()[-5:]]
+    guard_lines = [ln for ln in recent_lines if ln.startswith("if ")]
+    assert guard_lines, f"no guard line found near save call: {recent_lines}"
+    guard_line = guard_lines[-1]
+    assert guard_line == "if self._le2_shadow is not None:"
+    assert "_learning_mode_on" not in guard_line
+
+
 # ── Behavioral harness: minimal faithful reproduction of the guard pattern ──
 
 class _FakeShadow:

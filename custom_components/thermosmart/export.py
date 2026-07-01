@@ -42,6 +42,15 @@ LE2 research data:
   (decision_id, episode_id, learning_zone_id, zone_id, …) are stripped
   recursively before inclusion.  A privacy scan is performed as a final check.
 
+LE2 learning progress:
+  Per-zone "learning_progress" block — the same calibrated scores/labels
+  LearningShadowController.learning_progress_safe() already exposes to the
+  confidence sensor (data volume/coverage/diversity/clean-episode/outcome/
+  confidence scores, confounder_penalty, regime_cap_pct, main_blocker,
+  next_needed). No episode history, no timestamps, no IDs — just the
+  existing numeric/label explanation of why a zone reads at its current
+  progress percentage.
+
 24h auto-delete:
   Export files are scheduled for deletion 24 hours after creation using
   async_call_later.  This schedule does NOT survive a Home Assistant restart.
@@ -389,6 +398,64 @@ def _le2_health_data(coord) -> dict | None:
         return dataclasses.asdict(rt.health())
     except Exception:
         return None
+
+
+# Fields taken as-is from the real compute_learning_progress() attrs dict
+# (learning/runtime/learning_progress.py) — numeric scores/labels only, no
+# IDs, no timestamps, no raw episode data. Nothing here is invented; anything
+# not in this list (e.g. sample_count, outcome_quality, per-model episode
+# counts, bootstrap_excluded) simply isn't surfaced in this small research
+# block yet.
+_LEARNING_PROGRESS_RESEARCH_KEYS = (
+    "learning_stage",
+    "confidence_level",
+    "data_volume_score",
+    "clean_episode_score",
+    "thermal_regime_coverage_score",
+    "situation_diversity_score",
+    "outcome_validation_score",
+    "model_confidence_score",
+    "confounder_penalty",
+    "regime_cap_pct",
+    "main_blocker",
+    "next_needed",
+)
+
+
+def _le2_learning_progress_export(coord) -> dict:
+    """Return a small, public-safe LE2 learning-progress block for research export.
+
+    Sourced directly from LearningShadowController.learning_progress_safe() —
+    the SAME method ThermoSmartConfidenceSensor reads — so the exported
+    numbers always match what the user already sees. No new store read, no
+    episode-history access: this reuses the existing model-diagnostics-based
+    calculation that already runs every cycle.
+
+    Never raises and never breaks the export: a missing/unattached LE2 shadow
+    or any unexpected failure inside learning_progress_safe() (which is
+    already designed to never raise, but this stays defensive independent of
+    that guarantee) yields an explicit ``{"available": False, ...}`` block
+    instead of omitting the zone or failing the whole export.
+    """
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return {"available": False, "reason": "le2_shadow_unavailable"}
+        progress_pct, attrs = shadow.learning_progress_safe()
+        block: dict = {"available": True, "progress_pct": progress_pct}
+        for key in _LEARNING_PROGRESS_RESEARCH_KEYS:
+            if key in attrs:
+                block[key] = attrs[key]
+        safe = _le2_strip_forbidden(block)
+        try:
+            from .learning.privacy import scan_payload
+            if scan_payload(safe):
+                return {"available": False, "reason": "privacy_scan_failed"}
+        except Exception:
+            pass  # scan itself failing is non-fatal — block already key-stripped
+        return safe
+    except Exception as err:
+        return {"available": False, "learning_progress_error": str(err)}
 
 
 def _le2_pending_data(coord, zone_id: str) -> dict | None:
@@ -941,6 +1008,10 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
         learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
         analytics = _compute_analytics(learning)
         le2 = _le2_research_data(coord, entry.entry_id) if coord is not None else None
+        learning_progress = (
+            _le2_learning_progress_export(coord) if coord is not None
+            else {"available": False, "reason": "no_coordinator"}
+        )
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
@@ -948,6 +1019,7 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             "historical_learning_snapshot": learning,
             "analytics": analytics,
             "runtime_models": le2,
+            "learning_progress": learning_progress,
         })
 
     export: dict = {

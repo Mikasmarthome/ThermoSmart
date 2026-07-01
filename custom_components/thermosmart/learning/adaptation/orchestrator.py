@@ -129,6 +129,34 @@ class ApplicationOrchestrationResult:
             "applied_record_preview":      self.applied_record_preview,
         }
 
+    def to_research_dict(self) -> dict:
+        """Public-safe, timestamp-free serialization for anonymized research export.
+
+        Deliberately excludes ``candidate_key`` (caller nests this under the
+        owning history entry, which already carries the key), ``mode`` (internal
+        contract metadata, not research-relevant), and ``applied_record_preview``
+        (its ``AppliedAdaptationRecord.to_dict()`` payload contains raw
+        ``applied_ts`` / ``monitoring_deadline_ts`` timestamps — never suitable
+        for the anonymized research export, per the P8 export-safety finding).
+        """
+        return {
+            "application_enabled":         self.application_enabled,
+            "promotion_readiness":         self.promotion_readiness,
+            "would_apply":                 self.would_apply,
+            "would_apply_if_enabled":      self.would_apply_if_enabled,
+            "candidate_type":              self.candidate_type_value,
+            "direction":                   self.direction_value,
+            "blocked_reasons":             list(self.blocked_reasons),
+            "safety_reasons":              list(self.safety_reasons),
+            "bounded_delta_min":           self.bounded_delta_min,
+            "current_cumulative_delta_min": self.current_cumulative_delta_min,
+            "next_cumulative_delta_min":   self.next_cumulative_delta_min,
+            "monitoring_required":         self.monitoring_required,
+            "rollback_supported":          self.rollback_supported,
+            "lifecycle_existing_status":   self.lifecycle_existing_status,
+            "cooldown_active":             self.cooldown_active,
+        }
+
 
 def _lifecycle_block_reasons(
     *,

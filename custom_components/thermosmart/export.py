@@ -328,7 +328,9 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
         try:
             shadow = getattr(coord, "_le2_shadow", None)
             _history_tuples: list = []
+            _lifecycle_state = None
             if shadow is not None:
+                _lifecycle_state = getattr(shadow, "_application_lifecycle_state", None)
                 _hist_snapshot = shadow.adaptation_history_snapshot()
                 if _hist_snapshot:
                     from datetime import datetime as _dt
@@ -347,7 +349,7 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                             (_entry, _span, _le2_confounder_ratio(coord, zone_id))
                         )
             safe["adaptation_candidate_history"] = _le2_adaptation_history_for_research(
-                _history_tuples
+                _history_tuples, lifecycle_state=_lifecycle_state,
             )
         except Exception:
             safe["adaptation_candidate_history"] = []
@@ -539,12 +541,16 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
         return {**_zero, "last_error": str(err)}
 
 
-def _le2_adaptation_history_for_research(history_entries: list) -> list[dict]:
+def _le2_adaptation_history_for_research(
+    history_entries: list, *, lifecycle_state: Any = None,
+) -> list[dict]:
     """Convert adaptation candidate history entries to research-safe export dicts.
 
     Args:
         history_entries: list of (CandidateHistoryEntry, span_days, confounder_ratio)
             tuples. Pass [] when no runtime accumulation is available yet.
+        lifecycle_state: current ApplicationLifecycleState (or None), used to
+            attach a read-only "application_orchestration_preview" per entry.
 
     Returns public-safe dicts (see adaptation_history_entry_for_research_export).
     Always returns a list (empty when no entries). Never raises.
@@ -556,18 +562,147 @@ def _le2_adaptation_history_for_research(history_entries: list) -> list[dict]:
         from .learning.adaptation import adaptation_history_entry_for_research_export
         for entry, span_days, confounder_ratio in history_entries:
             try:
-                result.append(
-                    adaptation_history_entry_for_research_export(
-                        entry,
-                        span_days=span_days,
-                        confounder_ratio=confounder_ratio,
-                    )
+                d = adaptation_history_entry_for_research_export(
+                    entry,
+                    span_days=span_days,
+                    confounder_ratio=confounder_ratio,
                 )
+                d["application_orchestration_preview"] = _le2_orchestration_preview_dict(
+                    entry,
+                    lifecycle_state=lifecycle_state,
+                    span_days=span_days,
+                    confounder_ratio=confounder_ratio,
+                )
+                result.append(d)
             except Exception:
                 pass
     except Exception:
         pass
     return result
+
+
+def _le2_orchestration_preview_dict(
+    entry: Any, *, lifecycle_state: Any, span_days: float, confounder_ratio: float,
+) -> dict:
+    """Build a public-safe, timestamp-free orchestration preview for one
+    candidate history entry, for the anonymized research export.
+
+    Runtime context is intentionally always None here: the export path has no
+    safe live source for proposed_delta / current_cumulative_delta / safety
+    flags, so guessing them would be unsafe. Passing None makes the preview
+    block conservatively via "unknown_context" instead — application_enabled
+    and would_apply always report False; would_apply_if_enabled reports the
+    same conservative False in real export (an actually-live runtime context
+    is required for that field to read True, which only test/helper callers
+    of evaluate_application_orchestration() supply directly).
+
+    Never raises. Read-only — never mutates history or lifecycle state.
+    """
+    try:
+        from .learning.adaptation.orchestrator import evaluate_application_orchestration
+        result = evaluate_application_orchestration(
+            history_entry=entry,
+            lifecycle_state=lifecycle_state,
+            runtime_context=None,
+            span_days=span_days,
+            confounder_ratio=confounder_ratio,
+        )
+        return result.to_research_dict()
+    except Exception:
+        return {
+            "application_enabled": False,
+            "promotion_readiness": "blocked",
+            "would_apply": False,
+            "would_apply_if_enabled": False,
+            "candidate_type": None,
+            "direction": None,
+            "blocked_reasons": ["orchestration_preview_error"],
+            "safety_reasons": [],
+            "bounded_delta_min": None,
+            "current_cumulative_delta_min": None,
+            "next_cumulative_delta_min": None,
+            "monitoring_required": True,
+            "rollback_supported": True,
+            "lifecycle_existing_status": None,
+            "cooldown_active": False,
+        }
+
+
+def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
+    """Aggregate orchestration-preview counts across candidate history for
+    support export. Counts/status only — no per-entry detail, never raises.
+
+    Runtime context is intentionally None for every entry (see
+    _le2_orchestration_preview_dict) — this keeps would_apply_count always 0
+    and would_apply_if_enabled_count conservative (unknown_context blocks
+    both). lifecycle_blocked_count remains meaningful regardless, since
+    lifecycle-state gating does not depend on runtime_context.
+    """
+    _zero = {
+        "entry_count": 0,
+        "would_apply_count": 0,
+        "would_apply_if_enabled_count": 0,
+        "blocked_count": 0,
+        "lifecycle_blocked_count": 0,
+        "safety_blocked_count": 0,
+        "application_enabled": False,
+        "last_error": None,
+    }
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return _zero
+        history = shadow.adaptation_history_snapshot()
+        if not history:
+            return {**_zero, "last_error": shadow.adaptation_last_error()}
+
+        lifecycle_state = getattr(shadow, "_application_lifecycle_state", None)
+        from .learning.adaptation.orchestrator import evaluate_application_orchestration
+        from datetime import datetime as _dt
+
+        would_apply = 0
+        would_apply_if_enabled = 0
+        blocked = 0
+        lifecycle_blocked = 0
+        safety_blocked = 0
+        for entry in history.values():
+            try:
+                span_days = 0.0
+                if entry.first_seen_ts and entry.last_seen_ts:
+                    t0 = _dt.fromisoformat(entry.first_seen_ts.replace("Z", "+00:00"))
+                    t1 = _dt.fromisoformat(entry.last_seen_ts.replace("Z", "+00:00"))
+                    span_days = max(0.0, (t1 - t0).total_seconds() / 86400.0)
+                result = evaluate_application_orchestration(
+                    history_entry=entry,
+                    lifecycle_state=lifecycle_state,
+                    runtime_context=None,
+                    span_days=span_days,
+                    confounder_ratio=_le2_confounder_ratio(coord, zone_id),
+                )
+                if result.would_apply:
+                    would_apply += 1
+                if result.would_apply_if_enabled:
+                    would_apply_if_enabled += 1
+                if result.blocked_reasons:
+                    blocked += 1
+                if any(r.startswith("lifecycle_") for r in result.blocked_reasons):
+                    lifecycle_blocked += 1
+                if result.safety_reasons:
+                    safety_blocked += 1
+            except Exception:
+                blocked += 1
+        return {
+            "entry_count": len(history),
+            "would_apply_count": would_apply,
+            "would_apply_if_enabled_count": would_apply_if_enabled,
+            "blocked_count": blocked,
+            "lifecycle_blocked_count": lifecycle_blocked,
+            "safety_blocked_count": safety_blocked,
+            "application_enabled": False,
+            "last_error": shadow.adaptation_last_error(),
+        }
+    except Exception as err:
+        return {**_zero, "last_error": str(err)}
 
 
 def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
@@ -888,6 +1023,9 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["adaptation_application"] = _le2_application_lifecycle_summary(
                 coord, entry.entry_id
             )
+            zone_info["orchestration_preview"] = _le2_orchestration_preview_summary(
+                coord, entry.entry_id
+            )
         else:
             zone_info["runtime_state"] = None
             zone_info["runtime_health"] = None
@@ -895,6 +1033,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["adaptation"] = None
             zone_info["adaptation_history"] = None
             zone_info["adaptation_application"] = None
+            zone_info["orchestration_preview"] = None
 
         zones.append(zone_info)
 

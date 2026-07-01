@@ -286,6 +286,20 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: lifecycle state stays in-memory only
+        # Raw/episode capture storage — wiring foundation only (no writes yet).
+        # Construction performs zero storage I/O: it only holds a StoreFactory
+        # reference plus the canonical raw-track/episode-type registries, so a
+        # future capture/persist step has one clear, tested place to reach
+        # Raw/Episode stores from without duplicating registry construction.
+        self._capture_stores = None
+        try:
+            from ..storage.capture_stores import LearningCaptureStores
+            from ..storage.stores import HomeAssistantStoreFactory as _HAStoreFactory
+            self._capture_stores = LearningCaptureStores(
+                _HAStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: capture storage foundation stays unavailable
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -302,6 +316,16 @@ class LearningShadowController:
     @property
     def errors(self) -> int:
         return self._errors
+
+    @property
+    def capture_stores(self):
+        """Return the LearningCaptureStores wiring foundation, or None.
+
+        Write-nothing accessor object — see capture_stores.py. Present so a
+        future capture/persist step has one clear, already-tested attachment
+        point; nothing in this class calls it yet.
+        """
+        return self._capture_stores
 
     async def async_setup(self) -> bool:
         try:

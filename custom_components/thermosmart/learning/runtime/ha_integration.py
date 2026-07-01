@@ -313,6 +313,16 @@ class LearningShadowController:
         self._episode_history: dict = {}  # episode_id -> flat serialized episode entry
         self._episode_save_needed: bool = False
         self._episode_last_error: Optional[str] = None
+        # Support Critical Events — in-memory with persistent backing store, reached
+        # via the same LearningCaptureStores facade (SupportCriticalEventStore). No
+        # runtime producer exists yet — nothing anywhere calls
+        # record_support_critical_event_safe() in this step (see
+        # support_event_persistence.py's own docstring for why); this only wires
+        # load/save so a future, separately-approved instrumentation step has an
+        # already-tested attachment point.
+        self._support_critical_events: dict = {}  # event_id -> flat serialized support event entry
+        self._support_critical_events_save_needed: bool = False
+        self._support_critical_events_last_error: Optional[str] = None
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -353,6 +363,8 @@ class LearningShadowController:
         await self._async_load_application_lifecycle_safe()
         # Load persisted episode history (non-fatal; no runtime writer yet)
         await self._async_load_episode_history_safe()
+        # Load persisted support critical events (non-fatal; no runtime writer yet)
+        await self._async_load_support_critical_events_safe()
         return setup_ok
 
     def observe_safe(self, recommendation: Mapping[str, Any], *,
@@ -720,6 +732,111 @@ class LearningShadowController:
                 self._episode_save_needed = True
         except Exception as err:
             self._episode_last_error = str(err)
+
+    async def _async_load_support_critical_events_safe(self) -> None:
+        """Load persisted support critical events via
+        LearningCaptureStores.support_critical_events_store().
+
+        Non-fatal on missing/corrupt store. Each stored entry is validated with
+        deserialize_support_event() (from support_event_serialization.py)
+        before being kept — a malformed or schema-mismatched entry is silently
+        dropped, never crashes the load. No runtime writer populates this
+        store yet in this step.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            store = self._capture_stores.support_critical_events_store()
+            raw = await store.load()
+            if raw is None:
+                return
+            raw_entries = raw.get("events") if isinstance(raw, Mapping) else None
+            if not isinstance(raw_entries, Mapping):
+                return
+            from ..storage.support_event_serialization import deserialize_support_event
+            rebuilt: dict = {}
+            for eid, entry in raw_entries.items():
+                if not isinstance(entry, Mapping):
+                    continue  # malformed -> skip
+                if deserialize_support_event(entry) is None:
+                    continue  # unknown type / schema mismatch / malformed -> skip
+                rebuilt[eid] = dict(entry)
+            self._support_critical_events = rebuilt
+        except Exception as err:
+            self._support_critical_events_last_error = str(err)
+
+    async def _async_save_support_critical_events_safe(self) -> None:
+        """Persist support critical events best-effort. Non-fatal on error.
+
+        Dirty flag remains True when save fails, ensuring the next opportunity
+        retries. Nothing in this step ever sets
+        _support_critical_events_save_needed — this method exists so a future
+        runtime producer can rely on an already-tested save path via the
+        existing periodic save trigger.
+        """
+        if self._capture_stores is None or not self._support_critical_events_save_needed:
+            return
+        try:
+            store = self._capture_stores.support_critical_events_store()
+            await store.save({"events": dict(self._support_critical_events)})
+            self._support_critical_events_save_needed = False
+        except Exception as err:
+            self._support_critical_events_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def support_critical_events_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory support critical events.
+
+        Keys are event_id strings; values are flat, versioned serialized
+        support event entry dicts (see support_event_serialization.py). Empty
+        until a future runtime producer and/or a successful store load
+        populate it. Never raises.
+        """
+        try:
+            return dict(self._support_critical_events)
+        except Exception:
+            return {}
+
+    def support_critical_events_last_error(self) -> Optional[str]:
+        """Return the last error message from support event load/save, or None."""
+        return self._support_critical_events_last_error
+
+    def record_support_critical_event_safe(self, event: Any) -> None:
+        """Synchronous, memory-only hand-off for one support critical event.
+
+        NOT bound anywhere yet — no runtime/coordinator call site invokes this
+        in this step (see support_event_persistence.py's module docstring for
+        the exact reasoning and next-step hook points). Never performs
+        storage I/O itself: appends into the in-memory
+        ``_support_critical_events`` via the pure ``append_support_event()``
+        (which also applies the shared SUPPORT_EVENT_RETENTION_DEFAULT policy
+        immediately — no new/arbitrary retention numbers).
+        ``_support_critical_events_save_needed`` is set only when an entry
+        was actually appended and/or pruned — a duplicate ``event_id`` alone
+        does not mark it dirty. The next ``async_save_if_due()`` call flushes
+        it; nothing here saves directly.
+
+        Never raises: a missing capture-store foundation, an unrecognised/
+        malformed event, or any internal failure is captured in
+        ``_support_critical_events_last_error`` and swallowed — never
+        propagated, never touches ``_enabled``.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.support_event_persistence import append_support_event
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            result = append_support_event(
+                {"events": self._support_critical_events},
+                event,
+                now_utc=now_utc,
+            )
+            if result.appended_event_ids or result.pruned_event_ids:
+                self._support_critical_events = result.updated_payload["events"]
+                self._support_critical_events_save_needed = True
+        except Exception as err:
+            self._support_critical_events_last_error = str(err)
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -2551,6 +2668,7 @@ class LearningShadowController:
         await self._async_save_adaptation_history_safe()
         await self._async_save_application_lifecycle_safe()
         await self._async_save_episode_history_safe()
+        await self._async_save_support_critical_events_safe()
 
     async def async_flush(self) -> None:
         try:
@@ -2570,6 +2688,8 @@ class LearningShadowController:
         await self._async_save_application_lifecycle_safe()
         # Flush episode history (best-effort; saves if dirty)
         await self._async_save_episode_history_safe()
+        # Flush support critical events (best-effort; saves if dirty)
+        await self._async_save_support_critical_events_safe()
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.

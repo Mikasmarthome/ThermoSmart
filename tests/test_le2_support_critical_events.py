@@ -563,6 +563,16 @@ def test_t22_regression_imports_ok():
 
 
 # ── T23: No runtime/lifecycle wiring exists yet ─────────────────────────────
+#
+# A later step ("Support Critical Event Store State and Save Wiring")
+# legitimately added in-memory state + load/save wiring for support critical
+# events into LearningShadowController (ha_integration.py) — mirroring
+# exactly how the episode-history state/store wiring was added on top of the
+# episode-persistence foundation. That is expected, intentional wiring, not
+# a regression. What must remain true is the boundary this foundation step
+# was built to protect: lifecycle.py (run_cycle()) and coordinator.py never
+# reference support events at all — no runtime PRODUCER exists yet, only
+# state/load/save plumbing in ha_integration.py.
 
 def test_t23_lifecycle_module_has_no_support_event_reference():
     import custom_components.thermosmart.learning.runtime.lifecycle as _lifecycle_mod
@@ -571,11 +581,17 @@ def test_t23_lifecycle_module_has_no_support_event_reference():
     assert "SupportCriticalEvent" not in source
 
 
-def test_t23_ha_integration_module_has_no_support_event_reference():
+def test_t23_ha_integration_now_legitimately_has_state_and_store_wiring():
+    """Confirms the intentional wiring added by the store-wiring step: state
+    fields, load/save methods, and record_support_critical_event_safe() all
+    exist — but nothing else in ha_integration.py calls
+    record_support_critical_event_safe() as a live producer (no sink binding,
+    unlike record_completed_episode_safe(), which IS bound as episode_sink)."""
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha_mod
     source = inspect.getsource(_ha_mod)
-    assert "support_event" not in source.lower()
-    assert "SupportCriticalEvent" not in source
+    assert "self._support_critical_events: dict = {}" in source
+    assert "record_support_critical_event_safe" in source
+    assert source.count("self.record_support_critical_event_safe(") == 0
 
 
 def test_t23_coordinator_module_has_no_support_event_reference():

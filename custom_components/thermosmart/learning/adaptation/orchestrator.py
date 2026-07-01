@@ -96,6 +96,7 @@ class ApplicationOrchestrationResult:
     blocked_reasons: tuple[str, ...]
     safety_reasons: tuple[str, ...]
     bounded_delta_min: Optional[float]
+    current_cumulative_delta_min: Optional[float]
     next_cumulative_delta_min: Optional[float]
     monitoring_required: bool
     rollback_supported: bool
@@ -119,6 +120,7 @@ class ApplicationOrchestrationResult:
             "blocked_reasons":             list(self.blocked_reasons),
             "safety_reasons":              list(self.safety_reasons),
             "bounded_delta_min":           self.bounded_delta_min,
+            "current_cumulative_delta_min": self.current_cumulative_delta_min,
             "next_cumulative_delta_min":   self.next_cumulative_delta_min,
             "monitoring_required":         self.monitoring_required,
             "rollback_supported":          self.rollback_supported,
@@ -179,10 +181,18 @@ def evaluate_application_orchestration(
     mutation, no side effects. Never writes to ``lifecycle_state`` (the
     caller's object is only read from). Never raises.
 
+    Caller contract: ``lifecycle_state`` (when not None) must belong to the same
+    learning zone as ``history_entry`` — candidate_key lookup is a plain dict
+    read with no independent zone cross-check, since CandidateHistoryEntry
+    carries no zone_id field of its own (the zone is already folded into the
+    opaque candidate_key hash). Callers own one ApplicationLifecycleState per
+    zone (see LearningShadowController), so this holds naturally in practice.
+
     Args:
         history_entry:    accumulated candidate history entry.
-        lifecycle_state:  current ApplicationLifecycleState, or None when the
-                          storage layer could not load one (conservative block).
+        lifecycle_state:  current ApplicationLifecycleState for the SAME zone as
+                          history_entry, or None when the storage layer could
+                          not load one (conservative block).
         runtime_context:  live safety snapshot; None → conservative block via
                           evaluate_application_readiness's "unknown_context".
         span_days:        calendar days between first/last sighting (caller
@@ -282,6 +292,7 @@ def evaluate_application_orchestration(
         blocked_reasons=tuple(blocked_reasons),
         safety_reasons=application_decision.safety_reasons,
         bounded_delta_min=plan.bounded_delta_min,
+        current_cumulative_delta_min=plan.current_cumulative_delta_min,
         next_cumulative_delta_min=plan.next_cumulative_delta_min,
         monitoring_required=plan.monitoring_required,
         rollback_supported=plan.rollback_supported,

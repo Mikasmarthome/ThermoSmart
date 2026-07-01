@@ -287,6 +287,45 @@ def test_t10_expired_cooldown_does_not_block_via_cooldown_reason():
     assert "lifecycle_already_adopted" in result.blocked_reasons
 
 
+# ── T7 (audit follow-up): terminal statuses ADOPTED / ROLLED_BACK / WINDOW_EXPIRED
+# all block conservatively, each via its own distinct reason string ──────────
+
+def test_t7_terminal_status_adopted_blocks():
+    state = ApplicationLifecycleState(
+        learning_zone_id="zone_a", updated_at="",
+        entries={"deadbeef01234567": _lifecycle_entry(MonitoringStatus.ADOPTED)},
+    )
+    result = _run(lifecycle_state=state)
+    assert result.would_apply is False
+    assert result.would_apply_if_enabled is False
+    assert "lifecycle_already_adopted" in result.blocked_reasons
+    assert result.lifecycle_existing_status == MonitoringStatus.ADOPTED.value
+
+
+def test_t7_terminal_status_rolled_back_blocks():
+    state = ApplicationLifecycleState(
+        learning_zone_id="zone_a", updated_at="",
+        entries={"deadbeef01234567": _lifecycle_entry(MonitoringStatus.ROLLED_BACK)},
+    )
+    result = _run(lifecycle_state=state)
+    assert result.would_apply is False
+    assert result.would_apply_if_enabled is False
+    assert "lifecycle_rolled_back" in result.blocked_reasons
+    assert result.lifecycle_existing_status == MonitoringStatus.ROLLED_BACK.value
+
+
+def test_t7_terminal_status_window_expired_blocks():
+    state = ApplicationLifecycleState(
+        learning_zone_id="zone_a", updated_at="",
+        entries={"deadbeef01234567": _lifecycle_entry(MonitoringStatus.WINDOW_EXPIRED)},
+    )
+    result = _run(lifecycle_state=state)
+    assert result.would_apply is False
+    assert result.would_apply_if_enabled is False
+    assert "lifecycle_window_expired" in result.blocked_reasons
+    assert result.lifecycle_existing_status == MonitoringStatus.WINDOW_EXPIRED.value
+
+
 # ── T11: lifecycle_state None blocks conservatively ──────────────────────────
 
 def test_t11_lifecycle_state_none_blocks():
@@ -337,6 +376,7 @@ def test_t15_bounded_delta_carried():
     ctx = _ctx(proposed_delta=9.0, current_cumulative_delta=0.0)
     result = _run(runtime_context=ctx)
     assert result.bounded_delta_min == 5.0  # capped to max step
+    assert result.current_cumulative_delta_min == 0.0
     assert result.next_cumulative_delta_min == 5.0
 
 
@@ -372,9 +412,9 @@ def test_t17_to_dict_all_expected_fields_present():
         "candidate_key", "candidate_type", "direction", "promotion_readiness",
         "application_enabled", "application_readiness", "plan_status",
         "would_apply", "would_apply_if_enabled", "blocked_reasons",
-        "safety_reasons", "bounded_delta_min", "next_cumulative_delta_min",
-        "monitoring_required", "rollback_supported", "lifecycle_existing_status",
-        "cooldown_active",
+        "safety_reasons", "bounded_delta_min", "current_cumulative_delta_min",
+        "next_cumulative_delta_min", "monitoring_required", "rollback_supported",
+        "lifecycle_existing_status", "cooldown_active",
     }
     assert expected_keys.issubset(d.keys())
 

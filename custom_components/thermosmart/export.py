@@ -351,6 +351,13 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
             )
         except Exception:
             safe["adaptation_candidate_history"] = []
+        # 3d. Application lifecycle state entries (public-safe; no timestamps).
+        try:
+            safe["adaptation_application_state"] = (
+                _le2_application_lifecycle_research_entries(coord)
+            )
+        except Exception:
+            safe["adaptation_application_state"] = []
         # 4. Final privacy scan (belt-and-suspenders)
         try:
             from .learning.privacy import scan_payload
@@ -561,6 +568,74 @@ def _le2_adaptation_history_for_research(history_entries: list) -> list[dict]:
     except Exception:
         pass
     return result
+
+
+def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
+    """Return adaptation application lifecycle summary for support export.
+
+    Read-only, no mutation, no control effect. Never raises.
+    """
+    _zero = {
+        "state_entry_count": 0,
+        "active_count": 0,
+        "rollback_recommended_count": 0,
+        "adoption_ready_count": 0,
+        "adopted_count": 0,
+        "rolled_back_count": 0,
+        "expired_count": 0,
+        "last_error": None,
+    }
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return _zero
+        snapshot = shadow.application_lifecycle_snapshot()
+        last_err = getattr(shadow, "_application_lifecycle_last_error", None)
+        if snapshot is None:
+            return {**_zero, "last_error": last_err}
+        return {
+            "state_entry_count": snapshot.get("total", 0),
+            "active_count": snapshot.get("active", 0),
+            "rollback_recommended_count": snapshot.get("rollback_recommended", 0),
+            "adoption_ready_count": snapshot.get("adoption_ready", 0),
+            "adopted_count": snapshot.get("adopted", 0),
+            "rolled_back_count": snapshot.get("rolled_back", 0),
+            "expired_count": snapshot.get("expired", 0),
+            "last_error": last_err,
+        }
+    except Exception as err:
+        return {**_zero, "last_error": str(err)}
+
+
+def _le2_application_lifecycle_research_entries(coord: Any) -> list:
+    """Return public-safe application lifecycle state entries for research export.
+
+    No timestamps, no entity IDs, no zone names — only boolean / numeric fields.
+    Never raises; returns empty list on any error or when no state exists.
+    """
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return []
+        state = getattr(shadow, "_application_lifecycle_state", None)
+        if state is None or not getattr(state, "entries", None):
+            return []
+        from datetime import datetime as _dt, timezone as _tz
+        now_ts = _dt.now(_tz.utc).isoformat()
+        from .learning.adaptation.application_state import (
+            application_state_entry_for_research_export,
+        )
+        result: list = []
+        for entry in state.entries.values():
+            try:
+                result.append(
+                    application_state_entry_for_research_export(entry, now_ts=now_ts)
+                )
+            except Exception:
+                pass
+        return result
+    except Exception:
+        return []
 
 
 def _adaptation_situation_context(
@@ -810,12 +885,16 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["adaptation_history"] = _le2_adaptation_history_summary(
                 coord, entry.entry_id
             )
+            zone_info["adaptation_application"] = _le2_application_lifecycle_summary(
+                coord, entry.entry_id
+            )
         else:
             zone_info["runtime_state"] = None
             zone_info["runtime_health"] = None
             zone_info["runtime_pending"] = None
             zone_info["adaptation"] = None
             zone_info["adaptation_history"] = None
+            zone_info["adaptation_application"] = None
 
         zones.append(zone_info)
 

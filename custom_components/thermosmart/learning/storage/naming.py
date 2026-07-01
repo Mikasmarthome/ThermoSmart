@@ -86,3 +86,12 @@ def global_index_key() -> str:
 def adaptation_history_key(learning_zone_id: str) -> str:
     """Store key for the passive adaptation candidate history of one zone."""
     return _key(learning_zone_id, "adaptation_history")
+
+
+def application_lifecycle_key(learning_zone_id: str) -> str:
+    """Store key for the adaptation application lifecycle state of one zone.
+
+    Uses suffix ``application_lifecycle`` — fachlich klar (Lifecycle-State von
+    angewendeten Adaptations) and parallel to ``adaptation_history``.
+    """
+    return _key(learning_zone_id, "application_lifecycle")

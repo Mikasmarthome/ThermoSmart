@@ -273,6 +273,19 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: history stays in-memory only
+        # Application lifecycle state — in-memory with persistent backing store.
+        # No real application in this layer; entries are added by a future Application Layer.
+        self._application_lifecycle_state = None  # ApplicationLifecycleState | None
+        self._application_lifecycle_save_needed: bool = False
+        self._application_lifecycle_last_error: Optional[str] = None
+        self._application_lifecycle_store = None
+        try:
+            from ..storage.stores import ApplicationLifecycleStore, HomeAssistantStoreFactory
+            self._application_lifecycle_store = ApplicationLifecycleStore(
+                HomeAssistantStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: lifecycle state stays in-memory only
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -299,6 +312,8 @@ class LearningShadowController:
             return False
         # Load persisted adaptation history (non-fatal; errors in _adaptation_last_error)
         await self._async_load_adaptation_history_safe()
+        # Load persisted application lifecycle state (non-fatal; no real entries yet)
+        await self._async_load_application_lifecycle_safe()
         return setup_ok
 
     def observe_safe(self, recommendation: Mapping[str, Any], *,
@@ -507,6 +522,56 @@ class LearningShadowController:
             self._adaptation_save_needed = False
         except Exception as err:
             self._adaptation_last_error = str(err)
+
+    async def _async_load_application_lifecycle_safe(self) -> None:
+        """Load persisted application lifecycle state. Non-fatal on missing or corrupt store."""
+        if self._application_lifecycle_store is None:
+            return
+        try:
+            raw = await self._application_lifecycle_store.load()
+            if raw is None:
+                return
+            from ..adaptation.application_state import deserialize_application_lifecycle_state
+            state = deserialize_application_lifecycle_state(raw, self._zone)
+            self._application_lifecycle_state = state
+        except Exception as err:
+            self._application_lifecycle_last_error = str(err)
+
+    async def _async_save_application_lifecycle_safe(self) -> None:
+        """Persist application lifecycle state best-effort. Non-fatal on error.
+
+        Dirty flag remains True when save fails, ensuring the next opportunity retries.
+        """
+        if (self._application_lifecycle_store is None
+                or not self._application_lifecycle_save_needed):
+            return
+        try:
+            if self._application_lifecycle_state is None:
+                return
+            from ..adaptation.application_state import serialize_application_lifecycle_state
+            await self._application_lifecycle_store.save(
+                serialize_application_lifecycle_state(self._application_lifecycle_state)
+            )
+            self._application_lifecycle_save_needed = False
+        except Exception as err:
+            self._application_lifecycle_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def application_lifecycle_snapshot(self) -> Optional[dict]:
+        """Return a summary dict of the current application lifecycle state, or None.
+
+        Returns None when no state has been loaded yet (e.g. first run, no entries).
+        Never raises. Read-only — does not modify state.
+        """
+        try:
+            if self._application_lifecycle_state is None:
+                return None
+            from ..adaptation.application_state import summarize_application_lifecycle_state
+            return summarize_application_lifecycle_state(
+                self._application_lifecycle_state
+            ).to_dict()
+        except Exception:
+            return None
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -2336,6 +2401,7 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("save", err)
         await self._async_save_adaptation_history_safe()
+        await self._async_save_application_lifecycle_safe()
 
     async def async_flush(self) -> None:
         try:
@@ -2351,6 +2417,8 @@ class LearningShadowController:
             self._record_error("unload", err)
         # Flush adaptation history (best-effort; saves if dirty)
         await self._async_save_adaptation_history_safe()
+        # Flush application lifecycle state (best-effort; saves if dirty)
+        await self._async_save_application_lifecycle_safe()
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.

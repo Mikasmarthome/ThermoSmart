@@ -21,6 +21,7 @@ EPISODES_STORE_VERSION = 1
 MODEL_STATE_STORE_VERSION = 1
 GLOBAL_INDEX_STORE_VERSION = 1
 ADAPTATION_HISTORY_STORE_VERSION = 1
+APPLICATION_LIFECYCLE_STORE_VERSION = 1
 
 
 class StoreError(Exception):
@@ -165,4 +166,20 @@ class AdaptationHistoryStore(_VersionedStore):
             factory,
             naming.adaptation_history_key(learning_zone_id),
             ADAPTATION_HISTORY_STORE_VERSION,
+        )
+
+
+class ApplicationLifecycleStore(_VersionedStore):
+    """Versioned per-zone store for adaptation application lifecycle state.
+
+    Keyed by ``application_lifecycle_key(learning_zone_id)``. Not part of the
+    core initialization components — reset separately by ``reset_v2_learning_state``.
+    Empty on first load; non-fatal on missing or corrupt data.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.application_lifecycle_key(learning_zone_id),
+            APPLICATION_LIFECYCLE_STORE_VERSION,
         )

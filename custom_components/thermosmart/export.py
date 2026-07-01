@@ -51,6 +51,15 @@ LE2 learning progress:
   existing numeric/label explanation of why a zone reads at its current
   progress percentage.
 
+LE2 episode history:
+  Per-zone "episode_history" block — a BOUNDED SUMMARY (counts, ages,
+  retention metadata) of LearningShadowController.episode_history_snapshot(),
+  never a full episode list. No episode_id/learning_zone_id/decision_id/
+  trv_binding_id, no trajectory, no raw per-episode timestamps — only
+  aggregate counts_by_type, confounder_count, timeout_count, relative
+  oldest/newest ages in hours, and the registry's own retention policy
+  (max_records/max_age_days per type) to make boundedness visible.
+
 24h auto-delete:
   Export files are scheduled for deletion 24 hours after creation using
   async_call_later.  This schedule does NOT survive a Home Assistant restart.
@@ -108,6 +117,7 @@ _LE2_STRIP_KEY_SUBSTRINGS = (
     "evaluation_id", "user_id", "person", "email", "latitude", "longitude", "address",
     "hostname", "ip_address", "ipaddr", "source_episode_id", "correction_event_id",
     "source_decision_id", "trv_binding_id", "learning_zone_id", "zone_id",
+    "radiator_profile_id",
 )
 
 
@@ -456,6 +466,136 @@ def _le2_learning_progress_export(coord) -> dict:
         return safe
     except Exception as err:
         return {"available": False, "learning_progress_error": str(err)}
+
+
+# Known episode types (episode_schemas.EpisodeType values) — used both to seed
+# counts_by_type at zero (so a zone with no episodes of a type still reports
+# it explicitly) and to recognise/skip unrecognised "episode_type" values.
+_LE2_EPISODE_TYPES = (
+    "heating", "afterheat", "passive_cooling", "window_cooling", "outcome",
+)
+
+
+def _le2_episode_history_export(coord, *, now: datetime) -> dict:
+    """Return a small, bounded, public-safe episode-history SUMMARY for research export.
+
+    Deliberately a summary, not a per-episode entry list — this reuses
+    ``LearningShadowController.episode_history_snapshot()`` (already-in-memory,
+    no new store read) and aggregates counts/ages/retention metadata only.
+    No ``episode_id``, ``learning_zone_id``, ``decision_id``, ``trv_binding_id``,
+    no ``trajectory``, no raw per-episode timestamps — only aggregate counts
+    and relative ages (hours before ``now``).
+
+    Never raises and never breaks the export: a missing/unattached LE2 shadow,
+    a snapshot() failure, or an unexpected error anywhere in the aggregation
+    yields an explicit ``{"available": False, ...}`` block instead of omitting
+    the zone or failing the whole export. Malformed individual entries
+    (not a dict, unrecognised/missing "episode_type") are skipped and counted
+    in ``malformed_skipped_count`` — they never abort the summary.
+    """
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return {"available": False, "reason": "le2_shadow_unavailable"}
+        snapshot = shadow.episode_history_snapshot()
+        if not isinstance(snapshot, dict):
+            return {"available": False, "reason": "episode_history_unavailable"}
+
+        counts_by_type = {t: 0 for t in _LE2_EPISODE_TYPES}
+        confounder_count = 0
+        timeout_count = 0
+        malformed_skipped = 0
+        oldest_age_hours = None
+        newest_age_hours = None
+
+        for entry in snapshot.values():
+            if not isinstance(entry, dict):
+                malformed_skipped += 1
+                continue
+            etype = entry.get("episode_type")
+            if etype not in counts_by_type:
+                malformed_skipped += 1
+                continue
+            counts_by_type[etype] += 1
+
+            confounder_flags = entry.get("confounder_flags")
+            if isinstance(confounder_flags, list) and len(confounder_flags) > 0:
+                confounder_count += 1
+
+            if etype == "outcome" and entry.get("reason") == "timeout":
+                timeout_count += 1
+
+            end_ts_raw = entry.get("end_ts")
+            if isinstance(end_ts_raw, str):
+                try:
+                    end_ts = datetime.fromisoformat(end_ts_raw)
+                    if end_ts.tzinfo is None:
+                        end_ts = end_ts.replace(tzinfo=timezone.utc)
+                    age_hours = round((now - end_ts).total_seconds() / 3600.0, 1)
+                    if oldest_age_hours is None or age_hours > oldest_age_hours:
+                        oldest_age_hours = age_hours
+                    if newest_age_hours is None or age_hours < newest_age_hours:
+                        newest_age_hours = age_hours
+                except Exception:
+                    pass  # age is best-effort; a malformed timestamp just skips age tracking
+
+        entry_count = sum(counts_by_type.values())
+        available_types = sorted(t for t, n in counts_by_type.items() if n > 0)
+        missing_types = sorted(t for t, n in counts_by_type.items() if n == 0)
+
+        retention: dict = {"bounded": False}
+        try:
+            registry = shadow.capture_stores.episode_registry if shadow.capture_stores else None
+            if registry is not None:
+                max_records_by_type: dict = {}
+                max_age_days_by_type: dict = {}
+                for definition in registry.definitions():
+                    key = definition.episode_type.value
+                    max_records_by_type[key] = definition.retention.max_records
+                    max_age_days_by_type[key] = definition.retention.max_age_days
+                retention = {
+                    "bounded": bool(max_records_by_type) and all(
+                        v is not None for v in max_records_by_type.values()
+                    ),
+                    "max_records_by_type": max_records_by_type,
+                    "max_age_days_by_type": max_age_days_by_type,
+                }
+        except Exception:
+            pass  # retention metadata is best-effort; core counts remain valid
+
+        block: dict = {
+            "available": True,
+            "schema_version": _episode_schema_version(),
+            "entry_count": entry_count,
+            "counts_by_type": counts_by_type,
+            "available_types": available_types,
+            "missing_types": missing_types,
+            "confounder_count": confounder_count,
+            "timeout_count": timeout_count,
+            "malformed_skipped_count": malformed_skipped,
+            "oldest_age_hours": oldest_age_hours,
+            "newest_age_hours": newest_age_hours,
+            "retention": retention,
+        }
+        safe = _le2_strip_forbidden(block)
+        try:
+            from .learning.privacy import scan_payload
+            if scan_payload(safe):
+                return {"available": False, "reason": "privacy_scan_failed"}
+        except Exception:
+            pass  # scan itself failing is non-fatal — block already key-stripped
+        return safe
+    except Exception as err:
+        return {"available": False, "episode_history_error": str(err)}
+
+
+def _episode_schema_version() -> int:
+    """Return the current episode schema version, or None if unavailable."""
+    try:
+        from .learning.storage.episode_serialization import EPISODE_SCHEMA_VERSION
+        return EPISODE_SCHEMA_VERSION
+    except Exception:
+        return None
 
 
 def _le2_pending_data(coord, zone_id: str) -> dict | None:
@@ -1012,6 +1152,10 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             _le2_learning_progress_export(coord) if coord is not None
             else {"available": False, "reason": "no_coordinator"}
         )
+        episode_history = (
+            _le2_episode_history_export(coord, now=ts) if coord is not None
+            else {"available": False, "reason": "no_coordinator"}
+        )
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
@@ -1020,6 +1164,7 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             "analytics": analytics,
             "runtime_models": le2,
             "learning_progress": learning_progress,
+            "episode_history": episode_history,
         })
 
     export: dict = {

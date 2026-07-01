@@ -483,7 +483,8 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
     Reads the in-memory candidate history from coord._le2_shadow.
     Never raises.
     """
-    _zero = {"entry_count": 0, "promotion_ready_count": 0, "blocked_count": 0, "last_error": None}
+    _zero = {"entry_count": 0, "promotion_ready_count": 0, "blocked_count": 0,
+             "shadow_preview_count": 0, "application_enabled": False, "last_error": None}
     try:
         shadow = getattr(coord, "_le2_shadow", None)
         if shadow is None:
@@ -523,6 +524,8 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
             "entry_count": len(history),
             "promotion_ready_count": ready,
             "blocked_count": blocked,
+            "shadow_preview_count": ready,
+            "application_enabled": False,
             "last_error": shadow.adaptation_last_error(),
         }
     except Exception as err:

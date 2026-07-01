@@ -19,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional
 
 from .contracts import AdaptationDirection, AdaptationLifecycle, CandidateType
-from .history import CandidateHistoryEntry, evaluate_promotion_readiness
+from .history import CandidateHistoryEntry, PromotionReadiness, evaluate_promotion_readiness
 
 HISTORY_SCHEMA_VERSION = 1
 _COMPONENT_NAME = "adaptation_history"
@@ -235,6 +235,7 @@ def adaptation_history_entry_for_research_export(
     pgr = evaluate_promotion_readiness(
         entry, span_days=span_days, confounder_ratio=confounder_ratio,
     )
+    is_eligible = pgr.readiness is PromotionReadiness.ELIGIBLE
     return {
         "candidate_key":            entry.candidate_key,
         "candidate_type":           entry.candidate_type.value,
@@ -246,5 +247,7 @@ def adaptation_history_entry_for_research_export(
         "dominant_reason_ratio":    round(entry.dominant_reason_ratio, 3),
         "last_lifecycle":           entry.last_lifecycle.value,
         "promotion_readiness":      pgr.readiness.value,
+        "shadow_promotion_preview": is_eligible,
+        "application_enabled":      False,
         "blocking_reasons":         list(pgr.blocking_reasons),
     }

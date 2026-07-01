@@ -449,6 +449,190 @@ def test_integration_insufficient_samples_stays_blocked():
     print("  T_THIN PASS: signal with 5 samples stays BLOCKED (min_outcome_samples gate)")
 
 
+# ── Shadow Promotion Preview tests ───────────────────────────────────────────
+
+def test_shadow_promotion_preview_eligible():
+    """Eligible entry → shadow_promotion_preview=True, application_enabled=False."""
+    entry = _good_entry()
+    exported = adaptation_history_entry_for_research_export(
+        entry, span_days=11.0, confounder_ratio=0.05
+    )
+    assert exported["shadow_promotion_preview"] is True, (
+        f"Expected shadow_promotion_preview=True for ELIGIBLE, got {exported['shadow_promotion_preview']}"
+    )
+    assert exported["application_enabled"] is False, (
+        f"application_enabled must always be False, got {exported['application_enabled']}"
+    )
+    assert exported["promotion_readiness"] == PromotionReadiness.ELIGIBLE.value
+    print("  T_PREV1 PASS: eligible entry -> shadow_promotion_preview=True, application_enabled=False")
+
+
+def test_shadow_promotion_preview_blocked():
+    """Blocked entry → shadow_promotion_preview=False, application_enabled=False."""
+    entry = _good_entry(seen_count=1)  # blocks min_seen_count
+    exported = adaptation_history_entry_for_research_export(
+        entry, span_days=3.0, confounder_ratio=0.05
+    )
+    assert exported["shadow_promotion_preview"] is False, (
+        f"Expected shadow_promotion_preview=False for BLOCKED, got {exported['shadow_promotion_preview']}"
+    )
+    assert exported["application_enabled"] is False
+    assert exported["promotion_readiness"] == PromotionReadiness.BLOCKED.value
+    print("  T_PREV2 PASS: blocked entry -> shadow_promotion_preview=False, application_enabled=False")
+
+
+def test_application_enabled_always_false():
+    """application_enabled=False for any entry state — no Application Layer exists."""
+    for seen, span, conf in [(5, 11.0, 0.05), (1, 2.0, 0.30), (3, 7.0, 0.14)]:
+        entry = _good_entry(seen_count=seen)
+        exported = adaptation_history_entry_for_research_export(
+            entry, span_days=span, confounder_ratio=conf
+        )
+        assert exported["application_enabled"] is False, (
+            f"application_enabled must always be False (seen={seen})"
+        )
+    print("  T_PREV3 PASS: application_enabled=False across eligible, blocked, and boundary states")
+
+
+def test_support_export_shadow_preview_count():
+    """_le2_adaptation_history_summary zero-dict contains shadow_preview_count and application_enabled."""
+    # We test the zero-dict structure via import — no real coordinator needed
+    from custom_components.thermosmart.export import _le2_adaptation_history_summary
+
+    class _FakeShadow:
+        def adaptation_history_snapshot(self): return {}
+        def adaptation_last_error(self): return None
+
+    class _FakeCoord:
+        _le2_shadow = _FakeShadow()
+        def __init__(self): pass
+
+    result = _le2_adaptation_history_summary(_FakeCoord(), "zone_fake")
+    assert "shadow_preview_count" in result, f"shadow_preview_count missing: {list(result.keys())}"
+    assert "application_enabled" in result, f"application_enabled missing: {list(result.keys())}"
+    assert result["application_enabled"] is False
+    assert result["shadow_preview_count"] == 0
+    assert result["entry_count"] == 0
+    print(f"  T_PREV4 PASS: support export zero-dict has shadow_preview_count=0, application_enabled=False")
+
+
+def test_support_export_shadow_preview_count_with_eligible():
+    """shadow_preview_count equals promotion_ready_count for entries with eligible status."""
+    from custom_components.thermosmart.export import _le2_adaptation_history_summary
+    from custom_components.thermosmart.learning.adaptation.contracts import AdaptationLifecycle
+
+    good = _good_entry()  # will be ELIGIBLE (span_days computed below as 0 — but we need >7)
+    # We build a good entry with timestamps far enough apart
+    good2 = _good_entry(
+        first_seen_ts="2026-06-01T10:00:00+00:00",
+        last_seen_ts="2026-06-12T10:00:00+00:00",  # 11 days
+    )
+    blocked = _good_entry(seen_count=1)  # will be BLOCKED
+
+    history = {"key_good": good2, "key_blocked": blocked}
+
+    class _FakeShadow:
+        def adaptation_history_snapshot(self): return history
+        def adaptation_last_error(self): return None
+
+    class _FakeCoord:
+        _le2_shadow = _FakeShadow()
+        def __init__(self): pass
+
+    # Patch _le2_confounder_ratio to return 0.05
+    import unittest.mock as mock
+    import custom_components.thermosmart.export as _exp
+    with mock.patch.object(_exp, "_le2_confounder_ratio", return_value=0.05):
+        result = _le2_adaptation_history_summary(_FakeCoord(), "zone_fake")
+
+    assert result["shadow_preview_count"] == result["promotion_ready_count"], (
+        f"shadow_preview_count ({result['shadow_preview_count']}) must equal "
+        f"promotion_ready_count ({result['promotion_ready_count']})"
+    )
+    assert result["application_enabled"] is False
+    assert result["entry_count"] == 2
+    print(f"  T_PREV5 PASS: shadow_preview_count={result['shadow_preview_count']}, "
+          f"promotion_ready_count={result['promotion_ready_count']}, "
+          f"blocked_count={result['blocked_count']}, application_enabled=False")
+
+
+def test_export_does_not_mutate_history():
+    """Export functions must not mutate the history dict or its entries."""
+    entry = _good_entry()
+    original_seen = entry.seen_count
+    original_lc   = entry.last_lifecycle
+    original_key  = entry.candidate_key
+    history_before = {"k": entry}
+
+    exported = adaptation_history_entry_for_research_export(
+        entry, span_days=11.0, confounder_ratio=0.05
+    )
+
+    # entry is immutable (frozen dataclass), but verify snapshot invariants
+    assert entry.seen_count == original_seen
+    assert entry.last_lifecycle is original_lc
+    assert entry.candidate_key == original_key
+    assert "k" in history_before  # dict itself unchanged
+    assert history_before["k"] is entry  # same object reference
+
+    # exported dict mutation doesn't affect entry
+    exported["shadow_promotion_preview"] = "tampered"
+    assert entry.last_lifecycle is AdaptationLifecycle.SHADOW  # entry unaffected
+    print("  T_PREV6 PASS: export does not mutate history or entries; frozen dataclass confirmed")
+
+
+def test_preview_export_public_safe_no_forbidden_fields():
+    """Research export with preview fields contains no forbidden identity or path strings."""
+    entry = _good_entry()
+    exported = adaptation_history_entry_for_research_export(
+        entry, span_days=11.0, confounder_ratio=0.05
+    )
+    FORBIDDEN_KEYS = {
+        "entity_id", "entry_id", "zone_id", "learning_zone_id", "decision_id",
+        "episode_id", "person", "email", "first_seen_ts", "last_seen_ts",
+        "avg_timeout_rate", "avg_overshoot_rate",  # per-rate internals excluded
+    }
+    present_forbidden = set(exported.keys()) & FORBIDDEN_KEYS
+    assert not present_forbidden, f"Forbidden keys in preview export: {present_forbidden}"
+    # New preview fields must be present
+    assert "shadow_promotion_preview" in exported
+    assert "application_enabled" in exported
+    # Values are the right types (no leaking objects)
+    assert isinstance(exported["shadow_promotion_preview"], bool)
+    assert isinstance(exported["application_enabled"], bool)
+    print(f"  T_PREV7 PASS: preview export public-safe, "
+          f"shadow_promotion_preview={exported['shadow_promotion_preview']}, "
+          f"no forbidden fields ({len(exported)} total fields)")
+
+
+def test_eligible_lifecycle_remains_shadow_after_preview():
+    """Evaluating ELIGIBLE must not change entry.last_lifecycle."""
+    entry = _good_entry()
+    assert entry.last_lifecycle is AdaptationLifecycle.SHADOW
+    _ = adaptation_history_entry_for_research_export(entry, span_days=11.0, confounder_ratio=0.05)
+    assert entry.last_lifecycle is AdaptationLifecycle.SHADOW, (
+        "last_lifecycle must remain SHADOW after export evaluation"
+    )
+    # Also confirm ELIGIBLE state is not persisted back into the entry
+    assert entry.last_lifecycle is not AdaptationLifecycle.ELIGIBLE
+    print("  T_PREV8 PASS: entry.last_lifecycle remains SHADOW after ELIGIBLE preview evaluation")
+
+
+def test_no_control_paths_in_preview_export():
+    """Verify that adaptation export functions contain no control-path keywords."""
+    import inspect
+    from custom_components.thermosmart.learning.adaptation import history_store_schema
+    src = inspect.getsource(history_store_schema)
+    FORBIDDEN = [
+        "set_temperature", "async_write_ha_state", "dispatch(",
+        "apply_lifecycle(", "trv_setpoint", "boost_offset",
+        "async_call_service", "adjust_recommendation",
+    ]
+    hits = [p for p in FORBIDDEN if p in src]
+    assert not hits, f"Control paths in history_store_schema: {hits}"
+    print(f"  T_PREV9 PASS: no control paths in history_store_schema")
+
+
 # ── Gate threshold constants are correctly set ────────────────────────────────
 
 def test_gate_threshold_values():
@@ -490,6 +674,16 @@ if __name__ == "__main__":
         test_integration_pipeline_accumulation_reaches_eligible,
         test_integration_insufficient_samples_stays_blocked,
         test_gate_threshold_values,
+        # Shadow Promotion Preview
+        test_shadow_promotion_preview_eligible,
+        test_shadow_promotion_preview_blocked,
+        test_application_enabled_always_false,
+        test_support_export_shadow_preview_count,
+        test_support_export_shadow_preview_count_with_eligible,
+        test_export_does_not_mutate_history,
+        test_preview_export_public_safe_no_forbidden_fields,
+        test_eligible_lifecycle_remains_shadow_after_preview,
+        test_no_control_paths_in_preview_export,
     ]
 
     passed = failed = 0

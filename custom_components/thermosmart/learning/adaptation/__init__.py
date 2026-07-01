@@ -15,8 +15,14 @@ Public surface:
                          serialize_history_state, deserialize_history_state,
                          prune_history_entries
   application        — ApplicationPolicy, ApplicationRuntimeContext,
-                       ApplicationDecision, evaluate_application_readiness,
-                       application_readiness_preview
+                       ApplicationDecision, ApplicationPlan,
+                       evaluate_application_readiness,
+                       application_readiness_preview,
+                       build_preheat_application_plan
+  monitoring         — AppliedAdaptationRecord, MonitoringEvaluation,
+                       MonitoringStatus, build_applied_adaptation_record,
+                       evaluate_applied_adaptation_outcome,
+                       should_rollback_adaptation
 
 No HA imports. No runtime state. No control modifications.
 """
@@ -61,6 +67,14 @@ from .application import (
     build_preheat_application_plan,
     evaluate_application_readiness,
 )
+from .monitoring import (
+    AppliedAdaptationRecord,
+    MonitoringEvaluation,
+    MonitoringStatus,
+    build_applied_adaptation_record,
+    evaluate_applied_adaptation_outcome,
+    should_rollback_adaptation,
+)
 
 __all__ = [
     "AdaptationDirection",
@@ -97,4 +111,10 @@ __all__ = [
     "application_readiness_preview",
     "build_preheat_application_plan",
     "evaluate_application_readiness",
+    "AppliedAdaptationRecord",
+    "MonitoringEvaluation",
+    "MonitoringStatus",
+    "build_applied_adaptation_record",
+    "evaluate_applied_adaptation_outcome",
+    "should_rollback_adaptation",
 ]

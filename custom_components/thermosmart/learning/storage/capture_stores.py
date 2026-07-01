@@ -20,7 +20,13 @@ from typing import Optional
 from ..raw_schemas import RawTrackName
 from ..registry import EpisodeRegistry, RawTrackRegistry
 from .capture_registry import build_episode_registry, build_raw_track_registry
-from .stores import EpisodesStore, RawSegmentIndexStore, RawSegmentStore, StoreFactory
+from .stores import (
+    EpisodesStore,
+    RawSegmentIndexStore,
+    RawSegmentStore,
+    StoreFactory,
+    SupportCriticalEventStore,
+)
 
 
 class LearningCaptureStores:
@@ -77,3 +83,12 @@ class LearningCaptureStores:
     def episodes_store(self) -> EpisodesStore:
         """Return the single per-zone EpisodesStore (all episode types share it)."""
         return EpisodesStore(self._factory, self._zone)
+
+    def support_critical_events_store(self) -> SupportCriticalEventStore:
+        """Return the single per-zone SupportCriticalEventStore.
+
+        Foundation only — nothing calls ``.load()``/``.save()`` on the
+        returned handle from anywhere in the live runtime yet (see
+        ``support_event_persistence.py``'s module docstring).
+        """
+        return SupportCriticalEventStore(self._factory, self._zone)

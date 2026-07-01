@@ -95,3 +95,12 @@ def application_lifecycle_key(learning_zone_id: str) -> str:
     angewendeten Adaptations) and parallel to ``adaptation_history``.
     """
     return _key(learning_zone_id, "application_lifecycle")
+
+
+def support_critical_events_key(learning_zone_id: str) -> str:
+    """Store key for the bounded Support Critical Event history of one zone.
+
+    Parallel to ``episodes_key`` — one store per zone, keyed by the same
+    opaque ``learning_zone_id``, never a real zone name.
+    """
+    return _key(learning_zone_id, "support_critical_events")

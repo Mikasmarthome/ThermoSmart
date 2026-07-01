@@ -20,6 +20,7 @@ from typing import Any, Mapping, Optional
 
 from .contracts import AdaptationDirection, AdaptationLifecycle, CandidateType
 from .history import CandidateHistoryEntry, PromotionReadiness, evaluate_promotion_readiness
+from .application import application_readiness_preview
 
 HISTORY_SCHEMA_VERSION = 1
 _COMPONENT_NAME = "adaptation_history"
@@ -250,4 +251,5 @@ def adaptation_history_entry_for_research_export(
         "shadow_promotion_preview": is_eligible,
         "application_enabled":      False,
         "blocking_reasons":         list(pgr.blocking_reasons),
+        "application_readiness":    application_readiness_preview(entry),
     }

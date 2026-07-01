@@ -14,6 +14,9 @@ Public surface:
   history_store_schema — AdaptationHistoryState, HISTORY_SCHEMA_VERSION,
                          serialize_history_state, deserialize_history_state,
                          prune_history_entries
+  application        — ApplicationPolicy, ApplicationRuntimeContext,
+                       ApplicationDecision, evaluate_application_readiness,
+                       application_readiness_preview
 
 No HA imports. No runtime state. No control modifications.
 """
@@ -49,6 +52,13 @@ from .history_store_schema import (
     prune_history_entries,
     serialize_history_state,
 )
+from .application import (
+    ApplicationDecision,
+    ApplicationPolicy,
+    ApplicationRuntimeContext,
+    application_readiness_preview,
+    evaluate_application_readiness,
+)
 
 __all__ = [
     "AdaptationDirection",
@@ -78,4 +88,9 @@ __all__ = [
     "deserialize_history_state",
     "prune_history_entries",
     "serialize_history_state",
+    "ApplicationDecision",
+    "ApplicationPolicy",
+    "ApplicationRuntimeContext",
+    "application_readiness_preview",
+    "evaluate_application_readiness",
 ]

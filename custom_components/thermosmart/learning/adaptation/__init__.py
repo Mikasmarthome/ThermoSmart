@@ -23,6 +23,16 @@ Public surface:
                        MonitoringStatus, build_applied_adaptation_record,
                        evaluate_applied_adaptation_outcome,
                        should_rollback_adaptation
+  application_state  — APPLICATION_STATE_SCHEMA_VERSION,
+                       AppliedAdaptationStateEntry, ApplicationLifecycleState,
+                       ApplicationLifecycleSummary,
+                       record_to_state_entry, update_state_entry_from_evaluation,
+                       is_cooldown_active,
+                       serialize_application_lifecycle_state,
+                       deserialize_application_lifecycle_state,
+                       prune_application_state_entries,
+                       application_state_entry_for_research_export,
+                       summarize_application_lifecycle_state
 
 No HA imports. No runtime state. No control modifications.
 """
@@ -75,6 +85,20 @@ from .monitoring import (
     evaluate_applied_adaptation_outcome,
     should_rollback_adaptation,
 )
+from .application_state import (
+    APPLICATION_STATE_SCHEMA_VERSION,
+    ApplicationLifecycleState,
+    ApplicationLifecycleSummary,
+    AppliedAdaptationStateEntry,
+    application_state_entry_for_research_export,
+    deserialize_application_lifecycle_state,
+    is_cooldown_active,
+    prune_application_state_entries,
+    record_to_state_entry,
+    serialize_application_lifecycle_state,
+    summarize_application_lifecycle_state,
+    update_state_entry_from_evaluation,
+)
 
 __all__ = [
     "AdaptationDirection",
@@ -117,4 +141,16 @@ __all__ = [
     "build_applied_adaptation_record",
     "evaluate_applied_adaptation_outcome",
     "should_rollback_adaptation",
+    "APPLICATION_STATE_SCHEMA_VERSION",
+    "ApplicationLifecycleState",
+    "ApplicationLifecycleSummary",
+    "AppliedAdaptationStateEntry",
+    "application_state_entry_for_research_export",
+    "deserialize_application_lifecycle_state",
+    "is_cooldown_active",
+    "prune_application_state_entries",
+    "record_to_state_entry",
+    "serialize_application_lifecycle_state",
+    "summarize_application_lifecycle_state",
+    "update_state_entry_from_evaluation",
 ]

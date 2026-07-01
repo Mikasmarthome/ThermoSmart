@@ -1310,6 +1310,21 @@ class ThermoSmartCoordinator(
                 except Exception:  # never let LE 2.0 affect the heating path
                     pass
 
+            # ── LE 2.0 periodic persistence ─────────────────────────────
+            # Reachable every coordinator cycle regardless of the learning-mode
+            # toggle above, so state left dirty from an earlier cycle still gets
+            # flushed even if learning is disabled mid-session. async_save_if_due()
+            # is internally debounced (30s, hourly safety net via
+            # PersistenceOrchestrator) — a no-op on most cycles, never a second
+            # parallel save mechanism. Awaited (not fire-and-forget); HA never runs
+            # two _async_update_data cycles for the same coordinator concurrently,
+            # so there is no save race. A save failure must never affect heating.
+            if self._le2_shadow is not None:
+                try:
+                    await self._le2_shadow.async_save_if_due()
+                except Exception:
+                    pass
+
             return {
                 "weather": weather_data,
                 "zone": recommendation,

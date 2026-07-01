@@ -411,10 +411,11 @@ def test_t17_to_dict_all_expected_fields_present():
     expected_keys = {
         "candidate_key", "candidate_type", "direction", "promotion_readiness",
         "application_enabled", "application_readiness", "plan_status",
-        "would_apply", "would_apply_if_enabled", "blocked_reasons",
-        "safety_reasons", "bounded_delta_min", "current_cumulative_delta_min",
-        "next_cumulative_delta_min", "monitoring_required", "rollback_supported",
-        "lifecycle_existing_status", "cooldown_active",
+        "would_apply", "would_apply_if_enabled", "blocked_by_unknown_context",
+        "blocked_reasons", "safety_reasons", "bounded_delta_min",
+        "current_cumulative_delta_min", "next_cumulative_delta_min",
+        "monitoring_required", "rollback_supported", "lifecycle_existing_status",
+        "cooldown_active",
     }
     assert expected_keys.issubset(d.keys())
 

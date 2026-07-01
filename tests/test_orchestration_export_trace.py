@@ -24,6 +24,10 @@ Covers the read-only research/support export integration added in export.py:
   T15 — No application_enabled=True in production code
   T16 — No control keywords touched by the new export helpers
   T17 — Existing tests remain green (regression smoke-tests)
+
+Audit follow-up (P8 — error robustness, not covered above):
+  P8a — _le2_orchestration_preview_dict survives an unexpected orchestrator exception
+  P8b — _le2_orchestration_preview_summary survives adaptation_history_snapshot() raising
 """
 from __future__ import annotations
 
@@ -266,6 +270,8 @@ def test_t9_missing_runtime_context_blocks():
         _entry(), lifecycle_state=None, span_days=11.0, confounder_ratio=0.0,
     )
     assert "unknown_context" in preview["blocked_reasons"]
+    # Derived boolean lets a caller detect this without string-matching blocked_reasons.
+    assert preview["blocked_by_unknown_context"] is True
 
 
 # ── T10: lifecycle_state None (error path) blocks with lifecycle_state_unavailable
@@ -375,6 +381,47 @@ def test_t16_no_control_keywords_in_new_helpers():
         source = inspect.getsource(fn).lower()
         for token in _FORBIDDEN_CONTROL_TOKENS:
             assert token not in source, f"forbidden control token found in {fn.__name__}: {token}"
+
+
+# ── P8 audit follow-up: unexpected-exception error paths remain non-fatal ───
+
+def test_p8_preview_dict_survives_orchestrator_exception(monkeypatch):
+    """If evaluate_application_orchestration() unexpectedly raises, the export
+    helper must not propagate — it returns the safe fallback dict instead."""
+    import custom_components.thermosmart.learning.adaptation.orchestrator as _orch_mod
+
+    def _boom(**kwargs):
+        raise RuntimeError("simulated orchestrator failure")
+
+    monkeypatch.setattr(_orch_mod, "evaluate_application_orchestration", _boom)
+
+    preview = _le2_orchestration_preview_dict(
+        _entry(), lifecycle_state=None, span_days=11.0, confounder_ratio=0.0,
+    )
+    assert preview["blocked_reasons"] == ["orchestration_preview_error"]
+    assert preview["would_apply"] is False
+    assert preview["blocked_by_unknown_context"] is False
+
+
+def test_p8_preview_summary_survives_snapshot_exception():
+    """If shadow.adaptation_history_snapshot() unexpectedly raises, the support
+    export summary must not propagate — it returns the neutral zero dict with
+    the error captured in last_error instead."""
+
+    class _ExplodingShadow:
+        def adaptation_history_snapshot(self):
+            raise RuntimeError("simulated storage read failure")
+
+        def adaptation_last_error(self):
+            return None
+
+    class _Coord:
+        _le2_shadow = _ExplodingShadow()
+
+    result = _le2_orchestration_preview_summary(_Coord(), _ZONE_A)
+    assert result["entry_count"] == 0
+    assert result["would_apply_count"] == 0
+    assert "simulated storage read failure" in (result["last_error"] or "")
 
 
 # ── T17: Existing tests remain green (import smoke-test) ────────────────────

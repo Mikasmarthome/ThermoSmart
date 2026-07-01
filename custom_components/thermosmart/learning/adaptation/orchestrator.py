@@ -93,6 +93,10 @@ class ApplicationOrchestrationResult:
     plan_status: str                     # "would_apply" | "blocked_by_kill_switch" | "blocked"
     would_apply: bool                    # real outcome given the supplied policy
     would_apply_if_enabled: bool         # theoretical outcome if kill-switch were on
+    blocked_by_unknown_context: bool     # True iff "unknown_context" is in blocked_reasons —
+                                          # lets a caller distinguish "blocked because no live
+                                          # runtime context was supplied" from "blocked on the
+                                          # merits" without string-matching blocked_reasons
     blocked_reasons: tuple[str, ...]
     safety_reasons: tuple[str, ...]
     bounded_delta_min: Optional[float]
@@ -117,6 +121,7 @@ class ApplicationOrchestrationResult:
             "plan_status":                 self.plan_status,
             "would_apply":                 self.would_apply,
             "would_apply_if_enabled":      self.would_apply_if_enabled,
+            "blocked_by_unknown_context":  self.blocked_by_unknown_context,
             "blocked_reasons":             list(self.blocked_reasons),
             "safety_reasons":              list(self.safety_reasons),
             "bounded_delta_min":           self.bounded_delta_min,
@@ -144,6 +149,7 @@ class ApplicationOrchestrationResult:
             "promotion_readiness":         self.promotion_readiness,
             "would_apply":                 self.would_apply,
             "would_apply_if_enabled":      self.would_apply_if_enabled,
+            "blocked_by_unknown_context":  self.blocked_by_unknown_context,
             "candidate_type":              self.candidate_type_value,
             "direction":                   self.direction_value,
             "blocked_reasons":             list(self.blocked_reasons),
@@ -283,6 +289,7 @@ def evaluate_application_orchestration(
         + plan_only_reasons
         + lifecycle_reasons
     )
+    blocked_by_unknown_context = "unknown_context" in blocked_reasons
 
     application_readiness = (
         "eligible" if application_decision.would_allow_if_enabled else "blocked"
@@ -317,6 +324,7 @@ def evaluate_application_orchestration(
         plan_status=plan_status,
         would_apply=would_apply,
         would_apply_if_enabled=would_apply_if_enabled,
+        blocked_by_unknown_context=blocked_by_unknown_context,
         blocked_reasons=tuple(blocked_reasons),
         safety_reasons=application_decision.safety_reasons,
         bounded_delta_min=plan.bounded_delta_min,

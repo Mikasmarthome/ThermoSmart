@@ -614,6 +614,7 @@ def _le2_orchestration_preview_dict(
             "promotion_readiness": "blocked",
             "would_apply": False,
             "would_apply_if_enabled": False,
+            "blocked_by_unknown_context": False,
             "candidate_type": None,
             "direction": None,
             "blocked_reasons": ["orchestration_preview_error"],

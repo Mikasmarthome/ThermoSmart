@@ -173,6 +173,14 @@ class ThermoSmartCoordinator(
         self._support_event_window_hold_active: bool = False
         self._support_event_summer_hold_active: bool = False
         self._support_event_manual_override_active: bool = False
+        # TRV dispatch event dedupe: fires only when the (event_type, reason,
+        # setpoint) signature genuinely changes from the previous cycle —
+        # a zone sitting at target for hours must not spam one event per
+        # cycle. "Recommendation only" (active_control off) uses its own
+        # transition flag, matching the hold-event pattern above.
+        self._support_event_recommendation_only_active: bool = False
+        self._support_event_last_trv_signature: tuple | None = None
+        self._support_event_last_sent_setpoint: float | None = None
 
         # Kalibrierung (genutzt von TRVControlMixin)
         self._calibration_offsets: dict[str, float] = {}
@@ -1108,6 +1116,12 @@ class ThermoSmartCoordinator(
             _disp_status = _combined.status if _disp_attempted else "not_attempted"
             _eff_sps = _sp_stats.effective_setpoints
 
+            # LE2 Support Critical Events: observe the TRV dispatch outcome
+            # already decided above — pure observation, no influence on the
+            # decision, the service-call payload, or any filter/throttle
+            # logic. See _maybe_record_trv_dispatch_event().
+            self._maybe_record_trv_dispatch_event(recommendation, _sp_stats, effective_summer)
+
             # Per-device applied boost offset — updated BEFORE LiveDecisionRecord so
             # LDR.boost_applied_c reflects real dispatch truth, not the pre-dispatch
             # approved value.
@@ -1539,6 +1553,110 @@ class ThermoSmartCoordinator(
                     details={"source": "manual_override"},
                 )
             self._support_event_manual_override_active = manual_active
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_recommendation_only_event(self) -> None:
+        """Record ONE learning_recommendation_only landmark on the transition
+        into observation-only mode (active_control off) — not every cycle.
+        Mirrors the hold-transition dedupe pattern from Increment 2.
+        """
+        if self._support_event_recommendation_only_active:
+            return
+        self._support_event_recommendation_only_active = True
+        from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+        self._record_support_hold_event(
+            SupportEventType.LEARNING_RECOMMENDATION_ONLY, SupportEventSeverity.INFO,
+            reason="learning_recommendation_only",
+            summary="Zone is in observation/recommendation mode (active control off)",
+            details={"active_control": False},
+        )
+
+    def _maybe_record_trv_dispatch_event(
+        self, recommendation: dict, sp_stats: _DispatchStats, effective_summer: bool,
+    ) -> None:
+        """Record ONE Support Critical Event observing the TRV setpoint
+        dispatch OUTCOME already decided this cycle — pure observation, never
+        influences the dispatch decision, the service-call payload, or any
+        filter/throttle/setpoint logic. ``sp_stats`` is read-only here (the
+        same ``_DispatchStats`` already computed by ``_apply_temperature()``,
+        privacy-safe by construction — see trv_control.py).
+
+        Deduped via a small in-memory "last signature" cache
+        (event_type + reason + rounded requested setpoint) so an unchanged
+        situation (e.g. a zone sitting at target for hours) records at most
+        one event per genuinely new situation, never one per cycle — same
+        intent as the foundation's time-window dedupe helper, but a cheaper same-cycle-chain
+        check since this fires far more often (every control cycle) than the
+        storage/setup landmarks that helper was built for.
+
+        Only maps to a specific block reason when the EXISTING logic already
+        makes that reason determinable at this zone level (same-setpoint
+        match against ``_last_written_setpoints``, TRV unavailability via
+        ``_trv_offline`` — both already-tracked coordinator state, read-only
+        here). Falls back to the generic ``trv_command_blocked`` rather than
+        guessing a more specific reason the current code cannot actually
+        distinguish (e.g. "min interval" — no such gate exists in this
+        codebase; not fabricated here, see the accompanying report).
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            if not self._active_control:
+                self._maybe_record_recommendation_only_event()
+                return
+            self._support_event_recommendation_only_active = False
+            if effective_summer:
+                return  # covered by the existing summer_mode_hold event (Increment 2)
+
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            requested = recommendation.get("trv_setpoint", recommendation.get("adjusted_target"))
+            requested_rounded = round(float(requested), 1) if isinstance(requested, (int, float)) else None
+
+            if sp_stats.effective_setpoints:
+                event_type = SupportEventType.TRV_COMMAND_SENT
+                severity = SupportEventSeverity.INFO
+                reason = "trv_command_sent"
+                summary = "TRV setpoint command sent"
+                details: dict = {}
+                if requested_rounded is not None:
+                    details["requested_setpoint"] = requested_rounded
+                if self._support_event_last_sent_setpoint is not None:
+                    details["previous_setpoint"] = self._support_event_last_sent_setpoint
+            elif self._trv_offline:
+                event_type = SupportEventType.TRV_UNAVAILABLE
+                severity = SupportEventSeverity.WARNING
+                reason = "trv_unavailable"
+                summary = "TRV setpoint command blocked: TRV unavailable"
+                details = {"active_control": True}
+            elif requested_rounded is not None and any(
+                abs(v - requested_rounded) < 0.5 for v in self._last_written_setpoints.values()
+            ):
+                event_type = SupportEventType.SAME_SETPOINT_BLOCK
+                severity = SupportEventSeverity.INFO
+                reason = "same_setpoint_block"
+                summary = "TRV setpoint command blocked: already at target"
+                details = {"requested_setpoint": requested_rounded}
+            elif sp_stats.status == "not_attempted":
+                event_type = SupportEventType.TRV_COMMAND_BLOCKED
+                severity = SupportEventSeverity.INFO
+                reason = "not_attempted"
+                summary = "TRV setpoint command not attempted"
+                details = {"active_control": True}
+            else:
+                return  # failed/partially-succeeded dispatch: out of scope for this step
+
+            signature = (event_type.value, reason, requested_rounded)
+            if signature == self._support_event_last_trv_signature:
+                return
+            self._support_event_last_trv_signature = signature
+            if event_type is SupportEventType.TRV_COMMAND_SENT and requested_rounded is not None:
+                self._support_event_last_sent_setpoint = requested_rounded
+
+            self._record_support_hold_event(
+                event_type, severity, reason=reason, summary=summary, details=details,
+            )
         except Exception:
             pass  # event production is best-effort; must never affect the control cycle
 

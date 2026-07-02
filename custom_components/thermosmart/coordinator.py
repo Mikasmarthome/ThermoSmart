@@ -181,6 +181,12 @@ class ThermoSmartCoordinator(
         self._support_event_recommendation_only_active: bool = False
         self._support_event_last_trv_signature: tuple | None = None
         self._support_event_last_sent_setpoint: float | None = None
+        # Boost event dedupe: started/ended follow a boolean transition flag
+        # (like window/summer/manual above); blocked uses a small signature
+        # cache (reason only) since it can persist across many cycles while
+        # inactive, needing content-based dedup rather than a pure transition.
+        self._support_event_boost_active: bool = False
+        self._support_event_last_boost_signature: tuple | None = None
 
         # Kalibrierung (genutzt von TRVControlMixin)
         self._calibration_offsets: dict[str, float] = {}
@@ -1025,6 +1031,7 @@ class ThermoSmartCoordinator(
             #   → mixed_zone_check → device_unavailable_check → readiness → inner gates.
             # Runs BEFORE dispatch so the approved offset flows through device guards and
             # the single setpoint dispatch path.  Never raises into heating.
+            _boost_result = None  # AdaptiveBoostControlResult | None; None = not evaluated this cycle
             if self._le2_shadow is not None and not effective_summer:
                 # Pre-dispatch device availability: if any setpoint TRV is unavailable
                 # right now, block boost for this cycle to prevent partial dispatch.
@@ -1041,7 +1048,7 @@ class ThermoSmartCoordinator(
                 recommendation["_setpoint_device_unavailable"] = _setpoint_device_unavailable
                 _restore_pending = not self._active_control_initialized
                 try:
-                    self._le2_shadow.resolve_adaptive_boost_control(
+                    _boost_result = self._le2_shadow.resolve_adaptive_boost_control(
                         recommendation,
                         learning_mode_on=_learning_mode_on,
                         active_control_on=self._active_control,
@@ -1068,6 +1075,13 @@ class ThermoSmartCoordinator(
                         _candidate_c, TPI_MAX_BOOST_CELSIUS)
                 except Exception:
                     recommendation["boost_factor"] = 1.0
+
+            # LE2 Support Critical Events: observe the boost decision already
+            # made above (_boost_result, recommendation["le2_boost_adjusted"])
+            # — pure observation, no influence on boost timing, offset,
+            # cooldown, or lifecycle. See _maybe_record_boost_event().
+            self._maybe_record_boost_event(recommendation, _boost_result, effective_summer)
+
             # ── Authoritative Live Decision Record (Phase B1b) ────────────────────
             # Baseline record is always built from coordinator-owned data, regardless of
             # whether LE2 is attached.  The shadow optionally enriches with decision_id
@@ -1185,6 +1199,10 @@ class ThermoSmartCoordinator(
                             _disp_status)
                     except Exception:
                         pass
+                    # LE2 Support Critical Events: observe the invalidation
+                    # just performed above — pure observation, no influence
+                    # on the lifecycle release itself.
+                    self._maybe_record_boost_invalidated_event()
 
             # ── Complete LiveDecisionRecord with dispatch truth ────────────────────
             if _live_dec_pre is not None:
@@ -1656,6 +1674,100 @@ class ThermoSmartCoordinator(
 
             self._record_support_hold_event(
                 event_type, severity, reason=reason, summary=summary, details=details,
+            )
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_boost_event(
+        self, recommendation: dict, boost_result, effective_summer: bool,
+    ) -> None:
+        """Record Support Critical Events observing the boost decision
+        already made this cycle by resolve_adaptive_boost_control() — pure
+        observation, never influences boost timing, offset, cooldown, or
+        lifecycle. ``boost_result`` is the read-only
+        ``AdaptiveBoostControlResult`` already returned by that resolver
+        (None when it was not invoked this cycle — summer mode or no LE2
+        shadow attached).
+
+        started/ended follow the SAME boolean-transition-flag pattern as the
+        window/summer/manual hold events (Increment 2): an event fires only
+        when ``_support_event_boost_active`` genuinely flips. blocked uses a
+        small (event_type, reason) signature cache instead, since a zone can
+        stay blocked for the SAME reason across many cycles (e.g. a
+        persistent cooldown) — that must record once, not once per cycle;
+        but a genuinely different reason must still be visible.
+
+        ``reason`` values come directly from ``boost_result.blocking_reason``
+        (the resolver's own typed BoostBlockReason / inner-gate rejection
+        string, e.g. "active_control_off", "window_open", "cooldown_active",
+        "device_unavailable") — never guessed or invented.
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            if boost_result is None:
+                # Resolver not invoked this cycle (summer mode, or shadow gone).
+                if self._support_event_boost_active:
+                    self._support_event_boost_active = False
+                    reason = "summer_mode" if effective_summer else "shadow_unavailable"
+                    self._record_support_hold_event(
+                        SupportEventType.BOOST_ENDED, SupportEventSeverity.INFO,
+                        reason=reason, summary="Boost ended", details={"active": False},
+                    )
+                return
+
+            boost_active_now = bool(recommendation.get("le2_boost_adjusted", False))
+
+            if boost_active_now and not self._support_event_boost_active:
+                details: dict = {"active": True}
+                try:
+                    details["offset"] = round(float(boost_result.approved_boost_offset_c), 3)
+                except (TypeError, ValueError):
+                    pass
+                self._record_support_hold_event(
+                    SupportEventType.BOOST_STARTED, SupportEventSeverity.INFO,
+                    reason="boost_started", summary="Boost started", details=details,
+                )
+            elif not boost_active_now and self._support_event_boost_active:
+                reason = str(boost_result.blocking_reason or "unknown")
+                self._record_support_hold_event(
+                    SupportEventType.BOOST_ENDED, SupportEventSeverity.INFO,
+                    reason=reason, summary="Boost ended", details={"active": False},
+                )
+            elif not boost_active_now and boost_result.blocking_reason:
+                reason = str(boost_result.blocking_reason)
+                signature = ("boost_blocked", reason)
+                if signature != self._support_event_last_boost_signature:
+                    self._support_event_last_boost_signature = signature
+                    self._record_support_hold_event(
+                        SupportEventType.BOOST_BLOCKED, SupportEventSeverity.INFO,
+                        reason=reason, summary="Boost blocked", details={"active": False},
+                    )
+
+            self._support_event_boost_active = boost_active_now
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_boost_invalidated_event(self) -> None:
+        """Record ONE boost_ended landmark when boost was hard-released this
+        cycle after a failed/partial TRV dispatch — pure observation, called
+        right after the EXISTING invalidate_boost_after_failed_dispatch_safe()
+        lifecycle call, never influencing it. A no-op if boost was not
+        already recorded as active this cycle (avoids a spurious "ended"
+        when there was nothing to end from an event-production perspective).
+        """
+        if self._le2_shadow is None or not self._support_event_boost_active:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+            self._support_event_boost_active = False
+            self._record_support_hold_event(
+                SupportEventType.BOOST_ENDED, SupportEventSeverity.INFO,
+                reason="invalidated_after_failed_dispatch",
+                summary="Boost invalidated after failed dispatch",
+                details={"active": False},
             )
         except Exception:
             pass  # event production is best-effort; must never affect the control cycle

@@ -516,10 +516,17 @@ def test_t15_run_cycle_has_no_research_daily_store_io():
 # ── T16: No export hook exists in export.py ─────────────────────────────────
 
 def test_t16_no_export_reference():
+    """At the time THIS state/store wiring step was built, export.py had no
+    Research Daily reference whatsoever — checked here as a snapshot of
+    that boundary. A later, separately-approved step ("Research Daily
+    Long-Term Summary Export") legitimately added a public-safe,
+    read-only "research_daily" block to the research export, reading ONLY
+    LearningShadowController.research_daily_snapshot() — expected,
+    intentional export wiring, not a regression of this step's own scope.
+    What must remain true regardless is that export.py never references
+    ResearchDailyStore (no store I/O in the export layer)."""
     import custom_components.thermosmart.export as _exp
     source = inspect.getsource(_exp)
-    assert "research_daily" not in source.lower()
-    assert "ResearchDailyBucket" not in source
     assert "ResearchDailyStore" not in source
 
 

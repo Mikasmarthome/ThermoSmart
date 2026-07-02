@@ -287,14 +287,24 @@ def test_t13_coordinator_not_touched():
 # ── T14: No export reference in new code ────────────────────────────────────
 
 def test_t14_no_export_reference():
+    """At the time THIS store-wiring step was built, export.py had no
+    Research Daily reference — checked here as a snapshot of that boundary.
+    A later, separately-approved step ("Research Daily Long-Term Summary
+    Export") legitimately added a "research_daily" research-export block,
+    reading ONLY LearningShadowController.research_daily_snapshot() —
+    expected, intentional export wiring, not a regression of this step's
+    own scope. What must remain true regardless is that export.py never
+    constructs/references the ResearchDailyStore wrapper class itself or
+    calls the .research_daily_store() accessor — no store I/O in the
+    export layer."""
     for mod in (naming, _stores_mod, _capture_stores_mod):
         source = inspect.getsource(mod).lower()
         assert "export.py" not in source
 
     import custom_components.thermosmart.export as _exp
     source = inspect.getsource(_exp)
-    assert "ResearchDailyStore" not in source
-    assert "research_daily_store" not in source
+    assert "ResearchDailyStore(" not in source
+    assert ".research_daily_store(" not in source
 
 
 # ── T15: Existing Research Daily Foundation tests remain green ─────────────

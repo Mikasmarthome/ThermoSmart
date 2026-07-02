@@ -60,6 +60,16 @@ LE2 episode history:
   oldest/newest ages in hours, and the registry's own retention policy
   (max_records/max_age_days per type) to make boundedness visible.
 
+LE2 research daily buckets:
+  Per-zone "research_daily" block — a BOUNDED SUMMARY of
+  LearningShadowController.research_daily_snapshot() (already-in-memory,
+  no new store read). "summary" aggregates counters/averages/progress-
+  confidence min/max/last across ALL valid buckets; "daily" is a compact,
+  newest-first list capped at 90 days (records_truncated/truncation_reason
+  report any excess) — the summary itself is never truncated. No episode/
+  event ids, no raw events, no trajectories — every field is already one of
+  ResearchDailyBucket's own fixed scalar aggregates.
+
 LE2 support critical event timeline (support export only):
   Per-zone "critical_events" block — reads ONLY the already-in-memory
   LearningShadowController.support_critical_events_snapshot(), no store
@@ -607,6 +617,243 @@ def _episode_schema_version() -> int:
         return EPISODE_SCHEMA_VERSION
     except Exception:
         return None
+
+
+# Research Daily Buckets are already bounded in storage (365 days / 400
+# buckets — research_daily_persistence.py). This is a SEPARATE, smaller cap
+# on the per-day "daily" LIST actually returned in the research export, so a
+# single export file stays readable — 400 daily entries in a JSON file a
+# user is asked to review before sharing is not "small". 90 days (~3 months)
+# is long enough for a meaningful research-diagnosis window without bloating
+# the file. Centralised so a later calibration pass has one place to change.
+# The "summary" block below is NOT subject to this cap — it aggregates over
+# ALL valid buckets regardless, so long-term totals/min/max/last stay
+# complete even when the daily list itself is truncated.
+_RESEARCH_DAILY_EXPORT_MAX_BUCKETS = 90
+
+# Fixed, pre-defined counter fields eligible for a compact "daily" entry —
+# included only when > 0, mirroring ResearchDailyBucket's own field set
+# (research_daily_schemas.py). No entity/zone/episode ids, no raw events, no
+# trajectories — every one of these is already a scalar aggregate by
+# construction.
+_RESEARCH_DAILY_COUNTER_FIELDS = (
+    "decision_count",
+    "heating_allowed_count", "heating_blocked_count",
+    "trv_command_sent_count", "trv_command_blocked_count",
+    "same_setpoint_block_count", "trv_unavailable_count",
+    "window_hold_count", "summer_hold_count", "manual_override_count",
+    "boost_started_count", "boost_blocked_count", "boost_ended_count",
+    "sensor_unavailable_count", "sensor_restored_count", "fallback_used_count",
+    "outcome_resolved_count", "outcome_success_count", "outcome_failed_count",
+    "outcome_confounded_count",
+)
+# (sum_field, count_field) pairs — both included in a compact daily entry
+# only when the count is > 0 (a zero count means the sum is meaningless).
+_RESEARCH_DAILY_SUM_COUNT_PAIRS = (
+    ("overshoot_sum_c", "overshoot_count"),
+    ("undershoot_sum_c", "undershoot_count"),
+    ("comfort_error_sum_c", "comfort_error_count"),
+)
+_RESEARCH_DAILY_PROGRESS_CONFIDENCE_FIELDS = (
+    "learning_progress_min_pct", "learning_progress_max_pct", "learning_progress_last_pct",
+    "confidence_min", "confidence_max", "confidence_last",
+)
+
+
+def _le2_research_daily_compact_entry(bucket) -> dict:
+    """Compact per-day export entry: always ``bucket_date``, counters only
+    when > 0, sum/count pairs only when the count is > 0, progress/
+    confidence fields only when not None. Keeps the "daily" list readable —
+    a day with mostly-zero activity does not carry two dozen zero fields."""
+    entry: dict = {"bucket_date": bucket.bucket_date}
+    for field_name in _RESEARCH_DAILY_COUNTER_FIELDS:
+        value = getattr(bucket, field_name, 0)
+        if value:
+            entry[field_name] = value
+    for sum_field, count_field in _RESEARCH_DAILY_SUM_COUNT_PAIRS:
+        count_value = getattr(bucket, count_field, 0)
+        if count_value:
+            entry[sum_field] = getattr(bucket, sum_field)
+            entry[count_field] = count_value
+    for field_name in _RESEARCH_DAILY_PROGRESS_CONFIDENCE_FIELDS:
+        value = getattr(bucket, field_name, None)
+        if value is not None:
+            entry[field_name] = value
+    return entry
+
+
+def _le2_research_daily_export(coord, *, now: datetime) -> dict:
+    """Return a small, bounded, public-safe Research Daily Bucket long-term
+    summary for research export.
+
+    Reads ONLY the already-in-memory
+    ``LearningShadowController.research_daily_snapshot()`` — no store read
+    here (this module never touches the underlying research-daily storage
+    layer directly), no new aggregation, no runtime/coordinator touched. Each
+    stored entry is validated with ``deserialize_research_daily_bucket()``
+    (research_daily_serialization.py) before being used — a malformed or
+    schema-mismatched entry is skipped and counted in
+    ``malformed_skipped_count``, never aborts the summary.
+
+    ``summary`` aggregates over ALL valid buckets (counters summed;
+    ``avg_overshoot_c``/``avg_undershoot_c``/``avg_comfort_error_c`` from
+    each pair's sum/count; ``learning_progress_min_pct``/``confidence_min``
+    as the global min across buckets, ``..._max_pct``/``..._max`` as the
+    global max, ``..._last_pct``/``confidence_last`` from the most recent
+    bucket that actually has a non-None value). ``daily`` is capped to the
+    newest ``_RESEARCH_DAILY_EXPORT_MAX_BUCKETS`` buckets (newest-first) —
+    the summary stays complete even when the list is truncated; excess is
+    reported via ``records_truncated``/``truncation_reason``, never
+    silently dropped. Each daily entry is a COMPACT
+    ``_le2_research_daily_compact_entry()`` — no zero/None-field bloat.
+
+    Never raises and never breaks the export: a missing/unattached LE2
+    shadow, a snapshot() failure, or an unexpected error anywhere in the
+    aggregation yields an explicit ``{"available": False, ...}`` block
+    instead of omitting the zone or failing the whole export.
+    """
+    try:
+        shadow = getattr(coord, "_le2_shadow", None)
+        if shadow is None:
+            return {"available": False, "reason": "le2_shadow_unavailable"}
+        snapshot = shadow.research_daily_snapshot()
+        if not isinstance(snapshot, dict):
+            return {"available": False, "reason": "research_daily_unavailable"}
+
+        from .learning.storage.research_daily_serialization import (
+            deserialize_research_daily_bucket,
+        )
+        from .learning.storage.research_daily_persistence import (
+            RESEARCH_DAILY_RETENTION_MAX_BUCKETS,
+            RESEARCH_DAILY_RETENTION_MAX_DAYS,
+        )
+        from .learning.research_daily_schemas import RESEARCH_DAILY_SCHEMA_VERSION
+
+        malformed_skipped = 0
+        buckets: list = []
+        for entry in snapshot.values():
+            if not isinstance(entry, dict):
+                malformed_skipped += 1
+                continue
+            bucket = deserialize_research_daily_bucket(entry)
+            if bucket is None:
+                malformed_skipped += 1
+                continue
+            buckets.append(bucket)
+
+        retention = {
+            "bounded": (
+                RESEARCH_DAILY_RETENTION_MAX_DAYS is not None
+                and RESEARCH_DAILY_RETENTION_MAX_BUCKETS is not None
+            ),
+            "max_days": RESEARCH_DAILY_RETENTION_MAX_DAYS,
+            "max_buckets": RESEARCH_DAILY_RETENTION_MAX_BUCKETS,
+        }
+
+        block: dict = {
+            "available": True,
+            "schema_version": RESEARCH_DAILY_SCHEMA_VERSION,
+            "retention": retention,
+            "export_cap_buckets": _RESEARCH_DAILY_EXPORT_MAX_BUCKETS,
+            "bucket_count": len(buckets),
+            "coverage_start": None,
+            "coverage_end": None,
+            "records_truncated": 0,
+            "truncation_reason": None,
+            "malformed_skipped_count": malformed_skipped,
+            "summary": {},
+            "daily": [],
+        }
+
+        if buckets:
+            buckets_newest_first = sorted(buckets, key=lambda b: b.bucket_date, reverse=True)
+            bucket_dates = [b.bucket_date for b in buckets_newest_first]
+            block["coverage_start"] = min(bucket_dates)
+            block["coverage_end"] = max(bucket_dates)
+
+            kept = buckets_newest_first[:_RESEARCH_DAILY_EXPORT_MAX_BUCKETS]
+            truncated = len(buckets_newest_first) - len(kept)
+            block["records_truncated"] = truncated
+            block["truncation_reason"] = "export_cap_exceeded" if truncated > 0 else None
+            block["daily"] = [_le2_research_daily_compact_entry(b) for b in kept]
+
+            summary: dict = {name: 0 for name in _RESEARCH_DAILY_COUNTER_FIELDS}
+            sum_totals = {sum_field: 0.0 for sum_field, _count_field in _RESEARCH_DAILY_SUM_COUNT_PAIRS}
+            count_totals = {count_field: 0 for _sum_field, count_field in _RESEARCH_DAILY_SUM_COUNT_PAIRS}
+            progress_min = None
+            progress_max = None
+            confidence_min = None
+            confidence_max = None
+            for b in buckets:
+                for name in _RESEARCH_DAILY_COUNTER_FIELDS:
+                    summary[name] += getattr(b, name)
+                for sum_field, count_field in _RESEARCH_DAILY_SUM_COUNT_PAIRS:
+                    sum_totals[sum_field] += getattr(b, sum_field)
+                    count_totals[count_field] += getattr(b, count_field)
+                if b.learning_progress_min_pct is not None:
+                    progress_min = (
+                        b.learning_progress_min_pct if progress_min is None
+                        else min(progress_min, b.learning_progress_min_pct)
+                    )
+                if b.learning_progress_max_pct is not None:
+                    progress_max = (
+                        b.learning_progress_max_pct if progress_max is None
+                        else max(progress_max, b.learning_progress_max_pct)
+                    )
+                if b.confidence_min is not None:
+                    confidence_min = (
+                        b.confidence_min if confidence_min is None
+                        else min(confidence_min, b.confidence_min)
+                    )
+                if b.confidence_max is not None:
+                    confidence_max = (
+                        b.confidence_max if confidence_max is None
+                        else max(confidence_max, b.confidence_max)
+                    )
+            summary["avg_overshoot_c"] = (
+                round(sum_totals["overshoot_sum_c"] / count_totals["overshoot_count"], 3)
+                if count_totals["overshoot_count"] > 0 else None
+            )
+            summary["avg_undershoot_c"] = (
+                round(sum_totals["undershoot_sum_c"] / count_totals["undershoot_count"], 3)
+                if count_totals["undershoot_count"] > 0 else None
+            )
+            summary["avg_comfort_error_c"] = (
+                round(sum_totals["comfort_error_sum_c"] / count_totals["comfort_error_count"], 3)
+                if count_totals["comfort_error_count"] > 0 else None
+            )
+            summary["learning_progress_min_pct"] = progress_min
+            summary["learning_progress_max_pct"] = progress_max
+            summary["confidence_min"] = confidence_min
+            summary["confidence_max"] = confidence_max
+            # "last" = from the most recent bucket (by bucket_date) that
+            # actually carries a non-None value — a later day with no
+            # progress/confidence sample must not shadow an earlier day's
+            # real reading with a false None.
+            progress_last = None
+            confidence_last = None
+            for b in buckets_newest_first:
+                if progress_last is None and b.learning_progress_last_pct is not None:
+                    progress_last = b.learning_progress_last_pct
+                if confidence_last is None and b.confidence_last is not None:
+                    confidence_last = b.confidence_last
+                if progress_last is not None and confidence_last is not None:
+                    break
+            summary["learning_progress_last_pct"] = progress_last
+            summary["confidence_last"] = confidence_last
+
+            block["summary"] = summary
+
+        safe = _le2_strip_forbidden(block)
+        try:
+            from .learning.privacy import scan_payload
+            if scan_payload(safe):
+                return {"available": False, "reason": "privacy_scan_failed"}
+        except Exception:
+            pass  # scan itself failing is non-fatal — block already key-stripped
+        return safe
+    except Exception as err:
+        return {"available": False, "research_daily_error": str(err)}
 
 
 # Maximum events actually returned in the "events" list, independent of the
@@ -1310,6 +1557,10 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             _le2_episode_history_export(coord, now=ts) if coord is not None
             else {"available": False, "reason": "no_coordinator"}
         )
+        research_daily = (
+            _le2_research_daily_export(coord, now=ts) if coord is not None
+            else {"available": False, "reason": "no_coordinator"}
+        )
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
@@ -1319,6 +1570,7 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             "runtime_models": le2,
             "learning_progress": learning_progress,
             "episode_history": episode_history,
+            "research_daily": research_daily,
         })
 
     export: dict = {

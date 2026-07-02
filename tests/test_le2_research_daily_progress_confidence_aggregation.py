@@ -321,10 +321,18 @@ def test_t13_no_control_keywords_in_new_method():
 # ── T14: No Export hook touched ─────────────────────────────────────────────
 
 def test_t14_export_not_touched():
+    """At the time THIS aggregation step was built, export.py had no
+    Research Daily reference at all — checked here as a snapshot of that
+    boundary. A later, separately-approved step ("Research Daily Long-Term
+    Summary Export") legitimately added a public-safe, read-only
+    "research_daily" export block — expected, intentional export wiring,
+    not a regression of this step's own scope. What must remain true
+    regardless is that export.py never calls this step's own aggregation
+    method — the export layer only ever READS the already-aggregated
+    snapshot, it never triggers aggregation itself."""
     import custom_components.thermosmart.export as _exp
     source = inspect.getsource(_exp)
     assert "_maybe_record_research_daily_progress_sample_safe" not in source
-    assert "research_daily" not in source.lower()
 
 
 # ── T15: Existing Research Daily Support Event Aggregation tests green ─────

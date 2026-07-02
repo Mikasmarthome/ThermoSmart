@@ -304,12 +304,6 @@ Additional languages welcome via Pull Request (`custom_components/thermosmart/tr
 
 ---
 
-## Changelog
-
-Full release history: [RELEASE_NOTES.md](RELEASE_NOTES.md)
-
----
-
 ## Contributing
 
 **Bugs** → [GitHub Issues](https://github.com/Mikasmarthome/ThermoSmart/issues/new): HA version, ThermoSmart version, what happened, log lines (`Settings → System → Logs → thermosmart`)

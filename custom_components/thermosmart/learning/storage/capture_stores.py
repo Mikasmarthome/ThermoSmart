@@ -24,6 +24,7 @@ from .stores import (
     EpisodesStore,
     RawSegmentIndexStore,
     RawSegmentStore,
+    ResearchDailyStore,
     StoreFactory,
     SupportCriticalEventStore,
 )
@@ -92,3 +93,12 @@ class LearningCaptureStores:
         ``support_event_persistence.py``'s module docstring).
         """
         return SupportCriticalEventStore(self._factory, self._zone)
+
+    def research_daily_store(self) -> ResearchDailyStore:
+        """Return the single per-zone ResearchDailyStore.
+
+        Foundation only — nothing calls ``.load()``/``.save()`` on the
+        returned handle from anywhere in the live runtime yet (see
+        ``research_daily_persistence.py``'s module docstring).
+        """
+        return ResearchDailyStore(self._factory, self._zone)

@@ -104,3 +104,13 @@ def support_critical_events_key(learning_zone_id: str) -> str:
     opaque ``learning_zone_id``, never a real zone name.
     """
     return _key(learning_zone_id, "support_critical_events")
+
+
+def research_daily_key(learning_zone_id: str) -> str:
+    """Store key for the bounded Research Daily Bucket history of one zone.
+
+    Parallel to ``episodes_key``/``support_critical_events_key`` — one store
+    per zone, keyed by the same opaque ``learning_zone_id``, never a real
+    zone name.
+    """
+    return _key(learning_zone_id, "research_daily")

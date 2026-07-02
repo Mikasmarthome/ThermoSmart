@@ -23,6 +23,7 @@ GLOBAL_INDEX_STORE_VERSION = 1
 ADAPTATION_HISTORY_STORE_VERSION = 1
 APPLICATION_LIFECYCLE_STORE_VERSION = 1
 SUPPORT_CRITICAL_EVENT_STORE_VERSION = 1
+RESEARCH_DAILY_STORE_VERSION = 1
 
 
 class StoreError(Exception):
@@ -202,4 +203,23 @@ class SupportCriticalEventStore(_VersionedStore):
             factory,
             naming.support_critical_events_key(learning_zone_id),
             SUPPORT_CRITICAL_EVENT_STORE_VERSION,
+        )
+
+
+class ResearchDailyStore(_VersionedStore):
+    """Versioned per-zone store for the bounded Research Daily Bucket history.
+
+    Keyed by ``research_daily_key(learning_zone_id)``. Foundation only in
+    this step — nothing constructs, loads, or saves through this class from
+    the live runtime yet (see ``research_daily_persistence.py``'s module
+    docstring for the exact reasoning and the concrete next-step hook
+    points). Empty on first load; non-fatal on missing or corrupt data,
+    exactly like the other stores here.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.research_daily_key(learning_zone_id),
+            RESEARCH_DAILY_STORE_VERSION,
         )

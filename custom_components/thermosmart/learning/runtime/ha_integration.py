@@ -254,12 +254,92 @@ class LearningShadowController:
             except Exception:  # store construction must never break setup
                 adapter = None
         self._runtime = LearningRuntime(
-            LearningRuntimeConfig(mode=mode), store=adapter, clock=self._utcnow_iso)
+            LearningRuntimeConfig(mode=mode), store=adapter, clock=self._utcnow_iso,
+            # Synchronous, memory-only episode hand-off (see
+            # record_completed_episode_safe()) — bound now, but only ever
+            # invoked later during observe_safe(), by which point every
+            # attribute it touches (_episode_history etc.) already exists.
+            episode_sink=self.record_completed_episode_safe)
         # The new decision pipeline runs read-only every cycle (no sink => it can never
         # dispatch). The existing coordinator remains the single real dispatch path.
         self._pipeline = DecisionPipeline(
             resolver=FinalResolver(boost_runtime_limit=TPI_MAX_BOOST_CELSIUS))
         self._last_trace: Optional[dict] = None
+        # Adaptation candidate history — in-memory with persistent backing store.
+        self._adaptation_history: dict = {}
+        self._last_outcome_ts: Optional[str] = None
+        self._adaptation_last_error: Optional[str] = None
+        self._adaptation_save_needed: bool = False
+        self._adaptation_store = None
+        try:
+            from ..storage.stores import AdaptationHistoryStore, HomeAssistantStoreFactory
+            self._adaptation_store = AdaptationHistoryStore(
+                HomeAssistantStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: history stays in-memory only
+        # Application lifecycle state — in-memory with persistent backing store.
+        # No real application in this layer; entries are added by a future Application Layer.
+        self._application_lifecycle_state = None  # ApplicationLifecycleState | None
+        self._application_lifecycle_save_needed: bool = False
+        self._application_lifecycle_last_error: Optional[str] = None
+        self._application_lifecycle_store = None
+        try:
+            from ..storage.stores import ApplicationLifecycleStore, HomeAssistantStoreFactory
+            self._application_lifecycle_store = ApplicationLifecycleStore(
+                HomeAssistantStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: lifecycle state stays in-memory only
+        # Raw/episode capture storage — wiring foundation only (no writes yet).
+        # Construction performs zero storage I/O: it only holds a StoreFactory
+        # reference plus the canonical raw-track/episode-type registries, so a
+        # future capture/persist step has one clear, tested place to reach
+        # Raw/Episode stores from without duplicating registry construction.
+        self._capture_stores = None
+        try:
+            from ..storage.capture_stores import LearningCaptureStores
+            from ..storage.stores import HomeAssistantStoreFactory as _HAStoreFactory
+            self._capture_stores = LearningCaptureStores(
+                _HAStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: capture storage foundation stays unavailable
+        # Episode history — in-memory with persistent backing store, reached via the
+        # LearningCaptureStores facade above (EpisodesStore). No runtime append hook
+        # exists yet — nothing in run_cycle() calls append_completed_episode() in this
+        # step (see episode_persistence.py's own docstring for why); this only wires
+        # load/save so a future hook has an already-tested attachment point.
+        self._episode_history: dict = {}  # episode_id -> flat serialized episode entry
+        self._episode_save_needed: bool = False
+        self._episode_last_error: Optional[str] = None
+        # Support Critical Events — in-memory with persistent backing store, reached
+        # via the same LearningCaptureStores facade (SupportCriticalEventStore).
+        # Storage/setup landmark events (store loaded/empty/load-failed,
+        # save-failed/save-recovered) are recorded from within the load/save
+        # methods themselves in this step — no coordinator/runtime/control-path
+        # producer exists yet (see support_event_persistence.py's own docstring).
+        self._support_critical_events: dict = {}  # event_id -> flat serialized support event entry
+        self._support_critical_events_save_needed: bool = False
+        self._support_critical_events_last_error: Optional[str] = None
+        # Tracks whether a storage_save_failed landmark has already been recorded
+        # for the CURRENT failure streak — prevents re-recording one every
+        # periodic save attempt while the underlying problem persists, and gates
+        # the single storage_save_recovered landmark on the next success.
+        self._support_critical_events_save_failure_notified: bool = False
+        # Research Daily Buckets — in-memory with persistent backing store, reached
+        # via the same LearningCaptureStores facade (ResearchDailyStore). No
+        # runtime/coordinator aggregation hook exists — nothing in
+        # run_cycle()/coordinator calls record_research_daily_observation_safe()
+        # or record_support_critical_event_safe() directly. As of this step,
+        # record_support_critical_event_safe() itself aggregates a genuinely
+        # newly-appended Support Critical Event into the matching day's bucket
+        # (see _maybe_aggregate_research_daily_from_support_event()) — pure
+        # observation of an already-produced event, still no new producer and
+        # still no runtime/control path involved.
+        self._research_daily_buckets: dict = {}  # bucket_date -> flat serialized bucket entry
+        self._research_daily_save_needed: bool = False
+        self._research_daily_last_error: Optional[str] = None
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -277,13 +357,34 @@ class LearningShadowController:
     def errors(self) -> int:
         return self._errors
 
+    @property
+    def capture_stores(self):
+        """Return the LearningCaptureStores wiring foundation, or None.
+
+        Write-nothing accessor object — see capture_stores.py. Present so a
+        future capture/persist step has one clear, already-tested attachment
+        point; nothing in this class calls it yet.
+        """
+        return self._capture_stores
+
     async def async_setup(self) -> bool:
         try:
-            return await self._runtime.async_setup()
+            setup_ok = await self._runtime.async_setup()
         except Exception as err:  # learning setup failure must not fail the entry
             self._record_error("setup", err)
             self._enabled = False
             return False
+        # Load persisted adaptation history (non-fatal; errors in _adaptation_last_error)
+        await self._async_load_adaptation_history_safe()
+        # Load persisted application lifecycle state (non-fatal; no real entries yet)
+        await self._async_load_application_lifecycle_safe()
+        # Load persisted episode history (non-fatal; no runtime writer yet)
+        await self._async_load_episode_history_safe()
+        # Load persisted support critical events (non-fatal; no runtime writer yet)
+        await self._async_load_support_critical_events_safe()
+        # Load persisted research daily buckets (non-fatal)
+        await self._async_load_research_daily_safe()
+        return setup_ok
 
     def observe_safe(self, recommendation: Mapping[str, Any], *,
                      weather: Optional[Mapping[str, Any]] = None,
@@ -311,6 +412,878 @@ class LearningShadowController:
             self._last_result = CoordinatorBridge(self._runtime).process(inp)
         except Exception as err:
             self._record_error("cycle", err)
+        # Passive adaptation history — post-cycle, never raises, never affects heating.
+        try:
+            self._update_adaptation_history_safe(recommendation, weather)
+        except Exception as err:
+            try:
+                self._adaptation_last_error = str(err)
+            except Exception:
+                pass
+
+    def _update_adaptation_history_safe(
+        self,
+        recommendation: Any,
+        weather: Optional[Any],
+    ) -> None:
+        """Update in-memory adaptation history from current outcome model state.
+
+        Skips if outcome model has not advanced since last call (deduplication via
+        last_update_ts). Never mutates control state. Never raises — all errors are
+        captured in _adaptation_last_error.
+        """
+        try:
+            zr = self._runtime._zone(self._zone)
+            _om = zr.orchestrator.models.get("outcome")
+            if _om is None:
+                return
+            diag = _om.diagnostics()
+            new_ts = diag.last_update_ts
+            if not new_ts or new_ts == self._last_outcome_ts:
+                return
+
+            # Build OutcomeSignal from diagnostics
+            from ..adaptation.contracts import OutcomeSignal, SituationContext
+            full_count, partial_count = diag.full_partial
+            total_accepted = full_count + partial_count
+            partial_ratio = (
+                (partial_count / total_accepted) if total_accepted > 0 else 0.0
+            )
+            rej_counts = dict(diag.rejection_counts)
+            total_rej = sum(rej_counts.values())
+            signal = OutcomeSignal(
+                sample_count=diag.sample_counts.get("general", 0),
+                timeout_rate=diag.timeout_rate,
+                overshoot_rate=diag.overshoot_rate,
+                reached_rate=diag.reached_rate,
+                general_data_quality=diag.general_data_quality,
+                aggregate_reliability=getattr(diag, "confidence", 0.0),
+                partial_ratio=partial_ratio,
+                confounder_contamination=total_rej > 0,
+            )
+
+            # Build SituationContext — similar to export._adaptation_situation_context
+            # but without coordinator/coord; reads from recommendation and weather args.
+            _OUTDOOR_EDGES = (-10.0, -5.0, 0.0, 5.0, 10.0, 15.0)
+            outdoor_bucket: Optional[str] = None
+            if weather:
+                try:
+                    ot_raw = weather.get("temperature") if hasattr(weather, "get") else None
+                    if ot_raw is not None:
+                        ot = float(ot_raw)
+                        idx = sum(1 for edge in _OUTDOOR_EDGES if ot >= edge)
+                        outdoor_bucket = f"b{idx}"
+                except Exception:
+                    pass
+
+            mode_context: Optional[str] = None
+            preheat_was_active: Optional[bool] = None
+            if recommendation:
+                try:
+                    mode_context = recommendation.get("mode") or None
+                except Exception:
+                    pass
+                try:
+                    pa = recommendation.get("preheat_active")
+                    preheat_was_active = bool(pa) if pa is not None else None
+                except Exception:
+                    pass
+
+            controller_kind: Optional[str] = None
+            try:
+                _state = getattr(_om, "_state", None)
+                _samples = getattr(_state, "recent_samples", ()) or ()
+                if _samples:
+                    controller_kind = getattr(_samples[-1], "controller_kind", None)
+            except Exception:
+                pass
+
+            time_of_day_bucket: Optional[int] = None
+            weekday: Optional[int] = None
+            is_weekend: Optional[bool] = None
+            context_time_source = "unavailable"
+            try:
+                from datetime import datetime
+                _ts = datetime.fromisoformat(new_ts.replace("Z", "+00:00"))
+                time_of_day_bucket = _ts.hour
+                weekday = _ts.weekday()
+                is_weekend = weekday >= 5
+                context_time_source = "model_last_update"
+            except Exception:
+                pass
+
+            situation = SituationContext(
+                controller_kind=controller_kind,
+                outdoor_bucket=outdoor_bucket,
+                mode_context=mode_context,
+                time_of_day_bucket=time_of_day_bucket,
+                weekday=weekday,
+                is_weekend=is_weekend,
+                preheat_was_active=preheat_was_active,
+                boost_was_active=None,
+                target_delta_c=None,
+                heat_loss_c_per_h=None,
+                preheat_minutes_used=None,
+                active_control=None,
+                learning_enabled=None,
+                context_time_source=context_time_source,
+            )
+
+            from ..adaptation.history import update_adaptation_history
+            self._adaptation_history = update_adaptation_history(
+                self._adaptation_history,
+                self._zone,
+                signal,
+                situation,
+                new_ts,
+            )
+            self._last_outcome_ts = new_ts
+            self._adaptation_last_error = None
+            self._adaptation_save_needed = True
+        except Exception as err:
+            self._adaptation_last_error = str(err)
+
+    def adaptation_history_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory adaptation history.
+
+        Keys are candidate_key strings; values are CandidateHistoryEntry instances.
+        Empty on first call (reset on HA restart). Never raises.
+        """
+        try:
+            return dict(self._adaptation_history)
+        except Exception:
+            return {}
+
+    def adaptation_last_error(self) -> Optional[str]:
+        """Return the last error message from adaptation history accumulation, or None."""
+        return self._adaptation_last_error
+
+    async def _async_load_adaptation_history_safe(self) -> None:
+        """Load persisted adaptation history. Non-fatal on missing or corrupt store."""
+        if self._adaptation_store is None:
+            return
+        try:
+            raw = await self._adaptation_store.load()
+            if raw is None:
+                return
+            from ..adaptation.history_store_schema import deserialize_history_state
+            state = deserialize_history_state(raw, self._zone)
+            if state.entries:
+                self._adaptation_history = dict(state.entries)
+        except Exception as err:
+            self._adaptation_last_error = str(err)
+
+    async def _async_save_adaptation_history_safe(self) -> None:
+        """Persist adaptation history best-effort. Non-fatal on error."""
+        if self._adaptation_store is None or not self._adaptation_save_needed:
+            return
+        try:
+            from ..adaptation.history_store_schema import (
+                AdaptationHistoryState, prune_history_entries, serialize_history_state,
+            )
+            now_ts = self._utcnow_iso()
+            entries = prune_history_entries(self._adaptation_history, now_ts=now_ts)
+            state = AdaptationHistoryState(
+                learning_zone_id=self._zone,
+                updated_at=now_ts,
+                entries=entries,
+            )
+            await self._adaptation_store.save(serialize_history_state(state))
+            self._adaptation_save_needed = False
+        except Exception as err:
+            self._adaptation_last_error = str(err)
+
+    async def _async_load_application_lifecycle_safe(self) -> None:
+        """Load persisted application lifecycle state. Non-fatal on missing or corrupt store."""
+        if self._application_lifecycle_store is None:
+            return
+        try:
+            from ..adaptation.application_state import (
+                ApplicationLifecycleState, deserialize_application_lifecycle_state,
+            )
+            raw = await self._application_lifecycle_store.load()
+            if raw is None:
+                # No persisted data yet — initialize empty state so the Application Layer
+                # can add entries without having to guard against None first.
+                self._application_lifecycle_state = ApplicationLifecycleState(
+                    learning_zone_id=self._zone, updated_at="", entries={},
+                )
+                return
+            state = deserialize_application_lifecycle_state(raw, self._zone)
+            self._application_lifecycle_state = state
+        except Exception as err:
+            self._application_lifecycle_last_error = str(err)
+
+    async def _async_save_application_lifecycle_safe(self) -> None:
+        """Persist application lifecycle state best-effort. Non-fatal on error.
+
+        Dirty flag remains True when save fails, ensuring the next opportunity retries.
+        """
+        if (self._application_lifecycle_store is None
+                or not self._application_lifecycle_save_needed):
+            return
+        try:
+            if self._application_lifecycle_state is None:
+                return
+            from ..adaptation.application_state import serialize_application_lifecycle_state
+            await self._application_lifecycle_store.save(
+                serialize_application_lifecycle_state(self._application_lifecycle_state)
+            )
+            self._application_lifecycle_save_needed = False
+        except Exception as err:
+            self._application_lifecycle_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def application_lifecycle_snapshot(self) -> Optional[dict]:
+        """Return a summary dict of the current application lifecycle state, or None.
+
+        Returns None when no state has been loaded yet (e.g. first run, no entries).
+        Never raises. Read-only — does not modify state.
+        """
+        try:
+            if self._application_lifecycle_state is None:
+                return None
+            from ..adaptation.application_state import summarize_application_lifecycle_state
+            return summarize_application_lifecycle_state(
+                self._application_lifecycle_state
+            ).to_dict()
+        except Exception:
+            return None
+
+    async def _async_load_episode_history_safe(self) -> None:
+        """Load persisted episode history via LearningCaptureStores.episodes_store().
+
+        Non-fatal on missing/corrupt store. Each stored entry is validated with
+        deserialize_episode() (from episode_serialization.py) before being kept —
+        a malformed or schema-mismatched entry is silently dropped, never crashes
+        the load. No runtime writer populates this store yet in this step.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            store = self._capture_stores.episodes_store()
+            raw = await store.load()
+            if raw is None:
+                return
+            raw_entries = raw.get("episodes") if isinstance(raw, Mapping) else None
+            if not isinstance(raw_entries, Mapping):
+                return
+            from ..storage.episode_serialization import deserialize_episode
+            rebuilt: dict = {}
+            for eid, entry in raw_entries.items():
+                if not isinstance(entry, Mapping):
+                    continue  # malformed -> skip
+                if deserialize_episode(entry) is None:
+                    continue  # unknown type / schema mismatch / malformed -> skip
+                rebuilt[eid] = dict(entry)
+            self._episode_history = rebuilt
+        except Exception as err:
+            self._episode_last_error = str(err)
+
+    async def _async_save_episode_history_safe(self) -> None:
+        """Persist episode history best-effort. Non-fatal on error.
+
+        Dirty flag remains True when save fails, ensuring the next opportunity
+        retries. Nothing in this step ever sets _episode_save_needed — this
+        method exists so a future runtime append hook can rely on an
+        already-tested save path via the existing periodic save trigger.
+        """
+        if self._capture_stores is None or not self._episode_save_needed:
+            return
+        try:
+            store = self._capture_stores.episodes_store()
+            await store.save({"episodes": dict(self._episode_history)})
+            self._episode_save_needed = False
+        except Exception as err:
+            self._episode_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def episode_history_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory episode history.
+
+        Keys are episode_id strings; values are flat, versioned serialized
+        episode entry dicts (see episode_serialization.py). Empty until a
+        future runtime append hook and/or a successful store load populate it.
+        Never raises.
+        """
+        try:
+            return dict(self._episode_history)
+        except Exception:
+            return {}
+
+    def episode_last_error(self) -> Optional[str]:
+        """Return the last error message from episode history load/save, or None."""
+        return self._episode_last_error
+
+    def record_completed_episode_safe(self, episode: Any) -> None:
+        """Synchronous, memory-only hand-off for one completed episode.
+
+        Bound as LearningRuntime's ``episode_sink`` — called from
+        ``run_cycle()``'s completed-episode loop. Never performs storage I/O
+        itself: appends into the in-memory ``_episode_history`` via the pure
+        ``append_completed_episode()`` (which also applies that episode
+        type's own RetentionPolicy immediately, from
+        ``self._capture_stores.episode_registry`` — no new/arbitrary
+        retention numbers). ``_episode_save_needed`` is set only when an
+        entry was actually appended and/or pruned — a duplicate
+        ``episode_id`` alone does not mark it dirty. The next
+        ``async_save_if_due()`` call flushes it; nothing here saves directly.
+
+        Also observes (never influences) whether this was a genuinely new,
+        completed OutcomeEpisode and, if so, records ONE Support Critical
+        Event via ``_maybe_record_outcome_resolved_event()`` — see that
+        method's own docstring.
+
+        Never raises: a missing capture-store foundation, an unrecognised/
+        malformed episode, or any internal failure is captured in
+        ``_episode_last_error`` and swallowed — never propagated, never
+        touches ``_enabled``.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.episode_persistence import append_completed_episode
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            result = append_completed_episode(
+                {"episodes": self._episode_history},
+                episode,
+                episode_registry=self._capture_stores.episode_registry,
+                now_utc=now_utc,
+            )
+            if result.appended_episode_ids or result.pruned_episode_ids:
+                self._episode_history = result.updated_payload["episodes"]
+                self._episode_save_needed = True
+            self._maybe_record_outcome_resolved_event(episode, result)
+        except Exception as err:
+            self._episode_last_error = str(err)
+
+    def _maybe_record_outcome_resolved_event(self, episode: Any, result: Any) -> None:
+        """Record ONE outcome_resolved Support Critical Event when a
+        completed OutcomeEpisode was genuinely newly appended this call —
+        pure observation of the ALREADY-BUILT episode object handed to
+        ``record_completed_episode_safe()`` (for outcome episodes this is
+        the confounder-augmented ``bound_episode`` lifecycle.py's
+        ``run_cycle()`` already constructs — see that module's own comments;
+        never the raw episode). Never influences episode construction,
+        outcome scoring, retention, or Learning Progress — read-only access
+        to fields the ``OutcomeEpisode`` dataclass already carries.
+
+        Not produced for non-outcome episode types (heating/afterheat/
+        passive_cooling/window_cooling) — checked via ``isinstance``, not a
+        new classification.
+
+        Deduped by reusing the SAME episode_id-based dedup
+        ``append_completed_episode()`` already performs: fires only when
+        ``episode.episode_id`` is present in ``result.appended_episode_ids``
+        (a genuinely new append this call) — a duplicate resubmission of the
+        same completed outcome is a no-op here too, via already-tested
+        infrastructure rather than a new dedup mechanism.
+        ``episode.episode_id``/``episode.learning_zone_id``/
+        ``episode.decision_id`` are used only for this internal membership
+        check (or not at all) — never placed into the event itself.
+
+        Never raises: any failure here is swallowed — a missing landmark is
+        strictly less important than the episode persistence it decorates.
+        """
+        try:
+            from ..episode_schemas import OutcomeEpisode
+            if not isinstance(episode, OutcomeEpisode):
+                return
+            if episode.episode_id not in result.appended_episode_ids:
+                return  # duplicate resubmission, or not newly appended this call
+
+            from datetime import datetime
+            from ..support_event_schemas import (
+                SupportCriticalEvent, SupportEventSeverity, SupportEventType,
+            )
+            from ..storage.support_event_serialization import SUPPORT_EVENT_SCHEMA_VERSION
+
+            confounder_count = len(episode.confounder_flags)
+            details: dict = {
+                "regime": episode.regime.value,
+                "target_reached": episode.reason.value == "reached",
+                "reason": episode.reason.value,
+                "confounded": confounder_count > 0,
+                "confounder_count": confounder_count,
+            }
+            try:
+                delta = float(episode.end_temp) - float(episode.target)
+                details["overshoot_c"] = round(max(0.0, delta), 2)
+                details["undershoot_c"] = round(max(0.0, -delta), 2)
+                details["comfort_error_c"] = round(abs(delta), 2)
+            except (TypeError, ValueError):
+                pass  # optional derived fields only; core details above remain valid
+
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            # Hashed (not raw) episode_id: guarantees a distinct, deterministic
+            # support-event id per underlying outcome episode — a plain
+            # timestamp alone can collide when two outcomes resolve within the
+            # same millisecond (or under a frozen test clock), which would
+            # make append_support_event()'s own event_id dedup incorrectly
+            # treat two DIFFERENT outcomes as the same event. Never exposed
+            # raw or otherwise — only this one-way hash leaves the method.
+            _episode_id_hash = hashlib.sha256(episode.episode_id.encode()).hexdigest()[:16]
+            event_id = f"outcome_resolved_{_episode_id_hash}"
+            event = SupportCriticalEvent(
+                schema_version=SUPPORT_EVENT_SCHEMA_VERSION, event_id=event_id,
+                event_type=SupportEventType.OUTCOME_RESOLVED, ts=now_utc,
+                severity=SupportEventSeverity.INFO,
+                reason=episode.reason.value, summary="Outcome resolved", details=details,
+            )
+            self.record_support_critical_event_safe(event)
+        except Exception:
+            pass  # event production is best-effort; must never affect episode persistence
+
+    # 6h — avoids flooding the 48h critical-event timeline with a repeated
+    # "store loaded"/"store empty"/"load failed" landmark on every HA restart
+    # when restarts happen frequently (e.g. during setup/troubleshooting).
+    _STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S = 6 * 3600
+
+    def _record_storage_landmark_event_safe(
+        self, *, event_type: Any, severity: Any, reason: str, summary: str,
+        details: Mapping[str, Any], dedupe_window_s: Optional[float] = None,
+    ) -> None:
+        """Build and record ONE storage/setup landmark Support Critical Event.
+
+        Pure hand-off to record_support_critical_event_safe() — never touches
+        storage itself (no save triggered here), so this can never recurse
+        into the save path it may be called from. When ``dedupe_window_s`` is
+        given, skips recording if an event with the same (event_type, reason)
+        already exists in the current in-memory snapshot within that window
+        — used for the load-outcome landmarks, which would otherwise repeat
+        once per HA restart. Save-failure/-recovery landmarks pass no window
+        here; they are already deduped by the caller's own state flag
+        (``_support_critical_events_save_failure_notified``), which is a
+        precise state-transition signal rather than a time window. Never
+        raises: any failure here is swallowed — a missing landmark is
+        strictly less important than the load/save operation it decorates.
+        """
+        try:
+            from datetime import datetime
+            from .. import support_event_schemas as _schemas
+            from ..storage.support_event_serialization import SUPPORT_EVENT_SCHEMA_VERSION
+
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            event_id = f"storage_landmark_{event_type.value}_{int(now_utc.timestamp() * 1000)}"
+            candidate = _schemas.SupportCriticalEvent(
+                schema_version=SUPPORT_EVENT_SCHEMA_VERSION, event_id=event_id,
+                event_type=event_type, ts=now_utc, severity=severity,
+                reason=reason, summary=summary, details=dict(details),
+            )
+            if dedupe_window_s is not None:
+                from ..storage.support_event_persistence import is_recent_duplicate
+                recent = list(self._support_critical_events.values())
+                if is_recent_duplicate(candidate, recent, window_s=dedupe_window_s):
+                    return
+            self.record_support_critical_event_safe(candidate)
+        except Exception:
+            pass  # landmark recording is best-effort; never affects load/save itself
+
+    async def _async_load_support_critical_events_safe(self) -> None:
+        """Load persisted support critical events via
+        LearningCaptureStores.support_critical_events_store().
+
+        Non-fatal on missing/corrupt store. Each stored entry is validated with
+        deserialize_support_event() (from support_event_serialization.py)
+        before being kept — a malformed or schema-mismatched entry is silently
+        dropped (counted), never crashes the load.
+
+        Records exactly one storage/setup landmark event for this load
+        outcome (loaded-with-data / loaded-empty / load-failed), deduped
+        against the just-loaded snapshot so frequent HA restarts don't flood
+        the 48h timeline with repeated identical landmarks. This is the ONLY
+        event producer in this step — still no coordinator/runtime/control
+        path involved.
+        """
+        if self._capture_stores is None:
+            return
+        from .. import support_event_schemas as _schemas
+
+        records_loaded = 0
+        malformed_skipped = 0
+        load_error: Optional[Exception] = None
+        try:
+            store = self._capture_stores.support_critical_events_store()
+            raw = await store.load()
+            if raw is not None:
+                raw_entries = raw.get("events") if isinstance(raw, Mapping) else None
+                if isinstance(raw_entries, Mapping):
+                    from ..storage.support_event_serialization import deserialize_support_event
+                    rebuilt: dict = {}
+                    for eid, entry in raw_entries.items():
+                        if not isinstance(entry, Mapping):
+                            malformed_skipped += 1
+                            continue  # malformed -> skip
+                        if deserialize_support_event(entry) is None:
+                            malformed_skipped += 1
+                            continue  # unknown type / schema mismatch / malformed -> skip
+                        rebuilt[eid] = dict(entry)
+                    self._support_critical_events = rebuilt
+                    records_loaded = len(rebuilt)
+        except Exception as err:
+            self._support_critical_events_last_error = str(err)
+            load_error = err
+
+        if load_error is not None:
+            self._record_storage_landmark_event_safe(
+                event_type=_schemas.SupportEventType.STORAGE_RESTORE_FAILED,
+                severity=_schemas.SupportEventSeverity.WARNING,
+                reason="support_events_load_failed",
+                summary="Support critical event store failed to load",
+                details={"error_type": type(load_error).__name__},
+                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
+            )
+        elif records_loaded == 0:
+            self._record_storage_landmark_event_safe(
+                event_type=_schemas.SupportEventType.STORAGE_RESTORE,
+                severity=_schemas.SupportEventSeverity.INFO,
+                reason="support_events_empty",
+                summary="Support critical event store loaded (empty)",
+                details={"records_loaded": 0},
+                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
+            )
+        else:
+            self._record_storage_landmark_event_safe(
+                event_type=_schemas.SupportEventType.STORAGE_RESTORE,
+                severity=_schemas.SupportEventSeverity.INFO,
+                reason="support_events_loaded",
+                summary="Support critical event store loaded",
+                details={"records_loaded": records_loaded, "malformed_skipped": malformed_skipped},
+                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
+            )
+
+    async def _async_save_support_critical_events_safe(self) -> None:
+        """Persist support critical events best-effort. Non-fatal on error.
+
+        Dirty flag remains True when save fails, ensuring the next opportunity
+        retries. On the FIRST failure of a failure streak, records one
+        storage_save_failed landmark and sets
+        ``_support_critical_events_save_failure_notified`` — subsequent
+        failures in the same streak record nothing further (no per-cycle
+        spam). On the next successful save after a notified failure, records
+        one storage_save_recovered landmark and clears the flag. Recording
+        a landmark here never triggers a second save within this call — it
+        only marks ``_support_critical_events_save_needed`` dirty again for
+        the NEXT periodic save opportunity, exactly like any other append.
+        """
+        if self._capture_stores is None or not self._support_critical_events_save_needed:
+            return
+        from .. import support_event_schemas as _schemas
+        try:
+            store = self._capture_stores.support_critical_events_store()
+            await store.save({"events": dict(self._support_critical_events)})
+            self._support_critical_events_save_needed = False
+            if self._support_critical_events_save_failure_notified:
+                self._support_critical_events_save_failure_notified = False
+                self._record_storage_landmark_event_safe(
+                    event_type=_schemas.SupportEventType.STORAGE_SAVE_RECOVERED,
+                    severity=_schemas.SupportEventSeverity.INFO,
+                    reason="support_events_save_recovered",
+                    summary="Support critical event store save recovered",
+                    details={},
+                )
+        except Exception as err:
+            self._support_critical_events_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+            if not self._support_critical_events_save_failure_notified:
+                self._support_critical_events_save_failure_notified = True
+                self._record_storage_landmark_event_safe(
+                    event_type=_schemas.SupportEventType.STORAGE_SAVE_FAILED,
+                    severity=_schemas.SupportEventSeverity.WARNING,
+                    reason="support_events_save_failed",
+                    summary="Support critical event store failed to save",
+                    details={"error_type": type(err).__name__},
+                )
+
+    def support_critical_events_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory support critical events.
+
+        Keys are event_id strings; values are flat, versioned serialized
+        support event entry dicts (see support_event_serialization.py). Empty
+        until a future runtime producer and/or a successful store load
+        populate it. Never raises.
+        """
+        try:
+            return dict(self._support_critical_events)
+        except Exception:
+            return {}
+
+    def support_critical_events_last_error(self) -> Optional[str]:
+        """Return the last error message from support event load/save, or None."""
+        return self._support_critical_events_last_error
+
+    def record_support_critical_event_safe(self, event: Any) -> None:
+        """Synchronous, memory-only hand-off for one support critical event.
+
+        NOT bound anywhere yet — no runtime/coordinator call site invokes this
+        in this step (see support_event_persistence.py's module docstring for
+        the exact reasoning and next-step hook points). Never performs
+        storage I/O itself: appends into the in-memory
+        ``_support_critical_events`` via the pure ``append_support_event()``
+        (which also applies the shared SUPPORT_EVENT_RETENTION_DEFAULT policy
+        immediately — no new/arbitrary retention numbers).
+        ``_support_critical_events_save_needed`` is set only when an entry
+        was actually appended and/or pruned — a duplicate ``event_id`` alone
+        does not mark it dirty. The next ``async_save_if_due()`` call flushes
+        it; nothing here saves directly.
+
+        Never raises: a missing capture-store foundation, an unrecognised/
+        malformed event, or any internal failure is captured in
+        ``_support_critical_events_last_error`` and swallowed — never
+        propagated, never touches ``_enabled``.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.support_event_persistence import append_support_event
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            result = append_support_event(
+                {"events": self._support_critical_events},
+                event,
+                now_utc=now_utc,
+            )
+            if result.appended_event_ids or result.pruned_event_ids:
+                self._support_critical_events = result.updated_payload["events"]
+                self._support_critical_events_save_needed = True
+            if event.event_id in result.appended_event_ids:
+                # Only aggregate a GENUINELY newly appended event — a
+                # duplicate (deduped by append_support_event()'s own
+                # event_id check) or a rejected/malformed event (never
+                # reaches here; append_support_event() would have skipped
+                # it) must never inflate the daily counts. Failure here must
+                # never fail Support Event recording itself — fully isolated
+                # try/except, in addition to the one already inside
+                # _maybe_aggregate_research_daily_from_support_event().
+                try:
+                    self._maybe_aggregate_research_daily_from_support_event(event)
+                except Exception as err:
+                    self._research_daily_last_error = str(err)
+        except Exception as err:
+            self._support_critical_events_last_error = str(err)
+
+    # SupportEventType -> ResearchDailyBucket counter field, for the simple
+    # "one event -> +1 one field" cases. OUTCOME_RESOLVED is handled
+    # separately below (needs multiple fields from its details).
+    #
+    # Deliberately NOT mapped in this step (documented, not an oversight):
+    #   - Storage/setup landmark events (STORAGE_RESTORE(_FAILED),
+    #     STORAGE_SAVE_FAILED, STORAGE_SAVE_RECOVERED, RESTART_RESTORE):
+    #     these measure store health, not heating/learning quality — kept
+    #     out of Research Daily v1 per explicit product decision.
+    #   - LEARNING_RECOMMENDATION_ONLY: semantically distinct from
+    #     TRV_COMMAND_BLOCKED (no field exists for it, and folding it into
+    #     trv_command_blocked_count would conflate "no command was even
+    #     attempted because adaptive control wasn't authorized" with "a
+    #     command was attempted and vetoed") — deliberately left unmapped
+    #     rather than misclassified.
+    #   - HEATING_DECISION, WINDOW_CLOSED_RELEASE, MANUAL_OVERRIDE_END,
+    #     SCHEDULE_CHANGE, PRESENCE_HOLD, TEMPERATURE_INVALID,
+    #     MIN_INTERVAL_BLOCK, LEARNING_ADAPTIVE_APPLIED: no live producer
+    #     exists yet for these types (see support_event_schemas.py) or no
+    #     corresponding daily field exists — nothing to map.
+    #   - decision_count/heating_allowed_count/heating_blocked_count: real
+    #     per-decision counts should come from a future Coordinator/
+    #     Decision-Record source, not be estimated from Support Events.
+    _SUPPORT_EVENT_TYPE_TO_DAILY_FIELD = {
+        "trv_command_sent": "trv_command_sent_count",
+        "trv_command_blocked": "trv_command_blocked_count",
+        "same_setpoint_block": "same_setpoint_block_count",
+        "trv_unavailable": "trv_unavailable_count",
+        "window_open_hold": "window_hold_count",
+        "summer_mode_hold": "summer_hold_count",
+        "manual_override_start": "manual_override_count",
+        "boost_started": "boost_started_count",
+        "boost_blocked": "boost_blocked_count",
+        "boost_ended": "boost_ended_count",
+        "sensor_unavailable": "sensor_unavailable_count",
+        "sensor_restored": "sensor_restored_count",
+        "fallback_used": "fallback_used_count",
+    }
+
+    def _maybe_aggregate_research_daily_from_support_event(self, event: Any) -> None:
+        """Aggregate ONE genuinely newly-appended Support Critical Event into
+        the matching day's Research Daily Bucket.
+
+        Called ONLY from ``record_support_critical_event_safe()``, and only
+        for an event whose ``event_id`` is in that call's
+        ``result.appended_event_ids`` — never for a duplicate/rejected
+        event. This is pure aggregation of an already-produced, already
+        public-safe event; it creates NO new Support Event, changes no
+        Support Event semantics, and never touches the Support/Research
+        Export layout.
+
+        Bucket date is derived from ``event.ts`` (``YYYY-MM-DD``, UTC) — a
+        malformed/non-datetime ``ts`` silently skips aggregation (no system-
+        clock fallback, never raises). Only fixed, pre-defined scalar
+        aggregate fields are ever read from ``event.details`` (never the
+        whole dict, never entity/zone/episode ids, never raw events) — see
+        ``research_daily_schemas.py``'s module docstring for why Research
+        Daily Buckets need no free-form details mapping at all.
+
+        Never raises: any failure is left for the caller to catch (this
+        method itself, and ``record_research_daily_observation_safe()``
+        beneath it, are both already exception-safe, but the caller wraps
+        this call in its own try/except as well, so a genuinely unexpected
+        error here can never fail Support Event recording).
+        """
+        from ..research_daily_schemas import ResearchDailyObservation
+
+        try:
+            from datetime import timezone
+            bucket_date = event.ts.astimezone(timezone.utc).date().isoformat()
+        except (AttributeError, ValueError, OverflowError):
+            return  # malformed/non-datetime ts -> no aggregation, no system-clock fallback
+
+        event_type_value = getattr(event.event_type, "value", None)
+        details = event.details if isinstance(event.details, Mapping) else {}
+
+        kwargs: dict = {"bucket_date": bucket_date}
+        field_name = self._SUPPORT_EVENT_TYPE_TO_DAILY_FIELD.get(event_type_value)
+        if field_name is not None:
+            kwargs[field_name] = 1
+        elif event_type_value == "outcome_resolved":
+            kwargs["outcome_resolved_count"] = 1
+            target_reached = details.get("target_reached")
+            if target_reached is True:
+                kwargs["outcome_success_count"] = 1
+            elif target_reached is False:
+                kwargs["outcome_failed_count"] = 1
+            if details.get("confounded") is True:
+                kwargs["outcome_confounded_count"] = 1
+            for detail_key in ("overshoot_c", "undershoot_c", "comfort_error_c"):
+                value = details.get(detail_key)
+                if (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(value)
+                ):
+                    kwargs[detail_key] = float(value)
+        else:
+            return  # not mapped in this step (see the field-table comment above)
+
+        observation = ResearchDailyObservation(**kwargs)
+        self.record_research_daily_observation_safe(observation)
+
+    async def _async_load_research_daily_safe(self) -> None:
+        """Load persisted research daily buckets via
+        LearningCaptureStores.research_daily_store().
+
+        Non-fatal on missing/corrupt store. Each stored entry is validated
+        with deserialize_research_daily_bucket() (from
+        research_daily_serialization.py) before being kept — a malformed or
+        schema-mismatched entry is silently dropped, never crashes the load.
+        On a store-load exception, the error is recorded in
+        ``_research_daily_last_error`` and the state stays empty — no
+        exception ever propagates, ``_enabled`` is never touched.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            store = self._capture_stores.research_daily_store()
+            raw = await store.load()
+            if raw is None:
+                return
+            raw_entries = raw.get("buckets") if isinstance(raw, Mapping) else None
+            if not isinstance(raw_entries, Mapping):
+                return
+            from ..storage.research_daily_serialization import deserialize_research_daily_bucket
+            rebuilt: dict = {}
+            for bucket_date, entry in raw_entries.items():
+                if not isinstance(entry, Mapping):
+                    continue  # malformed -> skip
+                if deserialize_research_daily_bucket(entry) is None:
+                    continue  # unknown schema version / malformed -> skip
+                rebuilt[bucket_date] = dict(entry)
+            self._research_daily_buckets = rebuilt
+        except Exception as err:
+            self._research_daily_last_error = str(err)
+
+    async def _async_save_research_daily_safe(self) -> None:
+        """Persist research daily buckets best-effort. Non-fatal on error.
+
+        Only writes when a capture-store foundation exists AND
+        ``_research_daily_save_needed`` is True. Dirty flag remains True
+        when save fails, ensuring the next periodic save opportunity
+        retries; success clears it. Never raises.
+        """
+        if self._capture_stores is None or not self._research_daily_save_needed:
+            return
+        try:
+            store = self._capture_stores.research_daily_store()
+            await store.save({"buckets": dict(self._research_daily_buckets)})
+            self._research_daily_save_needed = False
+        except Exception as err:
+            self._research_daily_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def research_daily_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory research daily buckets.
+
+        Keys are bucket_date strings (YYYY-MM-DD); values are flat, versioned
+        serialized bucket entry dicts (see research_daily_serialization.py).
+        Empty until a future runtime aggregation hook and/or a successful
+        store load populate it. Never raises.
+        """
+        try:
+            return dict(self._research_daily_buckets)
+        except Exception:
+            return {}
+
+    def research_daily_last_error(self) -> Optional[str]:
+        """Return the last error message from research daily load/save, or None."""
+        return self._research_daily_last_error
+
+    def record_research_daily_observation_safe(self, observation: Any) -> None:
+        """Synchronous, memory-only hand-off for one research daily observation.
+
+        Called from ``_maybe_aggregate_research_daily_from_support_event()``
+        (itself only reached from ``record_support_critical_event_safe()``,
+        for a genuinely newly-appended Support Critical Event) — still no
+        direct runtime/coordinator call site invokes this method itself (see
+        research_daily_persistence.py's module docstring for the exact
+        reasoning and further next-step hook points, e.g. Episode-based
+        aggregation). Never performs storage I/O itself: merges into the in-memory
+        ``_research_daily_buckets`` via the pure
+        ``append_or_update_research_daily_bucket()`` (which also applies the
+        shared RESEARCH_DAILY_RETENTION_DEFAULT policy immediately — no
+        new/arbitrary retention numbers).
+
+        ``_research_daily_save_needed`` is set only when the resulting
+        payload actually differs from the payload before this call (a
+        genuinely no-op observation, e.g. one whose bucket_date is malformed
+        and gets silently ignored, does not mark it dirty).
+
+        Never raises: a missing capture-store foundation, a malformed
+        observation, or any internal failure is captured in
+        ``_research_daily_last_error`` and swallowed — never propagated,
+        never touches ``_enabled``.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.research_daily_persistence import (
+                append_or_update_research_daily_bucket,
+            )
+            bucket_date = getattr(observation, "bucket_date", None)
+            if not isinstance(bucket_date, str):
+                return
+            before = dict(self._research_daily_buckets)
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            result = append_or_update_research_daily_bucket(
+                {"buckets": self._research_daily_buckets},
+                bucket_date,
+                observation,
+                now_utc=now_utc,
+            )
+            after = result.updated_payload["buckets"]
+            if after != before:
+                self._research_daily_buckets = after
+                self._research_daily_save_needed = True
+        except Exception as err:
+            self._research_daily_last_error = str(err)
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -2139,6 +3112,11 @@ class LearningShadowController:
             await self._runtime.async_save_if_due()
         except Exception as err:
             self._record_error("save", err)
+        await self._async_save_adaptation_history_safe()
+        await self._async_save_application_lifecycle_safe()
+        await self._async_save_episode_history_safe()
+        await self._async_save_support_critical_events_safe()
+        await self._async_save_research_daily_safe()
 
     async def async_flush(self) -> None:
         try:
@@ -2152,6 +3130,16 @@ class LearningShadowController:
             await self._runtime.async_unload()
         except Exception as err:
             self._record_error("unload", err)
+        # Flush adaptation history (best-effort; saves if dirty)
+        await self._async_save_adaptation_history_safe()
+        # Flush application lifecycle state (best-effort; saves if dirty)
+        await self._async_save_application_lifecycle_safe()
+        # Flush episode history (best-effort; saves if dirty)
+        await self._async_save_episode_history_safe()
+        # Flush support critical events (best-effort; saves if dirty)
+        await self._async_save_support_critical_events_safe()
+        # Flush research daily buckets (best-effort; saves if dirty)
+        await self._async_save_research_daily_safe()
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.
@@ -2230,198 +3218,147 @@ class LearningShadowController:
     # Fewer samples produce an unreliable average that must not be shown as a fact.
     _MIN_OUTCOME_DISPLAY_SAMPLES: int = 3
 
-    # Per-model contribution weights for learning progress (must sum to 1.0).
-    # Core thermal models carry 95 % of the weight; onset_delay is an auxiliary
-    # TRV-response metric and may contribute at most 5 %.
-    _PROGRESS_MODEL_WEIGHTS: dict[str, float] = {
-        "heat_rate":   0.25,
-        "heat_loss":   0.25,
-        "afterheat":   0.20,
-        "outcome":     0.25,
-        "onset_delay": 0.05,
-    }
-
-    # Per-model saturation thresholds: episode-driven model updates needed for full
-    # contribution of that model's weight. Prior/fallback state is excluded.
-    _PROGRESS_THRESHOLDS: dict[str, int] = {
-        "heat_rate":   10,
-        "heat_loss":   10,
-        "afterheat":   8,
-        "outcome":     8,
-        "onset_delay": 10,
-    }
-
     def learning_progress_safe(self) -> tuple[float, dict]:
-        """Learning progress from zone-specific real model updates (0.0–100.0 %, attributes).
+        """Learning progress from zone-specific real model updates (0.0-100.0 %, attributes).
 
-        Two-layer formula:
-        1. Weighted raw score: core thermal models carry 95 % of the weight;
-           onset_delay (auxiliary TRV-response metric) at most 5 %.
-        2. Maturity cap: the displayed value is bounded by outcome sample count and
-           core model coverage. Progress stays conservative until real heating quality
-           is confirmed by accepted outcome evaluations across many situations.
+        Delegates to the pure, calibrated ``compute_learning_progress()``
+        (learning_progress.py) — see that module's docstring for the full
+        rationale and the six weighted components (data volume, thermal
+        regime coverage, situation diversity, clean-episode ratio, outcome
+        validation, model confidence) plus the confounder penalty. This
+        method's only job is to gather each model's REAL, already-tracked
+        diagnostics/confidence into a ``ModelSignal`` per model — no new
+        data is invented here.
 
-        Only episode-driven model updates count; bootstrap, priors, and the confidence
-        aggregator output are explicitly excluded.
+        Only episode-driven model updates count toward ``accepted_updates``;
+        bootstrap/prior-only state never contributes (a model with zero
+        accepted updates is excluded from the confidence-average component).
 
-        Returns ``(progress_pct, attributes)`` where ``progress_pct`` is 0.0 when no
-        real heating data has been accumulated.
+        Returns ``(progress_pct, attributes)`` where ``progress_pct`` is 0.0
+        when no real heating data has been accumulated yet.
         """
-        _n_models = len(self._PROGRESS_THRESHOLDS)
-        _cold = {
-            "data_source": "current_learning_engine",
-            "progress_status": "cold_start",
-            "weighted_progress": True,
-            "weighted_progress_raw": 0.0,
-            "maturity_cap_applied": False,
-            "maturity_cap": 5.0,
-            "quality_cap_applied": False,
-            "outcome_quality": None,
-            "time_maturity_available": False,
-            "models_with_real_data": 0,
-            "models_total": _n_models,
-            "onset_delay_updates": 0,
-            "outcome_samples": 0,
-            "core_thermal_models_with_data": 0,
-            "dominant_model": "none",
-            "progress_limited_by": "no_data",
-            "required_outcome_samples_for_next_stage": 3,
-            "bootstrap_excluded": True,
-            "reason": "no_valid_heating_episodes_yet",
-        }
         if not self._enabled:
-            return 0.0, {**_cold, "reason": "learning_disabled"}
+            from .learning_progress import cold_learning_progress_result
+            return 0.0, {**cold_learning_progress_result("no_completed_episodes_yet"), "reason": "learning_disabled"}
         try:
+            from .learning_progress import ModelSignal, compute_learning_progress
+
             zr = self._runtime._zone(self._zone)
             counts = dict(zr.model_update_counts)
 
-            _core = {"heat_rate", "heat_loss", "afterheat", "outcome"}
-            models_with_data = 0
-            core_with_data = 0
-            total_weighted = 0.0
-            best_model = "none"
-            best_contrib = 0.0
-
-            for model, threshold in self._PROGRESS_THRESHOLDS.items():
-                n = counts.get(model, 0)
-                weight = self._PROGRESS_MODEL_WEIGHTS[model]
-                saturation = min(1.0, n / threshold) if threshold > 0 else 0.0
-                contrib = saturation * weight
-                total_weighted += contrib
-                if n > 0:
-                    models_with_data += 1
-                    if model in _core:
-                        core_with_data += 1
-                if contrib > best_contrib:
-                    best_contrib = contrib
-                    best_model = model
-
-            raw_pct = round(total_weighted * 100.0, 1)
-            onset_updates = counts.get("onset_delay", 0)
-            outcome_updates = counts.get("outcome", 0)
-
-            # Layer 1 — Maturity cap: outcome sample count and core-model coverage.
-            if core_with_data == 0:
-                cap_pct, cap_reason = 5.0, "auxiliary_model_only"
-            elif outcome_updates == 0:
-                cap_pct, cap_reason = 15.0, "no_outcome_samples"
-            elif outcome_updates < 3:
-                cap_pct, cap_reason = 20.0, "insufficient_outcome_samples"
-            elif outcome_updates < 8:
-                cap_pct, cap_reason = 35.0, "early_learning_stage"
-            elif outcome_updates < 20:
-                cap_pct, cap_reason = 55.0, "early_learning_stage"
-            elif outcome_updates < 50:
-                cap_pct, cap_reason = 75.0, "limited_outcome_data"
-            elif core_with_data >= 4:
-                cap_pct, cap_reason = 100.0, "none"
-            elif core_with_data >= 3:
-                cap_pct, cap_reason = 90.0, "insufficient_core_thermal_models"
-            else:
-                cap_pct, cap_reason = 75.0, "insufficient_core_thermal_models"
-
-            # Layer 2 — Quality cap: poor or unstable outcomes limit progress even with
-            # many samples. Applied only when enough samples make the rates meaningful.
-            # Quality signals from OutcomeModel.diagnostics() — all optional, all safe.
-            quality_cap = 100.0
-            quality_reason = None
-            outcome_quality_val = None
-            quality_cap_applied = False
-            _QUALITY_GATE_MIN = 8
-            if outcome_updates >= _QUALITY_GATE_MIN:
+            signals: dict[str, Any] = {}
+            for model_name in ("heat_rate", "heat_loss", "afterheat", "outcome", "onset_delay"):
+                accepted = counts.get(model_name, 0)
+                sample_counts: dict = {}
+                rejection_counts: dict = {}
+                outlier_counts: dict = {}
+                confidence_value: Optional[float] = None
+                general_data_quality: Optional[float] = None
+                timeout_rate: Optional[float] = None
+                overshoot_rate: Optional[float] = None
+                partial_ratio: Optional[float] = None
                 try:
-                    _om = zr.orchestrator.models.get("outcome")
-                    if _om is not None:
-                        _od = _om.diagnostics()
-                        t_rate = _od.timeout_rate or 0.0
-                        o_rate = _od.overshoot_rate or 0.0
-                        dq = _od.general_data_quality
-                        _fc, _pc = _od.full_partial
-                        p_ratio = _pc / (_fc + _pc) if (_fc + _pc) > 0 else 0.0
-                        outcome_quality_val = round(dq, 3)
-                        if t_rate > 0.40 or o_rate > 0.35 or dq < 0.30:
-                            quality_cap = 50.0
-                            quality_reason = "unstable_outcomes"
-                        elif t_rate > 0.25 or o_rate > 0.25 or dq < 0.45 or p_ratio > 0.60:
-                            quality_cap = 65.0
-                            quality_reason = "outcome_quality"
+                    model = zr.orchestrator.models.get(model_name)
+                    if model is not None:
+                        diag = model.diagnostics()
+                        sample_counts = dict(getattr(diag, "sample_counts", None) or {})
+                        rejection_counts = dict(getattr(diag, "rejection_counts", None) or {})
+                        outlier_counts = dict(getattr(diag, "outlier_counts", None) or {})
+                        if model_name == "outcome":
+                            general_data_quality = getattr(diag, "general_data_quality", None)
+                            timeout_rate = getattr(diag, "timeout_rate", None)
+                            overshoot_rate = getattr(diag, "overshoot_rate", None)
+                            fc, pc = getattr(diag, "full_partial", (0, 0))
+                            partial_ratio = (pc / (fc + pc)) if (fc + pc) > 0 else 0.0
+                        if accepted > 0:
+                            confidence_value = model.confidence().value
                 except Exception:
-                    pass  # quality gate failure is non-fatal
+                    pass  # a single model's diagnostics failure must not block the others
+                signals[model_name] = ModelSignal(
+                    accepted_updates=accepted,
+                    sample_counts=sample_counts,
+                    rejection_counts=rejection_counts,
+                    outlier_counts=outlier_counts,
+                    confidence_value=confidence_value,
+                    general_data_quality=general_data_quality,
+                    timeout_rate=timeout_rate,
+                    overshoot_rate=overshoot_rate,
+                    partial_ratio=partial_ratio,
+                )
 
-            # Layer 2 is binding only when it further restricts beyond layer 1.
-            quality_cap_applied = quality_cap < cap_pct
-            final_cap = min(cap_pct, quality_cap)
-            final_reason = quality_reason if quality_cap_applied else cap_reason
-
-            cap_applied = raw_pct > final_cap
-            progress_pct = round(min(raw_pct, final_cap), 1)
-
-            # Next outcome sample count that unlocks the next maturity tier.
-            next_stage = None
-            if core_with_data > 0:
-                for _t in (3, 8, 20, 50):
-                    if outcome_updates < _t:
-                        next_stage = _t
-                        break
-
-            # Status uses the fully capped progress for user-facing truthfulness.
-            if progress_pct == 0.0:
-                status = "cold_start"
-                reason = "no_valid_heating_episodes_yet"
-            elif core_with_data == 0:
-                status = "collecting_data"
-                reason = "auxiliary_model_only"
-            elif final_reason == "none" and models_with_data == _n_models:
-                status = "learned"
-                reason = "sufficient_data"
-            else:
-                status = "learning"
-                reason = "partial_data"
-
-            return progress_pct, {
-                "data_source": "current_learning_engine",
-                "progress_status": status,
-                "weighted_progress": True,
-                "weighted_progress_raw": raw_pct,
-                "maturity_cap_applied": cap_applied,
-                "maturity_cap": final_cap,
-                "quality_cap_applied": quality_cap_applied,
-                "outcome_quality": outcome_quality_val,
-                "time_maturity_available": False,
-                "models_with_real_data": models_with_data,
-                "models_total": _n_models,
-                "onset_delay_updates": onset_updates,
-                "outcome_samples": outcome_updates,
-                "core_thermal_models_with_data": core_with_data,
-                "dominant_model": best_model if best_contrib > 0.0 else "none",
-                "progress_limited_by": final_reason,
-                "required_outcome_samples_for_next_stage": next_stage,
-                "bootstrap_excluded": True,
-                "reason": reason,
-            }
+            progress_pct, attrs = compute_learning_progress(signals)
+            self._maybe_record_research_daily_progress_sample_safe(progress_pct, attrs)
+            return progress_pct, attrs
         except Exception as err:
             self._record_error("learning_progress", err)
-        return 0.0, _cold
+            from .learning_progress import cold_learning_progress_result
+            return 0.0, cold_learning_progress_result("calculation_error")
+
+    def _maybe_record_research_daily_progress_sample_safe(self, progress_pct: Any, attrs: Any) -> None:
+        """Aggregate ONE learning-progress/confidence sample into the
+        current day's Research Daily Bucket.
+
+        Called ONLY from the successful ``compute_learning_progress()``
+        branch of ``learning_progress_safe()`` above — never for the
+        disabled-shadow early return or the calculation-error except
+        branch, since those are "we could not compute this" guards, not
+        genuine progress readings; aggregating their hard-coded 0.0 would
+        corrupt the daily min with a value that was never actually
+        measured. Reads exactly two already-computed, already public-safe
+        scalar values: ``progress_pct`` (0-100 %) and
+        ``attrs["model_confidence_score"]`` (the REAL averaged per-model
+        confidence score, 0.0-1.0 — never ``attrs["confidence_level"]``,
+        which is a string band label like "medium", not a number, and is
+        deliberately never guessed into one).
+
+        This is the ONLY call site for this method — no coordinator/sensor/
+        export change was made to call it more than once per
+        ``learning_progress_safe()`` invocation. Repeated calls with an
+        unchanged value are effectively free: unlike a naive counter, this
+        never spams storage, because
+        ``record_research_daily_observation_safe()`` only marks the bucket
+        dirty when the resulting merged payload genuinely differs (see its
+        own docstring) — an unchanged last_pct/confidence_last produces a
+        byte-identical serialized bucket, so a redundant call with the same
+        reading never triggers an extra save.
+
+        Bucket date is derived from this controller's own injected Clock
+        (``self._utcnow_iso()``, timezone-aware, deterministic under
+        tests) — never a bare ``datetime.utcnow()``. Never raises: a
+        malformed/out-of-range value or any internal failure is captured
+        in ``_research_daily_last_error`` and swallowed — never
+        propagated, never touches ``_enabled``.
+        """
+        try:
+            from datetime import datetime
+            from ..research_daily_schemas import ResearchDailyObservation
+
+            if not isinstance(progress_pct, (int, float)) or isinstance(progress_pct, bool):
+                return
+            if not math.isfinite(progress_pct) or not (0.0 <= progress_pct <= 100.0):
+                return  # out-of-range/invalid -> not a real percent, do not guess/clamp
+
+            confidence: Optional[float] = None
+            if isinstance(attrs, Mapping):
+                raw_confidence = attrs.get("model_confidence_score")
+                if (
+                    isinstance(raw_confidence, (int, float))
+                    and not isinstance(raw_confidence, bool)
+                    and math.isfinite(raw_confidence)
+                    and 0.0 <= raw_confidence <= 1.0
+                ):
+                    confidence = float(raw_confidence)
+
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            bucket_date = now_utc.date().isoformat()
+            observation = ResearchDailyObservation(
+                bucket_date=bucket_date,
+                learning_progress_pct=float(progress_pct),
+                confidence=confidence,
+            )
+            self.record_research_daily_observation_safe(observation)
+        except Exception as err:
+            self._research_daily_last_error = str(err)
 
     def diagnostics(self) -> dict:
         h = self._runtime.health()

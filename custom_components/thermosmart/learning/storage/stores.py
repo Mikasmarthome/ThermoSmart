@@ -20,6 +20,10 @@ RAW_INDEX_STORE_VERSION = 1
 EPISODES_STORE_VERSION = 1
 MODEL_STATE_STORE_VERSION = 1
 GLOBAL_INDEX_STORE_VERSION = 1
+ADAPTATION_HISTORY_STORE_VERSION = 1
+APPLICATION_LIFECYCLE_STORE_VERSION = 1
+SUPPORT_CRITICAL_EVENT_STORE_VERSION = 1
+RESEARCH_DAILY_STORE_VERSION = 1
 
 
 class StoreError(Exception):
@@ -150,3 +154,75 @@ class GlobalIndexStore(_VersionedStore):
     def __init__(self, factory: StoreFactory) -> None:
         super().__init__(factory, naming.global_index_key(),
                          GLOBAL_INDEX_STORE_VERSION)
+
+
+class AdaptationHistoryStore(_VersionedStore):
+    """Versioned per-zone store for passive adaptation candidate history.
+
+    Keyed by ``adaptation_history_key(learning_zone_id)``. Not part of the
+    core initialization components — reset separately by ``reset_v2_learning_state``.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.adaptation_history_key(learning_zone_id),
+            ADAPTATION_HISTORY_STORE_VERSION,
+        )
+
+
+class ApplicationLifecycleStore(_VersionedStore):
+    """Versioned per-zone store for adaptation application lifecycle state.
+
+    Keyed by ``application_lifecycle_key(learning_zone_id)``. Not part of the
+    core initialization components — reset separately by ``reset_v2_learning_state``.
+    Empty on first load; non-fatal on missing or corrupt data.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.application_lifecycle_key(learning_zone_id),
+            APPLICATION_LIFECYCLE_STORE_VERSION,
+        )
+
+
+class SupportCriticalEventStore(_VersionedStore):
+    """Versioned per-zone store for the bounded Support Critical Event history.
+
+    Keyed by ``support_critical_events_key(learning_zone_id)``. Foundation
+    only in this step — nothing constructs, loads, or saves through this
+    class from the live runtime yet (see
+    ``support_event_persistence.py``'s module docstring for the exact
+    reasoning and the concrete next-step hook points). Empty on first load;
+    non-fatal on missing or corrupt data, exactly like the other stores here.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.support_critical_events_key(learning_zone_id),
+            SUPPORT_CRITICAL_EVENT_STORE_VERSION,
+        )
+
+
+class ResearchDailyStore(_VersionedStore):
+    """Versioned per-zone store for the bounded Research Daily Bucket history.
+
+    Keyed by ``research_daily_key(learning_zone_id)``. Constructed, loaded,
+    and saved through the runtime shadow controller's own
+    ``_async_load_research_daily_safe()``/``_async_save_research_daily_safe()``
+    methods, reached via the capture-stores accessor facade
+    (``learning/storage/capture_stores.py``) — see
+    ``research_daily_persistence.py``'s module docstring for the pure
+    merge/persist pipeline that runs before saving through this class.
+    Empty on first load; non-fatal on missing or corrupt data, exactly like
+    the other stores here.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.research_daily_key(learning_zone_id),
+            RESEARCH_DAILY_STORE_VERSION,
+        )

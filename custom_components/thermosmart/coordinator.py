@@ -166,6 +166,35 @@ class ThermoSmartCoordinator(
         # Must be initialized before the first coordinator refresh to avoid AttributeError.
         self._boost_active: dict = {}
 
+        # LE2 Support Critical Event dedupe state — tracks the previous cycle's
+        # window/summer/manual hold flags so _maybe_record_support_hold_events()
+        # emits a landmark only on a genuine transition, never every cycle.
+        # Event production only; never read by any control/decision path.
+        self._support_event_window_hold_active: bool = False
+        self._support_event_summer_hold_active: bool = False
+        self._support_event_manual_override_active: bool = False
+        # TRV dispatch event dedupe: fires only when the (event_type, reason,
+        # setpoint) signature genuinely changes from the previous cycle —
+        # a zone sitting at target for hours must not spam one event per
+        # cycle. "Recommendation only" (active_control off) uses its own
+        # transition flag, matching the hold-event pattern above.
+        self._support_event_recommendation_only_active: bool = False
+        self._support_event_last_trv_signature: tuple | None = None
+        self._support_event_last_sent_setpoint: float | None = None
+        # Boost event dedupe: started/ended follow a boolean transition flag
+        # (like window/summer/manual above); blocked uses a small signature
+        # cache (reason only) since it can persist across many cycles while
+        # inactive, needing content-based dedup rather than a pure transition.
+        self._support_event_boost_active: bool = False
+        self._support_event_last_boost_signature: tuple | None = None
+        # Room-temperature sensor dedupe: unavailable/restored follow a
+        # boolean transition flag (True = last known state was available);
+        # the fallback-in-use signal uses a small signature cache so it
+        # records once per fallback episode, not once per cycle while the
+        # room sensor stays unavailable.
+        self._support_event_room_sensor_available: bool = True
+        self._support_event_last_fallback_signature: tuple | None = None
+
         # Kalibrierung (genutzt von TRVControlMixin)
         self._calibration_offsets: dict[str, float] = {}
         self._auto_quirk_entities: list[str] = []
@@ -990,6 +1019,11 @@ class ThermoSmartCoordinator(
                 schedule_period=self._schedule_period(recommendation, cfg),
             )
 
+            # LE2 Support Critical Events: record window/summer/manual hold
+            # transitions only (never every cycle) — pure event production,
+            # no control effect. See _maybe_record_support_hold_events().
+            self._maybe_record_support_hold_events(recommendation)
+
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
             # – verbessert die TRV-interne Regelung unabhängig von der aktiven Steuerung
             await self._async_write_external_temp(cfg, recommendation)
@@ -1004,6 +1038,7 @@ class ThermoSmartCoordinator(
             #   → mixed_zone_check → device_unavailable_check → readiness → inner gates.
             # Runs BEFORE dispatch so the approved offset flows through device guards and
             # the single setpoint dispatch path.  Never raises into heating.
+            _boost_result = None  # AdaptiveBoostControlResult | None; None = not evaluated this cycle
             if self._le2_shadow is not None and not effective_summer:
                 # Pre-dispatch device availability: if any setpoint TRV is unavailable
                 # right now, block boost for this cycle to prevent partial dispatch.
@@ -1020,7 +1055,7 @@ class ThermoSmartCoordinator(
                 recommendation["_setpoint_device_unavailable"] = _setpoint_device_unavailable
                 _restore_pending = not self._active_control_initialized
                 try:
-                    self._le2_shadow.resolve_adaptive_boost_control(
+                    _boost_result = self._le2_shadow.resolve_adaptive_boost_control(
                         recommendation,
                         learning_mode_on=_learning_mode_on,
                         active_control_on=self._active_control,
@@ -1047,6 +1082,13 @@ class ThermoSmartCoordinator(
                         _candidate_c, TPI_MAX_BOOST_CELSIUS)
                 except Exception:
                     recommendation["boost_factor"] = 1.0
+
+            # LE2 Support Critical Events: observe the boost decision already
+            # made above (_boost_result, recommendation["le2_boost_adjusted"])
+            # — pure observation, no influence on boost timing, offset,
+            # cooldown, or lifecycle. See _maybe_record_boost_event().
+            self._maybe_record_boost_event(recommendation, _boost_result, effective_summer)
+
             # ── Authoritative Live Decision Record (Phase B1b) ────────────────────
             # Baseline record is always built from coordinator-owned data, regardless of
             # whether LE2 is attached.  The shadow optionally enriches with decision_id
@@ -1094,6 +1136,12 @@ class ThermoSmartCoordinator(
             _combined = _sp_stats.merge(_vv_stats) if _disp_attempted else _DispatchStats()
             _disp_status = _combined.status if _disp_attempted else "not_attempted"
             _eff_sps = _sp_stats.effective_setpoints
+
+            # LE2 Support Critical Events: observe the TRV dispatch outcome
+            # already decided above — pure observation, no influence on the
+            # decision, the service-call payload, or any filter/throttle
+            # logic. See _maybe_record_trv_dispatch_event().
+            self._maybe_record_trv_dispatch_event(recommendation, _sp_stats, effective_summer)
 
             # Per-device applied boost offset — updated BEFORE LiveDecisionRecord so
             # LDR.boost_applied_c reflects real dispatch truth, not the pre-dispatch
@@ -1158,6 +1206,10 @@ class ThermoSmartCoordinator(
                             _disp_status)
                     except Exception:
                         pass
+                    # LE2 Support Critical Events: observe the invalidation
+                    # just performed above — pure observation, no influence
+                    # on the lifecycle release itself.
+                    self._maybe_record_boost_invalidated_event()
 
             # ── Complete LiveDecisionRecord with dispatch truth ────────────────────
             if _live_dec_pre is not None:
@@ -1310,6 +1362,21 @@ class ThermoSmartCoordinator(
                 except Exception:  # never let LE 2.0 affect the heating path
                     pass
 
+            # ── LE 2.0 periodic persistence ─────────────────────────────
+            # Reachable every coordinator cycle regardless of the learning-mode
+            # toggle above, so state left dirty from an earlier cycle still gets
+            # flushed even if learning is disabled mid-session. async_save_if_due()
+            # is internally debounced (30s, hourly safety net via
+            # PersistenceOrchestrator) — a no-op on most cycles, never a second
+            # parallel save mechanism. Awaited (not fire-and-forget); HA never runs
+            # two _async_update_data cycles for the same coordinator concurrently,
+            # so there is no save race. A save failure must never affect heating.
+            if self._le2_shadow is not None:
+                try:
+                    await self._le2_shadow.async_save_if_due()
+                except Exception:
+                    pass
+
             return {
                 "weather": weather_data,
                 "zone": recommendation,
@@ -1416,13 +1483,389 @@ class ThermoSmartCoordinator(
         raw = self._current_schedule_period()
         return raw.split("_", 1)[1] if "_" in raw else "comfort"
 
+    def _record_support_hold_event(self, event_type, severity, *, reason: str,
+                                    summary: str, details: dict) -> None:
+        """Build and hand off ONE Support Critical Event for a hold/release
+        transition. Memory-only: record_support_critical_event_safe() never
+        performs storage I/O, never awaits, never triggers a save directly —
+        persistence happens later via the existing periodic save cycle.
+        Never raises; a missing shadow or any internal failure is silently
+        skipped (event production must never affect the control cycle).
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportCriticalEvent
+            from .learning.storage.support_event_serialization import SUPPORT_EVENT_SCHEMA_VERSION
+            now = self._clock.now_utc()
+            event_id = f"hold_{event_type.value}_{int(now.timestamp() * 1000)}"
+            event = SupportCriticalEvent(
+                schema_version=SUPPORT_EVENT_SCHEMA_VERSION, event_id=event_id,
+                event_type=event_type, ts=now, severity=severity,
+                reason=reason, summary=summary, details=details,
+            )
+            self._le2_shadow.record_support_critical_event_safe(event)
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_support_hold_events(self, recommendation: dict) -> None:
+        """Record Support Critical Events for window/summer/manual hold
+        TRANSITIONS only — never every cycle. Compares this cycle's
+        window_open/is_summer/override_active flags (already computed in
+        ``recommendation``) against the previous cycle's own dedupe state;
+        emits a landmark only when a flag actually flips. Pure event
+        production: reads recommendation, never mutates it, never touches
+        control state (setpoints, TPI, boost, preheat, TRV commands). Never
+        raises — see _record_support_hold_event()'s own guard.
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            window_open = bool(recommendation.get("window_open", False))
+            if window_open and not self._support_event_window_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.WINDOW_OPEN_HOLD, SupportEventSeverity.INFO,
+                    reason="window_open",
+                    summary="Heating held due to an open window",
+                    details={"source": "window", "heating_allowed": False},
+                )
+            elif not window_open and self._support_event_window_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.WINDOW_CLOSED_RELEASE, SupportEventSeverity.INFO,
+                    reason="window_closed",
+                    summary="Window hold released",
+                    details={"source": "window", "heating_allowed": True},
+                )
+            self._support_event_window_hold_active = window_open
+
+            # No dedicated "summer mode release" event type exists in the
+            # schema (unlike the window open/closed pair) — reusing
+            # SUMMER_MODE_HOLD for both start and end, disambiguated by
+            # reason + current_active, was preferred over adding a new event
+            # type for a single asymmetric case (see report).
+            summer_active = bool(recommendation.get("is_summer", False))
+            if summer_active and not self._support_event_summer_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.SUMMER_MODE_HOLD, SupportEventSeverity.INFO,
+                    reason="summer_mode_active",
+                    summary="Heating held due to summer mode",
+                    details={"mode": "summer", "previous_active": False, "current_active": True},
+                )
+            elif not summer_active and self._support_event_summer_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.SUMMER_MODE_HOLD, SupportEventSeverity.INFO,
+                    reason="summer_mode_ended",
+                    summary="Summer mode hold ended",
+                    details={"mode": "summer", "previous_active": True, "current_active": False},
+                )
+            self._support_event_summer_hold_active = summer_active
+
+            manual_active = bool(recommendation.get("override_active", False))
+            if manual_active and not self._support_event_manual_override_active:
+                self._record_support_hold_event(
+                    SupportEventType.MANUAL_OVERRIDE_START, SupportEventSeverity.INFO,
+                    reason="manual_override_start",
+                    summary="Manual override started",
+                    details={"source": "manual_override"},
+                )
+            elif not manual_active and self._support_event_manual_override_active:
+                self._record_support_hold_event(
+                    SupportEventType.MANUAL_OVERRIDE_END, SupportEventSeverity.INFO,
+                    reason="manual_override_end",
+                    summary="Manual override ended",
+                    details={"source": "manual_override"},
+                )
+            self._support_event_manual_override_active = manual_active
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_recommendation_only_event(self) -> None:
+        """Record ONE learning_recommendation_only landmark on the transition
+        into observation-only mode (active_control off) — not every cycle.
+        Mirrors the hold-transition dedupe pattern from Increment 2.
+        """
+        if self._support_event_recommendation_only_active:
+            return
+        self._support_event_recommendation_only_active = True
+        from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+        self._record_support_hold_event(
+            SupportEventType.LEARNING_RECOMMENDATION_ONLY, SupportEventSeverity.INFO,
+            reason="learning_recommendation_only",
+            summary="Zone is in observation/recommendation mode (active control off)",
+            details={"active_control": False},
+        )
+
+    def _maybe_record_trv_dispatch_event(
+        self, recommendation: dict, sp_stats: _DispatchStats, effective_summer: bool,
+    ) -> None:
+        """Record ONE Support Critical Event observing the TRV setpoint
+        dispatch OUTCOME already decided this cycle — pure observation, never
+        influences the dispatch decision, the service-call payload, or any
+        filter/throttle/setpoint logic. ``sp_stats`` is read-only here (the
+        same ``_DispatchStats`` already computed by ``_apply_temperature()``,
+        privacy-safe by construction — see trv_control.py).
+
+        Deduped via a small in-memory "last signature" cache
+        (event_type + reason + rounded requested setpoint) so an unchanged
+        situation (e.g. a zone sitting at target for hours) records at most
+        one event per genuinely new situation, never one per cycle — same
+        intent as the foundation's time-window dedupe helper, but a cheaper same-cycle-chain
+        check since this fires far more often (every control cycle) than the
+        storage/setup landmarks that helper was built for.
+
+        Only maps to a specific block reason when the EXISTING logic already
+        makes that reason determinable at this zone level (same-setpoint
+        match against ``_last_written_setpoints``, TRV unavailability via
+        ``_trv_offline`` — both already-tracked coordinator state, read-only
+        here). Falls back to the generic ``trv_command_blocked`` rather than
+        guessing a more specific reason the current code cannot actually
+        distinguish (e.g. "min interval" — no such gate exists in this
+        codebase; not fabricated here, see the accompanying report).
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            if not self._active_control:
+                self._maybe_record_recommendation_only_event()
+                return
+            self._support_event_recommendation_only_active = False
+            if effective_summer:
+                return  # covered by the existing summer_mode_hold event (Increment 2)
+
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            requested = recommendation.get("trv_setpoint", recommendation.get("adjusted_target"))
+            requested_rounded = round(float(requested), 1) if isinstance(requested, (int, float)) else None
+
+            if sp_stats.effective_setpoints:
+                event_type = SupportEventType.TRV_COMMAND_SENT
+                severity = SupportEventSeverity.INFO
+                reason = "trv_command_sent"
+                summary = "TRV setpoint command sent"
+                details: dict = {}
+                if requested_rounded is not None:
+                    details["requested_setpoint"] = requested_rounded
+                if self._support_event_last_sent_setpoint is not None:
+                    details["previous_setpoint"] = self._support_event_last_sent_setpoint
+            elif self._trv_offline:
+                event_type = SupportEventType.TRV_UNAVAILABLE
+                severity = SupportEventSeverity.WARNING
+                reason = "trv_unavailable"
+                summary = "TRV setpoint command blocked: TRV unavailable"
+                details = {"active_control": True}
+            elif requested_rounded is not None and any(
+                abs(v - requested_rounded) < 0.5 for v in self._last_written_setpoints.values()
+            ):
+                event_type = SupportEventType.SAME_SETPOINT_BLOCK
+                severity = SupportEventSeverity.INFO
+                reason = "same_setpoint_block"
+                summary = "TRV setpoint command blocked: already at target"
+                details = {"requested_setpoint": requested_rounded}
+            elif sp_stats.status == "not_attempted":
+                event_type = SupportEventType.TRV_COMMAND_BLOCKED
+                severity = SupportEventSeverity.INFO
+                reason = "not_attempted"
+                summary = "TRV setpoint command not attempted"
+                details = {"active_control": True}
+            else:
+                return  # failed/partially-succeeded dispatch: out of scope for this step
+
+            signature = (event_type.value, reason, requested_rounded)
+            if signature == self._support_event_last_trv_signature:
+                return
+            self._support_event_last_trv_signature = signature
+            if event_type is SupportEventType.TRV_COMMAND_SENT and requested_rounded is not None:
+                self._support_event_last_sent_setpoint = requested_rounded
+
+            self._record_support_hold_event(
+                event_type, severity, reason=reason, summary=summary, details=details,
+            )
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_boost_event(
+        self, recommendation: dict, boost_result, effective_summer: bool,
+    ) -> None:
+        """Record Support Critical Events observing the boost decision
+        already made this cycle by resolve_adaptive_boost_control() — pure
+        observation, never influences boost timing, offset, cooldown, or
+        lifecycle. ``boost_result`` is the read-only
+        ``AdaptiveBoostControlResult`` already returned by that resolver
+        (None when it was not invoked this cycle — summer mode or no LE2
+        shadow attached).
+
+        started/ended follow the SAME boolean-transition-flag pattern as the
+        window/summer/manual hold events (Increment 2): an event fires only
+        when ``_support_event_boost_active`` genuinely flips. blocked uses a
+        small (event_type, reason) signature cache instead, since a zone can
+        stay blocked for the SAME reason across many cycles (e.g. a
+        persistent cooldown) — that must record once, not once per cycle;
+        but a genuinely different reason must still be visible.
+
+        ``reason`` values come directly from ``boost_result.blocking_reason``
+        (the resolver's own typed BoostBlockReason / inner-gate rejection
+        string, e.g. "active_control_off", "window_open", "cooldown_active",
+        "device_unavailable") — never guessed or invented.
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            if boost_result is None:
+                # Resolver not invoked this cycle (summer mode, or shadow gone).
+                if self._support_event_boost_active:
+                    self._support_event_boost_active = False
+                    reason = "summer_mode" if effective_summer else "shadow_unavailable"
+                    self._record_support_hold_event(
+                        SupportEventType.BOOST_ENDED, SupportEventSeverity.INFO,
+                        reason=reason, summary="Boost ended", details={"active": False},
+                    )
+                return
+
+            boost_active_now = bool(recommendation.get("le2_boost_adjusted", False))
+
+            if boost_active_now and not self._support_event_boost_active:
+                details: dict = {"active": True}
+                try:
+                    details["offset"] = round(float(boost_result.approved_boost_offset_c), 3)
+                except (TypeError, ValueError):
+                    pass
+                self._record_support_hold_event(
+                    SupportEventType.BOOST_STARTED, SupportEventSeverity.INFO,
+                    reason="boost_started", summary="Boost started", details=details,
+                )
+            elif not boost_active_now and self._support_event_boost_active:
+                reason = str(boost_result.blocking_reason or "unknown")
+                self._record_support_hold_event(
+                    SupportEventType.BOOST_ENDED, SupportEventSeverity.INFO,
+                    reason=reason, summary="Boost ended", details={"active": False},
+                )
+            elif not boost_active_now and boost_result.blocking_reason:
+                reason = str(boost_result.blocking_reason)
+                signature = ("boost_blocked", reason)
+                if signature != self._support_event_last_boost_signature:
+                    self._support_event_last_boost_signature = signature
+                    self._record_support_hold_event(
+                        SupportEventType.BOOST_BLOCKED, SupportEventSeverity.INFO,
+                        reason=reason, summary="Boost blocked", details={"active": False},
+                    )
+
+            self._support_event_boost_active = boost_active_now
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_boost_invalidated_event(self) -> None:
+        """Record ONE boost_ended landmark when boost was hard-released this
+        cycle after a failed/partial TRV dispatch — pure observation, called
+        right after the EXISTING invalidate_boost_after_failed_dispatch_safe()
+        lifecycle call, never influencing it. A no-op if boost was not
+        already recorded as active this cycle (avoids a spurious "ended"
+        when there was nothing to end from an event-production perspective).
+        """
+        if self._le2_shadow is None or not self._support_event_boost_active:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+            self._support_event_boost_active = False
+            self._record_support_hold_event(
+                SupportEventType.BOOST_ENDED, SupportEventSeverity.INFO,
+                reason="invalidated_after_failed_dispatch",
+                summary="Boost invalidated after failed dispatch",
+                details={"active": False},
+            )
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_room_sensor_events(
+        self, cfg: dict, primary_room_temp: float | None, resolved_current_temp: float | None,
+    ) -> None:
+        """Record Support Critical Events observing the room-temperature
+        sensor / TRV-temperature fallback outcome already decided this cycle
+        by the EXISTING read order (``_read_avg_sensor()`` then, only if
+        that returned None, ``_read_trv_avg_temp()``) — pure observation,
+        never influences sensor selection or the fallback itself.
+
+        ``primary_room_temp`` is the room sensor's OWN reading (None when
+        unavailable/unknown/non-numeric for every configured sensor —
+        ``_read_avg_sensor()`` does not distinguish those sub-cases, so
+        neither does this method; a ``temperature_invalid`` event is
+        deliberately NOT produced in this step since no such distinct state
+        exists anywhere in the current code — see the accompanying report).
+        ``resolved_current_temp`` is the value actually used this cycle
+        (room sensor value, or the TRV fallback, or still None if both
+        failed).
+
+        A zone with no ``temp_sensors`` configured at all is not "sensor
+        unavailable" — it deliberately relies on the TRV fallback by design
+        (see ``_read_trv_avg_temp()``'s own docstring) — no event is
+        produced for that case, only for a genuine unavailable/restored
+        TRANSITION on an actually-configured room sensor.
+
+        sensor_unavailable/sensor_restored follow the SAME boolean-
+        transition-flag pattern as the other hold/boost events. fallback_used
+        uses a small (event_type, fallback_type, reason) signature cache so
+        a room sensor staying unavailable for many cycles records the
+        fallback once per episode, not once per cycle; the cache resets when
+        the room sensor is available again, so a LATER new unavailable
+        episode is still visible.
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            if not cfg.get("temp_sensors"):
+                return  # role not in use for this zone by design — nothing to observe
+
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            primary_available = primary_room_temp is not None
+
+            if not primary_available and self._support_event_room_sensor_available:
+                self._support_event_room_sensor_available = False
+                self._record_support_hold_event(
+                    SupportEventType.SENSOR_UNAVAILABLE, SupportEventSeverity.WARNING,
+                    reason="room_sensor_unavailable",
+                    summary="Room temperature sensor unavailable",
+                    details={"sensor_role": "room_temperature", "state": "unavailable"},
+                )
+            elif primary_available and not self._support_event_room_sensor_available:
+                self._support_event_room_sensor_available = True
+                self._support_event_last_fallback_signature = None
+                self._record_support_hold_event(
+                    SupportEventType.SENSOR_RESTORED, SupportEventSeverity.INFO,
+                    reason="room_sensor_restored",
+                    summary="Room temperature sensor restored",
+                    details={"sensor_role": "room_temperature"},
+                )
+
+            if not primary_available and resolved_current_temp is not None:
+                signature = ("fallback_used", "trv_temperature", "room_sensor_unavailable")
+                if signature != self._support_event_last_fallback_signature:
+                    self._support_event_last_fallback_signature = signature
+                    self._record_support_hold_event(
+                        SupportEventType.FALLBACK_USED, SupportEventSeverity.INFO,
+                        reason="room_sensor_unavailable",
+                        summary="Using TRV temperature as fallback",
+                        details={"fallback_type": "trv_temperature", "reason": "room_sensor_unavailable"},
+                    )
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
     # ── Berechnung ───────────────────────────────────────────────────
 
     async def _compute_recommendation(self, cfg: dict, weather_data: dict, mode: str) -> dict:
         _learning_mode_on = bool(cfg.get("learning_enabled", True))
-        current_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
+        _primary_room_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
+        current_temp = _primary_room_temp
         if current_temp is None:
             current_temp = self._read_trv_avg_temp(cfg.get("climate_entities", []))
+        # LE2 Support Critical Events: observe the room-sensor/fallback
+        # outcome already decided above — pure observation, no influence on
+        # sensor selection or the fallback itself. See
+        # _maybe_record_room_sensor_events().
+        self._maybe_record_room_sensor_events(cfg, _primary_room_temp, current_temp)
 
         now = self._now_local()
         if current_temp is not None:

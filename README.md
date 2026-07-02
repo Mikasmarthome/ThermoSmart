@@ -8,7 +8,7 @@
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
   <a href="https://github.com/Mikasmarthome/ThermoSmart/releases/tag/v1.1.1"><img src="https://img.shields.io/badge/stable-v1.1.1-brightgreen.svg" alt="Stable Release"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/beta-v1.2.0--beta.3-orange.svg" alt="Beta Release"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/beta-v1.2.0--beta.4-orange.svg" alt="Beta Release"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -301,12 +301,6 @@ The file is saved to `/config/www/` and can be opened via `/local/<filename>` ap
 24 UI languages supported: BG · CA · CS · DA · DE · EL · EN · ES · FI · FR · HU · IT · NB · NL · PL · PT · RO · RU · SK · SL · SV · TR · UK · ZH-Hans
 
 Additional languages welcome via Pull Request (`custom_components/thermosmart/translations/`).
-
----
-
-## Changelog
-
-Full release history: [RELEASE_NOTES.md](RELEASE_NOTES.md)
 
 ---
 

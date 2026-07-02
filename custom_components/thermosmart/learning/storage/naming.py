@@ -81,3 +81,36 @@ def model_state_key(learning_zone_id: str) -> str:
 def global_index_key() -> str:
     """The single global index store key (a reconstructable cache)."""
     return f"{_PREFIX}__global_index"
+
+
+def adaptation_history_key(learning_zone_id: str) -> str:
+    """Store key for the passive adaptation candidate history of one zone."""
+    return _key(learning_zone_id, "adaptation_history")
+
+
+def application_lifecycle_key(learning_zone_id: str) -> str:
+    """Store key for the adaptation application lifecycle state of one zone.
+
+    Uses suffix ``application_lifecycle`` — fachlich klar (Lifecycle-State von
+    angewendeten Adaptations) and parallel to ``adaptation_history``.
+    """
+    return _key(learning_zone_id, "application_lifecycle")
+
+
+def support_critical_events_key(learning_zone_id: str) -> str:
+    """Store key for the bounded Support Critical Event history of one zone.
+
+    Parallel to ``episodes_key`` — one store per zone, keyed by the same
+    opaque ``learning_zone_id``, never a real zone name.
+    """
+    return _key(learning_zone_id, "support_critical_events")
+
+
+def research_daily_key(learning_zone_id: str) -> str:
+    """Store key for the bounded Research Daily Bucket history of one zone.
+
+    Parallel to ``episodes_key``/``support_critical_events_key`` — one store
+    per zone, keyed by the same opaque ``learning_zone_id``, never a real
+    zone name.
+    """
+    return _key(learning_zone_id, "research_daily")

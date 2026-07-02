@@ -323,6 +323,22 @@ def test_t14_non_datetime_ts_produces_no_bucket_non_fatal():
     assert ctrl._research_daily_save_needed is False
 
 
+def test_t14_bucket_date_uses_utc_calendar_date_not_local():
+    """Bucket date is the UTC calendar date of event.ts, not whatever
+    calendar date the event's own (possibly non-UTC) offset would imply —
+    matches research_daily_schemas.py's documented "UTC calendar date"
+    contract. A timestamp with a +05:00 offset just after local midnight on
+    2026-06-03 is still 2026-06-02 in UTC, and must bucket there."""
+    from datetime import timedelta
+
+    ctrl = _make_controller()
+    ts_local_june3_but_utc_june2 = datetime(2026, 6, 3, 1, 0, tzinfo=timezone(timedelta(hours=5)))
+    ev = _event("evt_utc_bucket", SupportEventType.TRV_COMMAND_SENT, ts=ts_local_june3_but_utc_june2)
+    ctrl.record_support_critical_event_safe(ev)
+    assert "2026-06-02" in ctrl._research_daily_buckets
+    assert "2026-06-03" not in ctrl._research_daily_buckets
+
+
 # ── T15: Duplicate Support Event is not double-counted ──────────────────────
 
 def test_t15_duplicate_support_event_not_double_counted():

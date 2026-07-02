@@ -382,7 +382,7 @@ class LearningShadowController:
         await self._async_load_episode_history_safe()
         # Load persisted support critical events (non-fatal; no runtime writer yet)
         await self._async_load_support_critical_events_safe()
-        # Load persisted research daily buckets (non-fatal; no aggregation hook yet)
+        # Load persisted research daily buckets (non-fatal)
         await self._async_load_research_daily_safe()
         return setup_ok
 

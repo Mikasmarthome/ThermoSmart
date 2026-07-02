@@ -1,14 +1,15 @@
 """Pure, bounded helpers for creating, aggregating, and retaining LE2
 Research Daily Buckets.
 
-Foundation only — no runtime producer exists yet anywhere (no call site
-constructs a ``ResearchDailyObservation``), no ``LearningShadowController``
-wiring, no store wrapper, no export wiring. This module defines the pure
-aggregation/retention pipeline a future, separately-approved step would call
-from higher-level controller methods, mirroring exactly how
-``episode_persistence.py``/``support_event_persistence.py`` were built and
-approved as standalone foundations before their own later runtime-hook
-steps:
+Pure helper/storage logic only — this module itself constructs no
+``ResearchDailyObservation`` and performs no persistence. The actual
+producers (Support Critical Event aggregation, Learning Progress/confidence
+sampling) live outside this module, in the runtime shadow controller layer,
+which calls into the pipeline below via its
+``record_research_daily_observation_safe()`` method. Persistence itself
+goes through the versioned per-zone research-daily wrapper class
+(``learning/storage/stores.py``), reached via the capture-stores accessor
+facade (``learning/storage/capture_stores.py``) — never directly from here:
 
     ResearchDailyObservation (small delta)
     -> record_research_daily_observation()   merges into one day's bucket
@@ -21,7 +22,7 @@ steps:
 No HA imports. No runtime imports. No control imports. No storage I/O of any
 kind — every function here is a pure transformation of in-memory dicts /
 dataclasses; the caller decides if/when to persist the resulting payload
-through a future store wrapper. Never mutates the ``bucket``/``observation``
+through the store wrapper. Never mutates the ``bucket``/``observation``
 objects passed in (both frozen dataclasses), nor the input ``payload`` in
 place (a new dict is always returned).
 """

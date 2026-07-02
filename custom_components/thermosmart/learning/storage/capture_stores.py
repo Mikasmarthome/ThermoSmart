@@ -97,8 +97,11 @@ class LearningCaptureStores:
     def research_daily_store(self) -> ResearchDailyStore:
         """Return the single per-zone ResearchDailyStore.
 
-        Foundation only — nothing calls ``.load()``/``.save()`` on the
-        returned handle from anywhere in the live runtime yet (see
-        ``research_daily_persistence.py``'s module docstring).
+        Reached from ``LearningShadowController``'s
+        ``_async_load_research_daily_safe()``/
+        ``_async_save_research_daily_safe()`` (see
+        ``research_daily_persistence.py``'s module docstring for the pure
+        merge/persist pipeline the controller calls into before saving
+        through the returned handle).
         """
         return ResearchDailyStore(self._factory, self._zone)

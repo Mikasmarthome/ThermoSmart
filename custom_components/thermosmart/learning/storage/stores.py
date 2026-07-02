@@ -209,12 +209,15 @@ class SupportCriticalEventStore(_VersionedStore):
 class ResearchDailyStore(_VersionedStore):
     """Versioned per-zone store for the bounded Research Daily Bucket history.
 
-    Keyed by ``research_daily_key(learning_zone_id)``. Foundation only in
-    this step — nothing constructs, loads, or saves through this class from
-    the live runtime yet (see ``research_daily_persistence.py``'s module
-    docstring for the exact reasoning and the concrete next-step hook
-    points). Empty on first load; non-fatal on missing or corrupt data,
-    exactly like the other stores here.
+    Keyed by ``research_daily_key(learning_zone_id)``. Constructed, loaded,
+    and saved through the runtime shadow controller's own
+    ``_async_load_research_daily_safe()``/``_async_save_research_daily_safe()``
+    methods, reached via the capture-stores accessor facade
+    (``learning/storage/capture_stores.py``) — see
+    ``research_daily_persistence.py``'s module docstring for the pure
+    merge/persist pipeline that runs before saving through this class.
+    Empty on first load; non-fatal on missing or corrupt data, exactly like
+    the other stores here.
     """
 
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:

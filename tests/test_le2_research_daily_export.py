@@ -34,6 +34,9 @@ new runtime hook.
   T21 — Existing episode_history export tests remain green
   T22 — Existing research daily aggregation/state/foundation tests remain green
   T23 — No control-path keywords touched
+  T24 — Unproduced decision counters (decision_count/heating_allowed_count/
+        heating_blocked_count) are omitted from summary while 0, and appear
+        once genuinely non-zero (P1 beta cleanup)
 """
 from __future__ import annotations
 
@@ -440,3 +443,113 @@ def test_t23_no_control_keywords_in_new_helper():
     source = inspect.getsource(_le2_research_daily_export).lower()
     for token in _FORBIDDEN_CONTROL_TOKENS:
         assert token not in source, f"forbidden control token found: {token}"
+
+
+# ── T24: Unproduced decision counters hidden while 0, shown when >0 ────────
+
+_UNPRODUCED_DECISION_FIELDS = ("decision_count", "heating_allowed_count", "heating_blocked_count")
+
+
+def test_t24_unproduced_decision_counters_omitted_when_zero():
+    """decision_count/heating_allowed_count/heating_blocked_count have no
+    live producer yet (see research_daily_schemas.py's module docstring) —
+    showing them as a flat 0 would misleadingly read as "zero decisions
+    ever made" rather than "not measured". They must be absent from
+    summary entirely while every bucket's value for them is 0."""
+    snapshot = {"2026-06-01": _bucket_entry("2026-06-01", trv_command_sent_count=3)}
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    for field_name in _UNPRODUCED_DECISION_FIELDS:
+        assert field_name not in block["summary"]
+    # A genuinely produced counter with the same "0 unless observed" shape
+    # (e.g. boost_started_count) is NOT affected by this — it stays present
+    # as an explicit 0 when no bucket ever set it.
+    assert block["summary"]["boost_started_count"] == 0
+
+
+def test_t24_decision_count_appears_once_genuinely_nonzero():
+    snapshot = {"2026-06-01": _bucket_entry("2026-06-01", decision_count=7)}
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    assert block["summary"]["decision_count"] == 7
+    # The other two unproduced fields stay omitted independently.
+    assert "heating_allowed_count" not in block["summary"]
+    assert "heating_blocked_count" not in block["summary"]
+
+
+def test_t24_heating_allowed_and_blocked_appear_independently_when_nonzero():
+    snapshot = {"2026-06-01": _bucket_entry("2026-06-01", heating_allowed_count=4, heating_blocked_count=2)}
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    assert block["summary"]["heating_allowed_count"] == 4
+    assert block["summary"]["heating_blocked_count"] == 2
+    assert "decision_count" not in block["summary"]
+
+
+def test_t24_summed_across_buckets_still_omitted_if_total_is_zero():
+    snapshot = {
+        "2026-06-01": _bucket_entry("2026-06-01", trv_command_sent_count=1),
+        "2026-06-02": _bucket_entry("2026-06-02", boost_started_count=1),
+    }
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    for field_name in _UNPRODUCED_DECISION_FIELDS:
+        assert field_name not in block["summary"]
+
+
+def test_t24_other_counters_unaffected_by_this_change():
+    """All non-decision counters keep their existing "always present, 0 or
+    summed" behaviour — this P1 change touches only the three unproduced
+    decision fields, nothing else."""
+    snapshot = {"2026-06-01": _bucket_entry("2026-06-01", trv_command_sent_count=2)}
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    summary = block["summary"]
+    always_present = (
+        "trv_command_sent_count", "trv_command_blocked_count", "same_setpoint_block_count",
+        "trv_unavailable_count", "window_hold_count", "summer_hold_count", "manual_override_count",
+        "boost_started_count", "boost_blocked_count", "boost_ended_count",
+        "sensor_unavailable_count", "sensor_restored_count", "fallback_used_count",
+        "outcome_resolved_count", "outcome_success_count", "outcome_failed_count",
+        "outcome_confounded_count",
+    )
+    for field_name in always_present:
+        assert field_name in summary
+
+
+def test_t24_daily_compact_entries_still_omit_zero_decision_fields():
+    """Unrelated to the summary change above, but re-confirms the compact
+    daily entry contract (already true before this P1 step) still holds:
+    zero-valued decision fields never appear in a daily entry either."""
+    snapshot = {"2026-06-01": _bucket_entry("2026-06-01", trv_command_sent_count=1)}
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    entry = block["daily"][0]
+    for field_name in _UNPRODUCED_DECISION_FIELDS:
+        assert field_name not in entry
+
+
+def test_t24_daily_compact_entry_shows_decision_count_when_nonzero():
+    snapshot = {"2026-06-01": _bucket_entry("2026-06-01", decision_count=3)}
+    coord = _FakeCoord(_FakeShadow(snapshot))
+    block = _le2_research_daily_export(coord, now=_NOW)
+    entry = block["daily"][0]
+    assert entry["decision_count"] == 3
+
+
+def test_t24_no_coordinator_hook_for_decision_counters():
+    import custom_components.thermosmart.coordinator as _coord_mod
+    source = inspect.getsource(_coord_mod)
+    assert "decision_count" not in source
+    assert "heating_allowed_count" not in source
+    assert "heating_blocked_count" not in source
+
+
+def test_t24_no_support_event_or_progress_aggregation_change():
+    """This P1 step only touches export presentation — it must not add any
+    new call site to the aggregation methods built in the two prior
+    increments."""
+    import custom_components.thermosmart.learning.runtime.ha_integration as _ha
+    source = inspect.getsource(_ha)
+    assert source.count("self._maybe_aggregate_research_daily_from_support_event(") == 1
+    assert source.count("self._maybe_record_research_daily_progress_sample_safe(") == 1

@@ -659,6 +659,18 @@ _RESEARCH_DAILY_PROGRESS_CONFIDENCE_FIELDS = (
     "confidence_min", "confidence_max", "confidence_last",
 )
 
+# Schema-defined but currently UNPRODUCED counters (research_daily_schemas.py
+# still carries them — deliberately not removed, since a real Coordinator/
+# Decision-Record producer may fill them in later; see that module's
+# docstring). Showing them as a flat "0" in the summary would misleadingly
+# read as "zero decisions ever made" rather than "not measured yet" — so
+# they are omitted from the summary entirely while every bucket's own value
+# is 0, and appear automatically the moment any bucket actually carries a
+# real (>0) value for one of them (no separate flag/field needed for that).
+_RESEARCH_DAILY_UNPRODUCED_SUMMARY_FIELDS = (
+    "decision_count", "heating_allowed_count", "heating_blocked_count",
+)
+
 
 def _le2_research_daily_compact_entry(bucket) -> dict:
     """Compact per-day export entry: always ``bucket_date``, counters only
@@ -706,6 +718,12 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
     reported via ``records_truncated``/``truncation_reason``, never
     silently dropped. Each daily entry is a COMPACT
     ``_le2_research_daily_compact_entry()`` — no zero/None-field bloat.
+    Currently-unproduced counters (``_RESEARCH_DAILY_UNPRODUCED_SUMMARY_FIELDS``
+    — ``decision_count``/``heating_allowed_count``/``heating_blocked_count``,
+    schema-defined but with no live producer yet) are omitted from
+    ``summary`` while they are 0, so the export never misleadingly reads as
+    "zero decisions ever made"; they reappear automatically the moment a
+    real producer starts giving one of them a genuine non-zero value.
 
     Never raises and never breaks the export: a missing/unattached LE2
     shadow, a snapshot() failure, or an unexpected error anywhere in the
@@ -841,6 +859,10 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
                     break
             summary["learning_progress_last_pct"] = progress_last
             summary["confidence_last"] = confidence_last
+
+            for field_name in _RESEARCH_DAILY_UNPRODUCED_SUMMARY_FIELDS:
+                if summary.get(field_name) == 0:
+                    del summary[field_name]
 
             block["summary"] = summary
 

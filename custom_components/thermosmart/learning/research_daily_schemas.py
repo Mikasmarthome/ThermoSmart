@@ -7,12 +7,17 @@ blocked?", "how stable is confidence?") from small, fixed-shape daily
 rollups instead of an ever-growing raw history. Mirrors the existing
 ``episode_schemas.py``/``support_event_schemas.py`` pattern: a frozen
 dataclass for one materialised bucket, plus a small, frozen "delta" dataclass
-(``ResearchDailyObservation``) a future producer would merge into it one
-small increment at a time — no builder/instrumentation logic here, and
-nothing anywhere yet constructs an observation or wires a producer (see
-``research_daily_persistence.py``'s module docstring).
+(``ResearchDailyObservation``) a producer merges into it one small increment
+at a time — no builder/instrumentation logic here; the actual producers
+(Support Critical Event aggregation, Learning Progress/confidence sampling)
+live in the runtime shadow controller layer, see
+``research_daily_persistence.py``'s module docstring for the pure
+merge/persist pipeline they call into. Not every field has a live producer
+yet — ``decision_count``/``heating_allowed_count``/``heating_blocked_count``
+remain schema-defined but unproduced until a real per-decision runtime
+signal exists (deliberately never estimated from Support Events).
 
-``bucket_date`` (``YYYY-MM-DD``, local calendar date) is the only "identity"
+``bucket_date`` (``YYYY-MM-DD``, UTC calendar date) is the only "identity"
 a bucket carries — no zone id, no entity ids, no episode/decision ids. The
 store this bucket will later belong to is expected to be zone-scoped by its
 own store key, exactly like ``EpisodesStore``/``SupportCriticalEventStore``
@@ -75,7 +80,7 @@ class ResearchDailyBucket:
     immutable-replace style already used for episodes/support events.
     """
     schema_version: int
-    bucket_date: str  # YYYY-MM-DD, local calendar date — no zone identity
+    bucket_date: str  # YYYY-MM-DD, UTC calendar date — no zone identity
 
     decision_count: int = 0
 

@@ -329,10 +329,14 @@ class LearningShadowController:
         self._support_critical_events_save_failure_notified: bool = False
         # Research Daily Buckets — in-memory with persistent backing store, reached
         # via the same LearningCaptureStores facade (ResearchDailyStore). No
-        # runtime aggregation hook exists yet — nothing in run_cycle()/coordinator
-        # calls record_research_daily_observation_safe() in this step (see
-        # research_daily_persistence.py's own docstring for the exact reasoning
-        # and the concrete next-step hook points).
+        # runtime/coordinator aggregation hook exists — nothing in
+        # run_cycle()/coordinator calls record_research_daily_observation_safe()
+        # or record_support_critical_event_safe() directly. As of this step,
+        # record_support_critical_event_safe() itself aggregates a genuinely
+        # newly-appended Support Critical Event into the matching day's bucket
+        # (see _maybe_aggregate_research_daily_from_support_event()) — pure
+        # observation of an already-produced event, still no new producer and
+        # still no runtime/control path involved.
         self._research_daily_buckets: dict = {}  # bucket_date -> flat serialized bucket entry
         self._research_daily_save_needed: bool = False
         self._research_daily_last_error: Optional[str] = None
@@ -1043,8 +1047,124 @@ class LearningShadowController:
             if result.appended_event_ids or result.pruned_event_ids:
                 self._support_critical_events = result.updated_payload["events"]
                 self._support_critical_events_save_needed = True
+            if event.event_id in result.appended_event_ids:
+                # Only aggregate a GENUINELY newly appended event — a
+                # duplicate (deduped by append_support_event()'s own
+                # event_id check) or a rejected/malformed event (never
+                # reaches here; append_support_event() would have skipped
+                # it) must never inflate the daily counts. Failure here must
+                # never fail Support Event recording itself — fully isolated
+                # try/except, in addition to the one already inside
+                # _maybe_aggregate_research_daily_from_support_event().
+                try:
+                    self._maybe_aggregate_research_daily_from_support_event(event)
+                except Exception as err:
+                    self._research_daily_last_error = str(err)
         except Exception as err:
             self._support_critical_events_last_error = str(err)
+
+    # SupportEventType -> ResearchDailyBucket counter field, for the simple
+    # "one event -> +1 one field" cases. OUTCOME_RESOLVED is handled
+    # separately below (needs multiple fields from its details).
+    #
+    # Deliberately NOT mapped in this step (documented, not an oversight):
+    #   - Storage/setup landmark events (STORAGE_RESTORE(_FAILED),
+    #     STORAGE_SAVE_FAILED, STORAGE_SAVE_RECOVERED, RESTART_RESTORE):
+    #     these measure store health, not heating/learning quality — kept
+    #     out of Research Daily v1 per explicit product decision.
+    #   - LEARNING_RECOMMENDATION_ONLY: semantically distinct from
+    #     TRV_COMMAND_BLOCKED (no field exists for it, and folding it into
+    #     trv_command_blocked_count would conflate "no command was even
+    #     attempted because adaptive control wasn't authorized" with "a
+    #     command was attempted and vetoed") — deliberately left unmapped
+    #     rather than misclassified.
+    #   - HEATING_DECISION, WINDOW_CLOSED_RELEASE, MANUAL_OVERRIDE_END,
+    #     SCHEDULE_CHANGE, PRESENCE_HOLD, TEMPERATURE_INVALID,
+    #     MIN_INTERVAL_BLOCK, LEARNING_ADAPTIVE_APPLIED: no live producer
+    #     exists yet for these types (see support_event_schemas.py) or no
+    #     corresponding daily field exists — nothing to map.
+    #   - decision_count/heating_allowed_count/heating_blocked_count: real
+    #     per-decision counts should come from a future Coordinator/
+    #     Decision-Record source, not be estimated from Support Events.
+    _SUPPORT_EVENT_TYPE_TO_DAILY_FIELD = {
+        "trv_command_sent": "trv_command_sent_count",
+        "trv_command_blocked": "trv_command_blocked_count",
+        "same_setpoint_block": "same_setpoint_block_count",
+        "trv_unavailable": "trv_unavailable_count",
+        "window_open_hold": "window_hold_count",
+        "summer_mode_hold": "summer_hold_count",
+        "manual_override_start": "manual_override_count",
+        "boost_started": "boost_started_count",
+        "boost_blocked": "boost_blocked_count",
+        "boost_ended": "boost_ended_count",
+        "sensor_unavailable": "sensor_unavailable_count",
+        "sensor_restored": "sensor_restored_count",
+        "fallback_used": "fallback_used_count",
+    }
+
+    def _maybe_aggregate_research_daily_from_support_event(self, event: Any) -> None:
+        """Aggregate ONE genuinely newly-appended Support Critical Event into
+        the matching day's Research Daily Bucket.
+
+        Called ONLY from ``record_support_critical_event_safe()``, and only
+        for an event whose ``event_id`` is in that call's
+        ``result.appended_event_ids`` — never for a duplicate/rejected
+        event. This is pure aggregation of an already-produced, already
+        public-safe event; it creates NO new Support Event, changes no
+        Support Event semantics, and never touches the Support/Research
+        Export layout.
+
+        Bucket date is derived from ``event.ts`` (``YYYY-MM-DD``, UTC) — a
+        malformed/non-datetime ``ts`` silently skips aggregation (no system-
+        clock fallback, never raises). Only fixed, pre-defined scalar
+        aggregate fields are ever read from ``event.details`` (never the
+        whole dict, never entity/zone/episode ids, never raw events) — see
+        ``research_daily_schemas.py``'s module docstring for why Research
+        Daily Buckets need no free-form details mapping at all.
+
+        Never raises: any failure is left for the caller to catch (this
+        method itself, and ``record_research_daily_observation_safe()``
+        beneath it, are both already exception-safe, but the caller wraps
+        this call in its own try/except as well, so a genuinely unexpected
+        error here can never fail Support Event recording).
+        """
+        from ..research_daily_schemas import ResearchDailyObservation
+
+        try:
+            from datetime import timezone
+            bucket_date = event.ts.astimezone(timezone.utc).date().isoformat()
+        except (AttributeError, ValueError, OverflowError):
+            return  # malformed/non-datetime ts -> no aggregation, no system-clock fallback
+
+        event_type_value = getattr(event.event_type, "value", None)
+        details = event.details if isinstance(event.details, Mapping) else {}
+
+        kwargs: dict = {"bucket_date": bucket_date}
+        field_name = self._SUPPORT_EVENT_TYPE_TO_DAILY_FIELD.get(event_type_value)
+        if field_name is not None:
+            kwargs[field_name] = 1
+        elif event_type_value == "outcome_resolved":
+            kwargs["outcome_resolved_count"] = 1
+            target_reached = details.get("target_reached")
+            if target_reached is True:
+                kwargs["outcome_success_count"] = 1
+            elif target_reached is False:
+                kwargs["outcome_failed_count"] = 1
+            if details.get("confounded") is True:
+                kwargs["outcome_confounded_count"] = 1
+            for detail_key in ("overshoot_c", "undershoot_c", "comfort_error_c"):
+                value = details.get(detail_key)
+                if (
+                    isinstance(value, (int, float))
+                    and not isinstance(value, bool)
+                    and math.isfinite(value)
+                ):
+                    kwargs[detail_key] = float(value)
+        else:
+            return  # not mapped in this step (see the field-table comment above)
+
+        observation = ResearchDailyObservation(**kwargs)
+        self.record_research_daily_observation_safe(observation)
 
     async def _async_load_research_daily_safe(self) -> None:
         """Load persisted research daily buckets via
@@ -1118,10 +1238,13 @@ class LearningShadowController:
     def record_research_daily_observation_safe(self, observation: Any) -> None:
         """Synchronous, memory-only hand-off for one research daily observation.
 
-        NOT bound anywhere yet — no runtime/coordinator call site invokes
-        this in this step (see research_daily_persistence.py's module
-        docstring for the exact reasoning and next-step hook points). Never
-        performs storage I/O itself: merges into the in-memory
+        Called from ``_maybe_aggregate_research_daily_from_support_event()``
+        (itself only reached from ``record_support_critical_event_safe()``,
+        for a genuinely newly-appended Support Critical Event) — still no
+        direct runtime/coordinator call site invokes this method itself (see
+        research_daily_persistence.py's module docstring for the exact
+        reasoning and further next-step hook points, e.g. Episode-based
+        aggregation). Never performs storage I/O itself: merges into the in-memory
         ``_research_daily_buckets`` via the pure
         ``append_or_update_research_daily_bucket()`` (which also applies the
         shared RESEARCH_DAILY_RETENTION_DEFAULT policy immediately — no

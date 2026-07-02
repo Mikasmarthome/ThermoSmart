@@ -223,6 +223,9 @@ __marimo__/
 # Reference extracts — never commit third-party source code
 vt_extracted/
 
+# Local/private test suite — kept locally, not published to the public repo
+tests/
+
 # Home Assistant local/private files
 secrets.yaml
 configuration.yaml

@@ -554,23 +554,32 @@ def test_t17_no_control_keywords_in_new_snippets():
 def test_t17_no_live_call_site_for_record_method():
     """At the time THIS state/store wiring step was built,
     record_research_daily_observation_safe() had no caller anywhere in
-    ha_integration.py — checked here as a snapshot of that boundary. A
-    later, separately-approved step ("Research Daily Aggregation Increment
-    1") legitimately added exactly ONE call site, from
+    ha_integration.py — checked here as a snapshot of that boundary. Two
+    later, separately-approved steps legitimately added call sites:
+    ("Research Daily Aggregation Increment 1")
     _maybe_aggregate_research_daily_from_support_event() (itself only
     reached from record_support_critical_event_safe(), for a genuinely
-    newly-appended Support Critical Event) — expected, intentional
-    aggregation of an already-produced event, not a runtime/coordinator
-    hook and not a regression of this step's own scope. What must remain
-    true regardless is that no runtime/coordinator/control path calls
+    newly-appended Support Critical Event), and
+    ("Research Daily Aggregation Increment 2")
+    _maybe_record_research_daily_progress_sample_safe() (itself only
+    reached from learning_progress_safe()'s successful
+    compute_learning_progress() branch). Both are expected, intentional
+    aggregation of already-produced signals, not a runtime/coordinator hook
+    and not a regression of this step's own scope. What must remain true
+    regardless is that no runtime/coordinator/control path calls
     record_research_daily_observation_safe() directly (see
-    test_le2_research_daily_support_event_aggregation.py's own T21 checks)."""
+    test_le2_research_daily_support_event_aggregation.py's and
+    test_le2_research_daily_progress_confidence_aggregation.py's own T21/T13
+    checks)."""
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha
     source = inspect.getsource(_ha)
     call_count = source.count("self.record_research_daily_observation_safe(")
-    assert call_count == 1
+    assert call_count == 2
     assert "self.record_research_daily_observation_safe(" in inspect.getsource(
         _ha.LearningShadowController._maybe_aggregate_research_daily_from_support_event
+    )
+    assert "self.record_research_daily_observation_safe(" in inspect.getsource(
+        _ha.LearningShadowController._maybe_record_research_daily_progress_sample_safe
     )
 
 

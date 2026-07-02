@@ -3286,11 +3286,79 @@ class LearningShadowController:
                     partial_ratio=partial_ratio,
                 )
 
-            return compute_learning_progress(signals)
+            progress_pct, attrs = compute_learning_progress(signals)
+            self._maybe_record_research_daily_progress_sample_safe(progress_pct, attrs)
+            return progress_pct, attrs
         except Exception as err:
             self._record_error("learning_progress", err)
             from .learning_progress import cold_learning_progress_result
             return 0.0, cold_learning_progress_result("calculation_error")
+
+    def _maybe_record_research_daily_progress_sample_safe(self, progress_pct: Any, attrs: Any) -> None:
+        """Aggregate ONE learning-progress/confidence sample into the
+        current day's Research Daily Bucket.
+
+        Called ONLY from the successful ``compute_learning_progress()``
+        branch of ``learning_progress_safe()`` above — never for the
+        disabled-shadow early return or the calculation-error except
+        branch, since those are "we could not compute this" guards, not
+        genuine progress readings; aggregating their hard-coded 0.0 would
+        corrupt the daily min with a value that was never actually
+        measured. Reads exactly two already-computed, already public-safe
+        scalar values: ``progress_pct`` (0-100 %) and
+        ``attrs["model_confidence_score"]`` (the REAL averaged per-model
+        confidence score, 0.0-1.0 — never ``attrs["confidence_level"]``,
+        which is a string band label like "medium", not a number, and is
+        deliberately never guessed into one).
+
+        This is the ONLY call site for this method — no coordinator/sensor/
+        export change was made to call it more than once per
+        ``learning_progress_safe()`` invocation. Repeated calls with an
+        unchanged value are effectively free: unlike a naive counter, this
+        never spams storage, because
+        ``record_research_daily_observation_safe()`` only marks the bucket
+        dirty when the resulting merged payload genuinely differs (see its
+        own docstring) — an unchanged last_pct/confidence_last produces a
+        byte-identical serialized bucket, so a redundant call with the same
+        reading never triggers an extra save.
+
+        Bucket date is derived from this controller's own injected Clock
+        (``self._utcnow_iso()``, timezone-aware, deterministic under
+        tests) — never a bare ``datetime.utcnow()``. Never raises: a
+        malformed/out-of-range value or any internal failure is captured
+        in ``_research_daily_last_error`` and swallowed — never
+        propagated, never touches ``_enabled``.
+        """
+        try:
+            from datetime import datetime
+            from ..research_daily_schemas import ResearchDailyObservation
+
+            if not isinstance(progress_pct, (int, float)) or isinstance(progress_pct, bool):
+                return
+            if not math.isfinite(progress_pct) or not (0.0 <= progress_pct <= 100.0):
+                return  # out-of-range/invalid -> not a real percent, do not guess/clamp
+
+            confidence: Optional[float] = None
+            if isinstance(attrs, Mapping):
+                raw_confidence = attrs.get("model_confidence_score")
+                if (
+                    isinstance(raw_confidence, (int, float))
+                    and not isinstance(raw_confidence, bool)
+                    and math.isfinite(raw_confidence)
+                    and 0.0 <= raw_confidence <= 1.0
+                ):
+                    confidence = float(raw_confidence)
+
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            bucket_date = now_utc.date().isoformat()
+            observation = ResearchDailyObservation(
+                bucket_date=bucket_date,
+                learning_progress_pct=float(progress_pct),
+                confidence=confidence,
+            )
+            self.record_research_daily_observation_safe(observation)
+        except Exception as err:
+            self._research_daily_last_error = str(err)
 
     def diagnostics(self) -> dict:
         h = self._runtime.health()

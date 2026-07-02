@@ -327,6 +327,15 @@ class LearningShadowController:
         # periodic save attempt while the underlying problem persists, and gates
         # the single storage_save_recovered landmark on the next success.
         self._support_critical_events_save_failure_notified: bool = False
+        # Research Daily Buckets — in-memory with persistent backing store, reached
+        # via the same LearningCaptureStores facade (ResearchDailyStore). No
+        # runtime aggregation hook exists yet — nothing in run_cycle()/coordinator
+        # calls record_research_daily_observation_safe() in this step (see
+        # research_daily_persistence.py's own docstring for the exact reasoning
+        # and the concrete next-step hook points).
+        self._research_daily_buckets: dict = {}  # bucket_date -> flat serialized bucket entry
+        self._research_daily_save_needed: bool = False
+        self._research_daily_last_error: Optional[str] = None
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
         self._last_comfort_time_utc: Optional[str] = None
@@ -369,6 +378,8 @@ class LearningShadowController:
         await self._async_load_episode_history_safe()
         # Load persisted support critical events (non-fatal; no runtime writer yet)
         await self._async_load_support_critical_events_safe()
+        # Load persisted research daily buckets (non-fatal; no aggregation hook yet)
+        await self._async_load_research_daily_safe()
         return setup_ok
 
     def observe_safe(self, recommendation: Mapping[str, Any], *,
@@ -1034,6 +1045,122 @@ class LearningShadowController:
                 self._support_critical_events_save_needed = True
         except Exception as err:
             self._support_critical_events_last_error = str(err)
+
+    async def _async_load_research_daily_safe(self) -> None:
+        """Load persisted research daily buckets via
+        LearningCaptureStores.research_daily_store().
+
+        Non-fatal on missing/corrupt store. Each stored entry is validated
+        with deserialize_research_daily_bucket() (from
+        research_daily_serialization.py) before being kept — a malformed or
+        schema-mismatched entry is silently dropped, never crashes the load.
+        On a store-load exception, the error is recorded in
+        ``_research_daily_last_error`` and the state stays empty — no
+        exception ever propagates, ``_enabled`` is never touched.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            store = self._capture_stores.research_daily_store()
+            raw = await store.load()
+            if raw is None:
+                return
+            raw_entries = raw.get("buckets") if isinstance(raw, Mapping) else None
+            if not isinstance(raw_entries, Mapping):
+                return
+            from ..storage.research_daily_serialization import deserialize_research_daily_bucket
+            rebuilt: dict = {}
+            for bucket_date, entry in raw_entries.items():
+                if not isinstance(entry, Mapping):
+                    continue  # malformed -> skip
+                if deserialize_research_daily_bucket(entry) is None:
+                    continue  # unknown schema version / malformed -> skip
+                rebuilt[bucket_date] = dict(entry)
+            self._research_daily_buckets = rebuilt
+        except Exception as err:
+            self._research_daily_last_error = str(err)
+
+    async def _async_save_research_daily_safe(self) -> None:
+        """Persist research daily buckets best-effort. Non-fatal on error.
+
+        Only writes when a capture-store foundation exists AND
+        ``_research_daily_save_needed`` is True. Dirty flag remains True
+        when save fails, ensuring the next periodic save opportunity
+        retries; success clears it. Never raises.
+        """
+        if self._capture_stores is None or not self._research_daily_save_needed:
+            return
+        try:
+            store = self._capture_stores.research_daily_store()
+            await store.save({"buckets": dict(self._research_daily_buckets)})
+            self._research_daily_save_needed = False
+        except Exception as err:
+            self._research_daily_last_error = str(err)
+            # dirty flag remains — will retry on next save opportunity
+
+    def research_daily_snapshot(self) -> dict:
+        """Return a shallow copy of the current in-memory research daily buckets.
+
+        Keys are bucket_date strings (YYYY-MM-DD); values are flat, versioned
+        serialized bucket entry dicts (see research_daily_serialization.py).
+        Empty until a future runtime aggregation hook and/or a successful
+        store load populate it. Never raises.
+        """
+        try:
+            return dict(self._research_daily_buckets)
+        except Exception:
+            return {}
+
+    def research_daily_last_error(self) -> Optional[str]:
+        """Return the last error message from research daily load/save, or None."""
+        return self._research_daily_last_error
+
+    def record_research_daily_observation_safe(self, observation: Any) -> None:
+        """Synchronous, memory-only hand-off for one research daily observation.
+
+        NOT bound anywhere yet — no runtime/coordinator call site invokes
+        this in this step (see research_daily_persistence.py's module
+        docstring for the exact reasoning and next-step hook points). Never
+        performs storage I/O itself: merges into the in-memory
+        ``_research_daily_buckets`` via the pure
+        ``append_or_update_research_daily_bucket()`` (which also applies the
+        shared RESEARCH_DAILY_RETENTION_DEFAULT policy immediately — no
+        new/arbitrary retention numbers).
+
+        ``_research_daily_save_needed`` is set only when the resulting
+        payload actually differs from the payload before this call (a
+        genuinely no-op observation, e.g. one whose bucket_date is malformed
+        and gets silently ignored, does not mark it dirty).
+
+        Never raises: a missing capture-store foundation, a malformed
+        observation, or any internal failure is captured in
+        ``_research_daily_last_error`` and swallowed — never propagated,
+        never touches ``_enabled``.
+        """
+        if self._capture_stores is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.research_daily_persistence import (
+                append_or_update_research_daily_bucket,
+            )
+            bucket_date = getattr(observation, "bucket_date", None)
+            if not isinstance(bucket_date, str):
+                return
+            before = dict(self._research_daily_buckets)
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            result = append_or_update_research_daily_bucket(
+                {"buckets": self._research_daily_buckets},
+                bucket_date,
+                observation,
+                now_utc=now_utc,
+            )
+            after = result.updated_payload["buckets"]
+            if after != before:
+                self._research_daily_buckets = after
+                self._research_daily_save_needed = True
+        except Exception as err:
+            self._research_daily_last_error = str(err)
 
     def invalidate_boost_after_failed_dispatch_safe(self, dispatch_status: str) -> None:
         """Hard-release boost lifecycle when the coordinator reports a failed/partial dispatch.
@@ -2866,6 +2993,7 @@ class LearningShadowController:
         await self._async_save_application_lifecycle_safe()
         await self._async_save_episode_history_safe()
         await self._async_save_support_critical_events_safe()
+        await self._async_save_research_daily_safe()
 
     async def async_flush(self) -> None:
         try:
@@ -2887,6 +3015,8 @@ class LearningShadowController:
         await self._async_save_episode_history_safe()
         # Flush support critical events (best-effort; saves if dirty)
         await self._async_save_support_critical_events_safe()
+        # Flush research daily buckets (best-effort; saves if dirty)
+        await self._async_save_research_daily_safe()
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.

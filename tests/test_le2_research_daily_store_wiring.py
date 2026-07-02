@@ -261,10 +261,18 @@ def test_t13_no_runtime_reference_in_capture_stores_accessor():
 
 
 def test_t13_ha_integration_not_touched():
+    """At the time THIS store-wiring step was built, ha_integration.py had no
+    reference to Research Daily anything — checked here as a snapshot of
+    that boundary. A later, separately-approved step ("Research Daily State
+    and Save Wiring") legitimately added in-memory state plus load/save
+    wiring in LearningShadowController, reaching ResearchDailyStore via
+    LearningCaptureStores.research_daily_store() — expected, intentional
+    storage-lifecycle wiring, not a regression of this step's own scope.
+    What must remain true regardless is that ha_integration.py never
+    references the store-key helper directly (it only goes through
+    LearningCaptureStores, exactly like Episode/Support Event storage)."""
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha
     source = inspect.getsource(_ha)
-    assert "ResearchDailyStore" not in source
-    assert "research_daily_store" not in source
     assert "research_daily_key" not in source
 
 

@@ -187,6 +187,13 @@ class ThermoSmartCoordinator(
         # inactive, needing content-based dedup rather than a pure transition.
         self._support_event_boost_active: bool = False
         self._support_event_last_boost_signature: tuple | None = None
+        # Room-temperature sensor dedupe: unavailable/restored follow a
+        # boolean transition flag (True = last known state was available);
+        # the fallback-in-use signal uses a small signature cache so it
+        # records once per fallback episode, not once per cycle while the
+        # room sensor stays unavailable.
+        self._support_event_room_sensor_available: bool = True
+        self._support_event_last_fallback_signature: tuple | None = None
 
         # Kalibrierung (genutzt von TRVControlMixin)
         self._calibration_offsets: dict[str, float] = {}
@@ -1772,13 +1779,93 @@ class ThermoSmartCoordinator(
         except Exception:
             pass  # event production is best-effort; must never affect the control cycle
 
+    def _maybe_record_room_sensor_events(
+        self, cfg: dict, primary_room_temp: float | None, resolved_current_temp: float | None,
+    ) -> None:
+        """Record Support Critical Events observing the room-temperature
+        sensor / TRV-temperature fallback outcome already decided this cycle
+        by the EXISTING read order (``_read_avg_sensor()`` then, only if
+        that returned None, ``_read_trv_avg_temp()``) — pure observation,
+        never influences sensor selection or the fallback itself.
+
+        ``primary_room_temp`` is the room sensor's OWN reading (None when
+        unavailable/unknown/non-numeric for every configured sensor —
+        ``_read_avg_sensor()`` does not distinguish those sub-cases, so
+        neither does this method; a ``temperature_invalid`` event is
+        deliberately NOT produced in this step since no such distinct state
+        exists anywhere in the current code — see the accompanying report).
+        ``resolved_current_temp`` is the value actually used this cycle
+        (room sensor value, or the TRV fallback, or still None if both
+        failed).
+
+        A zone with no ``temp_sensors`` configured at all is not "sensor
+        unavailable" — it deliberately relies on the TRV fallback by design
+        (see ``_read_trv_avg_temp()``'s own docstring) — no event is
+        produced for that case, only for a genuine unavailable/restored
+        TRANSITION on an actually-configured room sensor.
+
+        sensor_unavailable/sensor_restored follow the SAME boolean-
+        transition-flag pattern as the other hold/boost events. fallback_used
+        uses a small (event_type, fallback_type, reason) signature cache so
+        a room sensor staying unavailable for many cycles records the
+        fallback once per episode, not once per cycle; the cache resets when
+        the room sensor is available again, so a LATER new unavailable
+        episode is still visible.
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            if not cfg.get("temp_sensors"):
+                return  # role not in use for this zone by design — nothing to observe
+
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            primary_available = primary_room_temp is not None
+
+            if not primary_available and self._support_event_room_sensor_available:
+                self._support_event_room_sensor_available = False
+                self._record_support_hold_event(
+                    SupportEventType.SENSOR_UNAVAILABLE, SupportEventSeverity.WARNING,
+                    reason="room_sensor_unavailable",
+                    summary="Room temperature sensor unavailable",
+                    details={"sensor_role": "room_temperature", "state": "unavailable"},
+                )
+            elif primary_available and not self._support_event_room_sensor_available:
+                self._support_event_room_sensor_available = True
+                self._support_event_last_fallback_signature = None
+                self._record_support_hold_event(
+                    SupportEventType.SENSOR_RESTORED, SupportEventSeverity.INFO,
+                    reason="room_sensor_restored",
+                    summary="Room temperature sensor restored",
+                    details={"sensor_role": "room_temperature"},
+                )
+
+            if not primary_available and resolved_current_temp is not None:
+                signature = ("fallback_used", "trv_temperature", "room_sensor_unavailable")
+                if signature != self._support_event_last_fallback_signature:
+                    self._support_event_last_fallback_signature = signature
+                    self._record_support_hold_event(
+                        SupportEventType.FALLBACK_USED, SupportEventSeverity.INFO,
+                        reason="room_sensor_unavailable",
+                        summary="Using TRV temperature as fallback",
+                        details={"fallback_type": "trv_temperature", "reason": "room_sensor_unavailable"},
+                    )
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
     # ── Berechnung ───────────────────────────────────────────────────
 
     async def _compute_recommendation(self, cfg: dict, weather_data: dict, mode: str) -> dict:
         _learning_mode_on = bool(cfg.get("learning_enabled", True))
-        current_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
+        _primary_room_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
+        current_temp = _primary_room_temp
         if current_temp is None:
             current_temp = self._read_trv_avg_temp(cfg.get("climate_entities", []))
+        # LE2 Support Critical Events: observe the room-sensor/fallback
+        # outcome already decided above — pure observation, no influence on
+        # sensor selection or the fallback itself. See
+        # _maybe_record_room_sensor_events().
+        self._maybe_record_room_sensor_events(cfg, _primary_room_temp, current_temp)
 
         now = self._now_local()
         if current_temp is not None:

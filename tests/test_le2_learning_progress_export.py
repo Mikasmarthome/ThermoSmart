@@ -124,7 +124,7 @@ def test_t3_no_invented_progress_limited_by_list_field():
 
 def test_t4_missing_shadow_stays_valid():
     block = _le2_learning_progress_export(_FakeCoord(None))
-    assert block == {"available": False, "reason": "le2_shadow_unavailable"}
+    assert block == {"available": False, "reason": "learning_engine_unavailable"}
 
 
 # ── T5: learning_progress_safe() raising stays non-fatal ────────────────────

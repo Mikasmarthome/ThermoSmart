@@ -115,7 +115,7 @@ def test_t1_wired_into_async_export_learning_data():
 
 def test_t2_missing_shadow_yields_unavailable():
     block = _le2_research_daily_export(_FakeCoord(None), now=_NOW)
-    assert block == {"available": False, "reason": "le2_shadow_unavailable"}
+    assert block == {"available": False, "reason": "learning_engine_unavailable"}
 
 
 # ── T3: Empty snapshot yields available true, bucket_count 0, daily [] ─────

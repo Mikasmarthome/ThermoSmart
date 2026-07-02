@@ -117,7 +117,7 @@ def test_t2_empty_state_is_available_not_error():
 
 def test_t3_missing_shadow_yields_unavailable():
     block = _le2_critical_events_export(_FakeCoord(None), now=_NOW)
-    assert block == {"available": False, "reason": "le2_shadow_unavailable"}
+    assert block == {"available": False, "reason": "learning_engine_unavailable"}
 
 
 # ── T4: snapshot() exception is non-fatal ───────────────────────────────────

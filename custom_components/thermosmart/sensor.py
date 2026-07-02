@@ -357,7 +357,7 @@ class ThermoSmartHeatingPowerSensor(_Base):
         if sh is not None:
             rate_c_per_h, status = sh.read_heat_rate_safe()
             attrs: dict[str, Any] = {
-                "source": "le2",
+                "source": "learning_engine",
                 "rate_per_hour_K": round(rate_c_per_h, 4) if rate_c_per_h else None,
                 "status": status,
             }
@@ -438,7 +438,7 @@ class ThermoSmartHeatLossRateSensor(_Base):
         if sh is not None:
             rate_c_per_h, status = sh.read_heat_loss_rate_safe()
             attrs: dict[str, Any] = {
-                "source": "le2",
+                "source": "learning_engine",
                 "rate_per_hour_K": round(rate_c_per_h, 4) if rate_c_per_h else None,
                 "status": status,
             }

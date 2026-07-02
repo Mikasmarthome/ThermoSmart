@@ -167,7 +167,7 @@ def test_t6_all_malformed_still_yields_valid_available_summary():
 
 def test_t7_missing_shadow_yields_unavailable():
     block = _le2_episode_history_export(_FakeCoord(None), now=_NOW)
-    assert block == {"available": False, "reason": "le2_shadow_unavailable"}
+    assert block == {"available": False, "reason": "learning_engine_unavailable"}
 
 
 def test_t7_snapshot_exception_stays_non_fatal():

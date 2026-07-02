@@ -471,7 +471,7 @@ def _le2_learning_progress_export(coord) -> dict:
     try:
         shadow = getattr(coord, "_le2_shadow", None)
         if shadow is None:
-            return {"available": False, "reason": "le2_shadow_unavailable"}
+            return {"available": False, "reason": "learning_engine_unavailable"}
         progress_pct, attrs = shadow.learning_progress_safe()
         block: dict = {"available": True, "progress_pct": progress_pct}
         for key in _LEARNING_PROGRESS_RESEARCH_KEYS:
@@ -517,7 +517,7 @@ def _le2_episode_history_export(coord, *, now: datetime) -> dict:
     try:
         shadow = getattr(coord, "_le2_shadow", None)
         if shadow is None:
-            return {"available": False, "reason": "le2_shadow_unavailable"}
+            return {"available": False, "reason": "learning_engine_unavailable"}
         snapshot = shadow.episode_history_snapshot()
         if not isinstance(snapshot, dict):
             return {"available": False, "reason": "episode_history_unavailable"}
@@ -733,7 +733,7 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
     try:
         shadow = getattr(coord, "_le2_shadow", None)
         if shadow is None:
-            return {"available": False, "reason": "le2_shadow_unavailable"}
+            return {"available": False, "reason": "learning_engine_unavailable"}
         snapshot = shadow.research_daily_snapshot()
         if not isinstance(snapshot, dict):
             return {"available": False, "reason": "research_daily_unavailable"}
@@ -925,7 +925,7 @@ def _le2_critical_events_export(coord, *, now: datetime) -> dict:
     try:
         shadow = getattr(coord, "_le2_shadow", None)
         if shadow is None:
-            return {"available": False, "reason": "le2_shadow_unavailable"}
+            return {"available": False, "reason": "learning_engine_unavailable"}
         snapshot = shadow.support_critical_events_snapshot()
         if not isinstance(snapshot, dict):
             return {"available": False, "reason": "critical_events_unavailable"}

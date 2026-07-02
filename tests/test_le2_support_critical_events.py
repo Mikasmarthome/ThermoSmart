@@ -592,16 +592,17 @@ def test_t23_lifecycle_module_has_no_support_event_reference():
 def test_t23_ha_integration_now_legitimately_has_state_and_store_wiring():
     """Confirms the intentional wiring added by the store-wiring step: state
     fields, load/save methods, and record_support_critical_event_safe() all
-    exist. A later, separately-approved step ("Support Critical Event
-    Producers Increment 1") legitimately added exactly ONE caller — the
-    storage/setup landmark helper used only from the load/save methods
-    themselves — still no coordinator/control-path producer, no sink binding
-    (unlike record_completed_episode_safe(), which IS bound as episode_sink)."""
+    exist. Later, separately-approved steps legitimately added TWO callers:
+    Increment 1's storage/setup landmark helper, and Increment 6's
+    outcome-resolved observer (called only from record_completed_episode_safe()
+    to observe an already-completed OutcomeEpisode) — still no
+    coordinator/control-path producer, no sink binding for either (unlike
+    record_completed_episode_safe() itself, which IS bound as episode_sink)."""
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha_mod
     source = inspect.getsource(_ha_mod)
     assert "self._support_critical_events: dict = {}" in source
     assert "record_support_critical_event_safe" in source
-    assert source.count("self.record_support_critical_event_safe(") == 1
+    assert source.count("self.record_support_critical_event_safe(") == 2
 
 
 def test_t23_coordinator_produces_events_but_never_touches_storage_internals():

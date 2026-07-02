@@ -714,6 +714,11 @@ class LearningShadowController:
         ``episode_id`` alone does not mark it dirty. The next
         ``async_save_if_due()`` call flushes it; nothing here saves directly.
 
+        Also observes (never influences) whether this was a genuinely new,
+        completed OutcomeEpisode and, if so, records ONE Support Critical
+        Event via ``_maybe_record_outcome_resolved_event()`` — see that
+        method's own docstring.
+
         Never raises: a missing capture-store foundation, an unrecognised/
         malformed episode, or any internal failure is captured in
         ``_episode_last_error`` and swallowed — never propagated, never
@@ -734,8 +739,86 @@ class LearningShadowController:
             if result.appended_episode_ids or result.pruned_episode_ids:
                 self._episode_history = result.updated_payload["episodes"]
                 self._episode_save_needed = True
+            self._maybe_record_outcome_resolved_event(episode, result)
         except Exception as err:
             self._episode_last_error = str(err)
+
+    def _maybe_record_outcome_resolved_event(self, episode: Any, result: Any) -> None:
+        """Record ONE outcome_resolved Support Critical Event when a
+        completed OutcomeEpisode was genuinely newly appended this call —
+        pure observation of the ALREADY-BUILT episode object handed to
+        ``record_completed_episode_safe()`` (for outcome episodes this is
+        the confounder-augmented ``bound_episode`` lifecycle.py's
+        ``run_cycle()`` already constructs — see that module's own comments;
+        never the raw episode). Never influences episode construction,
+        outcome scoring, retention, or Learning Progress — read-only access
+        to fields the ``OutcomeEpisode`` dataclass already carries.
+
+        Not produced for non-outcome episode types (heating/afterheat/
+        passive_cooling/window_cooling) — checked via ``isinstance``, not a
+        new classification.
+
+        Deduped by reusing the SAME episode_id-based dedup
+        ``append_completed_episode()`` already performs: fires only when
+        ``episode.episode_id`` is present in ``result.appended_episode_ids``
+        (a genuinely new append this call) — a duplicate resubmission of the
+        same completed outcome is a no-op here too, via already-tested
+        infrastructure rather than a new dedup mechanism.
+        ``episode.episode_id``/``episode.learning_zone_id``/
+        ``episode.decision_id`` are used only for this internal membership
+        check (or not at all) — never placed into the event itself.
+
+        Never raises: any failure here is swallowed — a missing landmark is
+        strictly less important than the episode persistence it decorates.
+        """
+        try:
+            from ..episode_schemas import OutcomeEpisode
+            if not isinstance(episode, OutcomeEpisode):
+                return
+            if episode.episode_id not in result.appended_episode_ids:
+                return  # duplicate resubmission, or not newly appended this call
+
+            from datetime import datetime
+            from ..support_event_schemas import (
+                SupportCriticalEvent, SupportEventSeverity, SupportEventType,
+            )
+            from ..storage.support_event_serialization import SUPPORT_EVENT_SCHEMA_VERSION
+
+            confounder_count = len(episode.confounder_flags)
+            details: dict = {
+                "regime": episode.regime.value,
+                "target_reached": episode.reason.value == "reached",
+                "reason": episode.reason.value,
+                "confounded": confounder_count > 0,
+                "confounder_count": confounder_count,
+            }
+            try:
+                delta = float(episode.end_temp) - float(episode.target)
+                details["overshoot_c"] = round(max(0.0, delta), 2)
+                details["undershoot_c"] = round(max(0.0, -delta), 2)
+                details["comfort_error_c"] = round(abs(delta), 2)
+            except (TypeError, ValueError):
+                pass  # optional derived fields only; core details above remain valid
+
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            # Hashed (not raw) episode_id: guarantees a distinct, deterministic
+            # support-event id per underlying outcome episode — a plain
+            # timestamp alone can collide when two outcomes resolve within the
+            # same millisecond (or under a frozen test clock), which would
+            # make append_support_event()'s own event_id dedup incorrectly
+            # treat two DIFFERENT outcomes as the same event. Never exposed
+            # raw or otherwise — only this one-way hash leaves the method.
+            _episode_id_hash = hashlib.sha256(episode.episode_id.encode()).hexdigest()[:16]
+            event_id = f"outcome_resolved_{_episode_id_hash}"
+            event = SupportCriticalEvent(
+                schema_version=SUPPORT_EVENT_SCHEMA_VERSION, event_id=event_id,
+                event_type=SupportEventType.OUTCOME_RESOLVED, ts=now_utc,
+                severity=SupportEventSeverity.INFO,
+                reason=episode.reason.value, summary="Outcome resolved", details=details,
+            )
+            self.record_support_critical_event_safe(event)
+        except Exception:
+            pass  # event production is best-effort; must never affect episode persistence
 
     # 6h — avoids flooding the 48h critical-event timeline with a repeated
     # "store loaded"/"store empty"/"load failed" landmark on every HA restart

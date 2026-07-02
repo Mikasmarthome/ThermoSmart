@@ -504,19 +504,25 @@ def test_t14_coordinator_never_touches_store_wiring_internals():
 
 def test_t14_no_live_call_site_for_record_method_in_ha_integration():
     """At the time this wiring step was built, the method existed but had no
-    caller. A later, separately-approved step ("Support Critical Event
-    Producers Increment 1") legitimately added exactly ONE call site — the
-    storage/setup landmark helper (_record_storage_landmark_event_safe) used
-    only from the load/save methods themselves. That is intentional,
-    non-runtime, non-control wiring, not a coordinator/lifecycle producer —
-    still unlike record_completed_episode_safe(), it is not bound as a
-    LearningRuntime sink and no coordinator/control path calls it."""
+    caller. Later, separately-approved steps legitimately added call sites:
+    Increment 1's storage/setup landmark helper
+    (_record_storage_landmark_event_safe, used only from the load/save
+    methods themselves) and Increment 6's outcome-resolved observer
+    (_maybe_record_outcome_resolved_event, used only from
+    record_completed_episode_safe() to observe an already-completed
+    OutcomeEpisode). Both are intentional, non-runtime, non-control-path
+    event PRODUCTION — still unlike record_completed_episode_safe() itself,
+    neither is bound as a LearningRuntime sink and no coordinator/control
+    path calls record_support_critical_event_safe() directly."""
     import custom_components.thermosmart.learning.runtime.ha_integration as _ha
     source = inspect.getsource(_ha)
     call_count = source.count("self.record_support_critical_event_safe(")
-    assert call_count == 1
+    assert call_count == 2
     assert "self.record_support_critical_event_safe(" in inspect.getsource(
         _ha.LearningShadowController._record_storage_landmark_event_safe
+    )
+    assert "self.record_support_critical_event_safe(" in inspect.getsource(
+        _ha.LearningShadowController._maybe_record_outcome_resolved_event
     )
 
 

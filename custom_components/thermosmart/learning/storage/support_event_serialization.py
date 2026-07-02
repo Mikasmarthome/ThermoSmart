@@ -13,11 +13,13 @@ Storage-layer shape (``serialize_support_event``/``deserialize_support_event``):
 
 ``details`` is defensively bounded here (``DETAILS_MAX_KEYS`` keys,
 ``DETAILS_VALUE_MAX_LENGTH`` chars per string value, non-JSON-safe values
-dropped) — this is the one field a future producer might otherwise use as an
-escape hatch for something too large or not public-safe. Everything else in
-this schema is already public-safe by construction (see
-``support_event_schemas.py``'s module docstring for why ``zone_ref`` is
-deliberately absent).
+dropped, and any key whose name contains a forbidden substring — entity_id,
+zone_id, episode_id, decision_id, trajectory, etc. — stripped case-
+insensitively, see ``_FORBIDDEN_DETAIL_KEY_SUBSTRINGS``) — this is the one
+field a producer might otherwise use as an escape hatch for something too
+large or not public-safe. Everything else in this schema is already
+public-safe by construction (see ``support_event_schemas.py``'s module
+docstring for why ``zone_ref`` is deliberately absent).
 
 No HA imports. No runtime imports. No storage I/O of any kind. Never raises:
 malformed/unknown input is handled defensively (skip or return None).
@@ -41,11 +43,34 @@ SUPPORT_EVENT_SCHEMA_VERSION = 1
 _KNOWN_EVENT_TYPE_VALUES = {t.value for t in SupportEventType}
 _KNOWN_SEVERITY_VALUES = {s.value for s in SupportEventSeverity}
 
+# Key substrings a ``details`` entry is dropped for, checked case-insensitively.
+# Mirrors export.py's own forbidden-key lists (_LE2_STRIP_KEY_SUBSTRINGS /
+# privacy.py's _FORBIDDEN_KEY_SUBSTRINGS) but is deliberately a local,
+# independent copy: storage modules must not import from export.py (wrong
+# dependency direction — export.py already imports storage helpers) or from
+# privacy.py (an HA-adjacent module), so this list is mirrored, not shared,
+# to avoid a cyclical or architecturally backwards import. Keep the three
+# lists in sync by hand if the forbidden vocabulary changes.
+_FORBIDDEN_DETAIL_KEY_SUBSTRINGS = (
+    "entity_id", "zone_id", "episode_id", "learning_zone_id", "decision_id",
+    "trv_binding_id", "radiator_profile_id", "trajectory",
+    "person", "secret", "token", "path", "climate.", "sensor.",
+)
+
 
 def _bounded_details(details: Any) -> dict:
     """Defensively bound an arbitrary ``details`` mapping to small, JSON-safe
     scalars only. Never raises; unrecognised/oversized/non-scalar values are
     dropped rather than causing the whole event to fail to serialize.
+
+    Also drops any key whose name contains a forbidden substring (case-
+    insensitive) — see ``_FORBIDDEN_DETAIL_KEY_SUBSTRINGS`` — so a producer
+    that (by mistake) put e.g. ``entity_id``/``episode_id`` into ``details``
+    can never actually reach storage or export through this field, closing
+    the one place a producer could otherwise use as an escape hatch. This is
+    key-name stripping only, not a value-content scan (matching the existing
+    export-layer pattern; a value's CONTENT is a separate, deeper concern
+    that scan_payload() already covers at the export boundary).
     """
     if not isinstance(details, Mapping):
         return {}
@@ -54,6 +79,9 @@ def _bounded_details(details: Any) -> dict:
         if len(bounded) >= DETAILS_MAX_KEYS:
             break
         if not isinstance(key, str) or not key:
+            continue
+        low = key.lower()
+        if any(sub in low for sub in _FORBIDDEN_DETAIL_KEY_SUBSTRINGS):
             continue
         if isinstance(value, bool) or value is None or isinstance(value, (int, float)):
             bounded[key] = value
@@ -124,10 +152,11 @@ def support_event_for_export(entry: Mapping[str, Any]) -> Optional[dict]:
 
     Deliberately drops ``event_id`` (see support_event_schemas.py's guidance:
     "not later exported unreflectively") and re-applies the same details
-    bounds. Operates on the flat serialized dict shape (not a dataclass) —
-    this is the shape a future export step would actually read from a
-    loaded/snapshotted store. Returns None for malformed/unrecognised input;
-    never raises. NOT wired into export.py in this step (foundation only).
+    bounds (including the forbidden-key-substring strip — see
+    ``_bounded_details()``). Operates on the flat serialized dict shape (not
+    a dataclass) — the shape export.py's ``_le2_critical_events_export()``
+    actually reads from a loaded/snapshotted store, one entry at a time.
+    Returns None for malformed/unrecognised input; never raises.
     """
     if not isinstance(entry, Mapping):
         return None

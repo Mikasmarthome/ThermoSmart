@@ -1,9 +1,8 @@
-"""Pure, bounded helpers for appending Support Critical Events into a
-SupportCriticalEventStore-shaped payload, with retention pruning applied
-immediately after every append.
+"""Support event persistence helpers for bounded critical-event history.
 
-Foundation only in this step — nothing here performs storage I/O, and
-nothing in the live runtime calls it yet. Mirrors
+Pure helpers only; runtime producers call higher-level controller methods
+(``LearningShadowController.record_support_critical_event_safe()`` in
+``ha_integration.py``), never these functions directly. Mirrors
 ``episode_persistence.py``'s pipeline exactly:
 
     SupportCriticalEvent dataclass(es)
@@ -19,36 +18,6 @@ kind — every function here is a pure transformation of in-memory dicts; the
 caller decides if/when to persist the resulting payload through a
 SupportCriticalEventStore. Never mutates the ``event`` objects passed in, nor
 the input ``payload`` in place (a new dict is always returned).
-
-Why no runtime wiring in this step
------------------------------------
-Support Critical Events have no producers yet anywhere in the runtime — no
-call site currently constructs a ``SupportCriticalEvent`` (unlike completed
-episodes, which ``LearningRuntime.run_cycle()`` already produces every
-cycle). Wiring instrumentation into ~25 different event kinds across
-coordinator.py/ha_integration.py's control-adjacent code paths is
-substantial, high-blast-radius work explicitly out of scope for this step
-("keine breite Runtime-Instrumentierung", "keine massiven Änderungen in
-coordinator.py"). This module stops at a fully tested, standalone
-foundation — schema, serialization, append/prune, naming, and the
-``SupportCriticalEventStore`` wrapper — exactly mirroring how the episode
-persistence foundation was built and approved before its own, later,
-separately-reviewed runtime-hook step.
-
-Next-step hook points (for future, separately-approved work):
-  1. A small number of genuinely high-value call sites (e.g. a blocked TRV
-     command, a boost start/stop) could each construct one
-     ``SupportCriticalEvent`` and call ``append_support_event()`` — mirroring
-     exactly how ``record_completed_episode_safe()`` wraps
-     ``append_completed_episode()`` in ``ha_integration.py``.
-  2. ``LearningShadowController`` would need a new, separate dirty flag +
-     ``SupportCriticalEventStore`` load/save pair (analogous to
-     ``_episode_history``/``_episode_save_needed``), flushed through the
-     same existing ``async_save_if_due()`` periodic call — no new save
-     schedule needed.
-  3. A future Support Export step would read the loaded store's snapshot and
-     apply ``support_event_for_export()`` per entry — never before this
-     step's foundation exists.
 """
 from __future__ import annotations
 

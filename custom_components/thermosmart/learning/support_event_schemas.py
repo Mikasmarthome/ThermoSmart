@@ -5,12 +5,14 @@ small subset of "why did/didn't ThermoSmart act here" moments a support
 conversation actually needs — e.g. a blocked TRV command, a boost start/stop,
 a window-open hold, a sensor going unavailable. Mirrors the existing
 ``episode_schemas.py`` pattern: a typed Enum for the closed set of kinds, a
-frozen dataclass for one materialised event, no builder/instrumentation logic
-here (that is a separate, later, per-call-site step — see
-``support_event_persistence.py``'s module docstring for the exact reasoning).
+frozen dataclass for one materialised event. No builder/instrumentation logic
+lives here — producers (in ``coordinator.py`` and
+``ha_integration.py``/``LearningShadowController``) construct
+``SupportCriticalEvent`` instances and hand them to
+``record_support_critical_event_safe()``; this module only defines the
+typed shape they must conform to.
 
-Deliberately excluded from this schema (see the accompanying report for the
-full reasoning):
+Deliberately excluded from this schema:
   - ``zone_ref`` / any zone identity: the store this event belongs to is
     already zone-scoped by its own store key (one store per zone, exactly
     like ``EpisodesStore``) — duplicating zone identity inside every event
@@ -19,7 +21,10 @@ full reasoning):
     (reusing export.py's own hashing), never a raw zone id stored here.
   - Entity ids, HA object reprs, secrets, paths: never accepted as fields;
     ``details`` is a small, JSON-safe mapping of numeric/string diagnostic
-    values only (bounded and stripped further at serialization time).
+    values only — bounded (key count, string length) and stripped of any
+    key containing a forbidden substring (entity_id, zone_id, episode_id,
+    trajectory, etc.) at serialization time, see
+    ``support_event_serialization.py``'s ``_bounded_details()``.
 
 No HA imports. No control imports. No storage I/O. Never mutates its inputs.
 """

@@ -489,14 +489,22 @@ def test_t8_further_successful_saves_do_not_add_more_recovered_landmarks():
     assert len(recovered) == 1  # still just one, no repeats
 
 
-# ── T9: No event production from coordinator.py ─────────────────────────────
+# ── T9: No STORAGE/SETUP event production from coordinator.py ──────────────
+#
+# A later step ("Support Critical Event Producers Increment 2") legitimately
+# added coordinator-side event production for window/summer/manual HOLD
+# TRANSITIONS — that is expected, intentional wiring for that later,
+# separately-approved step, not a regression of THIS storage/setup-events
+# step. What must remain true: coordinator.py never produces the
+# storage/setup landmark events (STORAGE_RESTORE*/STORAGE_SAVE_*) — those
+# stay exclusively owned by ha_integration.py's load/save methods.
 
-def test_t9_no_event_production_in_coordinator():
+def test_t9_no_storage_setup_event_production_in_coordinator():
     import custom_components.thermosmart.coordinator as _coord_mod
     source = inspect.getsource(_coord_mod)
-    assert "record_support_critical_event_safe" not in source
     assert "STORAGE_RESTORE" not in source
     assert "STORAGE_SAVE_FAILED" not in source
+    assert "STORAGE_SAVE_RECOVERED" not in source
 
 
 # ── T10: No event production from lifecycle.py/run_cycle() ─────────────────

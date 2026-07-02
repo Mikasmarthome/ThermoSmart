@@ -484,12 +484,22 @@ def test_t14_no_runtime_hook_in_lifecycle():
     assert "record_support_critical_event_safe" not in source
 
 
-def test_t14_no_runtime_hook_in_coordinator():
+def test_t14_coordinator_never_touches_store_wiring_internals():
+    """A later step ("Support Critical Event Producers Increment 2")
+    legitimately added coordinator-side calls to
+    record_support_critical_event_safe() for window/summer/manual hold
+    TRANSITIONS — expected, intentional event PRODUCTION, not store wiring.
+    What must remain true is that coordinator.py never reaches past that
+    one public hand-off method into the store-wiring internals THIS file
+    covers — no direct dict/state mutation, no store construction, no
+    load/save call."""
     import custom_components.thermosmart.coordinator as _coord_mod
     source = inspect.getsource(_coord_mod)
-    assert "support_event" not in source.lower()
-    assert "SupportCriticalEvent" not in source
-    assert "record_support_critical_event_safe" not in source
+    assert "SupportCriticalEventStore" not in source
+    assert "_support_critical_events[" not in source
+    assert "_async_load_support_critical_events_safe" not in source
+    assert "_async_save_support_critical_events_safe" not in source
+    assert "support_critical_events_store(" not in source
 
 
 def test_t14_no_live_call_site_for_record_method_in_ha_integration():

@@ -604,11 +604,23 @@ def test_t23_ha_integration_now_legitimately_has_state_and_store_wiring():
     assert source.count("self.record_support_critical_event_safe(") == 1
 
 
-def test_t23_coordinator_module_has_no_support_event_reference():
+def test_t23_coordinator_produces_events_but_never_touches_storage_internals():
+    """A later step ("Support Critical Event Producers Increment 2")
+    legitimately added coordinator-side hold-transition event production —
+    it constructs SupportCriticalEvent instances (the pure schema type) and
+    hands them off via record_support_critical_event_safe(), exactly the
+    same pattern ha_integration.py's own storage-landmark helper uses.
+    Expected, intentional wiring for that later step, not a regression of
+    THIS foundation step. What must remain true: coordinator.py never
+    reaches into the storage-layer internals this foundation owns — no
+    append_support_event() call, no store construction, no direct dict
+    mutation of _support_critical_events."""
     import custom_components.thermosmart.coordinator as _coord_mod
     source = inspect.getsource(_coord_mod)
-    assert "support_event" not in source.lower()
-    assert "SupportCriticalEvent" not in source
+    assert "append_support_event(" not in source
+    assert "SupportCriticalEventStore" not in source
+    assert "_support_critical_events[" not in source
+    assert "is_recent_duplicate" not in source
 
 
 # ── T24: No control-path keywords touched ───────────────────────────────────

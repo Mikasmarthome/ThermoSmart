@@ -166,6 +166,14 @@ class ThermoSmartCoordinator(
         # Must be initialized before the first coordinator refresh to avoid AttributeError.
         self._boost_active: dict = {}
 
+        # LE2 Support Critical Event dedupe state — tracks the previous cycle's
+        # window/summer/manual hold flags so _maybe_record_support_hold_events()
+        # emits a landmark only on a genuine transition, never every cycle.
+        # Event production only; never read by any control/decision path.
+        self._support_event_window_hold_active: bool = False
+        self._support_event_summer_hold_active: bool = False
+        self._support_event_manual_override_active: bool = False
+
         # Kalibrierung (genutzt von TRVControlMixin)
         self._calibration_offsets: dict[str, float] = {}
         self._auto_quirk_entities: list[str] = []
@@ -990,6 +998,11 @@ class ThermoSmartCoordinator(
                 schedule_period=self._schedule_period(recommendation, cfg),
             )
 
+            # LE2 Support Critical Events: record window/summer/manual hold
+            # transitions only (never every cycle) — pure event production,
+            # no control effect. See _maybe_record_support_hold_events().
+            self._maybe_record_support_hold_events(recommendation)
+
             # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
             # – verbessert die TRV-interne Regelung unabhängig von der aktiven Steuerung
             await self._async_write_external_temp(cfg, recommendation)
@@ -1430,6 +1443,104 @@ class ThermoSmartCoordinator(
             return "comfort"
         raw = self._current_schedule_period()
         return raw.split("_", 1)[1] if "_" in raw else "comfort"
+
+    def _record_support_hold_event(self, event_type, severity, *, reason: str,
+                                    summary: str, details: dict) -> None:
+        """Build and hand off ONE Support Critical Event for a hold/release
+        transition. Memory-only: record_support_critical_event_safe() never
+        performs storage I/O, never awaits, never triggers a save directly —
+        persistence happens later via the existing periodic save cycle.
+        Never raises; a missing shadow or any internal failure is silently
+        skipped (event production must never affect the control cycle).
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportCriticalEvent
+            from .learning.storage.support_event_serialization import SUPPORT_EVENT_SCHEMA_VERSION
+            now = self._clock.now_utc()
+            event_id = f"hold_{event_type.value}_{int(now.timestamp() * 1000)}"
+            event = SupportCriticalEvent(
+                schema_version=SUPPORT_EVENT_SCHEMA_VERSION, event_id=event_id,
+                event_type=event_type, ts=now, severity=severity,
+                reason=reason, summary=summary, details=details,
+            )
+            self._le2_shadow.record_support_critical_event_safe(event)
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _maybe_record_support_hold_events(self, recommendation: dict) -> None:
+        """Record Support Critical Events for window/summer/manual hold
+        TRANSITIONS only — never every cycle. Compares this cycle's
+        window_open/is_summer/override_active flags (already computed in
+        ``recommendation``) against the previous cycle's own dedupe state;
+        emits a landmark only when a flag actually flips. Pure event
+        production: reads recommendation, never mutates it, never touches
+        control state (setpoints, TPI, boost, preheat, TRV commands). Never
+        raises — see _record_support_hold_event()'s own guard.
+        """
+        if self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+
+            window_open = bool(recommendation.get("window_open", False))
+            if window_open and not self._support_event_window_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.WINDOW_OPEN_HOLD, SupportEventSeverity.INFO,
+                    reason="window_open",
+                    summary="Heating held due to an open window",
+                    details={"source": "window", "heating_allowed": False},
+                )
+            elif not window_open and self._support_event_window_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.WINDOW_CLOSED_RELEASE, SupportEventSeverity.INFO,
+                    reason="window_closed",
+                    summary="Window hold released",
+                    details={"source": "window", "heating_allowed": True},
+                )
+            self._support_event_window_hold_active = window_open
+
+            # No dedicated "summer mode release" event type exists in the
+            # schema (unlike the window open/closed pair) — reusing
+            # SUMMER_MODE_HOLD for both start and end, disambiguated by
+            # reason + current_active, was preferred over adding a new event
+            # type for a single asymmetric case (see report).
+            summer_active = bool(recommendation.get("is_summer", False))
+            if summer_active and not self._support_event_summer_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.SUMMER_MODE_HOLD, SupportEventSeverity.INFO,
+                    reason="summer_mode_active",
+                    summary="Heating held due to summer mode",
+                    details={"mode": "summer", "previous_active": False, "current_active": True},
+                )
+            elif not summer_active and self._support_event_summer_hold_active:
+                self._record_support_hold_event(
+                    SupportEventType.SUMMER_MODE_HOLD, SupportEventSeverity.INFO,
+                    reason="summer_mode_ended",
+                    summary="Summer mode hold ended",
+                    details={"mode": "summer", "previous_active": True, "current_active": False},
+                )
+            self._support_event_summer_hold_active = summer_active
+
+            manual_active = bool(recommendation.get("override_active", False))
+            if manual_active and not self._support_event_manual_override_active:
+                self._record_support_hold_event(
+                    SupportEventType.MANUAL_OVERRIDE_START, SupportEventSeverity.INFO,
+                    reason="manual_override_start",
+                    summary="Manual override started",
+                    details={"source": "manual_override"},
+                )
+            elif not manual_active and self._support_event_manual_override_active:
+                self._record_support_hold_event(
+                    SupportEventType.MANUAL_OVERRIDE_END, SupportEventSeverity.INFO,
+                    reason="manual_override_end",
+                    summary="Manual override ended",
+                    details={"source": "manual_override"},
+                )
+            self._support_event_manual_override_active = manual_active
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
 
     # ── Berechnung ───────────────────────────────────────────────────
 

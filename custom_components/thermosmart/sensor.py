@@ -272,6 +272,17 @@ class ThermoSmartStatusSensor(_Base):
         presence = data.get("presence", {})
         le = self.coordinator.learning_engine
         learning_enabled = le.is_zone_enabled(self.coordinator.zone_id) if le else True
+
+        # Device compatibility — the first configured TRV's matched profile
+        # (device_profiles.get_profile(), already computed at device-detection
+        # time; this only reads the existing per-entity map, never re-matches
+        # or changes matching order). None until device detection has run at
+        # least once (e.g. right after setup).
+        from .device_profiles import device_profile_status
+        device_profiles = getattr(self.coordinator, "_device_profiles", None) or {}
+        primary_profile = next(iter(device_profiles.values()), None)
+        profile_status = device_profile_status(primary_profile) if primary_profile else None
+
         return {
             "current_temperature": z.get("current_temp"),
             "target_temperature": z.get("adjusted_target"),
@@ -292,6 +303,10 @@ class ThermoSmartStatusSensor(_Base):
             "adaptation_mode": z.get("adaptation_mode", "unknown"),
             "learning_enabled": learning_enabled,
             "active_control_enabled": self.coordinator._active_control,
+            "device_profile_name": profile_status["name"] if profile_status else None,
+            "device_profile_active": profile_status["active"] if profile_status else None,
+            "device_profile_mode": profile_status["mode"] if profile_status else None,
+            "device_profile_warning": profile_status["warning"] if profile_status else None,
         }
 
 

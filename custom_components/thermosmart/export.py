@@ -1032,6 +1032,37 @@ def _le2_pending_data(coord, zone_id: str) -> dict | None:
         return None
 
 
+def _device_profile_export(coord: Any) -> dict | None:
+    """Return a small, public-safe device-compatibility summary for support
+    export: the first configured TRV's matched profile display name,
+    active/observe-only mode, and warning (if any).
+
+    Pure read of the already-computed per-entity profile map from device
+    detection (coordinator.py's ``_device_profiles``, populated by
+    ``async_detect_device_entities()``) — never re-matches, never changes
+    match order, never enforces anything. No entity ids, no device ids: only
+    the profile's own display name/flags, which are public source data, not
+    per-installation data.
+
+    A zone with multiple TRVs is represented by its first configured
+    device's profile only (matches how other zone-level display values in
+    this export are already single, effective values, not per-TRV lists).
+
+    Returns None when no coordinator is attached or no profile has been
+    detected yet (e.g. right after setup, before device detection has run).
+    Never raises.
+    """
+    try:
+        from .device_profiles import device_profile_status
+        device_profiles = getattr(coord, "_device_profiles", None) or {}
+        profile = next(iter(device_profiles.values()), None)
+        if profile is None:
+            return None
+        return device_profile_status(profile)
+    except Exception:
+        return None
+
+
 def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
     """Return passive adaptation candidate counts for support export, or None.
 
@@ -1704,6 +1735,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
                 coord, entry.entry_id
             )
             zone_info["critical_events"] = _le2_critical_events_export(coord, now=ts)
+            zone_info["device_profile"] = _device_profile_export(coord)
         else:
             zone_info["runtime_state"] = None
             zone_info["runtime_health"] = None
@@ -1713,6 +1745,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["adaptation_application"] = None
             zone_info["orchestration_preview"] = None
             zone_info["critical_events"] = {"available": False, "reason": "no_coordinator"}
+            zone_info["device_profile"] = None
 
         zones.append(zone_info)
 

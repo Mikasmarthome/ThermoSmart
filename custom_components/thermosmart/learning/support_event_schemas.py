@@ -45,8 +45,20 @@ class SupportEventType(Enum):
     to accept all of them cleanly. New kinds should be added here first, so
     ``deserialize_support_event()`` can keep rejecting truly unknown values
     rather than silently accepting typos.
+
+    Reserved / no live producer (see ``RESERVED_NO_PRODUCER_EVENT_TYPES``
+    below): ``HEATING_DECISION``, ``SCHEDULE_CHANGE``, ``PRESENCE_HOLD``,
+    ``TEMPERATURE_INVALID``, ``MIN_INTERVAL_BLOCK``,
+    ``LEARNING_ADAPTIVE_APPLIED``, ``RESTART_RESTORE``. Kept rather than
+    removed: each documents a real, plausible future producer (e.g. a
+    genuine per-decision event, an invalid-sensor-reading event, an actual
+    min-interval gate, real adaptive application), and removing an already-
+    shipped enum member risks rejecting/orphaning any pre-existing stored
+    event of that type (``deserialize_support_event()`` rejects unknown
+    ``event_type`` strings) for a purely cosmetic gain. No control-path
+    change is implied by keeping them — nothing here constructs one.
     """
-    HEATING_DECISION = "heating_decision"
+    HEATING_DECISION = "heating_decision"        # reserved — no live producer, see class docstring
     TRV_COMMAND_SENT = "trv_command_sent"
     TRV_COMMAND_BLOCKED = "trv_command_blocked"
     BOOST_STARTED = "boost_started"
@@ -57,18 +69,18 @@ class SupportEventType(Enum):
     SUMMER_MODE_HOLD = "summer_mode_hold"
     MANUAL_OVERRIDE_START = "manual_override_start"
     MANUAL_OVERRIDE_END = "manual_override_end"
-    SCHEDULE_CHANGE = "schedule_change"
-    PRESENCE_HOLD = "presence_hold"
+    SCHEDULE_CHANGE = "schedule_change"          # reserved — no live producer, see class docstring
+    PRESENCE_HOLD = "presence_hold"              # reserved — no live producer, see class docstring
     SENSOR_UNAVAILABLE = "sensor_unavailable"
     SENSOR_RESTORED = "sensor_restored"
-    TEMPERATURE_INVALID = "temperature_invalid"
+    TEMPERATURE_INVALID = "temperature_invalid"  # reserved — no live producer, see class docstring
     TRV_UNAVAILABLE = "trv_unavailable"
-    MIN_INTERVAL_BLOCK = "min_interval_block"
+    MIN_INTERVAL_BLOCK = "min_interval_block"    # reserved — no live producer, see class docstring
     SAME_SETPOINT_BLOCK = "same_setpoint_block"
     LEARNING_RECOMMENDATION_ONLY = "learning_recommendation_only"
-    LEARNING_ADAPTIVE_APPLIED = "learning_adaptive_applied"
+    LEARNING_ADAPTIVE_APPLIED = "learning_adaptive_applied"  # reserved — no live producer, see class docstring
     FALLBACK_USED = "fallback_used"
-    RESTART_RESTORE = "restart_restore"
+    RESTART_RESTORE = "restart_restore"          # reserved — no live producer, see class docstring
     STORAGE_RESTORE = "storage_restore"
     STORAGE_RESTORE_FAILED = "storage_restore_failed"
     STORAGE_SAVE_FAILED = "storage_save_failed"
@@ -96,6 +108,21 @@ NOISE_PRONE_EVENT_TYPES = frozenset({
     SupportEventType.MIN_INTERVAL_BLOCK,
     SupportEventType.SAME_SETPOINT_BLOCK,
     SupportEventType.LEARNING_RECOMMENDATION_ONLY,
+})
+
+# Kinds with no live producer anywhere in the current runtime (see each
+# member's inline comment in SupportEventType above for why it is kept
+# rather than removed). Purely documentary — nothing filters on this set;
+# it exists so a maintainer scanning the schema can immediately tell which
+# kinds are reserved-for-future-use versus actually firing today.
+RESERVED_NO_PRODUCER_EVENT_TYPES = frozenset({
+    SupportEventType.HEATING_DECISION,
+    SupportEventType.SCHEDULE_CHANGE,
+    SupportEventType.PRESENCE_HOLD,
+    SupportEventType.TEMPERATURE_INVALID,
+    SupportEventType.MIN_INTERVAL_BLOCK,
+    SupportEventType.LEARNING_ADAPTIVE_APPLIED,
+    SupportEventType.RESTART_RESTORE,
 })
 
 # Bounds enforced at serialization time (see support_event_serialization.py) —

@@ -1121,9 +1121,19 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
 
     Reads the in-memory candidate history from coord._le2_shadow.
     Never raises.
+
+    ``entry_count``/``promotion_ready_count``/``blocked_count`` are real,
+    currently-active passive candidate-tracking counts — not inert. Only
+    ``shadow_preview_count`` (mirrors ``promotion_ready_count``) and
+    ``application_enabled`` describe the separate, currently-inactive
+    application/orchestration layer (see
+    _le2_application_lifecycle_summary's docstring); ``application_layer_status``
+    marks specifically those two fields as reserved/foundation-only, without
+    implying the rest of this block is inactive too.
     """
     _zero = {"entry_count": 0, "promotion_ready_count": 0, "blocked_count": 0,
-             "shadow_preview_count": 0, "application_enabled": False, "last_error": None}
+             "shadow_preview_count": 0, "application_enabled": False,
+             "application_layer_status": "reserved", "last_error": None}
     try:
         shadow = getattr(coord, "_le2_shadow", None)
         if shadow is None:
@@ -1160,11 +1170,11 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
             except Exception:
                 blocked += 1
         return {
+            **_zero,
             "entry_count": len(history),
             "promotion_ready_count": ready,
             "blocked_count": blocked,
             "shadow_preview_count": ready,
-            "application_enabled": False,
             "last_error": shadow.adaptation_last_error(),
         }
     except Exception as err:
@@ -1268,8 +1278,17 @@ def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
     and would_apply_if_enabled_count conservative (unknown_context blocks
     both). lifecycle_blocked_count remains meaningful regardless, since
     lifecycle-state gating does not depend on runtime_context.
+
+    ``status``/``active``/``reason`` mark this whole block as a preview of a
+    currently-inactive application/orchestration layer (see
+    _le2_application_lifecycle_summary's docstring) — the per-entry counts
+    stay real diagnostic previews ("what would happen if this were on"), not
+    a live feature a maintainer should expect to see actually apply anything.
     """
     _zero = {
+        "status": "reserved",
+        "active": False,
+        "reason": "application_layer_not_active_in_this_version",
         "entry_count": 0,
         "would_apply_count": 0,
         "would_apply_if_enabled_count": 0,
@@ -1323,13 +1342,13 @@ def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
             except Exception:
                 blocked += 1
         return {
+            **_zero,
             "entry_count": len(history),
             "would_apply_count": would_apply,
             "would_apply_if_enabled_count": would_apply_if_enabled,
             "blocked_count": blocked,
             "lifecycle_blocked_count": lifecycle_blocked,
             "safety_blocked_count": safety_blocked,
-            "application_enabled": False,
             "last_error": shadow.adaptation_last_error(),
         }
     except Exception as err:
@@ -1340,8 +1359,19 @@ def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
     """Return adaptation application lifecycle summary for support export.
 
     Read-only, no mutation, no control effect. Never raises.
+
+    The application/orchestration layer is foundation-only in this version —
+    ``ApplicationPolicy.application_enabled`` is a global kill-switch that is
+    always False (see learning/adaptation/application.py), and nothing in the
+    live runtime ever adopts/applies a candidate. Every count below is
+    therefore always 0, not a sign of a broken feature — ``status``/``active``/
+    ``reason`` make that explicit so a maintainer reading the export does not
+    mistake this for a live, currently-inactive-by-configuration feature.
     """
     _zero = {
+        "status": "reserved",
+        "active": False,
+        "reason": "application_layer_not_active_in_this_version",
         "state_entry_count": 0,
         "active_count": 0,
         "rollback_recommended_count": 0,
@@ -1360,6 +1390,7 @@ def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
         if snapshot is None:
             return {**_zero, "last_error": last_err}
         return {
+            **_zero,
             "state_entry_count": snapshot.get("total", 0),
             "active_count": snapshot.get("active", 0),
             "rollback_recommended_count": snapshot.get("rollback_recommended", 0),

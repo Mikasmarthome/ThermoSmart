@@ -255,7 +255,10 @@ class ThermoSmartCoordinator(
         # Learning mode is read from config (not a RestoreEntity) → not in barrier.
         self._active_control_initialized: bool = False
 
-        # LE 2.0 passive shadow controller (attached at setup; never controls)
+        # LE2 runtime is attached with adaptive-control capability. The
+        # effective adaptation mode is derived per cycle from the Learning
+        # and Active Control switches; with Active Control off, it remains
+        # shadow-only.
         self._le2_shadow = None
         # Authoritative live decision record for the last completed cycle (Phase B1).
         # Built pre-dispatch and completed post-dispatch; consumed by compute_decision_trace_safe().
@@ -296,7 +299,8 @@ class ThermoSmartCoordinator(
     # ── Eigenschaften ────────────────────────────────────────────────
 
     def attach_le2_shadow(self, shadow) -> None:
-        """Attach the passive LE 2.0 shadow controller (diagnostics only)."""
+        """Attach the LE2 runtime (adaptive-control capable; effective mode
+        is derived per cycle from the Learning and Active Control switches)."""
         self._le2_shadow = shadow
 
     def _now_local(self):

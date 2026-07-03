@@ -1694,6 +1694,16 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             "ha_version": HA_VERSION,
             "zone_count": len(zones),
         },
+        "storage_layout": {
+            "note": (
+                "ThermoSmart stores learning data per zone. The active LE2 runtime "
+                "store uses a hashed zone key: thermosmart_le2__<hash>. Segmented "
+                "LE2 stores use: thermosmart_le2__<zone_entry_id>__<suffix>. The "
+                "older thermosmart_learning_data store is legacy/read-only. Do not "
+                "manually delete thermosmart_le2__<hash> files unless you "
+                "intentionally want to reset runtime learning state for that zone."
+            ),
+        },
         "zones": zones,
     }
 

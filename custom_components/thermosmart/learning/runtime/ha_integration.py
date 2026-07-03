@@ -1,14 +1,18 @@
-"""Home Assistant shadow integration shell for LE 2.0 (Phase 17C).
+"""Home Assistant integration layer for the LE2 runtime.
 
-The ONLY glue between the live ThermoSmart coordinator and the passive LE-2.0
-runtime. It builds a typed ``RuntimeCycleInput`` from values the coordinator has
-already computed, runs the passive shadow cycle behind a hard guard, and stores
-only diagnostics. It NEVER calls a service, never mutates a control value, and
-never lets an exception reach the heating path.
+The ONLY glue between the live ThermoSmart coordinator and the LE2 runtime.
+It builds a typed ``RuntimeCycleInput`` from values the coordinator has
+already computed, runs a prediction-only observation cycle behind a hard
+guard, and stores diagnostics. This layer also exposes bounded
+adaptive-control adjustments (e.g. boost/preheat suggestions); it never
+dispatches a Home Assistant service call itself and never lets an exception
+reach the heating path — the coordinator is the sole place that decides,
+per cycle via ``ControlAdaptationMode`` (coordinator.py), whether an
+adjustment is ignored, shadowed, or actually applied.
 
-This module imports Home Assistant (it is the shell, not the pure core); it is
-deliberately NOT exported from ``runtime/__init__`` so the pure runtime stays
-importable without HA.
+This module imports Home Assistant (it is the integration shell, not the
+pure core); it is deliberately NOT exported from ``runtime/__init__`` so the
+pure runtime stays importable without HA.
 """
 from __future__ import annotations
 
@@ -225,10 +229,18 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
 
 
 class LearningShadowController:
-    """Owns the passive LE-2.0 runtime for one config entry / zone.
+    """Home Assistant bridge for LE2 observation and adaptive-control
+    suggestions, for one config entry / zone.
+
+    Owns the prediction-only runtime and exposes safe, bounded adjustment
+    helpers (e.g. boost/preheat suggestions). It does not dispatch a Home
+    Assistant service call directly — the coordinator gates and applies any
+    adjustment according to the effective adaptation mode
+    (``ControlAdaptationMode`` in coordinator.py).
 
     Every public method is guarded: a learning/store/model failure is counted and
-    logged (throttled), never raised. The existing heating control is untouched.
+    logged (throttled), never raised. A failure here never breaks the
+    deterministic TPI control path the coordinator falls back to.
     """
 
     def __init__(self, hass: Any, zone_id: str, *, store: Any = None,
@@ -392,7 +404,8 @@ class LearningShadowController:
                      schedule_comfort_temperature_c: Optional[float] = None,
                      heating_failure: bool = False,
                      live_record: Any = None) -> None:
-        """Run one passive shadow cycle. Never raises, never controls.
+        """Run one prediction-only observation cycle. Never raises; does not
+        dispatch a Home Assistant service call.
 
         ``live_record`` is the authoritative post-dispatch ``LiveDecisionRecord``;
         when provided, the boost outcome context is bound to its real dispatch result

@@ -235,14 +235,22 @@ HACS → Integrations → ThermoSmart → **Update** → Restart Home Assistant.
 **What is Observation mode?**  
 Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.
 
+**What do the Learning and Active Control switches actually do together?**  
+ThermoSmart combines two independent switches:
+
+- **Learning enabled + Active Control off** — ThermoSmart observes and learns, but does not control your devices (no service calls).
+- **Learning disabled + Active Control on** — ThermoSmart controls deterministically using TPI, without any adaptive learning adjustments.
+- **Learning enabled + Active Control on** — ThermoSmart may apply bounded adaptive adjustments on top of TPI control, once confidence and safety gates allow it.
+- **Both off** — ThermoSmart remains inactive for that zone.
+
 **How long until the learning algorithm is effective?**  
-Learning builds from active heating observations and works in both Observation mode and Active Control. Phase 1 (<5 obs): physical fallback only. Phase 2 (5–50): first patterns emerge. Phase 3 (50+): learning dominates. How quickly you reach each phase depends on how often your heating runs — results improve steadily as observations accumulate.
+Learning builds from active heating observations and works in both Observation mode and Active Control. Stage 1 (<5 obs): physical fallback only. Stage 2 (5–50): first patterns emerge. Stage 3 (50+): learning dominates. How quickly you reach each stage depends on how often your heating runs — results improve steadily as observations accumulate.
 
 **A sensor goes offline — what happens?**  
 ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors in a zone are unavailable simultaneously.
 
 **Where is the learning data stored?**  
-`/config/.storage/thermosmart_learning_data` — safe to share for debugging.
+Learning data is stored locally under Home Assistant's `/config/.storage/` directory. For debugging or support, use the **Create support export** button instead of sharing raw storage files — the export is designed to include useful diagnostics while avoiding raw Home Assistant storage data. Do not share or manually edit files under `/config/.storage` unless specifically asked by a maintainer.
 
 **Which TRVs use direct valve control?**  
 ThermoSmart auto-detects a direct-valve entity on each TRV device and writes the TPI duty-cycle (0–100%) to it when one is found. Recognised patterns:

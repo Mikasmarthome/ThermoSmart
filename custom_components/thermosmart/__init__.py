@@ -218,7 +218,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     hass.data[DOMAIN][entry.entry_id] = entry_store
 
-    # ── LE 2.0 passive shadow runtime (no control effect) ───────────
+    # ── LE 2.0 learning runtime (supports adaptive control) ─────────
+    # The runtime is started with CONTROL capability, but its EFFECTIVE
+    # behavior each cycle is gated by the two user-visible switches (Learning,
+    # Active Control) via ControlAdaptationMode.derive() in coordinator.py:
+    # Active Control OFF -> shadow-only (observe/learn, no service calls);
+    # Active Control ON + Learning OFF -> deterministic TPI-only control;
+    # Active Control ON + Learning ON -> adaptive control.
     # Setup failure here must never fail the zone or affect heating.
     try:
         from .learning.runtime.ha_integration import LearningShadowController
@@ -235,15 +241,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # NOTE: the flush/unload happens via the awaited call in async_unload_entry
         # (block-on-finish), never as a fire-and-forget task, so pending state is
         # guaranteed written by the time the unload completes.
-        _LOGGER.debug("ThermoSmart: LE 2.0 shadow runtime attached (passive)")
-    except Exception as err:  # learning is strictly optional and passive
+        _LOGGER.debug(
+            "ThermoSmart: Learning runtime attached; effective adaptation is "
+            "gated by Learning and Active Control switches"
+        )
+    except Exception as err:  # learning is strictly optional; setup failure is non-fatal
         _LOGGER.warning("ThermoSmart: LE 2.0 shadow setup skipped: %s", type(err).__name__)
 
     await hass.config_entries.async_forward_entry_setups(entry, ZONE_PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     _LOGGER.info(
-        "ThermoSmart Zone '%s' geladen – Beobachtungsmodus (Aktive Steuerung AUS)",
+        "ThermoSmart Zone '%s' geladen – effektiver Adaptionsmodus wird pro Zyklus "
+        "aus den Schaltern Lernen und Aktive Steuerung abgeleitet",
         cfg.get("name", entry.entry_id),
     )
     return True
@@ -258,7 +268,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
         if coordinator := entry_data.get("coordinator"):
             await coordinator._async_restore_temp_source()
-        # flush + unload the passive LE 2.0 shadow runtime (guarded)
+        # flush + unload the LE 2.0 learning runtime (guarded)
         if le2_shadow := entry_data.get("le2_shadow"):
             try:
                 await le2_shadow.async_unload()

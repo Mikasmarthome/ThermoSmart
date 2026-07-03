@@ -270,6 +270,8 @@ class ThermoSmartStatusSensor(_Base):
         z = self._zone
         data = self.coordinator.data or {}
         presence = data.get("presence", {})
+        le = self.coordinator.learning_engine
+        learning_enabled = le.is_zone_enabled(self.coordinator.zone_id) if le else True
         return {
             "current_temperature": z.get("current_temp"),
             "target_temperature": z.get("adjusted_target"),
@@ -282,6 +284,14 @@ class ThermoSmartStatusSensor(_Base):
             "summer_mode": z.get("is_summer", False),
             "heating_failure": z.get("heating_failure", False),
             "slope_window_active": getattr(self.coordinator, "_slope_window_active", False),
+            # Effective control mode this cycle — inactive/shadow_only/deterministic/
+            # adaptive — derived once per cycle in coordinator.py from the Learning
+            # and Active Control switches (ControlAdaptationMode.derive()). "unknown"
+            # only if coordinator.data hasn't produced a cycle yet (e.g. right after
+            # setup, before the first successful refresh).
+            "adaptation_mode": z.get("adaptation_mode", "unknown"),
+            "learning_enabled": learning_enabled,
+            "active_control_enabled": self.coordinator._active_control,
         }
 
 

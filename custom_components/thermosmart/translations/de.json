@@ -68,10 +68,10 @@
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone (Standard: zone.home)",
-          "learning_enabled": "Lernalgorithmus aktivieren"
+          "learning_enabled": "Lernen und adaptive Steuerung aktivieren"
         },
         "data_description": {
-          "learning_enabled": "ThermoSmart lernt Heizraten, Abkühlraten und optimale Temperaturen für diese Zone."
+          "learning_enabled": "Lernt das Heizverhalten der Zone. Wenn die aktive Steuerung eingeschaltet ist, darf das Lernen begrenzte adaptive Sollwert-Anpassungen vornehmen. Ausschalten nutzt deterministische TPI-Steuerung ohne adaptive Anpassung."
         }
       },
       "weather": {
@@ -171,10 +171,10 @@
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
           "home_zone": "Heimzone (Standard: zone.home)",
-          "learning_enabled": "Lernalgorithmus aktivieren"
+          "learning_enabled": "Lernen und adaptive Steuerung aktivieren"
         },
         "data_description": {
-          "learning_enabled": "ThermoSmart lernt Heizraten, Abkühlraten und optimale Temperaturen für diese Zone."
+          "learning_enabled": "Lernt das Heizverhalten der Zone. Wenn die aktive Steuerung eingeschaltet ist, darf das Lernen begrenzte adaptive Sollwert-Anpassungen vornehmen. Ausschalten nutzt deterministische TPI-Steuerung ohne adaptive Anpassung."
         }
       },
       "weather": {

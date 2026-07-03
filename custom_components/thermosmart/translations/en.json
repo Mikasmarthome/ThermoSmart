@@ -68,10 +68,10 @@
         "data": {
           "presence_persons": "Persons for presence detection",
           "home_zone": "Home zone (default: zone.home)",
-          "learning_enabled": "Enable learning algorithm"
+          "learning_enabled": "Enable learning and adaptive control"
         },
         "data_description": {
-          "learning_enabled": "ThermoSmart learns heating rates, cooling rates and optimal temperatures for this zone."
+          "learning_enabled": "Learns zone behavior. When active control is enabled, learning can apply bounded adaptive setpoint adjustments. Turn this off to use deterministic TPI-only control."
         }
       },
       "weather": {
@@ -171,10 +171,10 @@
         "data": {
           "presence_persons": "Persons for presence detection",
           "home_zone": "Home zone (default: zone.home)",
-          "learning_enabled": "Enable learning algorithm"
+          "learning_enabled": "Enable learning and adaptive control"
         },
         "data_description": {
-          "learning_enabled": "ThermoSmart learns heating rates, cooling rates and optimal temperatures for this zone."
+          "learning_enabled": "Learns zone behavior. When active control is enabled, learning can apply bounded adaptive setpoint adjustments. Turn this off to use deterministic TPI-only control."
         }
       },
       "weather": {

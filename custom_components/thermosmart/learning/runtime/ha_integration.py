@@ -333,6 +333,10 @@ class LearningShadowController:
         # producer exists yet (see support_event_persistence.py's own docstring).
         self._support_critical_events: dict = {}  # event_id -> flat serialized support event entry
         self._support_critical_events_save_needed: bool = False
+        # First time this dirty streak began (ISO ts); gates the debounce in
+        # _async_save_support_critical_events_safe() so a bare setup-time
+        # landmark doesn't immediately hit real storage. Cleared on save.
+        self._support_critical_events_first_dirty_ts: Optional[str] = None
         self._support_critical_events_last_error: Optional[str] = None
         # Tracks whether a storage_save_failed landmark has already been recorded
         # for the CURRENT failure streak — prevents re-recording one every
@@ -351,6 +355,10 @@ class LearningShadowController:
         # still no runtime/control path involved.
         self._research_daily_buckets: dict = {}  # bucket_date -> flat serialized bucket entry
         self._research_daily_save_needed: bool = False
+        # First time this dirty streak began (ISO ts); gates the debounce in
+        # _async_save_research_daily_safe() — same rationale as the support
+        # critical events counterpart above. Cleared on save.
+        self._research_daily_first_dirty_ts: Optional[str] = None
         self._research_daily_last_error: Optional[str] = None
         # Cache: schedule target time from last observe_safe call (one cycle lag is acceptable
         # for deescalation checks — TPI sufficiency uses this to compute remaining_time_to_target).
@@ -853,6 +861,30 @@ class LearningShadowController:
     # when restarts happen frequently (e.g. during setup/troubleshooting).
     _STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S = 6 * 3600
 
+    # Debounce for support-critical-event / research-daily saves, mirroring
+    # PersistenceOrchestrator's default debounce_s. Without this, a pure
+    # setup-time "store loaded (empty)" landmark would go straight to real
+    # `.storage` on the very first coordinator refresh — an empty fresh
+    # setup must not write LE2 store files. `force=True` (unload/shutdown)
+    # always bypasses this so genuinely accumulated data is never lost.
+    _SUPPORT_RESEARCH_SAVE_DEBOUNCE_S = 30.0
+
+    def _save_debounce_elapsed(self, first_dirty_ts: Optional[str]) -> bool:
+        """True once ``first_dirty_ts`` is at least the debounce window old.
+
+        Fails open (returns True) on a missing/unparseable timestamp so a
+        genuinely dirty state is never stuck unsaved due to a clock glitch.
+        """
+        if first_dirty_ts is None:
+            return True
+        try:
+            from datetime import datetime
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            first_utc = datetime.fromisoformat(first_dirty_ts)
+        except Exception:
+            return True
+        return (now_utc - first_utc).total_seconds() >= self._SUPPORT_RESEARCH_SAVE_DEBOUNCE_S
+
     def _record_storage_landmark_event_safe(
         self, *, event_type: Any, severity: Any, reason: str, summary: str,
         details: Mapping[str, Any], dedupe_window_s: Optional[float] = None,
@@ -966,8 +998,16 @@ class LearningShadowController:
                 dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
             )
 
-    async def _async_save_support_critical_events_safe(self) -> None:
+    async def _async_save_support_critical_events_safe(self, *, force: bool = False) -> None:
         """Persist support critical events best-effort. Non-fatal on error.
+
+        Debounced like PersistenceOrchestrator (``_SUPPORT_RESEARCH_SAVE_DEBOUNCE_S``):
+        a fresh dirty streak only reaches real storage once it has been
+        pending for at least the debounce window, so a bare setup-time
+        "store loaded (empty)" landmark does not itself write a `.storage`
+        file on the very first coordinator refresh. ``force=True``
+        (unload/shutdown) always bypasses the debounce so genuinely
+        accumulated data is never lost.
 
         Dirty flag remains True when save fails, ensuring the next opportunity
         retries. On the FIRST failure of a failure streak, records one
@@ -982,11 +1022,15 @@ class LearningShadowController:
         """
         if self._capture_stores is None or not self._support_critical_events_save_needed:
             return
+        if not force and not self._save_debounce_elapsed(
+                self._support_critical_events_first_dirty_ts):
+            return
         from .. import support_event_schemas as _schemas
         try:
             store = self._capture_stores.support_critical_events_store()
             await store.save({"events": dict(self._support_critical_events)})
             self._support_critical_events_save_needed = False
+            self._support_critical_events_first_dirty_ts = None
             if self._support_critical_events_save_failure_notified:
                 self._support_critical_events_save_failure_notified = False
                 self._record_storage_landmark_event_safe(
@@ -1059,6 +1103,8 @@ class LearningShadowController:
             )
             if result.appended_event_ids or result.pruned_event_ids:
                 self._support_critical_events = result.updated_payload["events"]
+                if not self._support_critical_events_save_needed:
+                    self._support_critical_events_first_dirty_ts = self._utcnow_iso()
                 self._support_critical_events_save_needed = True
             if event.event_id in result.appended_event_ids:
                 # Only aggregate a GENUINELY newly appended event — a
@@ -1213,20 +1259,28 @@ class LearningShadowController:
         except Exception as err:
             self._research_daily_last_error = str(err)
 
-    async def _async_save_research_daily_safe(self) -> None:
+    async def _async_save_research_daily_safe(self, *, force: bool = False) -> None:
         """Persist research daily buckets best-effort. Non-fatal on error.
 
         Only writes when a capture-store foundation exists AND
-        ``_research_daily_save_needed`` is True. Dirty flag remains True
-        when save fails, ensuring the next periodic save opportunity
-        retries; success clears it. Never raises.
+        ``_research_daily_save_needed`` is True. Debounced like
+        ``_async_save_support_critical_events_safe()`` (same
+        ``_SUPPORT_RESEARCH_SAVE_DEBOUNCE_S`` window) so a bare setup-time
+        aggregation does not itself write a `.storage` file on the very
+        first coordinator refresh; ``force=True`` (unload/shutdown) always
+        bypasses this. Dirty flag remains True when save fails, ensuring
+        the next periodic save opportunity retries; success clears it.
+        Never raises.
         """
         if self._capture_stores is None or not self._research_daily_save_needed:
+            return
+        if not force and not self._save_debounce_elapsed(self._research_daily_first_dirty_ts):
             return
         try:
             store = self._capture_stores.research_daily_store()
             await store.save({"buckets": dict(self._research_daily_buckets)})
             self._research_daily_save_needed = False
+            self._research_daily_first_dirty_ts = None
         except Exception as err:
             self._research_daily_last_error = str(err)
             # dirty flag remains — will retry on next save opportunity
@@ -1294,6 +1348,8 @@ class LearningShadowController:
             after = result.updated_payload["buckets"]
             if after != before:
                 self._research_daily_buckets = after
+                if not self._research_daily_save_needed:
+                    self._research_daily_first_dirty_ts = self._utcnow_iso()
                 self._research_daily_save_needed = True
         except Exception as err:
             self._research_daily_last_error = str(err)
@@ -3149,10 +3205,13 @@ class LearningShadowController:
         await self._async_save_application_lifecycle_safe()
         # Flush episode history (best-effort; saves if dirty)
         await self._async_save_episode_history_safe()
-        # Flush support critical events (best-effort; saves if dirty)
-        await self._async_save_support_critical_events_safe()
-        # Flush research daily buckets (best-effort; saves if dirty)
-        await self._async_save_research_daily_safe()
+        # Flush support critical events (best-effort; saves if dirty).
+        # force=True: unload must not lose genuinely accumulated data
+        # just because the debounce window hasn't elapsed yet.
+        await self._async_save_support_critical_events_safe(force=True)
+        # Flush research daily buckets (best-effort; saves if dirty).
+        # force=True — same rationale as above.
+        await self._async_save_research_daily_safe(force=True)
 
     def read_outcome_score_safe(self) -> tuple:
         """Read LE 2.0 outcome quality score (0–100 %) for display.
@@ -3337,7 +3396,7 @@ class LearningShadowController:
 
         Bucket date is derived from this controller's own injected Clock
         (``self._utcnow_iso()``, timezone-aware, deterministic under
-        tests) — never a bare ``datetime.utcnow()``. Never raises: a
+        tests) — never a bare wall-clock current-time helper. Never raises: a
         malformed/out-of-range value or any internal failure is captured
         in ``_research_daily_last_error`` and swallowed — never
         propagated, never touches ``_enabled``.

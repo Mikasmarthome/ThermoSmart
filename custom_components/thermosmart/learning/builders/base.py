@@ -1,6 +1,7 @@
 """Shared episode-builder contracts and machinery (pure Python)."""
 from __future__ import annotations
 
+from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from enum import Enum
@@ -261,6 +262,21 @@ class EpisodeBuilder:
     trajectory_cap: int = 120
     materialized: bool = True
 
+    # Bounded event-id dedup cache: an OrderedDict acts as an insertion-ordered
+    # set (O(1) membership + oldest-first eviction), matching the same
+    # bounded-LRU pattern already used elsewhere in the runtime (e.g.
+    # lifecycle.py's pending_boost_contexts). Drive-end events are far rarer
+    # than 5-min cycles, so 500 comfortably covers normal operation while
+    # still bounding a long-running session.
+    _SEEN_EVENT_IDS_CAP = 500
+
+    # Defensive hard cap on the open episode's per-step reliability samples.
+    # Episodes normally close within ~max_episode_duration_s (well under 20
+    # samples at a 5-min cadence) via each subclass's own timeout guard —
+    # this is only a safety net for the (currently unobserved) case where an
+    # episode never closes, so it must never trigger during normal building.
+    _RELIABILITIES_HARD_CAP = 1000
+
     def __init__(self, learning_zone_id: str,
                  params: Optional[BuilderParameters] = None) -> None:
         if not learning_zone_id:
@@ -270,7 +286,7 @@ class EpisodeBuilder:
         self._seq = 0
         self._last_ts: Optional[datetime] = None
         self._last_fingerprint: Optional[tuple] = None
-        self._seen_event_ids: set[str] = set()
+        self._seen_event_ids: "OrderedDict[str, None]" = OrderedDict()
         self._reset_episode()
 
     # -- subclass hooks --------------------------------------------------
@@ -317,7 +333,9 @@ class EpisodeBuilder:
         self._last_ts = inp.ts
         self._last_fingerprint = fp
         if inp.event_id is not None:
-            self._seen_event_ids.add(inp.event_id)
+            self._seen_event_ids[inp.event_id] = None
+            if len(self._seen_event_ids) > self._SEEN_EVENT_IDS_CAP:
+                self._seen_event_ids.popitem(last=False)
         return result
 
     def current_state(self) -> dict:
@@ -369,7 +387,8 @@ class EpisodeBuilder:
             self._last_ts = _parse(state["last_ts"])
             self._last_fingerprint = tuple(state["last_fingerprint"]) \
                 if state["last_fingerprint"] else None
-            self._seen_event_ids = set(state["seen_event_ids"])
+            self._seen_event_ids = OrderedDict(
+                (eid, None) for eid in state["seen_event_ids"][-self._SEEN_EVENT_IDS_CAP:])
             self._active = bool(state["active"])
             self._episode_id = state["episode_id"]
             self._start_ts = _parse(state["start_ts"])
@@ -392,7 +411,7 @@ class EpisodeBuilder:
         self._seq = 0
         self._last_ts = None
         self._last_fingerprint = None
-        self._seen_event_ids = set()
+        self._seen_event_ids = OrderedDict()
         self._reset_episode()
 
     # -- shared helpers --------------------------------------------------
@@ -420,6 +439,8 @@ class EpisodeBuilder:
                        inp.indoor_temp_quality, gap)
         if inp.regime is not None:
             self._reliabilities.append(inp.regime.reliability)
+            if len(self._reliabilities) > self._RELIABILITIES_HARD_CAP:
+                self._reliabilities = self._reliabilities[-self._RELIABILITIES_HARD_CAP:]
             self._last_regime = inp.regime.regime
         if inp.target is not None:
             self._extra["target"] = inp.target

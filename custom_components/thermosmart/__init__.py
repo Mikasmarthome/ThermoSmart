@@ -268,6 +268,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
         if coordinator := entry_data.get("coordinator"):
             await coordinator._async_restore_temp_source()
+            # cancel any in-flight valve-maintenance task (guarded — must never
+            # block unload, and a maintenance cycle must never outlive its entry)
+            try:
+                await coordinator.async_cancel_maintenance()
+            except Exception:
+                pass
         # flush + unload the LE 2.0 learning runtime (guarded)
         if le2_shadow := entry_data.get("le2_shadow"):
             try:

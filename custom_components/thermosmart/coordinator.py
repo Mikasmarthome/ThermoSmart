@@ -224,6 +224,7 @@ class ThermoSmartCoordinator(
         # Wartung (genutzt von MaintenanceMixin)
         self._last_maintenance: datetime | None = None
         self._maintenance_running: bool = False
+        self._maintenance_task: object = None  # Optional[asyncio.Task] — set in maintenance.py
 
         # Sensor-Filterung
         self._sensor_ema: dict[str, float] = {}

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import logging
 
 from .const import (
@@ -103,4 +104,20 @@ class MaintenanceMixin:
             finally:
                 self._maintenance_running = False
 
-        self.hass.async_create_task(_run_maintenance())
+        self._maintenance_task = self.hass.async_create_task(_run_maintenance())
+
+    async def async_cancel_maintenance(self) -> None:
+        """Cancel any in-flight valve-maintenance task and await its teardown.
+
+        Must be called on unload/reload so a maintenance cycle (which can run
+        for minutes, holding the boost setpoint) never outlives its config
+        entry and keeps calling services against a torn-down zone. Safe to
+        call when no maintenance task exists or it already finished.
+        """
+        task = self._maintenance_task
+        if task is None or task.done():
+            return
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+        self._maintenance_running = False

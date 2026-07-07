@@ -36,6 +36,22 @@ Zone identity: each zone_id (HA entry_id UUID) is replaced with a deterministic
 12-char hex digest.  Exports from the same installation share the same digests,
 making longitudinal data correlatable without being reversible.
 
+Historical (frozen LE1) learning snapshot:
+  Per-zone "historical_learning_snapshot" block — the frozen legacy
+  learning-engine data (learning_engine.freeze() in __init__.py) reshaped
+  into a structured Deep-Research view instead of an unfiltered pass-through
+  of LearningEngine.get_export_data(). Per-category allow-lists keep genuine
+  research value (heat rate, delta, outcome score, ts/weekday/hour/minute
+  time context) while only fields explicitly named in those allow-lists can
+  ever reach the export — no entity_id/device_id/unique_id/person/presence/
+  location/home name. event_count_summary reports the true (uncapped) totals;
+  research_events is capped per category (see
+  _HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY) with any excess reported via
+  records_truncated, never silently dropped. A final scan_payload() pass
+  (the same second-barrier scanner used by the LE2 runtime-models research
+  block) excludes any category that unexpectedly fails it. Never crashes the
+  export — a missing/malformed source yields available: false instead.
+
 LE2 research data:
   Only model coefficient aggregates are included (models, cycles,
   last_cycle_ts, model_update_counts).  Fields containing IDs of any kind
@@ -80,6 +96,16 @@ LE2 support critical event timeline (support export only):
   dropped. Coverage/retention metadata (coverage_start/end,
   persistent_store_retention_h, full_window_covered, store_warmup) describes
   the underlying data span, independent of the export cap.
+
+Support export reserved diagnostics:
+  Per-zone "reserved_diagnostics" block replaces the previous
+  "adaptation_application"/"orchestration_preview" pair — both were always-
+  zero placeholders for the application/orchestration layer, which is
+  foundation-only in this version (a global kill-switch keeps
+  application_enabled False; nothing ever actually applies a candidate). The
+  two live, currently-meaningful blocks ("adaptation",
+  "adaptation_history" — real passive-candidate/attribution counts, not
+  reserved) are unaffected and remain as-is.
 
 24h auto-delete:
   Export files are scheduled for deletion 24 hours after creation using
@@ -153,6 +179,188 @@ def _le2_strip_forbidden(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_le2_strip_forbidden(i) for i in obj]
     return obj
+
+
+# ── Historical (frozen LE1) learning snapshot — Deep Research reshaping ──────
+#
+# The legacy learning engine (frozen — LearningEngine.freeze() in __init__.py)
+# accumulated raw per-event dicts before LE 2.0 existed. These carry genuine
+# research value (heat rate, delta, outcome score, time-of-day context) and
+# are intentionally NOT reduced to counts/averages — only entity/person/
+# location identifiers are stripped. Unlike every other research-export
+# block, this snapshot used to be an unfiltered pass-through of
+# learning_engine.get_export_data() with no scan_payload() pass; the
+# functions below are the fix.
+#
+# Per-category ALLOW-lists (not a blacklist over the legacy free-form dicts)
+# are the primary defense: only fields explicitly named here can ever reach
+# the export, so an unexpected legacy key can only be silently excluded,
+# never silently leaked. scan_payload() (the same second-barrier scanner used
+# by the LE2 runtime-models research block, _le2_research_data) still runs as
+# a final check.
+
+_HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY = 200
+
+_HIST_OBS_ALLOWED_FIELDS = (
+    "target", "indoor_temp", "delta", "active_control", "window_open",
+    "control_reason", "preheat_active", "heating_failure", "vacation",
+    "summer_mode", "outdoor_temp", "outdoor_humidity", "wind_speed",
+    "solar_radiation", "indoor_humidity", "heat_rate", "norm_heat_rate",
+    "cool_rate", "schedule_period", "forecast_high",
+)
+_HIST_TRV_OBS_ALLOWED_FIELDS = (
+    "trv_setpoint", "indoor_temp", "target", "delta", "setpoint_excess",
+    "heat_rate", "efficiency", "outdoor_temp", "wind_speed", "solar_radiation",
+)
+_HIST_WINDOW_COOLING_ALLOWED_FIELDS = (
+    "duration_min", "temp_drop", "cooling_rate_per_min", "indoor_start_temp",
+    "outdoor_temp", "wind_speed",
+)
+_HIST_OUTCOME_ALLOWED_FIELDS = (
+    "start_temp", "target", "peak_temp", "end_temp", "minutes_taken",
+    "expected_minutes", "controller", "reason", "outcome_score",
+    "outdoor_temp", "outdoor_humidity", "wind_speed", "solar_radiation", "rain",
+)
+
+
+def _hist_event_view(raw: Any, allowed_fields: tuple, *, source: str) -> dict | None:
+    """Build one allow-listed research event from a raw legacy learning-engine
+    dict. Only technical/numeric fields explicitly named in ``allowed_fields``
+    survive, plus a research time context (``ts``/``weekday``/``hour``/
+    ``minute``, derived from ``ts`` so all four categories get the same
+    context shape even though only "observations" stored hour/minute/weekday
+    directly) and a fixed ``source`` marker. Returns None for a malformed
+    (non-dict) entry — never raises — so one corrupt legacy row cannot break
+    the whole export.
+    """
+    if not isinstance(raw, dict):
+        return None
+    ts_raw = raw.get("ts")
+    view: dict = {}
+    if isinstance(ts_raw, str):
+        view["ts"] = ts_raw
+        try:
+            ts_text = ts_raw[:-1] + "+00:00" if ts_raw.endswith("Z") else ts_raw
+            parsed = datetime.fromisoformat(ts_text)
+            view["weekday"] = parsed.weekday()
+            view["hour"] = parsed.hour
+            view["minute"] = parsed.minute
+        except Exception:
+            pass
+    for key in allowed_fields:
+        val = raw.get(key)
+        if val is None:
+            continue
+        if isinstance(val, (str, int, float, bool)):
+            view[key] = val
+        # else: unexpected type for a technical field — dropped, not guessed at.
+    view["source"] = source
+    return view
+
+
+def _hist_category(
+    raw_list: Any, allowed_fields: tuple, *, source: str,
+) -> tuple[list, int]:
+    """Cap a raw legacy event list to the most recent
+    ``_HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY`` entries (already
+    chronological in the source), then allow-list each kept entry. Returns
+    ``(kept_views, records_truncated)`` — never raises; a missing/malformed
+    source list yields an empty category rather than failing the export.
+    """
+    if not isinstance(raw_list, list):
+        return [], 0
+    total = len(raw_list)
+    capped_raw = raw_list[-_HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY:]
+    views = [
+        v for v in (_hist_event_view(r, allowed_fields, source=source) for r in capped_raw)
+        if v is not None
+    ]
+    truncated = max(0, total - len(capped_raw))
+    return views, truncated
+
+
+def _le2_historical_learning_snapshot_for_research(learning: dict) -> dict:
+    """Convert the frozen LE1 legacy learning-engine snapshot into a
+    structured, privacy-scanned Deep-Research block (see module-level
+    comment above for the rationale).
+
+    Scalar model-state values (confidence/boost_factor/forecast_bias/
+    heat_loss_ema) are plain floats already produced by
+    ``LearningEngine.get_export_data()`` — no allow-list needed beyond a
+    numeric-type check, kept under ``model_state`` in the new structure.
+    """
+    try:
+        obs_kept, obs_trunc = _hist_category(
+            learning.get("observations"), _HIST_OBS_ALLOWED_FIELDS, source="historical")
+        trv_kept, trv_trunc = _hist_category(
+            learning.get("trv_observations"), _HIST_TRV_OBS_ALLOWED_FIELDS, source="historical")
+        wc_kept, wc_trunc = _hist_category(
+            learning.get("window_cooling_obs"), _HIST_WINDOW_COOLING_ALLOWED_FIELDS,
+            source="historical")
+        out_kept, out_trunc = _hist_category(
+            learning.get("outcome_log"), _HIST_OUTCOME_ALLOWED_FIELDS, source="historical")
+
+        research_events = {
+            "observations": obs_kept,
+            "trv_observations": trv_kept,
+            "window_cooling": wc_kept,
+            "outcomes": out_kept,
+        }
+
+        # Final belt-and-suspenders scan — same defense used by
+        # _le2_research_data(). The allow-lists above should already make
+        # this a no-op; if it ever isn't, drop only the offending category
+        # so one unexpected field cannot suppress the rest of the snapshot.
+        from .learning.privacy import scan_payload
+        for cat_name, cat_events in list(research_events.items()):
+            try:
+                if scan_payload(cat_events):
+                    _LOGGER.warning(
+                        "ThermoSmart: historical_learning_snapshot.%s failed the "
+                        "privacy scan — category excluded from this export.",
+                        cat_name,
+                    )
+                    research_events[cat_name] = []
+            except Exception:
+                research_events[cat_name] = []
+
+        def _num(key: str):
+            val = learning.get(key)
+            return val if isinstance(val, (int, float)) else None
+
+        return {
+            "available": True,
+            "frozen": True,
+            "raw_legacy_dump_included": False,
+            "privacy_checked": True,
+            "event_count_summary": {
+                "observations": int(learning.get("observation_count") or 0),
+                "trv_observations": int(learning.get("trv_observation_count") or 0),
+                "window_cooling_observations": int(learning.get("window_cooling_obs_count") or 0),
+                "outcome_entries": len(learning.get("outcome_log") or []),
+            },
+            "model_state": {
+                "confidence": _num("confidence"),
+                "boost_factor": _num("boost_factor"),
+                "forecast_bias": _num("forecast_bias"),
+                "heat_loss_ema": _num("heat_loss_ema"),
+            },
+            "research_events": research_events,
+            "records_truncated": {
+                "observations": obs_trunc,
+                "trv_observations": trv_trunc,
+                "window_cooling": wc_trunc,
+                "outcomes": out_trunc,
+            },
+        }
+    except Exception:
+        return {
+            "available": False,
+            "reason": "historical_snapshot_unavailable",
+            "frozen": True,
+            "raw_legacy_dump_included": False,
+            "privacy_checked": True,
+        }
 
 
 # ── zone helpers ─────────────────────────────────────────────────────────────
@@ -1435,6 +1643,43 @@ def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
         return {**_zero, "last_error": str(err)}
 
 
+def _le2_reserved_diagnostics_summary(coord: Any, zone_id: str) -> dict:
+    """Collapsed placeholder for the application/orchestration layer in the
+    support export.
+
+    That layer is foundation-only in this version — ``ApplicationPolicy.
+    application_enabled`` is a global kill-switch that is always False (see
+    _le2_application_lifecycle_summary's docstring), and
+    _le2_orchestration_preview_summary's ``would_apply_count`` is always 0
+    for the same reason. Replaces the two previous always-inert blocks
+    (``adaptation_application``, ``orchestration_preview`` — every counter in
+    both was always 0) with one compact, clearly-labeled placeholder instead
+    of two blocks of always-zero counters that read as noise in a support
+    export. Any internal error from either underlying summary still surfaces
+    here via ``last_error`` (support-relevant even though the feature itself
+    is inactive). Never raises.
+    """
+    last_error = None
+    try:
+        app = _le2_application_lifecycle_summary(coord, zone_id)
+        if app.get("last_error"):
+            last_error = app["last_error"]
+    except Exception:
+        pass
+    if last_error is None:
+        try:
+            preview = _le2_orchestration_preview_summary(coord, zone_id)
+            if preview.get("last_error"):
+                last_error = preview["last_error"]
+        except Exception:
+            pass
+    return {
+        "available": False,
+        "reason": "reserved_inactive",
+        "last_error": last_error,
+    }
+
+
 def _le2_application_lifecycle_research_entries(coord: Any) -> list:
     """Return public-safe application lifecycle state entries for research export.
 
@@ -1630,12 +1875,15 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
         coord = entry_data.get("coordinator") if isinstance(entry_data, dict) else None
 
         meta = _zone_meta(cfg)
-        learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
         # The legacy learning engine is frozen — learning_engine.freeze() in
-        # __init__.py — so these values are a static historical snapshot, not
-        # live-updating data. Additive marker only; existing fields/consumers
-        # are unaffected.
-        learning["historical_snapshot_frozen"] = True
+        # __init__.py — so this is a static historical snapshot, not
+        # live-updating data. analytics is computed from the raw learning
+        # dict (pure numeric aggregates, already export-safe); the exported
+        # historical_learning_snapshot itself is a separate, sanitized,
+        # allow-listed Deep-Research view built by
+        # _le2_historical_learning_snapshot_for_research() below — see that
+        # function's docstring for why the raw dict is never exported as-is.
+        learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
         analytics = _compute_analytics(learning)
         le2 = _le2_research_data(coord, entry.entry_id) if coord is not None else None
         learning_progress = (
@@ -1654,7 +1902,7 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
             **meta,
-            "historical_learning_snapshot": learning,
+            "historical_learning_snapshot": _le2_historical_learning_snapshot_for_research(learning),
             "analytics": analytics,
             "runtime_models": le2,
             "learning_progress": learning_progress,
@@ -1733,10 +1981,7 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["adaptation_history"] = _le2_adaptation_history_summary(
                 coord, entry.entry_id
             )
-            zone_info["adaptation_application"] = _le2_application_lifecycle_summary(
-                coord, entry.entry_id
-            )
-            zone_info["orchestration_preview"] = _le2_orchestration_preview_summary(
+            zone_info["reserved_diagnostics"] = _le2_reserved_diagnostics_summary(
                 coord, entry.entry_id
             )
             zone_info["critical_events"] = _le2_critical_events_export(coord, now=ts)
@@ -1747,8 +1992,9 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             zone_info["runtime_pending"] = None
             zone_info["adaptation"] = None
             zone_info["adaptation_history"] = None
-            zone_info["adaptation_application"] = None
-            zone_info["orchestration_preview"] = None
+            zone_info["reserved_diagnostics"] = {
+                "available": False, "reason": "no_coordinator", "last_error": None,
+            }
             zone_info["critical_events"] = {"available": False, "reason": "no_coordinator"}
             zone_info["device_profile"] = None
 

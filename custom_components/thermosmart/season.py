@@ -5,6 +5,7 @@ import asyncio
 import logging
 
 from .const import SUMMER_THRESHOLD, WINTER_THRESHOLD, TEMP_FROST_PROTECTION
+from .temperature_units import from_internal_temperature_c, to_internal_temperature_c
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,15 +66,14 @@ class SeasonMixin:
             state = self.hass.states.get(entity_id)
             if not state or state.state in ("unavailable", "unknown"):
                 continue
-            try:
-                if abs(float(state.attributes.get("temperature", 0)) - TEMP_FROST_PROTECTION) < 0.5:
-                    continue
-            except (TypeError, ValueError):
-                pass
+            current_setpoint = to_internal_temperature_c(self.hass, state.attributes.get("temperature"))
+            if current_setpoint is not None and abs(current_setpoint - TEMP_FROST_PROTECTION) < 0.5:
+                continue
             self._last_written_setpoints[entity_id] = TEMP_FROST_PROTECTION
             tasks.append(self.hass.services.async_call(
                 "climate", "set_temperature",
-                {"entity_id": entity_id, "temperature": TEMP_FROST_PROTECTION},
+                {"entity_id": entity_id,
+                 "temperature": from_internal_temperature_c(self.hass, TEMP_FROST_PROTECTION)},
                 blocking=True,
             ))
             task_ids.append(entity_id)

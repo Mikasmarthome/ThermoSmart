@@ -14,6 +14,7 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
+from .temperature_units import to_internal_temperature_c
 from .tpi import compute_tpi, duty_to_setpoint
 from .const import (
     DOMAIN,
@@ -506,7 +507,7 @@ class ThermoSmartCoordinator(
                         if _cancel is not None:
                             _cancel()
                         self._window_close_at.pop(entity_id, None)
-                        current = self._read_avg_sensor(cfg.get("temp_sensors", []))
+                        current = self._read_avg_sensor(cfg.get("temp_sensors", []), is_temperature=True)
                         if current is not None:
                             self._window_open_temp[entity_id] = current
                         # Schedule a coordinator refresh exactly when the open delay expires
@@ -977,13 +978,11 @@ class ThermoSmartCoordinator(
                         for _eid in cfg.get("climate_entities", []):
                             _st = self.hass.states.get(_eid)
                             if _st is not None:
-                                try:
-                                    _t = float(_st.attributes.get("temperature", 0))
-                                    if _t > 0:
-                                        recommendation["trv_setpoint"] = _t
-                                        break
-                                except (TypeError, ValueError):
-                                    pass
+                                _t = to_internal_temperature_c(
+                                    self.hass, _st.attributes.get("temperature"))
+                                if _t is not None and _t > 0:
+                                    recommendation["trv_setpoint"] = _t
+                                    break
 
             # Nach trv_setpoint-Berechnung: Heizungsausfall-Erkennung
             self._check_heating_failure(recommendation)
@@ -1833,7 +1832,7 @@ class ThermoSmartCoordinator(
 
     async def _compute_recommendation(self, cfg: dict, weather_data: dict, mode: str) -> dict:
         _learning_mode_on = bool(cfg.get("learning_enabled", True))
-        _primary_room_temp = self._read_avg_sensor(cfg.get("temp_sensors", []))
+        _primary_room_temp = self._read_avg_sensor(cfg.get("temp_sensors", []), is_temperature=True)
         current_temp = _primary_room_temp
         if current_temp is None:
             current_temp = self._read_trv_avg_temp(cfg.get("climate_entities", []))
@@ -2259,12 +2258,14 @@ class ThermoSmartCoordinator(
     # ── Sensor-Lesen ─────────────────────────────────────────────────
 
     def _read_raw_avg_sensor(self, sensor_ids: list[str]) -> float | None:
-        """Raw average of available sensors — no EMA smoothing, for display only.
+        """Raw average of available temperature sensors — no EMA smoothing, for display only.
 
         Filters out invalid states (unknown, unavailable, None) but does not
         apply EMA or spike detection. Used exclusively for _live_temp so that
         climate.current_temperature reflects the actual sensor reading instead
-        of the EMA-smoothed value used by the control path.
+        of the EMA-smoothed value used by the control path. Each sensor's own
+        unit_of_measurement is normalized to °C before averaging — a mix of
+        °C and °F sensors is never averaged raw.
         """
         values = []
         seen: set[str] = set()
@@ -2274,10 +2275,10 @@ class ThermoSmartCoordinator(
             seen.add(sid)
             state = self.hass.states.get(sid)
             if state and state.state not in ("unknown", "unavailable", "None"):
-                try:
-                    values.append(float(state.state))
-                except ValueError:
-                    pass
+                c = to_internal_temperature_c(
+                    self.hass, state.state, unit=state.attributes.get("unit_of_measurement"))
+                if c is not None:
+                    values.append(c)
         return round(sum(values) / len(values), 1) if values else None
 
     def _read_trv_avg_temp(self, climate_entity_ids: list[str]) -> float | None:
@@ -2286,6 +2287,10 @@ class ThermoSmartCoordinator(
         Reads the current_temperature attribute directly; no EMA, no spike filter.
         Used when temp_sensors is empty so TPI and the display cache have a valid value.
         External temp sensors always take priority — this method is only called as fallback.
+        climate.current_temperature carries no unit attribute of its own — Home
+        Assistant's climate platform already normalizes it to the HA system
+        unit before it reaches state.attributes, so no explicit unit is passed
+        here (to_internal_temperature_c falls back to the system unit).
         """
         values = []
         seen: set[str] = set()
@@ -2296,15 +2301,18 @@ class ThermoSmartCoordinator(
             state = self.hass.states.get(eid)
             if state and state.state not in ("unknown", "unavailable"):
                 trv_t = state.attributes.get("current_temperature")
-                if trv_t is not None:
-                    try:
-                        values.append(float(trv_t))
-                    except (TypeError, ValueError):
-                        pass
+                c = to_internal_temperature_c(self.hass, trv_t)
+                if c is not None:
+                    values.append(c)
         return round(sum(values) / len(values), 1) if values else None
 
-    def _read_avg_sensor(self, sensor_ids: list[str]) -> float | None:
-        """Durchschnitt über alle verfügbaren Sensoren – ignoriert Ausfälle automatisch."""
+    def _read_avg_sensor(self, sensor_ids: list[str], *, is_temperature: bool = False) -> float | None:
+        """Durchschnitt über alle verfügbaren Sensoren – ignoriert Ausfälle automatisch.
+
+        Used for both temperature and humidity sensors. ``is_temperature=True``
+        normalizes each sensor's own unit_of_measurement to °C before EMA
+        filtering — humidity (percent) is never unit-converted.
+        """
         values = []
         seen: set[str] = set()
         for sid in sensor_ids:
@@ -2314,7 +2322,15 @@ class ThermoSmartCoordinator(
             state = self.hass.states.get(sid)
             if state and state.state not in ("unknown", "unavailable", "None"):
                 try:
-                    filtered = self._filter_sensor_value(sid, float(state.state))
+                    if is_temperature:
+                        raw = to_internal_temperature_c(
+                            self.hass, state.state,
+                            unit=state.attributes.get("unit_of_measurement"))
+                        if raw is None:
+                            continue
+                    else:
+                        raw = float(state.state)
+                    filtered = self._filter_sensor_value(sid, raw)
                     if filtered is not None:
                         values.append(filtered)
                 except ValueError:

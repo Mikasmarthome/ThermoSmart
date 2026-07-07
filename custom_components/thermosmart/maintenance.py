@@ -14,6 +14,7 @@ from .const import (
     VALVE_MAINTENANCE_DURATION_SUMMER_SEC,
     HEATING_MODE_VACATION,
 )
+from .temperature_units import from_internal_temperature_c
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -69,10 +70,11 @@ class MaintenanceMixin:
 
         async def _run_maintenance() -> None:
             try:
+                _boost_dispatch = from_internal_temperature_c(self.hass, VALVE_MAINTENANCE_BOOST_TEMP)
                 tasks = [
                     self.hass.services.async_call(
                         "climate", "set_temperature",
-                        {"entity_id": eid, "temperature": VALVE_MAINTENANCE_BOOST_TEMP},
+                        {"entity_id": eid, "temperature": _boost_dispatch},
                         blocking=True,
                     )
                     for eid in climate_entities
@@ -84,10 +86,11 @@ class MaintenanceMixin:
 
                 await asyncio.sleep(duration)
 
+                _return_dispatch = from_internal_temperature_c(self.hass, target_after)
                 tasks = [
                     self.hass.services.async_call(
                         "climate", "set_temperature",
-                        {"entity_id": eid, "temperature": target_after},
+                        {"entity_id": eid, "temperature": _return_dispatch},
                         blocking=True,
                     )
                     for eid in climate_entities

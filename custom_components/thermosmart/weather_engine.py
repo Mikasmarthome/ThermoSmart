@@ -6,6 +6,7 @@ import logging
 
 from homeassistant.core import HomeAssistant
 
+from .temperature_units import to_internal_temperature_c
 from .const import (
     WEATHER_COLD_THRESHOLD,
     WEATHER_MILD_THRESHOLD,
@@ -52,12 +53,19 @@ class WeatherEngine:
         self._solar_sensor = outdoor_solar_sensor
         self._rain_sensor = outdoor_rain_sensor
 
-    def _read_sensor(self, entity_id: str | None) -> float | None:
-        """Einzelnen Sensor lesen. Gibt None zurück wenn unavailable."""
+    def _read_sensor(self, entity_id: str | None, *, is_temperature: bool = False) -> float | None:
+        """Einzelnen Sensor lesen. Gibt None zurück wenn unavailable.
+
+        ``is_temperature=True`` normalizes the sensor's own unit_of_measurement
+        to °C — humidity/wind/solar/rain sensors are never unit-converted.
+        """
         if not entity_id:
             return None
         state = self._hass.states.get(entity_id)
         if state and state.state not in ("unknown", "unavailable", "None"):
+            if is_temperature:
+                return to_internal_temperature_c(
+                    self._hass, state.state, unit=state.attributes.get("unit_of_measurement"))
             try:
                 return float(state.state)
             except (ValueError, TypeError):
@@ -79,12 +87,17 @@ class WeatherEngine:
 
         # ── Wetter-Entity (Basis) ─────────────────────────────────────
         weather_state = self._hass.states.get(self._weather_entity)
+        weather_temp_unit: str | None = None
         if weather_state and weather_state.state not in ("unknown", "unavailable"):
             attrs = weather_state.attributes
             data["condition"] = weather_state.state
+            # weather.* entities expose their own display unit as a dedicated
+            # "temperature_unit" attribute (distinct from a sensor's
+            # unit_of_measurement) — the entity's temperature/forecast
+            # values are already expressed in this unit.
+            weather_temp_unit = attrs.get("temperature_unit")
 
             for key, attr in (
-                ("temperature", "temperature"),
                 ("humidity",    "humidity"),
                 ("wind_speed",  "wind_speed"),
             ):
@@ -94,16 +107,21 @@ class WeatherEngine:
                         data[key] = float(raw)
                     except (TypeError, ValueError):
                         pass
+            data["temperature"] = to_internal_temperature_c(
+                self._hass, attrs.get("temperature"), unit=weather_temp_unit)
 
             # Letzter Fallback: Legacy-Forecast aus Entity-Attributen
             # (für Integrationen die den neuen Service nicht unterstützen)
             legacy_forecast = attrs.get("forecast")
             if isinstance(legacy_forecast, list) and legacy_forecast:
                 try:
-                    data["forecast_high"] = float(legacy_forecast[0].get("temperature") or 0)
-                    data["forecast_low"] = float(
-                        legacy_forecast[0].get("templow") or data["forecast_high"] or 0
-                    )
+                    _high = to_internal_temperature_c(
+                        self._hass, legacy_forecast[0].get("temperature"), unit=weather_temp_unit)
+                    data["forecast_high"] = _high if _high is not None else None
+                    _low_raw = legacy_forecast[0].get("templow")
+                    data["forecast_low"] = (
+                        to_internal_temperature_c(self._hass, _low_raw, unit=weather_temp_unit)
+                        if _low_raw is not None else data["forecast_high"])
                 except (TypeError, ValueError, AttributeError):
                     pass
         elif self._weather_entity:
@@ -128,16 +146,18 @@ class WeatherEngine:
                 forecast_list = result.get(self._weather_entity, {}).get("forecast", [])
                 if forecast_list:
                     first = forecast_list[0]
-                    try:
-                        data["forecast_high"] = float(first.get("temperature") or 0)
-                    except (TypeError, ValueError):
-                        pass
-                    try:
-                        data["forecast_low"] = float(
-                            first.get("templow") or data["forecast_high"] or 0
-                        )
-                    except (TypeError, ValueError):
-                        pass
+                    # get_forecasts() returns values already converted to the
+                    # entity's own display unit (same weather_temp_unit as above).
+                    _high = to_internal_temperature_c(
+                        self._hass, first.get("temperature"), unit=weather_temp_unit)
+                    if _high is not None:
+                        data["forecast_high"] = _high
+                    _low_raw = first.get("templow")
+                    if _low_raw is not None:
+                        data["forecast_low"] = to_internal_temperature_c(
+                            self._hass, _low_raw, unit=weather_temp_unit)
+                    elif data["forecast_high"] is not None:
+                        data["forecast_low"] = data["forecast_high"]
         except TimeoutError:
             _LOGGER.warning(
                 "WeatherEngine: Forecast-Abruf Timeout (>10s) – nutze Legacy-Daten falls verfügbar"
@@ -155,7 +175,7 @@ class WeatherEngine:
             "rain":           self._rain_sensor,
         }
         for key, sensor_id in sensor_map.items():
-            value = self._read_sensor(sensor_id)
+            value = self._read_sensor(sensor_id, is_temperature=(key == "temperature"))
             if value is not None:
                 data[key] = value
                 if key == "temperature":

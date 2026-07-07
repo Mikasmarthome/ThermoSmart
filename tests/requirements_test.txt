@@ -1,0 +1,9 @@
+# Public test-suite dependencies (Pytest CI, GitHub Actions ubuntu-latest).
+# Intentionally minimal — only what the public suite actually imports:
+# pytest-homeassistant-custom-component provides the hass/enable_custom_integrations
+# fixtures used across these tests and pulls in a compatible homeassistant version
+# transitively. pytest-asyncio is required for the async test functions (run with
+# --asyncio-mode=auto). No freezegun/voluptuous — not used by any file in this suite.
+pytest>=8.0
+pytest-asyncio>=0.24
+pytest-homeassistant-custom-component>=0.13

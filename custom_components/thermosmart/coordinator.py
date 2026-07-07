@@ -549,17 +549,10 @@ class ThermoSmartCoordinator(
                                     self.hass, close_delay_secs, _close_delay_expired
                                 )
 
-                            duration_min = (now - opened_at).total_seconds() / 60
-                            temp_at_open = self._window_open_temp.pop(entity_id, None)
-                            current = self._read_avg_sensor(cfg.get("temp_sensors", []))
-                            if temp_at_open is not None and current is not None and duration_min >= 1.0:
-                                last_weather = (self.data or {}).get("weather", {})
-                                self.hass.async_create_task(
-                                    self.learning_engine.async_observe_window_cooling(
-                                        self.zone_id, duration_min, temp_at_open, current,
-                                        last_weather,
-                                    )
-                                )
+                            # LE v1 window-cooling observation removed (frozen no-op —
+                            # LearningEngine.freeze() in __init__.py). LE v1 now only
+                            # serves the schedule lookup via async_get_base_target().
+                            self._window_open_temp.pop(entity_id, None)
                         self._window_open_at.pop(entity_id, None)
 
                 _LOGGER.info(
@@ -997,32 +990,10 @@ class ThermoSmartCoordinator(
 
             await self._async_observe_trv_setpoints(cfg, recommendation, weather_data)
 
-            # Outcome-Scoring: Heizsitzung tracken und bewerten
-            if not effective_summer:
-                self.learning_engine.update_heating_session(
-                    zone_id=self.zone_id,
-                    current_temp=current_temp,
-                    target=target,   # effective_target – actual heating goal
-                    is_active_control=self._active_control,
-                    weather_data=weather_data,
-                    expected_minutes=recommendation.get("preheat_minutes", 0),
-                )
-
+            # LE v1 outcome-scoring/observation removed (frozen no-op —
+            # LearningEngine.freeze() in __init__.py). LE v1 now only serves
+            # the schedule lookup via async_get_base_target().
             indoor_humidity = self._read_avg_sensor(cfg.get("humidity_sensors", []))
-            await self.learning_engine.async_observe(
-                zone_id=self.zone_id,
-                recommendation=recommendation,
-                weather_data=weather_data,
-                indoor_humidity=indoor_humidity,
-                is_active_control=self._active_control,
-                window_open=recommendation.get("window_open", False),
-                control_reason=self._control_reason(recommendation),
-                preheat_active=recommendation.get("preheat_active", False),
-                heating_failure=bool(recommendation.get("heating_failure")),
-                vacation=recommendation.get("mode") == HEATING_MODE_VACATION,
-                summer_mode=bool(recommendation.get("is_summer", False)),
-                schedule_period=self._schedule_period(recommendation, cfg),
-            )
 
             # LE2 Support Critical Events: record window/summer/manual hold
             # transitions only (never every cycle) — pure event production,
@@ -2454,57 +2425,10 @@ class ThermoSmartCoordinator(
     async def _async_observe_trv_setpoints(
         self, cfg: dict, recommendation: dict, weather_data: dict
     ) -> None:
-        """TRV-Setpoints im Beobachtungsmodus oder der aktiven Steuerung erfassen und lernen."""
-        current_temp = recommendation.get("current_temp")
-        # Use effective_target (weather-adjusted) as the actual heating goal for observations
-        target = recommendation.get("effective_target")
-        if current_temp is None or target is None:
-            return
+        """No-op: existed solely to feed LE v1's setpoint-efficiency learning.
 
-        # In active control: only observe when ThermoSmart itself needs to heat.
-        # In observation mode: do NOT filter on our own target – the external controller
-        # may heat to a different (higher) target. The actual TRV setpoint check below
-        # (trv_setpoint < current_temp → skip) is sufficient as the quality gate.
-        if self._active_control and target <= current_temp:
-            return
-
-        heat_rate = None
-        now = self._now_local()
-        if self.zone_id in self.learning_engine._last_temp:
-            last_time, last_temp = self.learning_engine._last_temp[self.zone_id]
-            elapsed_min = (now - last_time).total_seconds() / 60
-            if 3 <= elapsed_min <= 15 and current_temp > last_temp:
-                heat_rate = round((current_temp - last_temp) / elapsed_min, 5)
-
-        if self._active_control:
-            written = [v for v in self._last_written_setpoints.values() if v >= current_temp]
-            if not written:
-                return
-            trv_setpoint = round(sum(written) / len(written), 1)
-            await self.learning_engine.async_observe_trv_setpoint(
-                zone_id=self.zone_id,
-                trv_setpoint=trv_setpoint,
-                indoor_temp=current_temp,
-                target=target,
-                weather_data=weather_data,
-                heat_rate=heat_rate,
-            )
-        else:
-            for entity_id in cfg.get("climate_entities", []):
-                state = self.hass.states.get(entity_id)
-                if state is None or state.state in ("unavailable", "unknown", "off"):
-                    continue
-                try:
-                    trv_setpoint = float(state.attributes.get("temperature", 0))
-                except (TypeError, ValueError):
-                    continue
-                if trv_setpoint < current_temp:
-                    continue
-                await self.learning_engine.async_observe_trv_setpoint(
-                    zone_id=self.zone_id,
-                    trv_setpoint=trv_setpoint,
-                    indoor_temp=current_temp,
-                    target=target,
-                    weather_data=weather_data,
-                    heat_rate=heat_rate,
-                )
+        LE v1 is frozen (LearningEngine.freeze() in __init__.py) and now only
+        serves the schedule lookup via async_get_base_target(); the
+        setpoint-efficiency observation this method fed was never applied.
+        """
+        return

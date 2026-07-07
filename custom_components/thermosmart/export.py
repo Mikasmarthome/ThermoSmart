@@ -1631,6 +1631,11 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
 
         meta = _zone_meta(cfg)
         learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
+        # LE v1 (the legacy learning engine) is frozen — learning_engine.freeze()
+        # in __init__.py — so these values are a static historical snapshot, not
+        # live-updating data. Additive marker only; existing fields/consumers
+        # are unaffected.
+        learning["legacy_v1_frozen"] = True
         analytics = _compute_analytics(learning)
         le2 = _le2_research_data(coord, entry.entry_id) if coord is not None else None
         learning_progress = (

@@ -303,11 +303,11 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: lifecycle state stays in-memory only
-        # Raw/episode capture storage — wiring foundation only (no writes yet).
-        # Construction performs zero storage I/O: it only holds a StoreFactory
-        # reference plus the canonical raw-track/episode-type registries, so a
-        # future capture/persist step has one clear, tested place to reach
-        # Raw/Episode stores from without duplicating registry construction.
+        # Raw/episode capture storage — live-reachable store-access facade.
+        # Construction itself performs zero storage I/O: it only holds a
+        # StoreFactory reference plus the canonical raw-track/episode-type
+        # registries. The returned handles ARE actively saved/loaded below
+        # (episodes_store(), support_critical_events_store(), research_daily_store()).
         self._capture_stores = None
         try:
             from ..storage.capture_stores import LearningCaptureStores
@@ -318,10 +318,9 @@ class LearningShadowController:
         except Exception:
             pass  # non-fatal: capture storage foundation stays unavailable
         # Episode history — in-memory with persistent backing store, reached via the
-        # LearningCaptureStores facade above (EpisodesStore). No runtime append hook
-        # exists yet — nothing in run_cycle() calls append_completed_episode() in this
-        # step (see episode_persistence.py's own docstring for why); this only wires
-        # load/save so a future hook has an already-tested attachment point.
+        # LearningCaptureStores facade above (EpisodesStore). Live-wired: the append
+        # hook is record_completed_episode_safe() below, bound as LearningRuntime's
+        # episode_sink and invoked from run_cycle()'s completed-episode loop.
         self._episode_history: dict = {}  # episode_id -> flat serialized episode entry
         self._episode_save_needed: bool = False
         self._episode_last_error: Optional[str] = None
@@ -329,8 +328,9 @@ class LearningShadowController:
         # via the same LearningCaptureStores facade (SupportCriticalEventStore).
         # Storage/setup landmark events (store loaded/empty/load-failed,
         # save-failed/save-recovered) are recorded from within the load/save
-        # methods themselves in this step — no coordinator/runtime/control-path
-        # producer exists yet (see support_event_persistence.py's own docstring).
+        # methods themselves. A coordinator-path producer also exists:
+        # coordinator.py's _maybe_record_support_hold_events() calls
+        # record_support_critical_event_safe() below every cycle.
         self._support_critical_events: dict = {}  # event_id -> flat serialized support event entry
         self._support_critical_events_save_needed: bool = False
         # First time this dirty streak began (ISO ts); gates the debounce in

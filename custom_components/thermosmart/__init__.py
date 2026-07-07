@@ -333,10 +333,12 @@ async def _async_purge_le2_zone_storage(
         )
 
     # Same hash the shadow controller uses to key its store (ha_integration.py's
-    # _zone_segment()) — recomputed here rather than imported so this cleanup
-    # path has no dependency on the live runtime module being importable.
-    import hashlib
-    zone_segment = hashlib.sha256(entry_id.encode("utf-8")).hexdigest()[:16]
+    # _zone_segment(), which now delegates to this same consolidated helper).
+    # naming.py is already pulled in transitively via storage.stores above —
+    # importing it directly here still avoids any dependency on the heavier
+    # live runtime module (ha_integration.py), matching the original intent.
+    from .learning.storage.naming import zone_segment as _zone_segment_fn
+    zone_segment = _zone_segment_fn(entry_id)
     await HomeAssistantStoreAdapter(hass, zone_segment).async_delete()
 
     if last_zone:

@@ -94,8 +94,15 @@ class AdaptiveBoostControlResult:
 
 
 def _zone_segment(zone_id: str) -> str:
-    """Non-identifying, stable token for the store key (never an entity name)."""
-    return hashlib.sha256(zone_id.encode("utf-8")).hexdigest()[:16]
+    """Non-identifying, stable token for the store key (never an entity name).
+
+    Delegates to the single consolidated implementation in
+    ``learning/storage/naming.py`` (``naming.zone_segment()``) — same
+    algorithm, same output; kept as a thin wrapper here so existing call
+    sites in this module are unaffected.
+    """
+    from ..storage.naming import zone_segment
+    return zone_segment(zone_id)
 
 
 def _is_celsius_unit(unit: str) -> bool:

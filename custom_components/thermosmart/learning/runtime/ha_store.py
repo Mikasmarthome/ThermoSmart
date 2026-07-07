@@ -5,12 +5,20 @@ so lazily (HA is imported inside the methods) so the pure runtime stays importab
 on plain Python. It adapts HA's ``Store`` to the injected ``AsyncStore`` protocol
 used by :class:`PersistenceOrchestrator`. Store keys stay under the
 ``thermosmart_le2__`` namespace and never embed entity names.
+
+Neutral naming migration (Learning Naming / Storage-Key audit): NEW_STORE_KEY_PREFIX
+is the target neutral prefix. STORE_KEY_PREFIX (unchanged) is what store_key() still
+actually produces — production behavior here is unaffected by this addition. See
+learning/storage/naming.py's module docstring for the full migration rationale;
+store_key_pair() mirrors that module's LearningStorageKeyPair pattern for this
+runtime-snapshot key specifically.
 """
 from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
 STORE_KEY_PREFIX = "thermosmart_le2__"
+NEW_STORE_KEY_PREFIX = "thermosmart_learning__"
 STORE_VERSION = 2
 
 
@@ -23,6 +31,24 @@ def store_key(zone_segment: str) -> str:
     if not zone_segment:
         raise ValueError("zone_segment must be non-empty")
     return f"{STORE_KEY_PREFIX}{zone_segment}"
+
+
+def store_key_pair(zone_segment: str):
+    """Target (neutral) and legacy runtime-snapshot key for one zone segment.
+
+    Returns a ``learning.storage.naming.LearningStorageKeyPair`` — imported
+    lazily here to avoid a module-level dependency from this HA-only adapter
+    onto the pure storage-naming module (mirrors this file's existing lazy-HA-
+    import style, just in the other direction). Does not change what
+    ``store_key()``/``HomeAssistantStoreAdapter`` actually use.
+    """
+    from ..storage.naming import LearningStorageKeyPair
+    if not zone_segment:
+        raise ValueError("zone_segment must be non-empty")
+    return LearningStorageKeyPair(
+        current=f"{NEW_STORE_KEY_PREFIX}{zone_segment}",
+        legacy=store_key(zone_segment),
+    )
 
 
 class HomeAssistantStoreAdapter:

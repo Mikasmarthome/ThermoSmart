@@ -63,15 +63,11 @@
         }
       },
       "presence": {
-        "title": "Step 3 / 4 – Presence & Learning",
+        "title": "Step 3 / 4 – Presence",
         "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
-          "home_zone": "Home zone (default: zone.home)",
-          "learning_enabled": "Enable learning and adaptive control"
-        },
-        "data_description": {
-          "learning_enabled": "Learns zone behavior. When active control is enabled, learning can apply bounded adaptive setpoint adjustments. Turn this off to use deterministic TPI-only control."
+          "home_zone": "Home zone (default: zone.home)"
         }
       },
       "weather": {
@@ -111,7 +107,7 @@
         "menu_options": {
           "devices": "Devices & Sensors",
           "schedule": "Temperatures & Schedule",
-          "presence": "Presence & Learning",
+          "presence": "Presence",
           "weather": "Weather & Outdoor Sensors"
         }
       },
@@ -166,15 +162,11 @@
         }
       },
       "presence": {
-        "title": "Presence & Learning",
+        "title": "Presence",
         "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
-          "home_zone": "Home zone (default: zone.home)",
-          "learning_enabled": "Enable learning and adaptive control"
-        },
-        "data_description": {
-          "learning_enabled": "Learns zone behavior. When active control is enabled, learning can apply bounded adaptive setpoint adjustments. Turn this off to use deterministic TPI-only control."
+          "home_zone": "Home zone (default: zone.home)"
         }
       },
       "weather": {

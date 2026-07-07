@@ -17,7 +17,6 @@ from .const import (
     CONF_OUTDOOR_WIND_SENSOR,
     CONF_OUTDOOR_SOLAR_SENSOR,
     CONF_OUTDOOR_RAIN_SENSOR,
-    CONF_LEARNING_ENABLED,
     CONF_SCHEDULE_ENABLED,
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
@@ -27,7 +26,6 @@ from .const import (
     CONF_VALVE_MAINTENANCE,
     CONF_SCHED_WD_MORNING, CONF_SCHED_WD_NIGHT,
     CONF_SCHED_WE_MORNING, CONF_SCHED_WE_NIGHT,
-    DEFAULT_LEARNING_ENABLED,
     TEMP_ECO,
     WINDOW_OPEN_SETPOINT,
 )
@@ -165,15 +163,20 @@ def _schema_schedule(d: dict) -> vol.Schema:
 
 
 def _schema_presence(d: dict) -> vol.Schema:
+    """Presence-detection fields only.
+
+    No global learning on/off question here — per-zone learning is controlled
+    at runtime via the "Learning mode" switch entity (switch.py,
+    ThermoSmartLearningSwitch), which already covers this. CONF_LEARNING_ENABLED
+    stays readable in coordinator.py/__init__.py for backward compatibility with
+    entries created before this field was removed from the UI.
+    """
     return vol.Schema({
         vol.Optional(CONF_PRESENCE_PERSONS, default=d.get(CONF_PRESENCE_PERSONS, [])):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="person", multiple=True)),
 
         vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="zone")),
-
-        vol.Required(CONF_LEARNING_ENABLED, default=d.get(CONF_LEARNING_ENABLED, DEFAULT_LEARNING_ENABLED)):
-            selector.BooleanSelector(),
     })
 
 
@@ -215,8 +218,13 @@ class ThermoSmartConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     def __init__(self) -> None:
         self._data: dict = {}
 
-    # Startmenü: System oder Zone
+    # Startmenü: System oder Zone – die globale Einrichtung wird nur angeboten,
+    # solange noch kein ThermoSmart-Entry existiert (weder System noch Zone).
+    # Danach führt der Flow direkt zum Heizzone-hinzufügen-Schritt, statt eine
+    # Option anzuzeigen die ohnehin nur mit einem Abort enden würde.
     async def async_step_user(self, user_input: dict | None = None):
+        if self.hass.config_entries.async_entries(DOMAIN):
+            return await self.async_step_add_zone()
         return self.async_show_menu(
             step_id="user",
             menu_options=["add_system", "add_zone"],

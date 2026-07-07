@@ -63,15 +63,11 @@
         }
       },
       "presence": {
-        "title": "Schritt 3 / 4 – Präsenz & Lernen",
+        "title": "Schritt 3 / 4 – Präsenz",
         "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
-          "home_zone": "Heimzone (Standard: zone.home)",
-          "learning_enabled": "Lernen und adaptive Steuerung aktivieren"
-        },
-        "data_description": {
-          "learning_enabled": "Lernt das Heizverhalten der Zone. Wenn die aktive Steuerung eingeschaltet ist, darf das Lernen begrenzte adaptive Sollwert-Anpassungen vornehmen. Ausschalten nutzt deterministische TPI-Steuerung ohne adaptive Anpassung."
+          "home_zone": "Heimzone (Standard: zone.home)"
         }
       },
       "weather": {
@@ -111,7 +107,7 @@
         "menu_options": {
           "devices": "Geräte & Sensoren",
           "schedule": "Temperaturen & Zeitplan",
-          "presence": "Präsenz & Lernen",
+          "presence": "Präsenz",
           "weather": "Wetter & Außensensoren"
         }
       },
@@ -166,15 +162,11 @@
         }
       },
       "presence": {
-        "title": "Präsenz & Lernen",
+        "title": "Präsenz",
         "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
           "presence_persons": "Personen für Präsenzerkennung",
-          "home_zone": "Heimzone (Standard: zone.home)",
-          "learning_enabled": "Lernen und adaptive Steuerung aktivieren"
-        },
-        "data_description": {
-          "learning_enabled": "Lernt das Heizverhalten der Zone. Wenn die aktive Steuerung eingeschaltet ist, darf das Lernen begrenzte adaptive Sollwert-Anpassungen vornehmen. Ausschalten nutzt deterministische TPI-Steuerung ohne adaptive Anpassung."
+          "home_zone": "Heimzone (Standard: zone.home)"
         }
       },
       "weather": {

@@ -100,7 +100,7 @@ Add **ThermoSmart System** first (Summer mode select + Vacation switch), then ad
 
 Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cycle · Weather offset · Temperature slope · Heat loss · Heating power · Outcome score · Solar gain · TRV observations · Window cooling rate · EMA temperature
 
-> **Note:** `sensor.*_confidence` and the Heat Loss, Heating Power, Outcome Score, TRV Observations, and Window Cooling Rate diagnostic sensors are backed by the LE 2.0 learning engine — their values and extra attributes reflect LE 2.0's model state.
+> **Note:** `sensor.*_confidence` and the Heat Loss, Heating Power, Outcome Score, TRV Observations, and Window Cooling Rate diagnostic sensors are backed by the Learning Engine — their values and extra attributes reflect the Learning Engine's model state.
 
 ### Global (ThermoSmart System)
 | Entity | Description |

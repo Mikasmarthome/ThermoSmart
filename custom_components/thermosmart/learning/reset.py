@@ -9,6 +9,7 @@ store ``thermosmart_learning_data``.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
 from .clock import Clock, SystemClock
@@ -38,8 +39,11 @@ from .storage.stores import (
     GlobalIndexStore,
     ModelStateStore,
     RawSegmentIndexStore,
+    RawSegmentStore,
+    ResearchDailyStore,
     StoreFactory,
     StoreVersionError,
+    SupportCriticalEventStore,
     ZoneMetadataStore,
 )
 
@@ -353,6 +357,70 @@ async def reset_v2_learning_state(
     return await ensure_v2_initialized(
         factory, entry_id, raw_registry=raw_registry, episode_registry=episode_registry,
         model_registry=model_registry, clock=clock)
+
+
+@dataclass(frozen=True)
+class ZonePurgeResult:
+    """Outcome of purging one zone's LE 2.0 storage on real removal. Never raises."""
+    deleted_keys: tuple[str, ...]
+    errors: tuple[str, ...]
+
+
+async def async_purge_zone_storage(
+    factory: StoreFactory, entry_id: str, *, raw_registry: RawTrackRegistry,
+) -> ZonePurgeResult:
+    """Delete every known LE 2.0 storage key for one zone.
+
+    Only ever called on REAL zone/entry removal (``async_remove_entry`` in
+    ``__init__.py``) — never on unload/reload, which must never lose data.
+    Every key deleted here is derived the same way it was created (via
+    ``learning/storage/naming.py`` through the store wrapper classes) — no
+    directory scan, no wildcard, no cross-zone reach. Best-effort per store:
+    one failing delete never blocks the rest. Does not touch the v1 store
+    ``thermosmart_learning_data`` (shared across zones — that is the caller's
+    responsibility once it has confirmed no zone remains) nor the LE 2.0
+    shadow-state store (a different key scheme; see
+    ``learning/runtime/ha_store.py``'s ``HomeAssistantStoreAdapter.async_delete()``).
+    """
+    lz = naming.validate_learning_zone_id(entry_id)
+    deleted: list[str] = []
+    errors: list[str] = []
+
+    async def _delete(store, key: str) -> None:
+        try:
+            await store.delete()
+            deleted.append(key)
+        except Exception as err:
+            errors.append(f"{key}: {type(err).__name__}")
+
+    await _delete(ZoneMetadataStore(factory, lz), naming.container_key(lz))
+    await _delete(ModelStateStore(factory, lz), naming.model_state_key(lz))
+    await _delete(AdaptationHistoryStore(factory, lz), naming.adaptation_history_key(lz))
+    await _delete(ApplicationLifecycleStore(factory, lz), naming.application_lifecycle_key(lz))
+    await _delete(EpisodesStore(factory, lz), naming.episodes_key(lz))
+    await _delete(SupportCriticalEventStore(factory, lz), naming.support_critical_events_key(lz))
+    await _delete(ResearchDailyStore(factory, lz), naming.research_daily_key(lz))
+
+    for track in raw_registry.names():
+        index_key = naming.raw_index_key(lz, track)
+        next_seq = 0
+        try:
+            raw = await RawSegmentIndexStore(factory, lz, track).load()
+            next_seq = int((raw or {}).get("next_sequence_number", 0))
+        except Exception as err:
+            errors.append(f"{index_key} (index load): {type(err).__name__}")
+        await _delete(RawSegmentIndexStore(factory, lz, track), index_key)
+
+        segment_store = RawSegmentStore(factory, lz, track)
+        for seq in range(next_seq):
+            seg_key = naming.raw_segment_key(lz, track, seq)
+            try:
+                await segment_store.delete_segment(seq)
+                deleted.append(seg_key)
+            except Exception as err:
+                errors.append(f"{seg_key}: {type(err).__name__}")
+
+    return ZonePurgeResult(deleted_keys=tuple(deleted), errors=tuple(errors))
 
 
 async def rebuild_global_index(

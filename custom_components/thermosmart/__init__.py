@@ -246,7 +246,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "gated by Learning and Active Control switches"
         )
     except Exception as err:  # learning is strictly optional; setup failure is non-fatal
-        _LOGGER.warning("ThermoSmart: LE 2.0 shadow setup skipped: %s", type(err).__name__)
+        _LOGGER.warning("ThermoSmart: Learning Engine setup skipped: %s", type(err).__name__)
 
     await hass.config_entries.async_forward_entry_setups(entry, ZONE_PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
@@ -302,24 +302,80 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
+async def _async_purge_le2_zone_storage(
+    hass: HomeAssistant, entry_id: str, *, last_zone: bool
+) -> None:
+    """Delete all LE 2.0 storage for one removed zone.
+
+    On the last remaining zone, also clears the shared legacy learning-engine
+    store and the LE 2.0 global index — both are zone-independent, so they
+    are only ever removed once no ThermoSmart zone remains at all. Only ever
+    called from ``async_remove_entry`` (real removal) — never from
+    ``async_unload_entry`` (reload/restart/unload must never lose data).
+    Best-effort: a failure here is logged but never raised further up.
+    """
+    from homeassistant.helpers.storage import Store as _HAStore
+
+    from .const import STORAGE_KEY, STORAGE_VERSION
+    from .learning.reset import async_purge_zone_storage
+    from .learning.runtime.ha_store import HomeAssistantStoreAdapter
+    from .learning.storage.capture_registry import build_raw_track_registry
+    from .learning.storage.stores import GlobalIndexStore, HomeAssistantStoreFactory
+
+    factory = HomeAssistantStoreFactory(hass)
+    result = await async_purge_zone_storage(
+        factory, entry_id, raw_registry=build_raw_track_registry(),
+    )
+    if result.errors:
+        _LOGGER.warning(
+            "ThermoSmart: LE2-Storage-Bereinigung für Zone %s teilweise fehlgeschlagen: %s",
+            entry_id, result.errors,
+        )
+
+    # Same hash the shadow controller uses to key its store (ha_integration.py's
+    # _zone_segment()) — recomputed here rather than imported so this cleanup
+    # path has no dependency on the live runtime module being importable.
+    import hashlib
+    zone_segment = hashlib.sha256(entry_id.encode("utf-8")).hexdigest()[:16]
+    await HomeAssistantStoreAdapter(hass, zone_segment).async_delete()
+
+    if last_zone:
+        await _HAStore(hass, STORAGE_VERSION, STORAGE_KEY).async_remove()
+        await GlobalIndexStore(factory).delete()
+
+
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Lerndaten der entfernten Zone sofort bereinigen.
 
     Wird von HA aufgerufen NACHDEM die Zone vollständig aus config_entries entfernt
     wurde – zu diesem Zeitpunkt ist die zone_id bereits aus dem Entry-Register verschwunden,
     sodass prune_orphaned_zones sie korrekt als verwaist erkennt.
+
+    Only ever called on REAL removal — never on unload/reload/restart, which
+    must never delete learning/support/research storage.
     """
     if entry.data.get("entry_type") == "system":
         return
-    le = hass.data.get(DOMAIN, {}).get("learning_engine")
-    if le is None:
-        return
+
     active_zone_ids = {
         e.entry_id
         for e in hass.config_entries.async_entries(DOMAIN)
         if e.data.get("entry_type") != "system"
     }
-    le.prune_orphaned_zones(active_zone_ids)
+
+    if le := hass.data.get(DOMAIN, {}).get("learning_engine"):
+        le.prune_orphaned_zones(active_zone_ids)
+
+    try:
+        await _async_purge_le2_zone_storage(
+            hass, entry.entry_id, last_zone=not active_zone_ids
+        )
+    except Exception as err:
+        _LOGGER.warning(
+            "ThermoSmart: Zone '%s' LE2-Storage-Bereinigung fehlgeschlagen: %s",
+            entry.data.get("name", entry.entry_id), type(err).__name__,
+        )
+
     _LOGGER.info(
         "ThermoSmart: Zone '%s' entfernt – Lerndaten sofort bereinigt",
         entry.data.get("name", entry.entry_id),

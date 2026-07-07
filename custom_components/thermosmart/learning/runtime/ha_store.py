@@ -45,3 +45,12 @@ class HomeAssistantStoreAdapter:
 
     async def async_save(self, data: Mapping[str, Any]) -> None:
         await self._store.async_save(dict(data))
+
+    async def async_delete(self) -> None:
+        """Delete this zone's shadow-state store via HA's safe Store.async_remove().
+
+        Exact known key only — no directory scan, no wildcard. Only ever
+        called on real zone/entry removal (async_remove_entry), never on
+        unload/reload (which must never lose data).
+        """
+        await self._store.async_remove()

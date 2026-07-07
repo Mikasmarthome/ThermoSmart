@@ -934,12 +934,13 @@ class LearningShadowController:
         before being kept — a malformed or schema-mismatched entry is silently
         dropped (counted), never crashes the load.
 
-        Records exactly one storage/setup landmark event for this load
-        outcome (loaded-with-data / loaded-empty / load-failed), deduped
-        against the just-loaded snapshot so frequent HA restarts don't flood
-        the 48h timeline with repeated identical landmarks. This is the ONLY
-        event producer in this step — still no coordinator/runtime/control
-        path involved.
+        Records a storage/setup landmark event only for a genuine restore of
+        existing data or a load failure — never for an empty/nonexistent
+        store, so a fresh setup (nothing ever saved yet) does not itself
+        create a new dirty Support Critical Event that a subsequent
+        force-flushed unload would persist. Deduped against the just-loaded
+        snapshot so frequent HA restarts don't flood the 48h timeline with
+        repeated identical landmarks.
         """
         if self._capture_stores is None:
             return
@@ -979,16 +980,7 @@ class LearningShadowController:
                 details={"error_type": type(load_error).__name__},
                 dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
             )
-        elif records_loaded == 0:
-            self._record_storage_landmark_event_safe(
-                event_type=_schemas.SupportEventType.STORAGE_RESTORE,
-                severity=_schemas.SupportEventSeverity.INFO,
-                reason="support_events_empty",
-                summary="Support critical event store loaded (empty)",
-                details={"records_loaded": 0},
-                dedupe_window_s=self._STORAGE_RESTORE_LANDMARK_DEDUPE_WINDOW_S,
-            )
-        else:
+        elif records_loaded > 0:
             self._record_storage_landmark_event_safe(
                 event_type=_schemas.SupportEventType.STORAGE_RESTORE,
                 severity=_schemas.SupportEventSeverity.INFO,
@@ -3456,5 +3448,5 @@ class LearningShadowController:
         n = self._error_signatures.get(sig, 0)
         self._error_signatures[sig] = n + 1
         if n % _ERROR_LOG_THROTTLE == 0:  # throttle identical errors
-            _LOGGER.warning("ThermoSmart LE2 shadow %s error (zone hidden): %s", kind,
+            _LOGGER.warning("ThermoSmart Learning Engine %s error (zone hidden): %s", kind,
                             type(err).__name__)

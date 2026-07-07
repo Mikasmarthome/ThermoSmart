@@ -406,8 +406,8 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
             violations = scan_payload(safe)
             if violations:
                 _LOGGER.warning(
-                    "ThermoSmart: LE2 research data for zone %s has %d residual privacy "
-                    "violation(s) after stripping — LE2 block excluded for this zone. "
+                    "ThermoSmart: Learning Engine research data for zone %s has %d residual "
+                    "privacy violation(s) after stripping — block excluded for this zone. "
                     "Violations: %s",
                     _zone_hash(zone_id), len(violations),
                     [(v.path, v.kind) for v in violations[:5]],
@@ -1631,11 +1631,11 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
 
         meta = _zone_meta(cfg)
         learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
-        # LE v1 (the legacy learning engine) is frozen — learning_engine.freeze()
-        # in __init__.py — so these values are a static historical snapshot, not
+        # The legacy learning engine is frozen — learning_engine.freeze() in
+        # __init__.py — so these values are a static historical snapshot, not
         # live-updating data. Additive marker only; existing fields/consumers
         # are unaffected.
-        learning["legacy_v1_frozen"] = True
+        learning["historical_snapshot_frozen"] = True
         analytics = _compute_analytics(learning)
         le2 = _le2_research_data(coord, entry.entry_id) if coord is not None else None
         learning_progress = (

@@ -180,6 +180,9 @@ HEATING_FAILURE_DELAY_MIN = 35      # Minuten fallender Temp trotz Heizbefehl bi
 HEATING_FAILURE_SLOPE_THRESH = -0.01  # °C/min – negativer Trend trotz aktivem Heizbefehl
 HEATING_FAILURE_CMD_DELTA = 2.0     # °C – Mindest-Delta Setpoint > Ist für "Heizbefehl aktiv"
 
+# Dispatch-Fehler-Erkennung (Command-Fehler-Zähler)
+DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD = 5  # aufeinanderfolgende Fehlschläge → Support-Event
+
 
 # Storage keys
 STORAGE_VERSION = 1

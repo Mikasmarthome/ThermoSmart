@@ -68,34 +68,50 @@ class MaintenanceMixin:
             self.zone_name, VALVE_MAINTENANCE_BOOST_TEMP,
         )
 
+        def _dispatch_payloads(setpoint_c: float) -> list[dict]:
+            """Resolve one setpoint through the SAME per-device clamp/step/
+            profile-active logic as regular TRV dispatch (Device Compatibility
+            P1) — min_temp/max_temp/target_temp_step and a de-activated device
+            profile are respected exactly like ``_apply_temperature()``'s own
+            dispatch, instead of writing the raw constant straight to
+            ``climate.set_temperature``. Unit conversion happens exactly once,
+            on the already-clamped/snapped value, matching the regular
+            dispatch path — no double conversion.
+            """
+            payloads = []
+            for eid in climate_entities:
+                state = self.hass.states.get(eid)
+                if state is None or state.state in ("unavailable", "unknown"):
+                    continue
+                profile = self._device_profiles.get(eid)
+                if profile is not None and not profile.is_active:
+                    continue
+                effective = self.resolve_device_effective_setpoint(
+                    eid, state, setpoint_c, profile)
+                payloads.append({
+                    "entity_id": eid,
+                    "temperature": from_internal_temperature_c(self.hass, effective),
+                })
+            return payloads
+
         async def _run_maintenance() -> None:
             try:
-                _boost_dispatch = from_internal_temperature_c(self.hass, VALVE_MAINTENANCE_BOOST_TEMP)
                 tasks = [
                     self.hass.services.async_call(
-                        "climate", "set_temperature",
-                        {"entity_id": eid, "temperature": _boost_dispatch},
-                        blocking=True,
+                        "climate", "set_temperature", payload, blocking=True,
                     )
-                    for eid in climate_entities
-                    if self.hass.states.get(eid)
-                    and self.hass.states.get(eid).state not in ("unavailable", "unknown")
+                    for payload in _dispatch_payloads(VALVE_MAINTENANCE_BOOST_TEMP)
                 ]
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)
 
                 await asyncio.sleep(duration)
 
-                _return_dispatch = from_internal_temperature_c(self.hass, target_after)
                 tasks = [
                     self.hass.services.async_call(
-                        "climate", "set_temperature",
-                        {"entity_id": eid, "temperature": _return_dispatch},
-                        blocking=True,
+                        "climate", "set_temperature", payload, blocking=True,
                     )
-                    for eid in climate_entities
-                    if self.hass.states.get(eid)
-                    and self.hass.states.get(eid).state not in ("unavailable", "unknown")
+                    for payload in _dispatch_payloads(target_after)
                 ]
                 if tasks:
                     await asyncio.gather(*tasks, return_exceptions=True)

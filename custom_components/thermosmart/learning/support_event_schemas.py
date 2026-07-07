@@ -61,6 +61,7 @@ class SupportEventType(Enum):
     HEATING_DECISION = "heating_decision"        # reserved — no live producer, see class docstring
     TRV_COMMAND_SENT = "trv_command_sent"
     TRV_COMMAND_BLOCKED = "trv_command_blocked"
+    TRV_COMMAND_FAILED = "trv_command_failed"
     BOOST_STARTED = "boost_started"
     BOOST_BLOCKED = "boost_blocked"
     BOOST_ENDED = "boost_ended"

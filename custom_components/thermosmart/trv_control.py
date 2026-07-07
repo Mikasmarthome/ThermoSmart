@@ -5,6 +5,7 @@ import asyncio
 import logging
 import math
 
+from homeassistant.components.climate import ClimateEntityFeature
 from homeassistant.const import UnitOfTemperature
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
@@ -38,7 +39,7 @@ class _DispatchStats:
     """Accumulates per-entity dispatch results without exposing entity IDs."""
     __slots__ = ("targets_total", "targets_succeeded", "targets_failed",
                  "failure_reasons", "effective_setpoints",
-                 "effective_setpoints_by_entity")
+                 "effective_setpoints_by_entity", "failed_entity_ids")
 
     def __init__(self) -> None:
         self.targets_total: int = 0
@@ -48,17 +49,25 @@ class _DispatchStats:
         self.effective_setpoints: list = []  # actual per-device °C values written (successes only)
         # entity_id → effective °C written (successes only; keyed for counterfactual baseline).
         self.effective_setpoints_by_entity: dict = {}
+        # entity_id per failed dispatch attempt (may repeat within one cycle across
+        # dispatch paths) — feeds the coordinator's per-entity consecutive-failure
+        # counter (Device Compatibility P1). Not privacy-sensitive: consumed only
+        # in-process by the coordinator, never itself exported or stored.
+        self.failed_entity_ids: list = []
 
     def record(self, exc=None, *, effective_c=None, entity_id: str | None = None) -> None:
         """Record one dispatch attempt; pass exc to mark it as failed.
 
         effective_c: actual setpoint °C that was written (for success, ignored on failure).
-        entity_id: entity whose setpoint was written; populates effective_setpoints_by_entity.
+        entity_id: entity whose setpoint was written; populates
+        effective_setpoints_by_entity on success, failed_entity_ids on failure.
         """
         self.targets_total += 1
         if exc is not None:
             self.targets_failed += 1
             self.failure_reasons.append(_normalize_dispatch_error(exc))
+            if entity_id is not None:
+                self.failed_entity_ids.append(entity_id)
         else:
             self.targets_succeeded += 1
             if effective_c is not None:
@@ -88,6 +97,7 @@ class _DispatchStats:
         merged.effective_setpoints = self.effective_setpoints + other.effective_setpoints
         merged.effective_setpoints_by_entity = {
             **self.effective_setpoints_by_entity, **other.effective_setpoints_by_entity}
+        merged.failed_entity_ids = self.failed_entity_ids + other.failed_entity_ids
         return merged
 
     @property
@@ -341,6 +351,39 @@ class TRVControlMixin:
                 self.zone_name, entity_id,
             )
         return state
+
+    def _supports_single_setpoint(self, entity_id: str, state) -> bool:
+        """Return False only when a climate entity EXPLICITLY declares
+        TARGET_TEMPERATURE_RANGE support and NOT single TARGET_TEMPERATURE —
+        a genuine dual-setpoint / HEAT_COOL-only device.
+
+        ThermoSmart only ever calls ``climate.set_temperature`` with a single
+        ``temperature`` value; such an entity would reject that on every
+        single cycle. Warns ONCE per entity (never a silent, repeating
+        failure loop) and the caller skips dispatch for it entirely — the
+        entity is never even attempted, so it cannot pollute the consecutive-
+        dispatch-failure counter either. No new UI, no crash.
+
+        A missing/zero ``supported_features`` (no positive evidence either
+        way — e.g. an integration that has not populated it) is treated as
+        single-setpoint-capable, matching prior behavior: this guard only
+        acts on a real, positive dual-setpoint-only signal, never on absence
+        of information.
+        """
+        supported = state.attributes.get("supported_features", 0) or 0
+        if supported & ClimateEntityFeature.TARGET_TEMPERATURE:
+            return True
+        if not (supported & ClimateEntityFeature.TARGET_TEMPERATURE_RANGE):
+            return True
+        if entity_id not in self._dual_setpoint_warned:
+            self._dual_setpoint_warned.add(entity_id)
+            _LOGGER.warning(
+                "ThermoSmart '%s': %s unterstützt kein einzelnes Sollwert-Attribut "
+                "(nur TARGET_TEMPERATURE_RANGE / HEAT_COOL) – ThermoSmart kann "
+                "diesen TRV nicht direkt ansteuern und überspringt ihn.",
+                self.zone_name, entity_id,
+            )
+        return False
 
     # ── Watchdog ─────────────────────────────────────────────────────
 
@@ -692,6 +735,8 @@ class TRVControlMixin:
                     state = self._get_trv_state(entity_id)
                     if state is None:
                         continue
+                    if not self._supports_single_setpoint(entity_id, state):
+                        continue
                     frost_temp = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
                     # min_temp is already normalized to the HA system unit by
                     # HA's climate platform — see resolve_device_effective_setpoint().
@@ -743,7 +788,7 @@ class TRVControlMixin:
                                 "ThermoSmart '%s': window-open setpoint failed for %s: %s",
                                 self.zone_name, eid, result,
                             )
-                            stats.record(result)
+                            stats.record(result, entity_id=eid)
                         else:
                             self._last_written_setpoints[eid] = sp  # success only
                             stats.record(None)
@@ -775,6 +820,8 @@ class TRVControlMixin:
                     "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
                     self.zone_name, entity_id,
                 )
+                continue
+            if not self._supports_single_setpoint(entity_id, state):
                 continue
             effective_setpoint = self.resolve_device_effective_setpoint(
                 entity_id, state, trv_setpoint, _profile)
@@ -824,7 +871,7 @@ class TRVControlMixin:
                     _hvac_first_exc = err
                 stats.record(_hvac_first_exc,
                              effective_c=effective_setpoint if _hvac_first_exc is None else None,
-                             entity_id=entity_id if _hvac_first_exc is None else None)
+                             entity_id=entity_id)
             else:
                 _sp_pending.append((entity_id, effective_setpoint, self.hass.services.async_call(
                     "climate", "set_temperature",
@@ -842,7 +889,7 @@ class TRVControlMixin:
                         "ThermoSmart '%s': Temperatur-Setpoint fehlgeschlagen: %s",
                         self.zone_name, result,
                     )
-                    stats.record(result)
+                    stats.record(result, entity_id=eid)
                 else:
                     self._last_written_setpoints[eid] = sp  # success only
                     stats.record(None, effective_c=sp, entity_id=eid)

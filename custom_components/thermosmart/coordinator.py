@@ -14,7 +14,7 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
-from .temperature_units import to_internal_temperature_c
+from .temperature_units import to_internal_temperature_c, is_plausible_temperature_c
 from .tpi import compute_tpi, duty_to_setpoint
 from .const import (
     DOMAIN,
@@ -44,6 +44,7 @@ from .const import (
     HEATING_FAILURE_DELAY_MIN,
     HEATING_FAILURE_SLOPE_THRESH,
     HEATING_FAILURE_CMD_DELTA,
+    DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD,
     TPI_MAX_BOOST_CELSIUS,
     TPI_COEF_INT_DEFAULT,
     TPI_COEF_EXT_DEFAULT,
@@ -206,6 +207,14 @@ class ThermoSmartCoordinator(
         self._trv_offline: set[str] = set()
         self._valve_reset_done: bool = False
         self._valve_reset_attempts: int = 0
+        # Per-entity consecutive setpoint-dispatch-failure counter (Device
+        # Compatibility P1) — reset to 0 on any successful dispatch for that
+        # entity; drives a single, rate-limited Support Critical Event after
+        # DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD consecutive failures.
+        self._dispatch_consecutive_failures: dict[str, int] = {}
+        # Entities already warned about missing TARGET_TEMPERATURE support
+        # (dual-setpoint / HEAT_COOL-only devices) — warn once, not every cycle.
+        self._dual_setpoint_warned: set[str] = set()
 
         # Device profiles — populated by async_detect_device_entities (TRVControlMixin)
         self._device_profiles: dict[str, DeviceProfile] = {}
@@ -1094,6 +1103,8 @@ class ThermoSmartCoordinator(
                 await self._watchdog_hvac(cfg, recommendation)
                 await self._async_calibrate_trvs(cfg, recommendation)
                 _sp_stats = await self._apply_temperature(cfg, recommendation)
+                _dispatch_failure_crossed = self._update_dispatch_failure_counters(_sp_stats)
+                self._maybe_record_dispatch_failure_event(_dispatch_failure_crossed)
                 # Direkte Ventilsteuerung nach Setpoint-Schreiben
                 duty = recommendation.get("tpi_duty_cycle", 0.0)
                 if recommendation.get("window_open"):
@@ -1656,6 +1667,58 @@ class ThermoSmartCoordinator(
 
             self._record_support_hold_event(
                 event_type, severity, reason=reason, summary=summary, details=details,
+            )
+        except Exception:
+            pass  # event production is best-effort; must never affect the control cycle
+
+    def _update_dispatch_failure_counters(self, stats: _DispatchStats) -> bool:
+        """Update per-entity consecutive setpoint-dispatch-failure counters
+        from this cycle's ``_apply_temperature()`` stats (Device Compatibility
+        P1 — ``_maybe_record_trv_dispatch_event()`` above deliberately left
+        failed/partially-succeeded dispatch "out of scope"; this covers that
+        gap without touching that method's existing behavior).
+
+        A successful dispatch always resets that entity's counter to 0 —
+        processed after failures so success wins even in the rare same-cycle
+        edge case where an entity appears in both (e.g. two dispatch paths
+        writing the same climate entity in one cycle).
+
+        Returns True the cycle any entity's counter reaches exactly
+        ``DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD`` — a one-time crossing
+        signal, not "still above threshold", so a persistent failure streak
+        fires the caller's event once, not once per cycle.
+        """
+        crossed = False
+        for eid in stats.failed_entity_ids:
+            n = self._dispatch_consecutive_failures.get(eid, 0) + 1
+            self._dispatch_consecutive_failures[eid] = n
+            if n == DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD:
+                crossed = True
+        for eid in stats.effective_setpoints_by_entity:
+            self._dispatch_consecutive_failures[eid] = 0
+        return crossed
+
+    def _maybe_record_dispatch_failure_event(self, crossed: bool) -> None:
+        """Fire ONE Support Critical Event the cycle a TRV's consecutive
+        setpoint-dispatch failures first reach
+        ``DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD`` (see
+        ``_update_dispatch_failure_counters()``). No entity id in the event
+        (schema forbids it, see support_event_schemas.py) — this is a
+        zone-level "a TRV command is persistently failing" signal, not a
+        per-device diagnosis. Fires again only after that entity recovers
+        (a success resets its counter to 0) and then fails
+        ``DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD`` times again — never once
+        per cycle while a streak continues, never a command flood.
+        """
+        if not crossed or self._le2_shadow is None:
+            return
+        try:
+            from .learning.support_event_schemas import SupportEventSeverity, SupportEventType
+            self._record_support_hold_event(
+                SupportEventType.TRV_COMMAND_FAILED, SupportEventSeverity.WARNING,
+                reason="repeated_dispatch_failure",
+                summary="TRV setpoint command failed repeatedly",
+                details={"consecutive_failures": DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD},
             )
         except Exception:
             pass  # event production is best-effort; must never affect the control cycle
@@ -2302,8 +2365,15 @@ class ThermoSmartCoordinator(
             if state and state.state not in ("unknown", "unavailable"):
                 trv_t = state.attributes.get("current_temperature")
                 c = to_internal_temperature_c(self.hass, trv_t)
-                if c is not None:
-                    values.append(c)
+                if c is None:
+                    continue
+                if not is_plausible_temperature_c(c, context=eid):
+                    _LOGGER.debug(
+                        "ThermoSmart '%s': TRV-Fallback %s unplausibler Wert verworfen: %.1f°C",
+                        self.zone_name, eid, c,
+                    )
+                    continue
+                values.append(c)
         return round(sum(values) / len(values), 1) if values else None
 
     def _read_avg_sensor(self, sensor_ids: list[str], *, is_temperature: bool = False) -> float | None:
@@ -2330,15 +2400,41 @@ class ThermoSmartCoordinator(
                             continue
                     else:
                         raw = float(state.state)
-                    filtered = self._filter_sensor_value(sid, raw)
+                    filtered = self._filter_sensor_value(sid, raw, is_temperature=is_temperature)
                     if filtered is not None:
                         values.append(filtered)
                 except ValueError:
                     pass
         return round(sum(values) / len(values), 1) if values else None
 
-    def _filter_sensor_value(self, sensor_id: str, raw: float) -> float | None:
-        """EMA-Glättung mit Spike-Erkennung – Ausreißer werden ignoriert."""
+    def _filter_sensor_value(
+        self, sensor_id: str, raw: float, *, is_temperature: bool = True,
+    ) -> float | None:
+        """EMA-Glättung mit Spike-Erkennung – Ausreißer werden ignoriert.
+
+        Plausibility guard runs first (temperature sensors only —
+        ``is_temperature=False`` skips it so humidity/percent readings are
+        never checked against a Celsius band), before any EMA state is
+        touched: a garbage/out-of-range reading (e.g. a 127°C/-100°C device
+        sentinel) is rejected before it can become the EMA baseline or be
+        compared against an existing one. It never enters
+        ``self._sensor_ema``, so the next genuinely plausible reading still
+        sets a fresh baseline normally instead of being spike-rejected
+        relative to a garbage seed. ``_read_avg_sensor()`` (this method's
+        only caller) passes ``is_temperature`` through explicitly for both
+        its temperature and humidity sensor paths; the default here only
+        matters for direct/test callers.
+        """
+        if is_temperature and not is_plausible_temperature_c(raw, context=sensor_id):
+            count = self._sensor_noise_count.get(sensor_id, 0) + 1
+            self._sensor_noise_count[sensor_id] = count
+            if count == 1:
+                _LOGGER.debug(
+                    "ThermoSmart '%s': Sensor %s unplausibler Wert verworfen: %.1f°C",
+                    self.zone_name, sensor_id, raw,
+                )
+            return None
+
         if sensor_id not in self._sensor_ema:
             self._sensor_ema[sensor_id] = raw
             return raw

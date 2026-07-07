@@ -17,6 +17,7 @@ from ..confidence import (
     ConfidenceComponent,
     ConfidenceInput,
     ConfidencePurpose,
+    ConfidenceStatus,
     EvidenceDomain,
 )
 from ..contracts import PredictionType
@@ -131,22 +132,43 @@ class ModelOrchestrator:
             out[pred.prediction_type] = pred
         return out
 
-    def collect_confidence_components(self) -> dict[str, ConfidenceComponent]:
+    def collect_confidence_components(
+        self, *, now: Optional[str] = None
+    ) -> dict[str, ConfidenceComponent]:
+        """Collect one ConfidenceComponent per model.
+
+        ``now`` is an already-materialised ISO timestamp from the caller's
+        injected Clock (never read here) — forwarded to each model's
+        ``confidence(now=...)`` so freshness/staleness can be derived from
+        its own ``last_update_ts``. A model's reported ``status`` string
+        (e.g. "stale") is mapped onto the real ConfidenceStatus enum here —
+        ConfidenceComponent.freshness/reliability need no explicit mapping
+        since they already fall back to the contribution's own values.
+        """
         comps: dict[str, ConfidenceComponent] = {}
         for name, model in self._models.items():
             try:
-                contrib = model.confidence()
+                contrib = model.confidence(now=now)
             except Exception as err:
                 self._errors.append(f"{name}:confidence:{type(err).__name__}")
                 continue
+            status = ConfidenceStatus.HEALTHY
+            if contrib.status:
+                try:
+                    status = ConfidenceStatus(contrib.status)
+                except ValueError:
+                    pass  # unrecognised status string -> keep default HEALTHY
             comps[name] = ConfidenceComponent(
-                kind=_COMPONENT_KIND[name], contribution=contrib,
+                kind=_COMPONENT_KIND[name], contribution=contrib, status=status,
                 evidence_domains=_COMPONENT_DOMAINS[name])
         return comps
 
-    def aggregate(self, purposes: Mapping[ConfidencePurpose, tuple[str, ...]]) -> dict[str, Any]:
+    def aggregate(
+        self, purposes: Mapping[ConfidencePurpose, tuple[str, ...]], *,
+        now: Optional[str] = None,
+    ) -> dict[str, Any]:
         """Run the aggregator once per requested purpose from model components."""
-        comps = self.collect_confidence_components()
+        comps = self.collect_confidence_components(now=now)
         results: dict[str, Any] = {}
         for purpose, component_names in purposes.items():
             components = tuple(comps[n] for n in component_names if n in comps)
@@ -157,8 +179,8 @@ class ModelOrchestrator:
                 self._errors.append(f"confidence:{purpose.value}:{type(err).__name__}")
         return results
 
-    def run(self, purposes: Optional[Mapping[ConfidencePurpose, tuple[str, ...]]] = None
-            ) -> OrchestrationResult:
+    def run(self, purposes: Optional[Mapping[ConfidencePurpose, tuple[str, ...]]] = None, *,
+            now: Optional[str] = None) -> OrchestrationResult:
         self._errors = []
         predictions = self.collect_predictions()
         if purposes is None:
@@ -172,7 +194,7 @@ class ModelOrchestrator:
                 ConfidencePurpose.BOOST: ("boost", "outcome"),
                 ConfidencePurpose.MANUAL_CORRECTION: ("manual_correction",),
             }
-        confidence = self.aggregate(purposes)
+        confidence = self.aggregate(purposes, now=now)
         return OrchestrationResult(predictions=predictions, confidence_results=confidence,
                                    model_errors=tuple(self._errors))
 

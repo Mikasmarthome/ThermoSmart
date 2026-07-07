@@ -54,7 +54,7 @@ from ..contracts import (
     UpdateEligibilityResult,
 )
 from ..episode_schemas import EpisodeType, HeatingEpisode
-from .base import clamp, is_finite, outlier_z, robust_ema_update
+from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
 PARAMETER_VERSION = 1
@@ -908,7 +908,7 @@ class OnsetDelayModel:
         rel = max(self._state.aggregate_reliability, 0.1)
         return clamp(coverage * spread_penalty * rel, 0.0, 1.0)
 
-    def confidence(self) -> ConfidenceContribution:
+    def confidence(self, *, now: Optional[str] = None) -> ConfidenceContribution:
         g = self._state.general
         reasons: list[str] = []
         if not g.has_evidence:
@@ -917,8 +917,9 @@ class OnsetDelayModel:
             reasons.append("few_samples")
         value = self._confidence_value(g.sample_count, not g.has_evidence,
                                        g.dispersion, g.onset_delay_min)
+        freshness, status = freshness_from_age(now, self._state.last_update_ts)
         return ConfidenceContribution(value=value, evidence_count=g.sample_count,
-                                      reasons=tuple(reasons))
+                                      reasons=tuple(reasons), freshness=freshness, status=status)
 
     # -- diagnostics / export -------------------------------------------
 

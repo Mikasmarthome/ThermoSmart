@@ -3334,8 +3334,11 @@ class LearningShadowController:
                             overshoot_rate = getattr(diag, "overshoot_rate", None)
                             fc, pc = getattr(diag, "full_partial", (0, 0))
                             partial_ratio = (pc / (fc + pc)) if (fc + pc) > 0 else 0.0
-                        if accepted > 0:
-                            confidence_value = model.confidence().value
+                        # Recomputed every call, regardless of accepted-this-cycle
+                        # activity, so staleness (via now vs. the model's own
+                        # last_update_ts) is always reflected — never gated on
+                        # new evidence having just arrived.
+                        confidence_value = model.confidence(now=self._utcnow_iso()).value
                 except Exception:
                     pass  # a single model's diagnostics failure must not block the others
                 signals[model_name] = ModelSignal(

@@ -32,7 +32,7 @@ from ..contracts import (
     UpdateEligibilityResult,
 )
 from ..raw_schemas import CorrectionActionType, CorrectionSource, ManualCorrectionEvent, RawTrackName
-from .base import clamp, is_finite, median, outlier_z, robust_ema_update
+from .base import clamp, freshness_from_age, is_finite, median, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
 PARAMETER_VERSION = 1
@@ -907,7 +907,7 @@ class ManualCorrectionModel:
         return clamp(coverage * (0.4 + 0.6 * consistency) * (0.4 + 0.6 * direct_fraction)
                      * (1.0 - 0.5 * revert_rate) * (0.5 + 0.5 * days), 0.0, 1.0)
 
-    def confidence(self) -> ConfidenceContribution:
+    def confidence(self, *, now: Optional[str] = None) -> ConfidenceContribution:
         g = self._state.general
         n = g.sample_count
         reasons: list[str] = []
@@ -921,6 +921,10 @@ class ManualCorrectionModel:
             reasons.append("high_revert_rate")
         fallback = not g.has_evidence
         value = self._confidence_value(g.signed_magnitude.effective_n, fallback)
+        freshness, staleness = freshness_from_age(now, self._state.last_update_ts)
+        status = "healthy" if g.has_evidence else "fallback"
+        if g.has_evidence and staleness == "stale":
+            status = "stale"
         return ConfidenceContribution(
             value=value, evidence_count=n, reasons=tuple(reasons),
             component="manual_correction",
@@ -929,8 +933,8 @@ class ManualCorrectionModel:
             evidence_domains=("user_correction", "controller_events"),
             source_count=len(self._state.buckets),
             prior_fraction=1.0 if fallback else 0.0,
-            learned_fraction=0.0 if fallback else 1.0, fallback_used=fallback, freshness=1.0,
-            status="healthy" if g.has_evidence else "fallback")
+            learned_fraction=0.0 if fallback else 1.0, fallback_used=fallback, freshness=freshness,
+            status=status)
 
     def _attribution_mean(self) -> Optional[float]:
         if not self._state.recent_samples:

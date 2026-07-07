@@ -32,7 +32,7 @@ from ..contracts import (
 )
 from ..episode_schemas import EpisodeType
 from ..raw_schemas import ForecastDecisionEvent, ForecastEvaluationEvent, RawTrackName
-from .base import clamp, is_finite, outlier_z, robust_ema_update
+from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
 PARAMETER_VERSION = 1
@@ -684,7 +684,7 @@ class ForecastModel:
         reality = self._mean_reality_quality() or 0.5
         return clamp(coverage * accuracy * reality, 0.0, 1.0)
 
-    def confidence(self) -> ConfidenceContribution:
+    def confidence(self, *, now: Optional[str] = None) -> ConfidenceContribution:
         g = self._state.general
         reasons: list[str] = []
         if not g.has_evidence:
@@ -694,6 +694,10 @@ class ForecastModel:
             reasons.append("low_reality_quality")
         fallback = not g.has_evidence
         value = self._confidence_value(g.abs_error.effective_n, fallback)
+        freshness, staleness = freshness_from_age(now, self._state.last_update_ts)
+        status = "healthy" if g.has_evidence else "fallback"
+        if g.has_evidence and staleness == "stale":
+            status = "stale"
         return ConfidenceContribution(
             value=value, evidence_count=g.sample_count, reasons=tuple(reasons),
             component="forecast",
@@ -703,7 +707,7 @@ class ForecastModel:
             source_count=len(self._state.source_buckets),
             prior_fraction=1.0 if fallback else 0.0,
             learned_fraction=0.0 if fallback else 1.0, fallback_used=fallback,
-            freshness=1.0, status="healthy" if g.has_evidence else "fallback")
+            freshness=freshness, status=status)
 
     def _mean_reality_quality(self) -> Optional[float]:
         n = self._state.general.sample_count

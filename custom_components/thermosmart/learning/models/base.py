@@ -7,7 +7,22 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Sequence
+from datetime import datetime
+from typing import Optional, Sequence
+
+# -- confidence freshness (staleness) -----------------------------------------
+#
+# Conservative defaults: a 14-day grace window absorbs normal gaps between
+# heating cycles/episodes without any decay, a 90-day floor stops the decay
+# from ever reaching zero (physical building characteristics don't invalidate
+# just because nothing new was observed — this says "unconfirmed", not
+# "wrong"), and STALE_THRESHOLD triggers the aggregator's existing stale
+# handling (confidence.py already multiplies freshness into effective
+# confidence and applies extra caps when status is STALE).
+FRESHNESS_GRACE_DAYS = 14.0
+FRESHNESS_FLOOR_DAYS = 90.0
+FRESHNESS_FLOOR = 0.45
+STALE_THRESHOLD = 0.70
 
 
 def is_finite(x) -> bool:
@@ -63,3 +78,39 @@ def outlier_z(sample: float, value: float, dispersion: float) -> float:
     if dispersion <= 1e-9:
         return 0.0
     return abs(sample - value) / dispersion
+
+
+def freshness_from_age(
+    now: Optional[str], last_update_ts: Optional[str],
+) -> tuple[float, Optional[str]]:
+    """Derive (freshness, status) from elapsed time since the model's own
+    last_update_ts — never reads the wall clock; ``now`` must already be a
+    materialised ISO timestamp from the caller's injected Clock.
+
+    Conservative by design: missing/unparseable timestamps return
+    ``(1.0, None)`` rather than inventing staleness for data that was never
+    there — a genuinely cold-start model already reports low confidence via
+    its own evidence-based value, so this must never double-penalize it.
+    Linear decay between FRESHNESS_GRACE_DAYS and FRESHNESS_FLOOR_DAYS, never
+    below FRESHNESS_FLOOR. status is "stale" once freshness drops below
+    STALE_THRESHOLD, else None (healthy).
+    """
+    if now is None or last_update_ts is None:
+        return 1.0, None
+    try:
+        now_dt = datetime.fromisoformat(now)
+        last_dt = datetime.fromisoformat(last_update_ts)
+    except (TypeError, ValueError):
+        return 1.0, None
+    age_days = (now_dt - last_dt).total_seconds() / 86400.0
+    if age_days <= FRESHNESS_GRACE_DAYS:
+        freshness = 1.0
+    elif age_days >= FRESHNESS_FLOOR_DAYS:
+        freshness = FRESHNESS_FLOOR
+    else:
+        span = FRESHNESS_FLOOR_DAYS - FRESHNESS_GRACE_DAYS
+        frac = (age_days - FRESHNESS_GRACE_DAYS) / span
+        freshness = 1.0 - frac * (1.0 - FRESHNESS_FLOOR)
+    freshness = clamp(freshness, FRESHNESS_FLOOR, 1.0)
+    status = "stale" if freshness < STALE_THRESHOLD else None
+    return freshness, status

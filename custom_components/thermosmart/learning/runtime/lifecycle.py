@@ -537,7 +537,7 @@ class LearningRuntime:
 
         if mode in (LearningRuntimeMode.SHADOW, LearningRuntimeMode.ADVISORY,
                     LearningRuntimeMode.CONTROL):
-            result = zr.orchestrator.run()
+            result = zr.orchestrator.run(now=inp.ts)
             predictions = dict(result.predictions)
             confidence_results = dict(result.confidence_results)
             model_errors = result.model_errors

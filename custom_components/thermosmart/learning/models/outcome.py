@@ -30,7 +30,7 @@ from ..contracts import (
 )
 from ..episode_schemas import ControllerKind, EpisodeReason, EpisodeType, OutcomeEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
-from .base import clamp, is_finite, outlier_z, robust_ema_update
+from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
 PARAMETER_VERSION = 1
@@ -812,7 +812,7 @@ class OutcomeModel:
         dq = max(self._state.general.data_quality.value, 0.1)
         return clamp(coverage * spread * dq, 0.0, 1.0)
 
-    def confidence(self) -> ConfidenceContribution:
+    def confidence(self, *, now: Optional[str] = None) -> ConfidenceContribution:
         g = self._state.general
         reasons: list[str] = []
         if not g.has_evidence:
@@ -823,8 +823,9 @@ class OutcomeModel:
         if total > 0 and self._state.partial_count / total > 0.5:
             reasons.append("mostly_partial")
         value = self._confidence_value(g.sample_count, not g.has_evidence)
+        freshness, status = freshness_from_age(now, self._state.last_update_ts)
         return ConfidenceContribution(value=value, evidence_count=g.sample_count,
-                                      reasons=tuple(reasons))
+                                      reasons=tuple(reasons), freshness=freshness, status=status)
 
     # -- diagnostics / export -------------------------------------------
 

@@ -36,7 +36,7 @@ from ..contracts import (
 )
 from ..episode_schemas import ControllerKind, EpisodeReason, EpisodeType, OutcomeEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
-from .base import clamp, is_finite, outlier_z, robust_ema_update
+from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 from .boost_degradation import (
     BoostDegradationState, BoostLearningReadiness, BoostScopedDegradation, DegradationParams,
     is_scope_eligible, maybe_capture_known_good, observe_scoped, resolve_cooldown,
@@ -1771,7 +1771,7 @@ class BoostModel:
         except Exception:
             return False
 
-    def confidence(self) -> ConfidenceContribution:
+    def confidence(self, *, now: Optional[str] = None) -> ConfidenceContribution:
         g = self._state.general
         reasons: list[str] = []
         if not g.has_evidence:
@@ -1784,6 +1784,10 @@ class BoostModel:
             reasons.append("mostly_partial")
         fallback = not g.has_evidence
         value = self._confidence_value(g.effective_factor.effective_n, fallback)
+        freshness, staleness = freshness_from_age(now, self._state.last_update_ts)
+        status = "healthy" if g.has_evidence else "fallback"
+        if g.has_evidence and staleness == "stale":
+            status = "stale"
         return ConfidenceContribution(
             value=value, evidence_count=g.sample_count, reasons=tuple(reasons),
             component="boost",
@@ -1792,8 +1796,8 @@ class BoostModel:
             evidence_domains=("thermal_trajectory", "controller_events", "outcome_history"),
             source_count=len(self._state.buckets),
             prior_fraction=1.0 if fallback else 0.0,
-            learned_fraction=0.0 if fallback else 1.0, fallback_used=fallback, freshness=1.0,
-            status="healthy" if g.has_evidence else "fallback")
+            learned_fraction=0.0 if fallback else 1.0, fallback_used=fallback, freshness=freshness,
+            status=status)
 
     # -- diagnostics / export -------------------------------------------
 

@@ -1,4 +1,4 @@
-"""BoostModel for LE 2.0 (pure Python).
+"""BoostModel for Learning (pure Python).
 
 Learns whether — and how strongly — an extra heating impulse (a temporary TRV
 setpoint offset above target) was worthwhile. It judges THERMAL effect and
@@ -329,7 +329,7 @@ class BoostParameters:
     min_duration_pred_s: float = 300.0
     max_duration_pred_s: float = 7200.0
     # Adaptive control limits (separate from technical 8°C TPI maximum)
-    # 3°C: conservative LE 2.0 cap — even a well-learned boost rarely exceeds this in residential
+    # 3°C: conservative Learning cap — even a well-learned boost rarely exceeds this in residential
     adaptive_max_boost_c: float = 3.0
     # Mirrors ControlPolicy.min_control_confidence: used for adaptive cap tiering
     min_control_confidence: float = 0.55
@@ -356,19 +356,19 @@ class BoostParameters:
     cooldown_duration_s: float = 300.0
     failure_cooldown_duration_s: float = 900.0
     # Deescalation thresholds: when to release an active boost mid-episode.
-    # released_tpi_sufficient: LE2 heat-rate projection shows TPI closes gap without boost.
+    # released_tpi_sufficient: Learning heat-rate projection shows TPI closes gap without boost.
     # High TPI duty alone proves high demand, NOT sufficiency; duty threshold is not used.
     deescalation_tpi_heat_rate_min_confidence: float = 0.35  # gate cold-start hr predictions
     deescalation_tpi_max_remaining_c: float = 1.0    # only release if deficit is small
     deescalation_tpi_safety_horizon_min: float = 20.0  # hr must close gap in ≤ this time
-    # released_overshoot_risk: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise) as primary,
+    # released_overshoot_risk: Learning EXPECTED_OVERSHOOT (AfterheatModel residual rise) as primary,
     # or safety heuristic (fallback: remaining ≤ deficit_c AND slope > 0 AND age ≥ min_active).
     # BOOST_OUTCOME is NOT the authority here — it measures historical boost quality, not residual rise.
-    deescalation_overshoot_min_confidence: float = 0.30   # gate for LE2 EXPECTED_OVERSHOOT path
+    deescalation_overshoot_min_confidence: float = 0.30   # gate for Learning EXPECTED_OVERSHOOT path
     deescalation_overshoot_safety_buffer_c: float = 0.05  # remaining ≤ expected + buffer
-    deescalation_overshoot_deficit_c: float = 0.3         # near-target threshold (LE2 + heuristic)
+    deescalation_overshoot_deficit_c: float = 0.3         # near-target threshold (Learning + heuristic)
     deescalation_overshoot_min_active_s: float = 600.0    # heuristic age gate
-    # released_afterheat_sufficient: requires LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise).
+    # released_afterheat_sufficient: requires Learning EXPECTED_OVERSHOOT (AfterheatModel residual rise).
     # BOOST_OUTCOME must NOT be used — it is historical boost outcome quality, not physical afterheat.
     # Current slope is supporting evidence; AfterheatModel prediction is the authoritative source.
     deescalation_afterheat_min_confidence: float = 0.35   # prediction must be confident
@@ -463,7 +463,7 @@ class BoostRecommendation:
     reason_codes: tuple[str, ...]
     model_version: int = MODEL_VERSION
     parameter_version: int = PARAMETER_VERSION
-    # Current LE 2.0 adaptive cap applied (separate from 8°C technical TPI max)
+    # Current Learning adaptive cap applied (separate from 8°C technical TPI max)
     adaptive_cap_c: float = 3.0
     # B2b-5 / B2b-5a: learning readiness (NOT a release lifecycle / not an activation signal)
     readiness: str = BoostLearningReadiness.INSUFFICIENT_DATA
@@ -1516,7 +1516,7 @@ class BoostModel:
         return self.predict_boost_factor(context)
 
     def activation_readiness(self, context: Optional[BoostPredictionContext] = None):
-        """B2b-7/8: the single authoritative LE2 boost ACTIVATION-READINESS contract.
+        """B2b-7/8: the single authoritative Learning boost ACTIVATION-READINESS contract.
 
         Pure-on-state: derived entirely from the persisted authoritative model state +
         runtime context. NOT activation, NOT user consent, NOT control. Unknown/legacy/missing
@@ -1608,7 +1608,7 @@ class BoostModel:
         return sum(vals) / len(vals)
 
     def adaptive_cap_c(self) -> float:
-        """Confidence- and outcome-adjusted LE 2.0 control cap, separate from technical 8°C limit.
+        """Confidence- and outcome-adjusted Learning control cap, separate from technical 8°C limit.
 
         Tiers (derived from BoostParameters, mirroring ControlPolicy thresholds):
           < cold_start_confidence_cap (0.35): cap = 0.5°C  — cold start, very conservative

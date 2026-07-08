@@ -1,4 +1,4 @@
-"""Deterministic, pure-Python thermal regime classifier for LE 2.0.
+"""Deterministic, pure-Python thermal regime classifier for Learning.
 
 The classifier consumes FeatureExtractor results plus controller/TRV/telemetry
 signals and returns a structured :class:`RegimeResult`. It is deterministic, has

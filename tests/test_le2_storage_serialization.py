@@ -1,4 +1,4 @@
-"""Phase 3 tests for the authoritative LE 2.0 raw serializer."""
+"""Phase 3 tests for the authoritative Learning raw serializer."""
 from __future__ import annotations
 
 from datetime import datetime, timezone

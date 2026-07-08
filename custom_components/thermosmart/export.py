@@ -1,7 +1,7 @@
 """Anonymized learning-data export for ThermoSmart.
 
 Creates a JSON snapshot of per-zone learning data that can be shared voluntarily
-to support LE 2.0 development.  Nothing is sent automatically — the user decides
+to support Learning development.  Nothing is sent automatically — the user decides
 whether and how to share the file.
 
 Privacy contract
@@ -11,7 +11,7 @@ Exported data contains:
   - Export timestamp
   - Per-zone: TRV count, sensor counts, feature flags (booleans only)
   - Per-zone: all numeric learning data (observations, rates, confidence, …)
-  - Per-zone: LE2 model coefficient statistics (numeric only — no IDs)
+  - Per-zone: Learning model coefficient statistics (numeric only — no IDs)
 
 Exported data does NOT contain:
   - Passwords or authentication tokens of any kind
@@ -23,7 +23,7 @@ Exported data does NOT contain:
 Timestamps are intentionally retained:
   Observation timestamps (ts, hour, minute, weekday) are required for
   longitudinal learning analysis and are the primary reason this data is
-  valuable for LE 2.0.  A series of heating timestamps can reveal usage
+  valuable for Learning.  A series of heating timestamps can reveal usage
   patterns (presence, sleep schedule, away periods).  Users should review
   the exported file before sharing it with anyone.
 
@@ -36,7 +36,7 @@ Zone identity: each zone_id (HA entry_id UUID) is replaced with a deterministic
 12-char hex digest.  Exports from the same installation share the same digests,
 making longitudinal data correlatable without being reversible.
 
-Historical (frozen LE1) learning snapshot:
+Historical (frozen legacy) learning snapshot:
   Per-zone "historical_learning_snapshot" block — the frozen legacy
   learning-engine data (learning_engine.freeze() in __init__.py) reshaped
   into a structured Deep-Research view instead of an unfiltered pass-through
@@ -48,17 +48,17 @@ Historical (frozen LE1) learning snapshot:
   research_events is capped per category (see
   _HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY) with any excess reported via
   records_truncated, never silently dropped. A final scan_payload() pass
-  (the same second-barrier scanner used by the LE2 runtime-models research
+  (the same second-barrier scanner used by the Learning runtime-models research
   block) excludes any category that unexpectedly fails it. Never crashes the
   export — a missing/malformed source yields available: false instead.
 
-LE2 research data:
+Learning research data:
   Only model coefficient aggregates are included (models, cycles,
   last_cycle_ts, model_update_counts).  Fields containing IDs of any kind
   (decision_id, episode_id, learning_zone_id, zone_id, …) are stripped
   recursively before inclusion.  A privacy scan is performed as a final check.
 
-LE2 learning progress:
+Learning learning progress:
   Per-zone "learning_progress" block — the same calibrated scores/labels
   LearningShadowController.learning_progress_safe() already exposes to the
   confidence sensor (data volume/coverage/diversity/clean-episode/outcome/
@@ -67,7 +67,7 @@ LE2 learning progress:
   existing numeric/label explanation of why a zone reads at its current
   progress percentage.
 
-LE2 episode history:
+Learning episode history:
   Per-zone "episode_history" block — a BOUNDED SUMMARY (counts, ages,
   retention metadata) of LearningShadowController.episode_history_snapshot(),
   never a full episode list. No episode_id/learning_zone_id/decision_id/
@@ -76,7 +76,7 @@ LE2 episode history:
   oldest/newest ages in hours, and the registry's own retention policy
   (max_records/max_age_days per type) to make boundedness visible.
 
-LE2 research daily buckets:
+Learning research daily buckets:
   Per-zone "research_daily" block — a BOUNDED SUMMARY of
   LearningShadowController.research_daily_snapshot() (already-in-memory,
   no new store read). "summary" aggregates counters/averages/progress-
@@ -86,7 +86,7 @@ LE2 research daily buckets:
   event ids, no raw events, no trajectories — every field is already one of
   ResearchDailyBucket's own fixed scalar aggregates.
 
-LE2 support critical event timeline (support export only):
+Learning support critical event timeline (support export only):
   Per-zone "critical_events" block — reads ONLY the already-in-memory
   LearningShadowController.support_critical_events_snapshot(), no store
   read. Each event is rendered via support_event_for_export() (drops
@@ -146,20 +146,20 @@ EXPORT_FORMAT_VERSION = 1
 _ANON_SALT = "thermosmart_le_export_v1"
 _EXPORT_CLEANUP_DELAY_S: float = 24 * 3600  # 24 hours; not restart-safe
 
-# ── LE2 privacy helpers ───────────────────────────────────────────────────────
+# ── Learning privacy helpers ───────────────────────────────────────────────────────
 
 # Top-level keys safe to include from _ZoneRuntime.serialize().
 # Excluded: capture (contains zone_id + decision_id in ledger),
 #           pipeline (contains zone_id + open_decision_id),
 #           ledger (inside capture, contains decision_ids),
 #           baseline_store, pending_* (all contain decision-related IDs).
-_LE2_RESEARCH_SAFE_TOP_KEYS = frozenset(
+_LEARNING_RESEARCH_SAFE_TOP_KEYS = frozenset(
     {"models", "cycles", "last_cycle_ts", "model_update_counts"}
 )
 
 # Key substrings to strip recursively — mirrors privacy.py _FORBIDDEN_KEY_SUBSTRINGS
 # plus "zone_id" which the scanner does not catch standalone.
-_LE2_STRIP_KEY_SUBSTRINGS = (
+_LEARNING_STRIP_KEY_SUBSTRINGS = (
     "entity_id", "entry_id", "device_id", "decision_id", "episode_id", "event_id",
     "evaluation_id", "user_id", "person", "email", "latitude", "longitude", "address",
     "hostname", "ip_address", "ipaddr", "source_episode_id", "correction_event_id",
@@ -168,23 +168,23 @@ _LE2_STRIP_KEY_SUBSTRINGS = (
 )
 
 
-def _le2_strip_forbidden(obj: Any) -> Any:
-    """Recursively remove keys matching LE2 privacy-forbidden substrings."""
+def _learning_strip_forbidden(obj: Any) -> Any:
+    """Recursively remove keys matching Learning privacy-forbidden substrings."""
     if isinstance(obj, dict):
         return {
-            k: _le2_strip_forbidden(v)
+            k: _learning_strip_forbidden(v)
             for k, v in obj.items()
-            if not (isinstance(k, str) and any(s in k.lower() for s in _LE2_STRIP_KEY_SUBSTRINGS))
+            if not (isinstance(k, str) and any(s in k.lower() for s in _LEARNING_STRIP_KEY_SUBSTRINGS))
         }
     if isinstance(obj, list):
-        return [_le2_strip_forbidden(i) for i in obj]
+        return [_learning_strip_forbidden(i) for i in obj]
     return obj
 
 
-# ── Historical (frozen LE1) learning snapshot — Deep Research reshaping ──────
+# ── Historical (frozen legacy) learning snapshot — Deep Research reshaping ──
 #
 # The legacy learning engine (frozen — LearningEngine.freeze() in __init__.py)
-# accumulated raw per-event dicts before LE 2.0 existed. These carry genuine
+# accumulated raw per-event dicts before Learning existed. These carry genuine
 # research value (heat rate, delta, outcome score, time-of-day context) and
 # are intentionally NOT reduced to counts/averages — only entity/person/
 # location identifiers are stripped. Unlike every other research-export
@@ -196,7 +196,7 @@ def _le2_strip_forbidden(obj: Any) -> Any:
 # are the primary defense: only fields explicitly named here can ever reach
 # the export, so an unexpected legacy key can only be silently excluded,
 # never silently leaked. scan_payload() (the same second-barrier scanner used
-# by the LE2 runtime-models research block, _le2_research_data) still runs as
+# by the Learning runtime-models research block, _learning_research_data) still runs as
 # a final check.
 
 _HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY = 200
@@ -279,8 +279,8 @@ def _hist_category(
     return views, truncated
 
 
-def _le2_historical_learning_snapshot_for_research(learning: dict) -> dict:
-    """Convert the frozen LE1 legacy learning-engine snapshot into a
+def _historical_learning_snapshot_for_research(learning: dict) -> dict:
+    """Convert the frozen legacy learning-engine snapshot into a
     structured, privacy-scanned Deep-Research block (see module-level
     comment above for the rationale).
 
@@ -308,7 +308,7 @@ def _le2_historical_learning_snapshot_for_research(learning: dict) -> dict:
         }
 
         # Final belt-and-suspenders scan — same defense used by
-        # _le2_research_data(). The allow-lists above should already make
+        # _learning_research_data(). The allow-lists above should already make
         # this a no-op; if it ever isn't, drop only the offending category
         # so one unexpected field cannot suppress the rest of the snapshot.
         from .learning.privacy import scan_payload
@@ -493,12 +493,12 @@ def _compute_analytics(learning: dict) -> dict:
     }
 
 
-# ── LE2 data accessors ────────────────────────────────────────────────────────
+# ── Learning data accessors ────────────────────────────────────────────────────────
 
-def _le2_runtime(coord):
-    """Safely return the LE2 LearningRuntime from a coordinator, or None."""
+def _learning_runtime(coord):
+    """Safely return the Learning LearningRuntime from a coordinator, or None."""
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return None
         return getattr(shadow, "runtime", None)
@@ -506,17 +506,17 @@ def _le2_runtime(coord):
         return None
 
 
-def _le2_research_data(coord, zone_id: str) -> dict | None:
-    """Return privacy-safe LE2 model statistics for research export, or None.
+def _learning_research_data(coord, zone_id: str) -> dict | None:
+    """Return privacy-safe Learning model statistics for research export, or None.
 
-    Only includes top-level keys from _LE2_RESEARCH_SAFE_TOP_KEYS (models,
+    Only includes top-level keys from _LEARNING_RESEARCH_SAFE_TOP_KEYS (models,
     cycles, last_cycle_ts, model_update_counts).  All fields whose key contains
     a forbidden substring (decision_id, learning_zone_id, zone_id, …) are
     stripped recursively before inclusion.  A final privacy scan confirms no
-    violations remain; if any do, the LE2 block is excluded for that zone.
+    violations remain; if any do, the Learning block is excluded for that zone.
     """
     try:
-        rt = _le2_runtime(coord)
+        rt = _learning_runtime(coord)
         if rt is None:
             return None
         zone_rt = rt._zones.get(zone_id)
@@ -524,9 +524,9 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
             return None
         raw = zone_rt.serialize()
         # 1. Allowlist: only safe top-level sections
-        filtered = {k: v for k, v in raw.items() if k in _LE2_RESEARCH_SAFE_TOP_KEYS}
+        filtered = {k: v for k, v in raw.items() if k in _LEARNING_RESEARCH_SAFE_TOP_KEYS}
         # 2. Recursive strip of forbidden keys within allowed sections
-        safe = _le2_strip_forbidden(filtered)
+        safe = _learning_strip_forbidden(filtered)
         # 3. Replace serialized outcome model with research-scoped export.
         #    The raw serialization (serialize_state) uses internal confounder_flags and
         #    has no truncation_info. The research export normalizes to confounder_codes
@@ -574,7 +574,7 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
             pass
         # 3c. Adaptation candidate history (in-memory; empty until first outcome cycle).
         try:
-            shadow = getattr(coord, "_le2_shadow", None)
+            shadow = getattr(coord, "_learning_shadow", None)
             _history_tuples: list = []
             _lifecycle_state = None
             if shadow is not None:
@@ -594,9 +594,9 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                         except Exception:
                             _span = 0.0
                         _history_tuples.append(
-                            (_entry, _span, _le2_confounder_ratio(coord, zone_id))
+                            (_entry, _span, _learning_confounder_ratio(coord, zone_id))
                         )
-            safe["adaptation_candidate_history"] = _le2_adaptation_history_for_research(
+            safe["adaptation_candidate_history"] = _learning_adaptation_history_for_research(
                 _history_tuples, lifecycle_state=_lifecycle_state,
             )
         except Exception:
@@ -604,7 +604,7 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
         # 3d. Application lifecycle state entries (public-safe; no timestamps).
         try:
             safe["adaptation_application_state"] = (
-                _le2_application_lifecycle_research_entries(coord)
+                _learning_application_lifecycle_research_entries(coord)
             )
         except Exception:
             safe["adaptation_application_state"] = []
@@ -622,16 +622,16 @@ def _le2_research_data(coord, zone_id: str) -> dict | None:
                 )
                 return None
         except Exception as scan_err:
-            _LOGGER.debug("ThermoSmart: LE2 privacy scan skipped: %s", scan_err)
+            _LOGGER.debug("ThermoSmart: learning privacy scan skipped: %s", scan_err)
         return safe
     except Exception:
         return None
 
 
-def _le2_health_data(coord) -> dict | None:
-    """Return LE2 RuntimeHealth as a plain dict for support export, or None."""
+def _learning_health_data(coord) -> dict | None:
+    """Return Learning RuntimeHealth as a plain dict for support export, or None."""
     try:
-        rt = _le2_runtime(coord)
+        rt = _learning_runtime(coord)
         if rt is None:
             return None
         return dataclasses.asdict(rt.health())
@@ -661,8 +661,8 @@ _LEARNING_PROGRESS_RESEARCH_KEYS = (
 )
 
 
-def _le2_learning_progress_export(coord) -> dict:
-    """Return a small, public-safe LE2 learning-progress block for research export.
+def _learning_progress_export(coord) -> dict:
+    """Return a small, public-safe Learning learning-progress block for research export.
 
     Sourced directly from LearningShadowController.learning_progress_safe() —
     the SAME method ThermoSmartConfidenceSensor reads — so the exported
@@ -670,14 +670,14 @@ def _le2_learning_progress_export(coord) -> dict:
     episode-history access: this reuses the existing model-diagnostics-based
     calculation that already runs every cycle.
 
-    Never raises and never breaks the export: a missing/unattached LE2 shadow
+    Never raises and never breaks the export: a missing/unattached Learning shadow
     or any unexpected failure inside learning_progress_safe() (which is
     already designed to never raise, but this stays defensive independent of
     that guarantee) yields an explicit ``{"available": False, ...}`` block
     instead of omitting the zone or failing the whole export.
     """
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return {"available": False, "reason": "learning_engine_unavailable"}
         progress_pct, attrs = shadow.learning_progress_safe()
@@ -685,7 +685,7 @@ def _le2_learning_progress_export(coord) -> dict:
         for key in _LEARNING_PROGRESS_RESEARCH_KEYS:
             if key in attrs:
                 block[key] = attrs[key]
-        safe = _le2_strip_forbidden(block)
+        safe = _learning_strip_forbidden(block)
         try:
             from .learning.privacy import scan_payload
             if scan_payload(safe):
@@ -700,12 +700,12 @@ def _le2_learning_progress_export(coord) -> dict:
 # Known episode types (episode_schemas.EpisodeType values) — used both to seed
 # counts_by_type at zero (so a zone with no episodes of a type still reports
 # it explicitly) and to recognise/skip unrecognised "episode_type" values.
-_LE2_EPISODE_TYPES = (
+_LEARNING_EPISODE_TYPES = (
     "heating", "afterheat", "passive_cooling", "window_cooling", "outcome",
 )
 
 
-def _le2_episode_history_export(coord, *, now: datetime) -> dict:
+def _learning_episode_history_export(coord, *, now: datetime) -> dict:
     """Return a small, bounded, public-safe episode-history SUMMARY for research export.
 
     Deliberately a summary, not a per-episode entry list — this reuses
@@ -715,7 +715,7 @@ def _le2_episode_history_export(coord, *, now: datetime) -> dict:
     no ``trajectory``, no raw per-episode timestamps — only aggregate counts
     and relative ages (hours before ``now``).
 
-    Never raises and never breaks the export: a missing/unattached LE2 shadow,
+    Never raises and never breaks the export: a missing/unattached Learning shadow,
     a snapshot() failure, or an unexpected error anywhere in the aggregation
     yields an explicit ``{"available": False, ...}`` block instead of omitting
     the zone or failing the whole export. Malformed individual entries
@@ -723,14 +723,14 @@ def _le2_episode_history_export(coord, *, now: datetime) -> dict:
     in ``malformed_skipped_count`` — they never abort the summary.
     """
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return {"available": False, "reason": "learning_engine_unavailable"}
         snapshot = shadow.episode_history_snapshot()
         if not isinstance(snapshot, dict):
             return {"available": False, "reason": "episode_history_unavailable"}
 
-        counts_by_type = {t: 0 for t in _LE2_EPISODE_TYPES}
+        counts_by_type = {t: 0 for t in _LEARNING_EPISODE_TYPES}
         confounder_count = 0
         timeout_count = 0
         malformed_skipped = 0
@@ -806,7 +806,7 @@ def _le2_episode_history_export(coord, *, now: datetime) -> dict:
             "newest_age_hours": newest_age_hours,
             "retention": retention,
         }
-        safe = _le2_strip_forbidden(block)
+        safe = _learning_strip_forbidden(block)
         try:
             from .learning.privacy import scan_payload
             if scan_payload(safe):
@@ -880,7 +880,7 @@ _RESEARCH_DAILY_UNPRODUCED_SUMMARY_FIELDS = (
 )
 
 
-def _le2_research_daily_compact_entry(bucket) -> dict:
+def _learning_research_daily_compact_entry(bucket) -> dict:
     """Compact per-day export entry: always ``bucket_date``, counters only
     when > 0, sum/count pairs only when the count is > 0, progress/
     confidence fields only when not None. Keeps the "daily" list readable —
@@ -902,7 +902,7 @@ def _le2_research_daily_compact_entry(bucket) -> dict:
     return entry
 
 
-def _le2_research_daily_export(coord, *, now: datetime) -> dict:
+def _learning_research_daily_export(coord, *, now: datetime) -> dict:
     """Return a small, bounded, public-safe Research Daily Bucket long-term
     summary for research export.
 
@@ -925,7 +925,7 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
     the summary stays complete even when the list is truncated; excess is
     reported via ``records_truncated``/``truncation_reason``, never
     silently dropped. Each daily entry is a COMPACT
-    ``_le2_research_daily_compact_entry()`` — no zero/None-field bloat.
+    ``_learning_research_daily_compact_entry()`` — no zero/None-field bloat.
     Currently-unproduced counters (``_RESEARCH_DAILY_UNPRODUCED_SUMMARY_FIELDS``
     — ``decision_count``/``heating_allowed_count``/``heating_blocked_count``,
     schema-defined but with no live producer yet) are omitted from
@@ -933,13 +933,13 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
     "zero decisions ever made"; they reappear automatically the moment a
     real producer starts giving one of them a genuine non-zero value.
 
-    Never raises and never breaks the export: a missing/unattached LE2
+    Never raises and never breaks the export: a missing/unattached Learning
     shadow, a snapshot() failure, or an unexpected error anywhere in the
     aggregation yields an explicit ``{"available": False, ...}`` block
     instead of omitting the zone or failing the whole export.
     """
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return {"available": False, "reason": "learning_engine_unavailable"}
         snapshot = shadow.research_daily_snapshot()
@@ -1001,7 +1001,7 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
             truncated = len(buckets_newest_first) - len(kept)
             block["records_truncated"] = truncated
             block["truncation_reason"] = "export_cap_exceeded" if truncated > 0 else None
-            block["daily"] = [_le2_research_daily_compact_entry(b) for b in kept]
+            block["daily"] = [_learning_research_daily_compact_entry(b) for b in kept]
 
             summary: dict = {name: 0 for name in _RESEARCH_DAILY_COUNTER_FIELDS}
             sum_totals = {sum_field: 0.0 for sum_field, _count_field in _RESEARCH_DAILY_SUM_COUNT_PAIRS}
@@ -1074,7 +1074,7 @@ def _le2_research_daily_export(coord, *, now: datetime) -> dict:
 
             block["summary"] = summary
 
-        safe = _le2_strip_forbidden(block)
+        safe = _learning_strip_forbidden(block)
         try:
             from .learning.privacy import scan_payload
             if scan_payload(safe):
@@ -1100,7 +1100,7 @@ _SUPPORT_EVENT_EXPORT_MAX_RECORDS = 200
 _SUPPORT_EVENT_SEVERITY_RANK = {"info": 0, "warning": 1, "critical": 2}
 
 
-def _le2_critical_events_export(coord, *, now: datetime) -> dict:
+def _learning_critical_events_export(coord, *, now: datetime) -> dict:
     """Return a small, bounded, public-safe Support Critical Event timeline
     summary for support export.
 
@@ -1122,7 +1122,7 @@ def _le2_critical_events_export(coord, *, now: datetime) -> dict:
     excess is reported via ``records_truncated``/``truncation_reason`` — no
     event is silently dropped without being counted.
 
-    Never raises and never breaks the export: a missing/unattached LE2
+    Never raises and never breaks the export: a missing/unattached Learning
     shadow, a snapshot() failure, or an unexpected error anywhere in the
     aggregation yields an explicit ``{"available": False, ...}`` block
     instead of omitting the zone or failing the whole export. Malformed
@@ -1131,7 +1131,7 @@ def _le2_critical_events_export(coord, *, now: datetime) -> dict:
     ``malformed_skipped_count`` — they never abort the summary.
     """
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return {"available": False, "reason": "learning_engine_unavailable"}
         snapshot = shadow.support_critical_events_snapshot()
@@ -1217,7 +1217,7 @@ def _le2_critical_events_export(coord, *, now: datetime) -> dict:
             "malformed_skipped_count": malformed_skipped,
             "events": events,
         }
-        safe = _le2_strip_forbidden(block)
+        safe = _learning_strip_forbidden(block)
         try:
             from .learning.privacy import scan_payload
             if scan_payload(safe):
@@ -1229,10 +1229,10 @@ def _le2_critical_events_export(coord, *, now: datetime) -> dict:
         return {"available": False, "critical_events_error": str(err)}
 
 
-def _le2_pending_data(coord, zone_id: str) -> dict | None:
-    """Return LE2 pending-attribution summary for support export, or None."""
+def _learning_pending_data(coord, zone_id: str) -> dict | None:
+    """Return Learning pending-attribution summary for support export, or None."""
     try:
-        rt = _le2_runtime(coord)
+        rt = _learning_runtime(coord)
         if rt is None:
             return None
         return rt.pending_attribution_summary(zone_id)
@@ -1271,7 +1271,7 @@ def _device_profile_export(coord: Any) -> dict | None:
         return None
 
 
-def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
+def _learning_adaptation_summary(coord, zone_id: str) -> dict | None:
     """Return passive adaptation candidate counts for support export, or None.
 
     Summary only — no trace details. Never modifies control state.
@@ -1280,7 +1280,7 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
         from .learning.adaptation import (
             OutcomeSignal, SituationContext, suggest_candidates, AdaptationLifecycle,
         )
-        rt = _le2_runtime(coord)
+        rt = _learning_runtime(coord)
         if rt is None:
             return None
         zone_rt = rt._zones.get(zone_id)
@@ -1333,10 +1333,10 @@ def _le2_adaptation_summary(coord, zone_id: str) -> dict | None:
         return None
 
 
-def _le2_confounder_ratio(coord: Any, zone_id: str) -> float:
+def _learning_confounder_ratio(coord: Any, zone_id: str) -> float:
     """Compute rejection-based confounder ratio from the outcome model. Returns 0.0 on error."""
     try:
-        rt = _le2_runtime(coord)
+        rt = _learning_runtime(coord)
         if rt is None:
             return 0.0
         zr = rt._zones.get(zone_id)
@@ -1355,10 +1355,10 @@ def _le2_confounder_ratio(coord: Any, zone_id: str) -> float:
         return 0.0
 
 
-def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
+def _learning_adaptation_history_summary(coord, zone_id: str) -> dict:
     """Return adaptation candidate history summary for support export.
 
-    Reads the in-memory candidate history from coord._le2_shadow.
+    Reads the in-memory candidate history from coord._learning_shadow.
     Never raises.
 
     ``entry_count``/``promotion_ready_count``/``blocked_count`` are real,
@@ -1366,7 +1366,7 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
     ``shadow_preview_count`` (mirrors ``promotion_ready_count``) and
     ``application_enabled`` describe the separate, currently-inactive
     application/orchestration layer (see
-    _le2_application_lifecycle_summary's docstring); ``application_layer_status``
+    _learning_application_lifecycle_summary's docstring); ``application_layer_status``
     marks specifically those two fields as reserved/foundation-only, without
     implying the rest of this block is inactive too.
     """
@@ -1374,7 +1374,7 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
              "shadow_preview_count": 0, "application_enabled": False,
              "application_layer_status": "reserved", "last_error": None}
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return _zero
         history = shadow.adaptation_history_snapshot()
@@ -1400,7 +1400,7 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
                     pass
                 pgr = evaluate_promotion_readiness(
                     entry, span_days=span_days,
-                    confounder_ratio=_le2_confounder_ratio(coord, zone_id),
+                    confounder_ratio=_learning_confounder_ratio(coord, zone_id),
                 )
                 if pgr.readiness is PromotionReadiness.ELIGIBLE:
                     ready += 1
@@ -1420,7 +1420,7 @@ def _le2_adaptation_history_summary(coord, zone_id: str) -> dict:
         return {**_zero, "last_error": str(err)}
 
 
-def _le2_adaptation_history_for_research(
+def _learning_adaptation_history_for_research(
     history_entries: list, *, lifecycle_state: Any = None,
 ) -> list[dict]:
     """Convert adaptation candidate history entries to research-safe export dicts.
@@ -1446,7 +1446,7 @@ def _le2_adaptation_history_for_research(
                     span_days=span_days,
                     confounder_ratio=confounder_ratio,
                 )
-                d["application_orchestration_preview"] = _le2_orchestration_preview_dict(
+                d["application_orchestration_preview"] = _learning_orchestration_preview_dict(
                     entry,
                     lifecycle_state=lifecycle_state,
                     span_days=span_days,
@@ -1460,7 +1460,7 @@ def _le2_adaptation_history_for_research(
     return result
 
 
-def _le2_orchestration_preview_dict(
+def _learning_orchestration_preview_dict(
     entry: Any, *, lifecycle_state: Any, span_days: float, confounder_ratio: float,
 ) -> dict:
     """Build a public-safe, timestamp-free orchestration preview for one
@@ -1508,19 +1508,19 @@ def _le2_orchestration_preview_dict(
         }
 
 
-def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
+def _learning_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
     """Aggregate orchestration-preview counts across candidate history for
     support export. Counts/status only — no per-entry detail, never raises.
 
     Runtime context is intentionally None for every entry (see
-    _le2_orchestration_preview_dict) — this keeps would_apply_count always 0
+    _learning_orchestration_preview_dict) — this keeps would_apply_count always 0
     and would_apply_if_enabled_count conservative (unknown_context blocks
     both). lifecycle_blocked_count remains meaningful regardless, since
     lifecycle-state gating does not depend on runtime_context.
 
     ``status``/``active``/``reason`` mark this whole block as a preview of a
     currently-inactive application/orchestration layer (see
-    _le2_application_lifecycle_summary's docstring) — the per-entry counts
+    _learning_application_lifecycle_summary's docstring) — the per-entry counts
     stay real diagnostic previews ("what would happen if this were on"), not
     a live feature a maintainer should expect to see actually apply anything.
     """
@@ -1538,7 +1538,7 @@ def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
         "last_error": None,
     }
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return _zero
         history = shadow.adaptation_history_snapshot()
@@ -1566,7 +1566,7 @@ def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
                     lifecycle_state=lifecycle_state,
                     runtime_context=None,
                     span_days=span_days,
-                    confounder_ratio=_le2_confounder_ratio(coord, zone_id),
+                    confounder_ratio=_learning_confounder_ratio(coord, zone_id),
                 )
                 if result.would_apply:
                     would_apply += 1
@@ -1594,7 +1594,7 @@ def _le2_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
         return {**_zero, "last_error": str(err)}
 
 
-def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
+def _learning_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
     """Return adaptation application lifecycle summary for support export.
 
     Read-only, no mutation, no control effect. Never raises.
@@ -1621,7 +1621,7 @@ def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
         "last_error": None,
     }
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return _zero
         snapshot = shadow.application_lifecycle_snapshot()
@@ -1643,14 +1643,14 @@ def _le2_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
         return {**_zero, "last_error": str(err)}
 
 
-def _le2_reserved_diagnostics_summary(coord: Any, zone_id: str) -> dict:
+def _learning_reserved_diagnostics_summary(coord: Any, zone_id: str) -> dict:
     """Collapsed placeholder for the application/orchestration layer in the
     support export.
 
     That layer is foundation-only in this version — ``ApplicationPolicy.
     application_enabled`` is a global kill-switch that is always False (see
-    _le2_application_lifecycle_summary's docstring), and
-    _le2_orchestration_preview_summary's ``would_apply_count`` is always 0
+    _learning_application_lifecycle_summary's docstring), and
+    _learning_orchestration_preview_summary's ``would_apply_count`` is always 0
     for the same reason. Replaces the two previous always-inert blocks
     (``adaptation_application``, ``orchestration_preview`` — every counter in
     both was always 0) with one compact, clearly-labeled placeholder instead
@@ -1661,14 +1661,14 @@ def _le2_reserved_diagnostics_summary(coord: Any, zone_id: str) -> dict:
     """
     last_error = None
     try:
-        app = _le2_application_lifecycle_summary(coord, zone_id)
+        app = _learning_application_lifecycle_summary(coord, zone_id)
         if app.get("last_error"):
             last_error = app["last_error"]
     except Exception:
         pass
     if last_error is None:
         try:
-            preview = _le2_orchestration_preview_summary(coord, zone_id)
+            preview = _learning_orchestration_preview_summary(coord, zone_id)
             if preview.get("last_error"):
                 last_error = preview["last_error"]
         except Exception:
@@ -1680,14 +1680,14 @@ def _le2_reserved_diagnostics_summary(coord: Any, zone_id: str) -> dict:
     }
 
 
-def _le2_application_lifecycle_research_entries(coord: Any) -> list:
+def _learning_application_lifecycle_research_entries(coord: Any) -> list:
     """Return public-safe application lifecycle state entries for research export.
 
     No timestamps, no entity IDs, no zone names — only boolean / numeric fields.
     Never raises; returns empty list on any error or when no state exists.
     """
     try:
-        shadow = getattr(coord, "_le2_shadow", None)
+        shadow = getattr(coord, "_learning_shadow", None)
         if shadow is None:
             return []
         state = getattr(shadow, "_application_lifecycle_state", None)
@@ -1881,30 +1881,30 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
         # dict (pure numeric aggregates, already export-safe); the exported
         # historical_learning_snapshot itself is a separate, sanitized,
         # allow-listed Deep-Research view built by
-        # _le2_historical_learning_snapshot_for_research() below — see that
+        # _historical_learning_snapshot_for_research() below — see that
         # function's docstring for why the raw dict is never exported as-is.
         learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
         analytics = _compute_analytics(learning)
-        le2 = _le2_research_data(coord, entry.entry_id) if coord is not None else None
+        runtime_models = _learning_research_data(coord, entry.entry_id) if coord is not None else None
         learning_progress = (
-            _le2_learning_progress_export(coord) if coord is not None
+            _learning_progress_export(coord) if coord is not None
             else {"available": False, "reason": "no_coordinator"}
         )
         episode_history = (
-            _le2_episode_history_export(coord, now=ts) if coord is not None
+            _learning_episode_history_export(coord, now=ts) if coord is not None
             else {"available": False, "reason": "no_coordinator"}
         )
         research_daily = (
-            _le2_research_daily_export(coord, now=ts) if coord is not None
+            _learning_research_daily_export(coord, now=ts) if coord is not None
             else {"available": False, "reason": "no_coordinator"}
         )
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
             **meta,
-            "historical_learning_snapshot": _le2_historical_learning_snapshot_for_research(learning),
+            "historical_learning_snapshot": _historical_learning_snapshot_for_research(learning),
             "analytics": analytics,
-            "runtime_models": le2,
+            "runtime_models": runtime_models,
             "learning_progress": learning_progress,
             "episode_history": episode_history,
             "research_daily": research_daily,
@@ -1975,16 +1975,16 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
                 "current_mode": getattr(coord, "_current_mode", None),
                 "confidence": round(float(((coord.data or {}).get("learning_confidence") or 0.0)), 3),
             }
-            zone_info["runtime_health"] = _le2_health_data(coord)
-            zone_info["runtime_pending"] = _le2_pending_data(coord, entry.entry_id)
-            zone_info["adaptation"] = _le2_adaptation_summary(coord, entry.entry_id)
-            zone_info["adaptation_history"] = _le2_adaptation_history_summary(
+            zone_info["runtime_health"] = _learning_health_data(coord)
+            zone_info["runtime_pending"] = _learning_pending_data(coord, entry.entry_id)
+            zone_info["adaptation"] = _learning_adaptation_summary(coord, entry.entry_id)
+            zone_info["adaptation_history"] = _learning_adaptation_history_summary(
                 coord, entry.entry_id
             )
-            zone_info["reserved_diagnostics"] = _le2_reserved_diagnostics_summary(
+            zone_info["reserved_diagnostics"] = _learning_reserved_diagnostics_summary(
                 coord, entry.entry_id
             )
-            zone_info["critical_events"] = _le2_critical_events_export(coord, now=ts)
+            zone_info["critical_events"] = _learning_critical_events_export(coord, now=ts)
             zone_info["device_profile"] = _device_profile_export(coord)
         else:
             zone_info["runtime_state"] = None
@@ -2011,12 +2011,17 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
         },
         "storage_layout": {
             "note": (
-                "ThermoSmart stores learning data per zone. The active LE2 runtime "
-                "store uses a hashed zone key: thermosmart_le2__<hash>. Segmented "
-                "LE2 stores use: thermosmart_le2__<zone_entry_id>__<suffix>. The "
-                "older thermosmart_learning_data store is legacy/read-only. Do not "
-                "manually delete thermosmart_le2__<hash> files unless you "
-                "intentionally want to reset runtime learning state for that zone."
+                "ThermoSmart stores learning data per zone. The active learning "
+                "runtime store uses a hashed zone key: thermosmart_learning__<hash>. "
+                "Segmented learning stores use: "
+                "thermosmart_learning__<zone_entry_id>__<suffix>. Older "
+                "thermosmart_le2__ keys (pre-migration installs) are read once as a "
+                "fallback and then mirrored onto the keys above; they are kept as a "
+                "safety fallback and not deleted automatically. The separate, older "
+                "thermosmart_learning_data store is unrelated legacy/read-only data. "
+                "Do not manually delete any thermosmart_learning__<hash> or "
+                "thermosmart_le2__<hash> files unless you intentionally want to "
+                "reset runtime learning state for that zone."
             ),
         },
         "zones": zones,

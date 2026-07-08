@@ -2,7 +2,7 @@
 
 Covers:
   1.  LE1 frozen semantics in all four modes
-  2.  LE2 storage dirty/save per mode
+  2.  Learning storage dirty/save per mode
   3.  Pending outcome count per mode
   4.  Preheat/afterheat/boost cleanup on mode transitions
   5.  Multi-TRV in all four modes
@@ -129,7 +129,7 @@ class TestLE1FrozenSemantics:
         have since been removed from the coordinator's real cycle. LE v1
         continues to serve exactly one live purpose: the schedule lookup via
         async_get_base_target(), which must still be called every cycle in
-        all four modes — this removal does not gate or disable any LE2 path.
+        all four modes — this removal does not gate or disable any Learning path.
 
         async_observe_window_cooling() is not exercised here: it is only
         reached from the window-sensor state-change listener wired by
@@ -165,7 +165,7 @@ class TestLE1FrozenSemantics:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# 2. LE2 Storage Dirty / Save per Mode
+# 2. Learning Storage Dirty / Save per Mode
 # ════════════════════════════════════════════════════════════════════════════════
 
 class TestStorageDirtyPerMode:
@@ -315,7 +315,7 @@ class TestPreheatCleanupTransitions:
 
     @pytest.mark.asyncio
     async def test_adaptive_to_deterministic_boost_blocked(self):
-        """ADAPTIVE → DETERMINISTIC: LE2 boost is blocked (Gate 1) in next cycle."""
+        """ADAPTIVE → DETERMINISTIC: Learning boost is blocked (Gate 1) in next cycle."""
         coord, shadow, _ = await _coord_with_shadow(True, True, eligible_boost=True)
         await _cycle(coord)
         coord.entry.data["learning_enabled"] = False  # switch to DETERMINISTIC
@@ -337,14 +337,14 @@ class TestPreheatCleanupTransitions:
 
     @pytest.mark.asyncio
     async def test_learning_off_during_adaptive_preheat_no_le2_boost(self):
-        """Learning OFF during ADAPTIVE preheat: LE2 boost blocked in next cycle."""
+        """Learning OFF during ADAPTIVE preheat: Learning boost blocked in next cycle."""
         coord, shadow, _ = await _coord_with_shadow(True, True, eligible_boost=True)
         await _cycle(coord)
         coord.entry.data["learning_enabled"] = False
         zone_b = await _cycle(coord)
         applied = zone_b.get("applied_boost_offset_c") or 0.0
         assert applied == 0.0, (
-            f"Learning OFF must block LE2 boost: applied={applied}")
+            f"Learning OFF must block Learning boost: applied={applied}")
 
     @pytest.mark.asyncio
     async def test_mode_switch_before_dispatch_no_stale_offset(self):
@@ -550,7 +550,7 @@ class TestMinimalSetup:
 
     @pytest.mark.asyncio
     async def test_adaptive_trv_only_with_shadow_no_crash(self):
-        """ADAPTIVE: TRV-only with LE2 shadow → no crash, safe baseline used."""
+        """ADAPTIVE: TRV-only with Learning shadow → no crash, safe baseline used."""
         cfg = {
             "learning_enabled": True,
             "temp_sensors": ["sensor.test_temp"],
@@ -609,7 +609,7 @@ class TestRestoreMatrixUnit:
 
     @pytest.mark.asyncio
     async def test_deterministic_restart_no_le2_data_in_control(self):
-        """DETERMINISTIC → restart → DETERMINISTIC: no LE2 data affects TPI."""
+        """DETERMINISTIC → restart → DETERMINISTIC: no Learning data affects TPI."""
         coord, shadow, _ = await _coord_with_shadow(False, True)
         zone1 = await _cycle(coord)
         assert zone1.get("tpi_coef_source") == "deterministic_baseline"
@@ -718,11 +718,11 @@ class TestShadowVsRealOutcomes:
 
     @pytest.mark.asyncio
     async def test_deterministic_real_dispatch_no_le2_influence(self):
-        """DETERMINISTIC: real dispatch happens but LE2 shadow has no influence on setpoints."""
+        """DETERMINISTIC: real dispatch happens but Learning shadow has no influence on setpoints."""
         coord, shadow, _ = await _coord_with_shadow(False, True)
         zone = await _cycle(coord)
         assert coord.control_calls, "DETERMINISTIC must dispatch"
-        # LE2 shadow NOT observed → no LE2 influence
+        # Learning shadow NOT observed → no Learning influence
         assert zone.get("tpi_coef_source") == "deterministic_baseline"
         applied = zone.get("applied_boost_offset_c") or 0.0
-        assert applied == 0.0, "DETERMINISTIC must have 0 LE2 boost influence"
+        assert applied == 0.0, "DETERMINISTIC must have 0 Learning boost influence"

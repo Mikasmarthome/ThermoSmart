@@ -1,4 +1,4 @@
-"""Typed raw record schemas for LE 2.0 (pure Python, no Home Assistant).
+"""Typed raw record schemas for Learning (pure Python, no Home Assistant).
 
 Raw records contain ONLY measurements, observed states, controller decisions
 and immutable events — never derived values (``delta``, ``heat_rate``,

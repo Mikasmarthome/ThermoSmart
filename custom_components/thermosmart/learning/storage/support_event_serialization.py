@@ -1,4 +1,4 @@
-"""Versioned, defensive serialization for LE2 Support Critical Events.
+"""Versioned, defensive serialization for Learning Support Critical Events.
 
 Mirrors ``episode_serialization.py``'s pattern: a flat, JSON-safe dict shape,
 a schema-version guard, and a separate public-safe export view. Reuses the
@@ -44,7 +44,7 @@ _KNOWN_EVENT_TYPE_VALUES = {t.value for t in SupportEventType}
 _KNOWN_SEVERITY_VALUES = {s.value for s in SupportEventSeverity}
 
 # Key substrings a ``details`` entry is dropped for, checked case-insensitively.
-# Mirrors export.py's own forbidden-key lists (_LE2_STRIP_KEY_SUBSTRINGS /
+# Mirrors export.py's own forbidden-key lists (_LEARNING_STRIP_KEY_SUBSTRINGS /
 # privacy.py's _FORBIDDEN_KEY_SUBSTRINGS) but is deliberately a local,
 # independent copy: storage modules must not import from export.py (wrong
 # dependency direction — export.py already imports storage helpers) or from
@@ -154,7 +154,7 @@ def support_event_for_export(entry: Mapping[str, Any]) -> Optional[dict]:
     "not later exported unreflectively") and re-applies the same details
     bounds (including the forbidden-key-substring strip — see
     ``_bounded_details()``). Operates on the flat serialized dict shape (not
-    a dataclass) — the shape export.py's ``_le2_critical_events_export()``
+    a dataclass) — the shape export.py's ``_learning_critical_events_export()``
     actually reads from a loaded/snapshotted store, one entry at a time.
     Returns None for malformed/unrecognised input; never raises.
     """

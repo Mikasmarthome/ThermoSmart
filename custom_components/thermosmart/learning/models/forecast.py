@@ -1,4 +1,4 @@
-"""ForecastModel for LE 2.0 (pure Python).
+"""ForecastModel for Learning (pure Python).
 
 Learns how trustworthy past weather/temperature forecasts were for a zone — it
 does NOT forecast. It matches a ``ForecastDecisionEvent`` (the forecast that was

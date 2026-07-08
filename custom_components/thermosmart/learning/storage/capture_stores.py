@@ -1,4 +1,4 @@
-"""Live-reachable store-access facade for LE2 raw/episode capture.
+"""Live-reachable store-access facade for Learning raw/episode capture.
 
 Constructing ``LearningCaptureStores`` performs NO storage I/O — it only holds
 a ``StoreFactory`` reference plus the canonical registries (built in
@@ -30,7 +30,7 @@ from .stores import (
 
 
 class LearningCaptureStores:
-    """Per-zone, lazy accessor for LE2 raw segment / episode stores.
+    """Per-zone, lazy accessor for Learning raw segment / episode stores.
 
     Holds only a ``StoreFactory`` + registries — no cached store instances,
     no open file handles, no background tasks, no writes. Every accessor call

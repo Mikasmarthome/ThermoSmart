@@ -1,4 +1,4 @@
-"""Support / Learning export orchestration for LE 2.0 (pure Python).
+"""Support / Learning export orchestration for Learning (pure Python).
 
 Merges already-computed model exports, confidence results and injected summaries
 into two typed, privacy-safe, deterministic, JSON-compatible payloads — a compact

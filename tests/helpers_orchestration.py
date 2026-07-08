@@ -1,4 +1,4 @@
-"""Shared builders for LE 2.0 diagnostics/export orchestration tests."""
+"""Shared builders for Learning diagnostics/export orchestration tests."""
 from __future__ import annotations
 
 from datetime import datetime, timezone

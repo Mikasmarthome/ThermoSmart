@@ -1,4 +1,4 @@
-"""Privacy primitives for LE 2.0 diagnostics/export orchestration (pure Python).
+"""Privacy primitives for Learning diagnostics/export orchestration (pure Python).
 
 Provides the field-level privacy classification, a namespaced pseudonymizer, a
 versioned privacy policy (quantisation + time strategy) and a defensive privacy

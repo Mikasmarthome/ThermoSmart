@@ -1,4 +1,4 @@
-"""Typed schema for LE2 Support Critical Events (pure Python, no Home Assistant).
+"""Typed schema for Learning Support Critical Events (pure Python, no Home Assistant).
 
 Support Critical Events are NOT a log of every coordinator cycle. They are the
 small subset of "why did/didn't ThermoSmart act here" moments a support

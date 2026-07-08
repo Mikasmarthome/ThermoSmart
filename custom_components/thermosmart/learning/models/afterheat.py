@@ -1,4 +1,4 @@
-"""AfterheatModel for LE 2.0 (pure Python).
+"""AfterheatModel for Learning (pure Python).
 
 Learns the thermal after-effect once active heat input ends, from completed,
 undisturbed AfterheatEpisodes: residual temperature rise (deg C), time to peak,

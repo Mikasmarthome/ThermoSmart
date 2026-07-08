@@ -66,7 +66,7 @@ TEMP_SOURCE_SENSOR_GRACE_SECONDS = 300
 # TPI-Regler Konstanten
 TPI_COEF_INT_DEFAULT  = 0.6    # Duty-Cycle-Anteil pro °C Raumfehler (0→100%)
 TPI_COEF_EXT_DEFAULT  = 0.01   # Duty-Cycle-Anteil pro °C Außentemperatur-Delta
-# Central unit string for all LE2 rate predictions (°C/h).
+# Central unit string for all Learning rate predictions (°C/h).
 # Gate 4 in read_tpi_coefficients_safe() and all unit assertions use this constant.
 UNIT_C_PER_H = "C/h"
 TPI_MAX_BOOST_CELSIUS = 8.0    # max. °C über Zieltemp für Setpoint-Konvertierung

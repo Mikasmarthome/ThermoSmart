@@ -1,4 +1,4 @@
-"""Pure-core LE2 runtime foundation.
+"""Pure-core Learning runtime foundation.
 
 Injected-dependency runtime: capture, evidence materialisation, model
 orchestration, shadow comparison and persistence policy. This core is

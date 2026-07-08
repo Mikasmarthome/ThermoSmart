@@ -1,4 +1,4 @@
-"""Shared builders for LE 2.0 ConfidenceAggregator tests."""
+"""Shared builders for Learning ConfidenceAggregator tests."""
 from __future__ import annotations
 
 from typing import Optional, Sequence

@@ -1,6 +1,6 @@
-"""Home Assistant Store adapter for the LE 2.0 persistence protocol.
+"""Home Assistant Store adapter for the Learning persistence protocol.
 
-This is the only LE-2.0 runtime module that touches Home Assistant, and it does
+This is the only Learning runtime module that touches Home Assistant, and it does
 so lazily (HA is imported inside the methods) so the pure runtime stays importable
 on plain Python. It adapts HA's ``Store`` to the injected ``AsyncStore`` protocol
 used by :class:`PersistenceOrchestrator`. Store keys never embed entity names.

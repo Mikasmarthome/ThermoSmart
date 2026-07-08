@@ -1,4 +1,4 @@
-"""Deterministic, validated store-key naming for LE 2.0 (pure Python).
+"""Deterministic, validated store-key naming for Learning (pure Python).
 
 Store keys are derived solely from the opaque ``learning_zone_id`` and the
 track/segment context — never from visible zone names or entity ids. Keys are
@@ -7,7 +7,7 @@ versioned, and collision-free across zones, tracks and segments.
 
 Neutral naming migration (Learning Naming / Storage-Key audit):
   The historical ``thermosmart_le2__`` prefix exposed an internal generation
-  codename ("LE2") directly in ``.storage`` filenames — a technically curious
+  codename directly in ``.storage`` filenames — a technically curious
   user browsing that folder would see it. ``LEARNING_STORAGE_PREFIX`` is the
   neutral prefix every store now saves under; ``LEGACY_LEARNING_STORAGE_PREFIX``
   is the old prefix, still read as a one-time lazy-migration fallback by the
@@ -31,13 +31,13 @@ from typing import Optional
 
 from ..raw_schemas import RawTrackName
 
-# Identifies the Learning Engine generation these stores belong to (LE 2.0).
+# Identifies the learning-engine generation these stores belong to.
 # Distinct from the v1 store key ``thermosmart_learning_data``.
 LEARNING_ENGINE_GENERATION = 2
 
 _DOMAIN = "thermosmart"
 
-# Target neutral prefix (no LE1/LE2 generation codename) and the current/
+# Target neutral prefix (no internal generation codename) and the current/
 # actual prefix every existing *_key() function below still produces.
 # _PREFIX stays an alias of the legacy constant so none of the functions
 # already in production use change their output as a side effect of this
@@ -246,13 +246,13 @@ def research_daily_key_pair(learning_zone_id: str) -> LearningStorageKeyPair:
 
 
 def zone_segment(learning_zone_id: str) -> str:
-    """Non-identifying, stable token for the LE2 runtime-snapshot store key
+    """Non-identifying, stable token for the Learning runtime-snapshot store key
     (ha_store.py's ``store_key()``) — never an entity name.
 
     Consolidated here (single source of truth) from two previously
     independent, byte-identical implementations:
     ``learning/runtime/ha_integration.py``'s private ``_zone_segment()`` and
-    an inline duplicate in ``__init__.py``'s ``_async_purge_le2_zone_storage()``
+    an inline duplicate in ``__init__.py``'s ``_async_purge_learning_zone_storage()``
     (which deliberately avoided importing the heavier runtime module — this
     module, already a pure/no-HA-dependency leaf, satisfies that same
     constraint). Same algorithm, same output, for any given input — this is a

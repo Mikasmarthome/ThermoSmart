@@ -1,4 +1,4 @@
-"""Shared builders for LE 2.0 control-policy tests."""
+"""Shared builders for Learning control-policy tests."""
 from __future__ import annotations
 
 from typing import Optional

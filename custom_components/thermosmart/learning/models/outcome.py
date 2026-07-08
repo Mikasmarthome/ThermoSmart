@@ -1,4 +1,4 @@
-"""OutcomeModel for LE 2.0 (pure Python).
+"""OutcomeModel for Learning (pure Python).
 
 Evaluates heating decisions across four SEPARATE, reproducible dimensions —
 physical target achievement, comfort quality, controller quality and data

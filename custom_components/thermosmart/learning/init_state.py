@@ -1,4 +1,4 @@
-"""Typed initialization / reset state for LE 2.0 (pure Python, no Home Assistant).
+"""Typed initialization / reset state for Learning (pure Python, no Home Assistant).
 
 These types describe the outcome of zone initialization and reset. They are pure
 so they can be imported and asserted without Home Assistant. The actual store

@@ -133,7 +133,7 @@ class ThermoSmartTRVSetpointSensor(_Base):
             "target_temperature": target,
             "boost_delta": f"+{boost}°C" if boost > 0 else "0°C",
             "boost_factor":           z.get("boost_factor", 1.0),           # compat: 1.0=neutral
-            "boost_offset_c":         z.get("boost_offset_c", 0.0),         # LE2 raw prediction: 0.0=neutral
+            "boost_offset_c":         z.get("boost_offset_c", 0.0),         # Learning raw prediction: 0.0=neutral
             "applied_boost_offset_c": z.get("applied_boost_offset_c", 0.0), # confirmed dispatch truth
             "boost_active": boost > 0,
         }
@@ -168,7 +168,7 @@ class ThermoSmartConfidenceSensor(_Base):
 
     @property
     def native_value(self):
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is None:
             return 0.0
         progress_pct, _ = shadow.learning_progress_safe()
@@ -176,7 +176,7 @@ class ThermoSmartConfidenceSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is None:
             return {
                 "data_source": "current_learning_engine",
@@ -349,9 +349,9 @@ class ThermoSmartTempSlopeSensor(_Base):
 
 
 class ThermoSmartHeatingPowerSensor(_Base):
-    """Average heating rate (K/min) — LE 2.0 source, compatibility unit kept.
+    """Average heating rate (K/min) — Learning source, compatibility unit kept.
 
-    Value is LE 2.0 HEAT_RATE (°C/h) divided by 60 for backwards-compatible
+    Value is Learning HEAT_RATE (°C/h) divided by 60 for backwards-compatible
     K/min display.  LE v1 is no longer read for this value.
     """
     _attr_entity_registry_enabled_default = False
@@ -367,7 +367,7 @@ class ThermoSmartHeatingPowerSensor(_Base):
 
     @property
     def native_value(self):
-        sh = getattr(self.coordinator, "_le2_shadow", None)
+        sh = getattr(self.coordinator, "_learning_shadow", None)
         if sh is not None:
             rate_c_per_h, status = sh.read_heat_rate_safe()
             if status == "valid" and rate_c_per_h > 0:
@@ -378,7 +378,7 @@ class ThermoSmartHeatingPowerSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        sh = getattr(self.coordinator, "_le2_shadow", None)
+        sh = getattr(self.coordinator, "_learning_shadow", None)
         if sh is not None:
             rate_c_per_h, status = sh.read_heat_rate_safe()
             attrs: dict[str, Any] = {
@@ -430,9 +430,9 @@ class ThermoSmartTpiSensor(_Base):
 
 
 class ThermoSmartHeatLossRateSensor(_Base):
-    """Learned heat loss rate (K/min) — LE 2.0 source, compatibility unit kept.
+    """Learned heat loss rate (K/min) — Learning source, compatibility unit kept.
 
-    Value is LE 2.0 HEAT_LOSS_RATE (°C/h) divided by 60 for backwards-compatible
+    Value is Learning HEAT_LOSS_RATE (°C/h) divided by 60 for backwards-compatible
     K/min display.  LE v1 is no longer read for this value when shadow is attached.
     """
     _attr_entity_registry_enabled_default = False
@@ -448,7 +448,7 @@ class ThermoSmartHeatLossRateSensor(_Base):
 
     @property
     def native_value(self):
-        sh = getattr(self.coordinator, "_le2_shadow", None)
+        sh = getattr(self.coordinator, "_learning_shadow", None)
         if sh is not None:
             rate_c_per_h, status = sh.read_heat_loss_rate_safe()
             if status == "valid" and rate_c_per_h >= 0:
@@ -459,7 +459,7 @@ class ThermoSmartHeatLossRateSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        sh = getattr(self.coordinator, "_le2_shadow", None)
+        sh = getattr(self.coordinator, "_learning_shadow", None)
         if sh is not None:
             rate_c_per_h, status = sh.read_heat_loss_rate_safe()
             attrs: dict[str, Any] = {
@@ -526,7 +526,7 @@ class ThermoSmartOutcomeScoreSensor(_Base):
 
     @property
     def native_value(self):
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is None:
             return None
         score_pct, _status = shadow.read_outcome_score_safe()
@@ -534,7 +534,7 @@ class ThermoSmartOutcomeScoreSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is None:
             return {"data_source": "current_learning_engine", "data_status": "not_available"}
         return shadow.read_outcome_attributes_safe()
@@ -555,7 +555,7 @@ class ThermoSmartTRVObservationsSensor(_Base):
 
     @property
     def native_value(self):
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is not None:
             breakdown = shadow.confidence_display_attributes()
             return breakdown.get("trv_observations", 0)
@@ -563,7 +563,7 @@ class ThermoSmartTRVObservationsSensor(_Base):
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is not None:
             breakdown = shadow.confidence_display_attributes()
             return {
@@ -620,14 +620,15 @@ class ThermoSmartWindowCoolingRateSensor(_Base):
 
     @property
     def native_value(self):
-        # LE1 is frozen — its window cooling rate is a historical snapshot, never updated.
-        # LE2 models window cooling via HeatLossModel but has no dedicated public
-        # read method for K/min rate yet. Return None until a live source exists.
+        # The frozen legacy engine's window cooling rate is a historical snapshot,
+        # never updated. Learning models window cooling via HeatLossModel but has
+        # no dedicated public read method for K/min rate yet. Return None until a
+        # live source exists.
         return None
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        shadow = getattr(self.coordinator, "_le2_shadow", None)
+        shadow = getattr(self.coordinator, "_learning_shadow", None)
         if shadow is not None:
             breakdown = shadow.confidence_display_attributes()
             return {

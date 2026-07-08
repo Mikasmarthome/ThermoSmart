@@ -1,4 +1,4 @@
-"""Typed core contracts for the LE 2.0 decision architecture (Phase 19A, pure Python).
+"""Typed core contracts for the Learning decision architecture (Phase 19A, pure Python).
 
 These replace free-form recommendation dictionaries as the *internal* architecture
 boundary. Existing HA-facing dicts are adapted at the edges (see baseline.py); the
@@ -29,7 +29,7 @@ class DecisionReason(Enum):
     ABSENCE = "absence"
     SUMMER = "summer"
     BASELINE = "baseline"
-    LE2_APPLIED = "le2_applied"
+    LEARNING_APPLIED = "learning_applied"
     DEVICE_LIMIT = "device_limit"
     ANTI_CHATTER = "anti_chatter"
 
@@ -51,7 +51,7 @@ class DecisionMode(Enum):
 
 class BoostEvaluationStatus(Enum):
     """B2b-3c three-state authority for the boost decision. The single authoritative
-    source is the LE-2.0 boost authority; these states must never collapse."""
+    source is the Learning boost authority; these states must never collapse."""
     NOT_EVALUATED = "not_evaluated"            # boost authority not invoked / data missing
     EVALUATED_NOT_APPLIED = "evaluated_not_applied"  # evaluated, authoritatively no boost
     APPLIED = "applied"                        # a boost offset was authoritatively applied
@@ -82,7 +82,7 @@ class ZoneRuntimeInput:
     forecast_high_c: Optional[float] = None
     early_cutoff_state: Optional[str] = None
     # Preheat / HeatRate / OnsetDelay context (passed through for DecisionTrace)
-    preheat_minutes_le2: Optional[float] = None
+    preheat_minutes_learning: Optional[float] = None
     preheat_status: Optional[str] = None
     deterministic_baseline_preheat_min: Optional[float] = None
     heat_rate_c_per_h: Optional[float] = None
@@ -139,7 +139,7 @@ class LearningPrediction:
 
 @dataclass(frozen=True)
 class LearningPredictionSet:
-    """All technically-ready LE 2.0 predictions for one decision."""
+    """All technically-ready Learning predictions for one decision."""
     zone_id: str
     decision_id: Optional[str]
     predictions: Mapping[str, LearningPrediction] = field(default_factory=dict)
@@ -163,7 +163,7 @@ class ResolvedControlDecision:
     zone_id: str
     feature: str
     baseline_value: Optional[float]
-    le2_value: Optional[float]
+    learning_value: Optional[float]
     final_value: Optional[float]
     unit: str
     applied: bool
@@ -208,7 +208,7 @@ class DispatchResult:
 class DecisionTraceEntry:
     feature: str
     baseline_value: Optional[float]
-    le2_value: Optional[float]
+    learning_value: Optional[float]
     final_value: Optional[float]
     applied: bool
     reason: str
@@ -241,7 +241,7 @@ class DecisionTrace:
     #   A = preheat_command_lead_time_min  (total, returned to coordinator)
     #   B = effective_onset_delay_min      (TRV→room; adaptive, separate from rate)
     #   C = effective_room_heating_duration_min  (only this drives HeatRate learning)
-    preheat_minutes_le2: Optional[float] = None   # LE2 value before any selection
+    preheat_minutes_learning: Optional[float] = None   # Learning value before any selection
     preheat_status: Optional[str] = None           # "valid", "deterministic_baseline", …
     preheat_baseline_minutes: Optional[float] = None  # deterministic baseline value
     selected_preheat_min: Optional[float] = None   # = preheat_command_lead_time_min (alias)
@@ -264,12 +264,12 @@ class DecisionTrace:
     # Boost diagnostics: internal truth, compat adapter, adaptive cap, lifecycle
     boost_offset_c_applied: Optional[float] = None   # internal additive °C (0.0 = neutral)
     boost_factor_compat: Optional[float] = None       # public attr (1.0 = neutral, compat adapter)
-    boost_adaptive_cap_c: Optional[float] = None      # LE 2.0 adaptive cap in effect this cycle
+    boost_adaptive_cap_c: Optional[float] = None      # Learning adaptive cap in effect this cycle
     boost_lifecycle_state: Optional[str] = None       # current lifecycle state string
     # TPI authority chain: typed fields for no-double-apply verification
     tpi_duty_percent: Optional[float] = None          # TPI duty [0–100 %] this cycle
-    tpi_baseline_setpoint_c: Optional[float] = None  # TPI setpoint before any LE2 boost
-    boost_offset_requested_c: Optional[float] = None  # raw LE2 prediction (pre-gate)
+    tpi_baseline_setpoint_c: Optional[float] = None  # TPI setpoint before any Learning boost
+    boost_offset_requested_c: Optional[float] = None  # raw Learning prediction (pre-gate)
     boost_rejected_reason: Optional[str] = None       # why boost was not applied (e.g. "direct_valve_control")
     # Deescalation trace fields (populated by compute_decision_trace_safe via lifecycle state)
     boost_release_reason: Optional[str] = None           # lifecycle release reason string
@@ -278,7 +278,7 @@ class DecisionTrace:
     predicted_time_to_target_without_boost_min: Optional[float] = None
     remaining_time_to_target_min: Optional[float] = None  # schedule remaining time
     tpi_sufficiency_safety_margin_min: Optional[float] = None  # versioned TPI safety margin
-    afterheat_prediction_c: Optional[float] = None       # LE2 EXPECTED_OVERSHOOT residual rise
+    afterheat_prediction_c: Optional[float] = None       # Learning EXPECTED_OVERSHOOT residual rise
     afterheat_prediction_status: Optional[str] = None    # "learned", "cold_start", "unavailable"
     afterheat_confidence: Optional[float] = None         # EXPECTED_OVERSHOOT prediction confidence
     boost_outcome_overshoot_risk: Optional[bool] = None  # BOOST_OUTCOME overshoot history flag
@@ -295,7 +295,7 @@ class DecisionTrace:
             "comfort_temperature_c": self.comfort_temperature_c,
             "early_cutoff_state": self.early_cutoff_state,
             "early_cutoff_hold_active": self.early_cutoff_hold_active,
-            "preheat_minutes_le2": self.preheat_minutes_le2,
+            "preheat_minutes_learning": self.preheat_minutes_learning,
             "preheat_status": self.preheat_status,
             "preheat_baseline_minutes": self.preheat_baseline_minutes,
             "selected_preheat_min": self.selected_preheat_min,
@@ -340,7 +340,7 @@ class DecisionTrace:
             "baseline_setpoint_c": self.baseline_setpoint_c,
             "final_setpoint_c": self.final_setpoint_c, "applied_any": self.applied_any,
             "features": [
-                {"feature": e.feature, "baseline": e.baseline_value, "le2": e.le2_value,
+                {"feature": e.feature, "baseline": e.baseline_value, "learning": e.learning_value,
                  "final": e.final_value, "applied": e.applied, "reason": e.reason,
                  "fallback": e.fallback_reason, "confidence": e.confidence,
                  "clamp": e.clamp_applied}
@@ -364,13 +364,13 @@ class LiveDecisionRecord:
     ts: str                                     # ISO 8601 UTC — snapshot at decision time
     mode: str                                   # "control" | "shadow"
 
-    # ── baseline (TPI output, before LE2 adjustment) ─────────────────────
-    baseline_setpoint_c: Optional[float]        # TPI setpoint before any LE2 boost
+    # ── baseline (TPI output, before Learning adjustment) ─────────────────────
+    baseline_setpoint_c: Optional[float]        # TPI setpoint before any Learning boost
     final_setpoint_c: Optional[float]           # recommendation["trv_setpoint"] after boost
 
-    # ── LE2 boost decision ────────────────────────────────────────────────
-    boost_applied: bool                         # True when LE2 boost was applied this cycle
-    boost_candidate_c: Optional[float]          # raw LE2 proposal (pre-guard), °C offset
+    # ── Learning boost decision ────────────────────────────────────────────────
+    boost_applied: bool                         # True when Learning boost was applied this cycle
+    boost_candidate_c: Optional[float]          # raw Learning proposal (pre-guard), °C offset
     boost_applied_c: Optional[float]            # offset actually applied (None = not applied)
     boost_rejected_reason: Optional[str]        # gate that blocked boost; None = not in scope
 

@@ -1,4 +1,4 @@
-"""Home Assistant store wrappers for LE 2.0 (the only HA-dependent storage layer).
+"""Home Assistant store wrappers for Learning (the only HA-dependent storage layer).
 
 Thin, versioned, injectable wrappers. They make no business decisions, import
 no models and no coordinator, and create no store at import time. Tests inject a

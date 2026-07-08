@@ -1,10 +1,10 @@
 """Confidence display adapter (Phase 19A-B, pure Python).
 
 Produces the legacy confidence display values (combined % and the per-track
-breakdown attribute shape) purely from LE-2.0 ``ConfidenceResult`` objects — so the
+breakdown attribute shape) purely from Learning ``ConfidenceResult`` objects — so the
 existing sensor/attribute semantics are preserved WITHOUT a second confidence
-formula. The control/prediction gates already consume LE-2.0 ``ConfidenceResult``
-directly; this only feeds *display*. When no LE-2.0 confidence exists, a neutral,
+formula. The control/prediction gates already consume Learning ``ConfidenceResult``
+directly; this only feeds *display*. When no Learning confidence exists, a neutral,
 safe fallback (0.0 / empty) is returned — never the legacy engine.
 """
 from __future__ import annotations
@@ -26,7 +26,7 @@ def _val(last_confidence: Mapping[str, Any], purpose: ConfidencePurpose) -> Opti
 
 
 def combined_confidence(last_confidence: Mapping[str, Any]) -> float:
-    """Display rollup: mean of the available LE-2.0 per-purpose confidences ([0,1]).
+    """Display rollup: mean of the available Learning per-purpose confidences ([0,1]).
 
     This is a display aggregation over the aggregator's own outputs, not a new gate
     formula. Returns 0.0 when no confidence is available (neutral/safe).
@@ -42,7 +42,7 @@ def combined_confidence(last_confidence: Mapping[str, Any]) -> float:
 
 def confidence_breakdown(last_confidence: Mapping[str, Any], *,
                          model_update_counts: Optional[Mapping[str, int]] = None) -> dict:
-    """Legacy-compatible breakdown attribute shape, sourced from LE-2.0 confidences."""
+    """Legacy-compatible breakdown attribute shape, sourced from Learning confidences."""
     counts = dict(model_update_counts or {})
     def pct(purpose):
         v = _val(last_confidence, purpose)

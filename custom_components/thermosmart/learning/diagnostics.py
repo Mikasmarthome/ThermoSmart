@@ -1,4 +1,4 @@
-"""Engine-wide diagnostics orchestration for LE 2.0 (pure Python).
+"""Engine-wide diagnostics orchestration for Learning (pure Python).
 
 Merges per-model ``diagnostics()`` / ``confidence()`` output and injected typed
 summaries into a privacy-safe, deterministic engine/zone/model diagnostics tree.

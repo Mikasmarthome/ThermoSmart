@@ -1,4 +1,4 @@
-"""HeatRateModel for LE 2.0 (pure Python).
+"""HeatRateModel for Learning (pure Python).
 
 Learns a zone's heating rate (deg C per hour) from completed, undisturbed
 ACTIVE_HEATING episodes. Two levels: a general zone rate (the TRV-only fallback)
@@ -272,7 +272,7 @@ def _bucket_index(value: float, edges: Sequence[float]) -> int:
 # -- model --------------------------------------------------------------------
 
 class HeatRateModel:
-    """Pure heating-rate model implementing the LE 2.0 Model contract."""
+    """Pure heating-rate model implementing the Learning Model contract."""
 
     model_name = MODEL_NAME
     model_version = MODEL_VERSION

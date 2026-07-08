@@ -1,4 +1,4 @@
-"""LE 2.0 zone initialization and reset (HA-dependent storage shell).
+"""Learning zone initialization and reset (HA-dependent storage shell).
 
 Creates only empty, versioned v2 store structures — never fabricated model
 states or priors. Idempotent, recovery-safe, and driven by explicitly provided
@@ -361,7 +361,7 @@ async def reset_v2_learning_state(
 
 @dataclass(frozen=True)
 class ZonePurgeResult:
-    """Outcome of purging one zone's LE 2.0 storage on real removal. Never raises."""
+    """Outcome of purging one zone's Learning storage on real removal. Never raises."""
     deleted_keys: tuple[str, ...]
     errors: tuple[str, ...]
 
@@ -369,7 +369,7 @@ class ZonePurgeResult:
 async def async_purge_zone_storage(
     factory: StoreFactory, entry_id: str, *, raw_registry: RawTrackRegistry,
 ) -> ZonePurgeResult:
-    """Delete every known LE 2.0 storage key for one zone.
+    """Delete every known Learning storage key for one zone.
 
     Only ever called on REAL zone/entry removal (``async_remove_entry`` in
     ``__init__.py``) — never on unload/reload, which must never lose data.
@@ -378,7 +378,7 @@ async def async_purge_zone_storage(
     directory scan, no wildcard, no cross-zone reach. Best-effort per store:
     one failing delete never blocks the rest. Does not touch the v1 store
     ``thermosmart_learning_data`` (shared across zones — that is the caller's
-    responsibility once it has confirmed no zone remains) nor the LE 2.0
+    responsibility once it has confirmed no zone remains) nor the Learning
     shadow-state store (a different key scheme; see
     ``learning/runtime/ha_store.py``'s ``HomeAssistantStoreAdapter.async_delete()``).
     """

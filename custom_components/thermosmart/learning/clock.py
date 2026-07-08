@@ -1,4 +1,4 @@
-"""Injectable clock abstraction for the LE 2.0 pure-Python core.
+"""Injectable clock abstraction for the Learning pure-Python core.
 
 The learning core must never call ``homeassistant.util.dt.now()`` (or any other
 Home Assistant helper) directly. Instead every component receives a ``Clock``

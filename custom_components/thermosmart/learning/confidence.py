@@ -1,4 +1,4 @@
-"""ConfidenceAggregator for LE 2.0 (pure Python).
+"""ConfidenceAggregator for Learning (pure Python).
 
 The single authoritative place that combines per-model ``ConfidenceContribution``
 objects into a purpose-bound, capped, gated confidence. Models only report their

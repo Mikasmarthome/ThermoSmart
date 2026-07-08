@@ -6,7 +6,7 @@ four deterministic operating modes across all subsystems:
   INACTIVE      — Learning OFF + Active OFF  → no influence, no dispatch, no learning
   SHADOW_ONLY   — Learning ON  + Active OFF  → learning/observation, zero service calls
   DETERMINISTIC — Learning OFF + Active ON   → real dispatch, static defaults only
-  ADAPTIVE      — Learning ON  + Active ON   → real dispatch + LE2 adaptive values
+  ADAPTIVE      — Learning ON  + Active ON   → real dispatch + Learning adaptive values
 
 Coverage:
   1.  Mode derivation (exhaustive)
@@ -181,29 +181,29 @@ class TestTPIAuthorityPerMode:
 
     @pytest.mark.asyncio
     async def test_deterministic_uses_baseline_even_with_shadow(self):
-        """DETERMINISTIC: LE2 shadow attached but TPI source must be 'deterministic_baseline'."""
+        """DETERMINISTIC: Learning shadow attached but TPI source must be 'deterministic_baseline'."""
         coord, _ = await _coord_with_shadow(False, True)
         zone = await _cycle(coord)
         assert zone.get("tpi_coef_source") == "deterministic_baseline"
 
     @pytest.mark.asyncio
     async def test_shadow_only_reads_le2_coefficients(self):
-        """SHADOW_ONLY: tpi_coef_source comes from LE2 shadow (not baseline)."""
+        """SHADOW_ONLY: tpi_coef_source comes from Learning shadow (not baseline)."""
         coord, _ = await _coord_with_shadow(True, False)
         zone = await _cycle(coord)
-        # LE2 shadow is attached and learning is on → coef source must NOT be baseline
+        # Learning shadow is attached and learning is on → coef source must NOT be baseline
         src = zone.get("tpi_coef_source")
         assert src != "deterministic_baseline", (
-            f"SHADOW_ONLY should use LE2 TPI source, got: {src!r}")
+            f"SHADOW_ONLY should use Learning TPI source, got: {src!r}")
 
     @pytest.mark.asyncio
     async def test_adaptive_reads_le2_coefficients(self):
-        """ADAPTIVE: tpi_coef_source comes from LE2 shadow."""
+        """ADAPTIVE: tpi_coef_source comes from Learning shadow."""
         coord, _ = await _coord_with_shadow(True, True)
         zone = await _cycle(coord)
         src = zone.get("tpi_coef_source")
         assert src != "deterministic_baseline", (
-            f"ADAPTIVE should use LE2 TPI source, got: {src!r}")
+            f"ADAPTIVE should use Learning TPI source, got: {src!r}")
 
     @pytest.mark.asyncio
     async def test_tpi_smoothed_resets_on_deterministic(self):
@@ -239,7 +239,7 @@ class TestPreheatAuthorityPerMode:
         }
         coord = _base_coord(False, True, extra_cfg=cfg)
         zone = await _cycle(coord)
-        # When LE2 is not used, preheat_status comes from the deterministic baseline
+        # When Learning is not used, preheat_status comes from the deterministic baseline
         preheat_status = zone.get("preheat_status", "")
         # Both "cold_start_prior" (no evidence) and "prior_only" map to deterministic path
         assert "prior" in preheat_status or "baseline" in preheat_status or preheat_status == "", (
@@ -247,14 +247,14 @@ class TestPreheatAuthorityPerMode:
 
     @pytest.mark.asyncio
     async def test_shadow_only_preheat_from_le2(self):
-        """SHADOW_ONLY: preheat uses LE2 read path (even though dispatch doesn't happen)."""
+        """SHADOW_ONLY: preheat uses Learning read path (even though dispatch doesn't happen)."""
         coord, shadow = await _coord_with_shadow(True, False)
         zone = await _cycle(coord)
-        # With LE2 shadow: preheat_status must NOT be the deterministic baseline
+        # With Learning shadow: preheat_status must NOT be the deterministic baseline
         # (even with cold start, the shadow's read_preheat_minutes_safe was called)
         preheat_status = zone.get("preheat_status", "")
-        # Any status is fine — but we confirm the LE2 path was taken
-        # (if shadow has no data yet, "cold_start_prior" via LE2 path is expected)
+        # Any status is fine — but we confirm the Learning path was taken
+        # (if shadow has no data yet, "cold_start_prior" via Learning path is expected)
         assert preheat_status is not None
 
     @pytest.mark.asyncio
@@ -533,10 +533,10 @@ class TestModeTransitions:
 
     @pytest.mark.asyncio
     async def test_adaptive_to_deterministic_tpi_resets_to_baseline(self):
-        """ADAPTIVE → DETERMINISTIC: TPI smoothed resets, LE2 values isolated."""
+        """ADAPTIVE → DETERMINISTIC: TPI smoothed resets, Learning values isolated."""
         from custom_components.thermosmart.coordinator import TPI_COEF_INT_DEFAULT
         coord, shadow = await _coord_with_shadow(True, True, eligible_boost=True)
-        # Drive smoothed value above default (as if LE2 learned a high coef_int)
+        # Drive smoothed value above default (as if Learning learned a high coef_int)
         coord._tpi_coef_int_smoothed = TPI_COEF_INT_DEFAULT * 3.0
         # Transition to DETERMINISTIC
         coord.entry.data["learning_enabled"] = False
@@ -559,13 +559,13 @@ class TestModeTransitions:
 
     @pytest.mark.asyncio
     async def test_adaptive_to_deterministic_no_le2_boost_in_next_cycle(self):
-        """ADAPTIVE → DETERMINISTIC: next cycle must NOT apply LE2 boost offset."""
+        """ADAPTIVE → DETERMINISTIC: next cycle must NOT apply Learning boost offset."""
         coord, shadow = await _coord_with_shadow(True, True, eligible_boost=True)
         await _cycle(coord)
         coord.entry.data["learning_enabled"] = False  # switch to DETERMINISTIC
         zone_b = await _cycle(coord)
         applied = zone_b.get("applied_boost_offset_c", 0.0) or 0.0
-        assert applied == 0.0, f"No LE2 boost in DETERMINISTIC: applied={applied}"
+        assert applied == 0.0, f"No Learning boost in DETERMINISTIC: applied={applied}"
 
     @pytest.mark.asyncio
     async def test_shadow_only_to_adaptive_no_stale_boost_from_shadow_phase(self):
@@ -628,7 +628,7 @@ class TestRestoreSemantics:
 
     @pytest.mark.asyncio
     async def test_deterministic_ignores_restored_le2_data(self):
-        """DETERMINISTIC after restart with LE2 store data: stored data not used for control."""
+        """DETERMINISTIC after restart with Learning store data: stored data not used for control."""
         from tests.helpers import make_coordinator
         from tests.helpers_runtime_scenarios import heating_ramp_then_settle
 
@@ -641,7 +641,7 @@ class TestRestoreSemantics:
         # Now simulate restart with DETERMINISTIC mode (learning OFF)
         coord2 = _base_coord(False, True)  # NO shadow attached (learning off)
         zone = await _cycle(coord2)
-        # Must use deterministic baseline regardless of any potential LE2 restore data
+        # Must use deterministic baseline regardless of any potential Learning restore data
         assert zone.get("tpi_coef_source") == "deterministic_baseline"
         assert zone.get("adaptation_mode") == ControlAdaptationMode.DETERMINISTIC
 
@@ -735,7 +735,7 @@ class TestDiagnosticsPerMode:
 
     @pytest.mark.asyncio
     async def test_adaptive_diagnostics_shows_le2_source(self):
-        """ADAPTIVE: TPI source comes from LE2 (not baseline), mode is 'adaptive'."""
+        """ADAPTIVE: TPI source comes from Learning (not baseline), mode is 'adaptive'."""
         coord, shadow = await _coord_with_shadow(True, True)
         zone = await _cycle(coord)
         assert zone.get("adaptation_mode") == "adaptive"
@@ -784,7 +784,7 @@ class TestINACTIVEInvariants:
 
     @pytest.mark.asyncio
     async def test_stored_learning_data_not_read_for_control(self):
-        """INACTIVE: LE2 shadow not read for TPI (learning_mode=False path)."""
+        """INACTIVE: Learning shadow not read for TPI (learning_mode=False path)."""
         coord, shadow = await _coord_with_shadow(False, False)
         zone = await _cycle(coord)
         # Even with shadow attached, TPI must use baseline (because learning_enabled=False)
@@ -834,14 +834,14 @@ class TestSHADOWONLYNegative:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# 13. DETERMINISTIC mode — LE2 isolation proofs
+# 13. DETERMINISTIC mode — Learning isolation proofs
 # ════════════════════════════════════════════════════════════════════════════════
 
 class TestDETERMINISTICIsolation:
 
     @pytest.mark.asyncio
     async def test_old_le2_data_in_store_does_not_influence_tpi(self):
-        """DETERMINISTIC: existing LE2 store data is never read for TPI coefficients."""
+        """DETERMINISTIC: existing Learning store data is never read for TPI coefficients."""
         # Attach shadow with "rich" stored data (learning=False, but shadow exists)
         coord, shadow = await _coord_with_shadow(False, True)
         zone = await _cycle(coord)

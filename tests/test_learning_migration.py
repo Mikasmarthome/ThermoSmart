@@ -2,7 +2,7 @@
 
 The current storage version is 1 and the migration function is a pure NO-OP:
 it returns the supplied data unchanged. These tests FREEZE that v1 baseline so
-that any future LE 2.0 migration (v1 → v2) is introduced deliberately and
+that any future Learning migration (v1 → v2) is introduced deliberately and
 visibly — a failing test here will flag the moment migration behaviour changes.
 
 No real Store I/O: ThermoSmartStore is constructed with a mocked hass.

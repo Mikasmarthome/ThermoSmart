@@ -1,4 +1,4 @@
-"""Shared builders for LE 2.0 ForecastModel tests."""
+"""Shared builders for Learning ForecastModel tests."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

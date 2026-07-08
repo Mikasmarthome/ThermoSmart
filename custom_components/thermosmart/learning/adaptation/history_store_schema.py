@@ -41,7 +41,7 @@ class AdaptationHistoryState:
     This is the ``data`` payload stored by a future _VersionedStore.
     The store_schema_version envelope is managed by _VersionedStore.
 
-    ``learning_zone_id`` is the opaque LE 2.0 zone id (= entry_id),
+    ``learning_zone_id`` is the opaque Learning zone id (= entry_id),
     not a zone name, entity_id, or human-readable string.
     The stored value is the authoritative identity anchor for recovery.
     """

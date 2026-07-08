@@ -1,4 +1,4 @@
-"""Shared builders for LE 2.0 ManualCorrectionModel tests."""
+"""Shared builders for Learning ManualCorrectionModel tests."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

@@ -1,6 +1,6 @@
 """Final decision resolver (Phase 19A, pure Python).
 
-Single authority that merges the deterministic baseline with released LE 2.0
+Single authority that merges the deterministic baseline with released Learning
 predictions through the Phase-18 ``ControlPolicy`` (the one confidence gate), then
 the GuardLayer and DeviceAdapter, producing one ``DeviceControlCommand`` plus a
 full ``DecisionTrace``. Both SHADOW and CONTROL flow through here; the only
@@ -8,7 +8,7 @@ difference is whether the released value is actually dispatched.
 
 Priority (strictest first):
   1. safety / frost   2. user / mode lock   3. window / absence
-  4. baseline         5. released LE2        6. device limits
+  4. baseline         5. released Learning        6. device limits
   7. anti-chatter      8. single command
 """
 from __future__ import annotations
@@ -75,15 +75,15 @@ class FinalResolver:
         fb, lock = self._safety_locked(zin, base)
         ctx = self._control_context(zin)
 
-        def add(feature, base_v, le2_v, final_v, applied, reason, fb_reason, conf, clamp):
+        def add(feature, base_v, learning_v, final_v, applied, reason, fb_reason, conf, clamp):
             entries.append(DecisionTraceEntry(
-                feature=feature, baseline_value=base_v, le2_value=le2_v, final_value=final_v,
+                feature=feature, baseline_value=base_v, learning_value=learning_v, final_value=final_v,
                 applied=applied, reason=reason, fallback_reason=fb_reason,
                 confidence=conf, clamp_applied=clamp))
             reason_codes.add(reason)
 
-        # ---- boost-offset (full LE 2.0 authority for setpoint) ----
-        # Correctness invariant: final_setpoint = tpi_baseline_setpoint + le2_boost_offset.
+        # ---- boost-offset (full Learning authority for setpoint) ----
+        # Correctness invariant: final_setpoint = tpi_baseline_setpoint + learning_boost_offset.
         # base.trv_setpoint_c is the TPI-computed baseline; dec.final_value is the additive
         # offset. Never: target_c + boost (that would discard the TPI baseline entirely).
         boost = preds.get("boost_offset")
@@ -120,13 +120,13 @@ class FinalResolver:
                   if cr is not None else None)
             dec = self.policy.resolve(_BOOST[0], base.boost_offset_c, cp, context=ctx,
                                       unit=boost.unit)
-            # Full LE 2.0 authority: apply when CONTROL mode and confidence gate passed.
+            # Full Learning authority: apply when CONTROL mode and confidence gate passed.
             # Both increases and decreases are allowed (no reduce-only constraint).
             apply = (mode is DecisionMode.CONTROL and dec.applied
                      and dec.final_value is not None)
             if apply:
                 # TPI authority: boost is ADDITIVE on top of the TPI baseline setpoint.
-                # cand = tpi_baseline_setpoint + le2_boost_offset (never comfort_target + boost)
+                # cand = tpi_baseline_setpoint + learning_boost_offset (never comfort_target + boost)
                 cand = base.trv_setpoint_c + dec.final_value
                 guard = self.guards.check_setpoint(baseline_sp, cand)
                 if guard.allowed:
@@ -135,7 +135,7 @@ class FinalResolver:
                     for r in guard.reasons:
                         reason_codes.add(r)
                     add("boost_offset", base.boost_offset_c, boost.value, dec.final_value,
-                        True, "le2_applied", FallbackReason.NONE.value,
+                        True, "learning_applied", FallbackReason.NONE.value,
                         dec.confidence.value if dec.confidence else None, dec.clamp_applied)
                 else:
                     add("boost_offset", base.boost_offset_c, boost.value, base.boost_offset_c,
@@ -166,26 +166,26 @@ class FinalResolver:
             # 19A: integrated end-to-end but NOT applied to the immediate setpoint
             add(key, base_v, pred.value,
                 dec.final_value if dec.applied else base_v, False,
-                "le2_applied" if dec.applied else "baseline",
+                "learning_applied" if dec.applied else "baseline",
                 FallbackReason.SHADOW_MODE.value if dec.applied else FallbackReason.CONTROL_REJECTED.value,
                 dec.confidence.value if dec.confidence else None, dec.clamp_applied)
 
         command = self.device.build_command(
             zin.zone_id, setpoint_c=final_sp, duty_cycle=base.duty_cycle,
-            source_reason="le2_applied" if applied_any else "baseline",
+            source_reason="learning_applied" if applied_any else "baseline",
             shadow_only=(mode is DecisionMode.SHADOW or not applied_any))
 
         # Preheat time components: A = B + C (all three kept separate in trace).
         # A = preheat_command_lead_time_min (total lead time returned to coordinator)
         # B = effective_onset_delay_min (from ZoneRuntimeInput; adaptive when learned)
         # C = effective_room_heating_duration_min = A - B (only C drives HeatRate learning)
-        _le2_total = zin.preheat_minutes_le2
+        _learning_total = zin.preheat_minutes_learning
         _onset_delay = zin.onset_delay_min or 5.0  # fallback to prior if not in input
-        _room_heat_dur = round(_le2_total - _onset_delay, 2) if _le2_total is not None else None
+        _room_heat_dur = round(_learning_total - _onset_delay, 2) if _learning_total is not None else None
         _ec_contribution = None
         _preheat_status = zin.preheat_status
         _preheat_fallback = _preheat_status in ("deterministic_baseline", "low_confidence")
-        _selected = _le2_total  # selected == le2 value (baseline already folded in by shadow)
+        _selected = _learning_total  # selected == learning value (baseline already folded in by shadow)
 
         # Boost trace fields: derive internal offset from final setpoint delta
         _boost_entry = next((e for e in entries if e.feature == "boost_offset"), None)
@@ -208,7 +208,7 @@ class FinalResolver:
             early_cutoff_state=zin.early_cutoff_state,
             early_cutoff_hold_active=zin.early_cutoff_state in (
                 "cutoff_applied", "coasting_hold"),
-            preheat_minutes_le2=_le2_total,
+            preheat_minutes_learning=_learning_total,
             preheat_status=_preheat_status,
             preheat_baseline_minutes=zin.deterministic_baseline_preheat_min or base.preheat_minutes,
             selected_preheat_min=_selected,
@@ -219,7 +219,7 @@ class FinalResolver:
             onset_delay_source=zin.onset_delay_status,
             onset_delay_status=zin.onset_delay_status,
             effective_room_heating_duration_min=_room_heat_dur,
-            preheat_command_lead_time_min=_le2_total,
+            preheat_command_lead_time_min=_learning_total,
             temperature_gap_c=zin.temperature_gap_c,
             target_temperature_c=zin.target_temperature_c,
             context_time_bucket=zin.context_time_bucket,
@@ -236,5 +236,5 @@ class FinalResolver:
         dispatch = DispatchResult(
             zone_id=zin.zone_id, dispatched=applied_any and mode is DecisionMode.CONTROL,
             command=command, shadow_only=command.shadow_only,
-            reason="le2_applied" if applied_any else "baseline")
+            reason="learning_applied" if applied_any else "baseline")
         return trace, dispatch

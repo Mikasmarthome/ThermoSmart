@@ -355,7 +355,7 @@ class TestDispatchFailureCounter:
 
     def test_support_event_fires_exactly_once_at_threshold(self):
         coord = make_coordinator()
-        coord._le2_shadow = MagicMock()
+        coord._learning_shadow = MagicMock()
         stats = _DispatchStats()
         stats.record(Exception("boom"), entity_id="climate.trv")
 
@@ -363,13 +363,13 @@ class TestDispatchFailureCounter:
             crossed = coord._update_dispatch_failure_counters(stats)
             coord._maybe_record_dispatch_failure_event(crossed)
 
-        assert coord._le2_shadow.record_support_critical_event_safe.call_count == 1
-        event = coord._le2_shadow.record_support_critical_event_safe.call_args[0][0]
+        assert coord._learning_shadow.record_support_critical_event_safe.call_count == 1
+        event = coord._learning_shadow.record_support_critical_event_safe.call_args[0][0]
         assert event.event_type == SupportEventType.TRV_COMMAND_FAILED
 
     def test_no_spam_beyond_threshold(self):
         coord = make_coordinator()
-        coord._le2_shadow = MagicMock()
+        coord._learning_shadow = MagicMock()
         stats = _DispatchStats()
         stats.record(Exception("boom"), entity_id="climate.trv")
 
@@ -377,11 +377,11 @@ class TestDispatchFailureCounter:
             crossed = coord._update_dispatch_failure_counters(stats)
             coord._maybe_record_dispatch_failure_event(crossed)
 
-        assert coord._le2_shadow.record_support_critical_event_safe.call_count == 1
+        assert coord._learning_shadow.record_support_critical_event_safe.call_count == 1
 
     def test_event_refires_after_recovery_and_new_failure_streak(self):
         coord = make_coordinator()
-        coord._le2_shadow = MagicMock()
+        coord._learning_shadow = MagicMock()
         fail_stats = _DispatchStats()
         fail_stats.record(Exception("boom"), entity_id="climate.trv")
         success_stats = _DispatchStats()
@@ -390,18 +390,18 @@ class TestDispatchFailureCounter:
         for _ in range(DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD):
             coord._maybe_record_dispatch_failure_event(
                 coord._update_dispatch_failure_counters(fail_stats))
-        assert coord._le2_shadow.record_support_critical_event_safe.call_count == 1
+        assert coord._learning_shadow.record_support_critical_event_safe.call_count == 1
 
         coord._update_dispatch_failure_counters(success_stats)  # recovers
 
         for _ in range(DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD):
             coord._maybe_record_dispatch_failure_event(
                 coord._update_dispatch_failure_counters(fail_stats))
-        assert coord._le2_shadow.record_support_critical_event_safe.call_count == 2
+        assert coord._learning_shadow.record_support_critical_event_safe.call_count == 2
 
     def test_no_event_without_shadow_attached(self):
         coord = make_coordinator()
-        assert coord._le2_shadow is None
+        assert coord._learning_shadow is None
         coord._maybe_record_dispatch_failure_event(True)  # must not raise
 
 

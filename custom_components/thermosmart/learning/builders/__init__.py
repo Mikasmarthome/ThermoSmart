@@ -1,4 +1,4 @@
-"""LE 2.0 episode builder layer (Phase 6, pure Python).
+"""Learning episode builder layer (Phase 6, pure Python).
 
 Builders consume a time-ordered stream of raw observations, controller/TRV
 events, HeatingDriveEnd events, RegimeResults and FeatureExtractor results and

@@ -1,6 +1,6 @@
-"""Home Assistant integration layer for the LE2 runtime.
+"""Home Assistant integration layer for the Learning runtime.
 
-The ONLY glue between the live ThermoSmart coordinator and the LE2 runtime.
+The ONLY glue between the live ThermoSmart coordinator and the Learning runtime.
 It builds a typed ``RuntimeCycleInput`` from values the coordinator has
 already computed, runs a prediction-only observation cycle behind a hard
 guard, and stores diagnostics. This layer also exposes bounded
@@ -77,7 +77,7 @@ class AdaptiveBoostControlResult:
                                      service call); 0.0 when any gate blocked it (definitely
                                      not applied).  Post-dispatch truth lives in LiveDecisionRecord.
     """
-    requested_boost_offset_c: Optional[float]   # raw LE2 proposal (None = no prediction)
+    requested_boost_offset_c: Optional[float]   # raw Learning proposal (None = no prediction)
     approved_boost_offset_c: float              # 0.0 when any gate blocks; never None
     applied_boost_offset_c: Optional[float]     # None = pre-dispatch; 0.0 = blocked
     boost_allowed: bool                         # True only when all outer gates pass
@@ -86,7 +86,7 @@ class AdaptiveBoostControlResult:
     blocking_reason: Optional[str]              # first gate that blocked this cycle
     release_reason: Optional[str]               # lifecycle release reason, if triggered
     clamp_applied: bool                         # True when step/device clamp modified offset
-    source_decision_id: Optional[str]           # LE2 decision_id that produced the boost
+    source_decision_id: Optional[str]           # Learning decision_id that produced the boost
     # Trace fields — cycle-bound, never persisted
     authorization_source: Optional[str] = None  # "bootstrap_activation" when authorized_override
     bypassed_gates: tuple = ()                  # confidence gates bypassed by authorized_override
@@ -108,7 +108,7 @@ def _zone_segment(zone_id: str) -> str:
 def _is_celsius_unit(unit: str) -> bool:
     """Return True when the unit string represents Celsius temperature.
 
-    Accepts only forms actually produced by LE2 model contracts:
+    Accepts only forms actually produced by Learning model contracts:
       "C"       — AfterheatModel, HeatRate, HeatLoss (short form)
       "celsius" — ForecastModel, ManualCorrection, BoostOutcome (long form)
 
@@ -236,7 +236,7 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
 
 
 class LearningShadowController:
-    """Home Assistant bridge for LE2 observation and adaptive-control
+    """Home Assistant bridge for Learning observation and adaptive-control
     suggestions, for one config entry / zone.
 
     Owns the prediction-only runtime and exposes safe, bounded adjustment
@@ -872,7 +872,7 @@ class LearningShadowController:
     # PersistenceOrchestrator's default debounce_s. Without this, a pure
     # setup-time "store loaded (empty)" landmark would go straight to real
     # `.storage` on the very first coordinator refresh — an empty fresh
-    # setup must not write LE2 store files. `force=True` (unload/shutdown)
+    # setup must not write Learning store files. `force=True` (unload/shutdown)
     # always bypasses this so genuinely accumulated data is never lost.
     _SUPPORT_RESEARCH_SAVE_DEBOUNCE_S = 30.0
 
@@ -1414,7 +1414,7 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("lifecycle_timeout", err)
 
-    def _get_le2_predictions_for_zone(self) -> dict:
+    def _get_learning_predictions_for_zone(self) -> dict:
         """Return last_predictions dict for the current zone. Isolated for testing."""
         try:
             zr = self._runtime._zone(self._zone)
@@ -1426,13 +1426,13 @@ class LearningShadowController:
         """Release active boost early when real-time data shows heating is self-sufficient.
 
         Three ordered checks (early return on first match):
-        1. released_tpi_sufficient: LE2 HEAT_RATE projection shows TPI closes gap alone,
+        1. released_tpi_sufficient: Learning HEAT_RATE projection shows TPI closes gap alone,
            within the actual schedule remaining time (or fallback horizon when no schedule).
            High TPI duty alone does NOT prove sufficiency — high duty proves high demand.
-        2. released_overshoot_risk: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise)
+        2. released_overshoot_risk: Learning EXPECTED_OVERSHOOT (AfterheatModel residual rise)
            covers remaining gap near target (≤ 0.3°C). Safety heuristic (remaining ≤ 0.3°C
            AND slope > 0 AND active ≥ 600s) fires as fallback when prediction unavailable.
-        3. released_afterheat_sufficient: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual
+        3. released_afterheat_sufficient: Learning EXPECTED_OVERSHOOT (AfterheatModel residual
            rise = learned physical afterheat) covers remaining deficit with safety margin.
            BOOST_OUTCOME must NOT be used here — it measures historical boost quality,
            not physical residual rise after heating stops.
@@ -1496,7 +1496,7 @@ class LearningShadowController:
                 except Exception:
                     pass
 
-            # Read LE2 predictions for thermal authority (never raises)
+            # Read Learning predictions for thermal authority (never raises)
             heat_rate_c_per_h: Optional[float] = None
             # AfterheatModel residual rise: authoritative for overshoot risk AND afterheat
             afterheat_rise_c: Optional[float] = None
@@ -1504,10 +1504,10 @@ class LearningShadowController:
             afterheat_valid: bool = False
             try:
                 from ..contracts import PredictionType
-                le2_preds = self._get_le2_predictions_for_zone()
+                learning_preds = self._get_learning_predictions_for_zone()
 
                 # HEAT_RATE: authoritative for TPI sufficiency projection
-                hr_pred = le2_preds.get(PredictionType.HEAT_RATE)
+                hr_pred = learning_preds.get(PredictionType.HEAT_RATE)
                 if hr_pred is not None and not getattr(hr_pred, "fallback_used", True):
                     hr_conf = float(getattr(hr_pred, "confidence", 0.0) or 0.0)
                     if hr_conf >= params.deescalation_tpi_heat_rate_min_confidence:
@@ -1526,7 +1526,7 @@ class LearningShadowController:
                 #   3. no "stale"/"superseded" in warnings  — prediction currency
                 #   4. source_episode_id matches current episode (if both known)
                 #   5. confidence >= minimum threshold (checked in release checks below)
-                eo_pred = le2_preds.get(PredictionType.EXPECTED_OVERSHOOT)
+                eo_pred = learning_preds.get(PredictionType.EXPECTED_OVERSHOOT)
                 if eo_pred is not None and not getattr(eo_pred, "fallback_used", True):
                     # Gate 2: unit — use central contract normalizer (see _is_celsius_unit)
                     _eo_units = getattr(eo_pred, "units", {}) or {}
@@ -1551,7 +1551,7 @@ class LearningShadowController:
             except Exception:
                 pass
 
-            # 1. TPI sufficient: LE2 heat-rate shows TPI closes gap within the effective horizon.
+            # 1. TPI sufficient: Learning heat-rate shows TPI closes gap within the effective horizon.
             # Effective horizon: remaining_time_to_target - safety_margin (when schedule known),
             # or fallback fixed horizon (when no schedule available — conservative).
             if (heat_rate_c_per_h is not None
@@ -1573,7 +1573,7 @@ class LearningShadowController:
                 except (TypeError, ValueError, ZeroDivisionError):
                     pass
 
-            # 2. Overshoot risk: LE2 EXPECTED_OVERSHOOT (AfterheatModel residual rise) as primary.
+            # 2. Overshoot risk: Learning EXPECTED_OVERSHOOT (AfterheatModel residual rise) as primary.
             # Only fires near-target (remaining ≤ overshoot_deficit_c = 0.3°C) to ensure
             # separation from the wider-gap afterheat check (Check 3).
             if (afterheat_valid
@@ -1618,10 +1618,10 @@ class LearningShadowController:
     def adjust_recommendation_safe(self, recommendation: dict, *,
                                    boost_runtime_limit: Optional[float] = None,
                                    authorized_override: bool = False) -> None:
-        """In CONTROL mode only, apply LE 2.0 boost authority to the dispatched recommendation.
+        """In CONTROL mode only, apply Learning boost authority to the dispatched recommendation.
 
-        Full authority: LE 2.0 determines the final boost offset (both increases and
-        decreases). The existing TPI setpoint is the baseline; LE 2.0 may increase or
+        Full authority: Learning determines the final boost offset (both increases and
+        decreases). The existing TPI setpoint is the baseline; Learning may increase or
         reduce it, subject to confidence gate and device clamps. Never raises; a no-op
         in any non-CONTROL mode (SHADOW stays byte-identical).
 
@@ -1630,7 +1630,7 @@ class LearningShadowController:
 
         Side-effects on ``recommendation`` (Phase B1 provenance tracking):
           ``_boost_rejection_reason`` — gate that blocked boost, or None when applied.
-          ``_boost_candidate_c``     — raw LE2 °C proposal (pre-guard); None = no proposal.
+          ``_boost_candidate_c``     — raw Learning °C proposal (pre-guard); None = no proposal.
           ``_boost_applied_c``       — °C offset actually written; None when not applied.
         """
         recommendation["_boost_rejection_reason"] = None
@@ -1758,7 +1758,7 @@ class LearningShadowController:
                             recommendation["trv_setpoint"] = round(
                                 float(setpoint) + _new_off, 4)
                             recommendation["_boost_applied_c"] = _new_off
-                            recommendation["le2_boost_adjusted"] = True
+                            recommendation["learning_boost_adjusted"] = True
                         else:
                             recommendation["_boost_rejection_reason"] = "deescalation_soft"
                         return  # no further boost during soft deescalation
@@ -1769,7 +1769,7 @@ class LearningShadowController:
             if _model_cooldown is not None and _model_cooldown.cooldown_active(self._utcnow_iso()):
                 recommendation["_boost_rejection_reason"] = "cooldown_active"
                 return
-            # Baseline = currently applied le2 boost (not TPI offset reconstruction).
+            # Baseline = currently applied learning boost (not TPI offset reconstruction).
             # Anti-chatter compares against this: 0.0 when no boost active.
             baseline_offset = 0.0
             try:
@@ -1816,7 +1816,7 @@ class LearningShadowController:
                 ConfidencePurpose.BOOST, context=ctx, unit="celsius_offset",
                 model_version=getattr(boost_pred, "model_version", None),
                 parameter_version=getattr(boost_pred, "parameter_version", None))
-            # Full authority: apply any LE 2.0 decision (increase or decrease)
+            # Full authority: apply any Learning decision (increase or decrease)
             if decision.applied and decision.final_value is not None:
                 # Wire lifecycle: transition to APPLIED for episode tracking.
                 # apply_lifecycle() returns False when episode binding blocks retry
@@ -1841,13 +1841,13 @@ class LearningShadowController:
                     # Record context at boost-apply time for schedule-change detection.
                     # Updated every cycle boost is applied; compared next cycle to detect transitions.
                     self._boost_applied_comfort_time_utc = self._last_comfort_time_utc
-                    # TPI authority: final = tpi_baseline_setpoint + le2_boost_offset.
+                    # TPI authority: final = tpi_baseline_setpoint + learning_boost_offset.
                     # Preserve original TPI baseline for audit before overwriting.
                     recommendation["tpi_baseline_setpoint"] = float(setpoint)
                     recommendation["trv_setpoint"] = round(
                         float(setpoint) + decision.final_value, 4)
                     recommendation["_boost_applied_c"] = decision.final_value
-                    recommendation["le2_boost_adjusted"] = True
+                    recommendation["learning_boost_adjusted"] = True
                 else:
                     recommendation["_boost_rejection_reason"] = "lifecycle_blocked"
             else:
@@ -1877,7 +1877,7 @@ class LearningShadowController:
             zr = self._runtime._zone(self._zone)
             decision_id = getattr(zr, "last_decision_id", None)
             _tpi_diag = recommendation.get("tpi_coef_diag") or {}
-            boost_applied = bool(recommendation.get("le2_boost_adjusted"))
+            boost_applied = bool(recommendation.get("learning_boost_adjusted"))
             baseline_sp = (
                 recommendation.get("tpi_baseline_setpoint")
                 if boost_applied
@@ -1936,9 +1936,9 @@ class LearningShadowController:
         record: Any,
         recommendation: Mapping[str, Any],
     ) -> Optional[Any]:
-        """Enrich a coordinator-built baseline LiveDecisionRecord with LE2-specific fields.
+        """Enrich a coordinator-built baseline LiveDecisionRecord with Learning-specific fields.
 
-        Adds ``decision_id`` from the zone lifecycle and ``onset_delay`` from LE2
+        Adds ``decision_id`` from the zone lifecycle and ``onset_delay`` from Learning
         predictions.  Returns the enriched record (via ``dataclasses.replace``), or
         the original record unchanged if enrichment fails.  Never raises.
         """
@@ -1948,10 +1948,10 @@ class LearningShadowController:
             import dataclasses as _dc
             from ..contracts import PredictionType as _PT
             zr = self._runtime._zone(self._zone)
-            _le2_decision_id = getattr(zr, "last_decision_id", None)
-            # Only override the coordinator's baseline decision_id when LE2 has generated one.
+            _learning_decision_id = getattr(zr, "last_decision_id", None)
+            # Only override the coordinator's baseline decision_id when Learning has generated one.
             # Overwriting with None would lose the coordinator-generated ID.
-            decision_id = _le2_decision_id if _le2_decision_id is not None else record.decision_id
+            decision_id = _learning_decision_id if _learning_decision_id is not None else record.decision_id
             onset_delay_min: Optional[float] = None
             onset_delay_source: Optional[str] = None
             try:
@@ -2000,10 +2000,10 @@ class LearningShadowController:
         boost_entry = DecisionTraceEntry(
             feature="boost_offset",
             baseline_value=0.0,
-            le2_value=boost_candidate,
+            learning_value=boost_candidate,
             final_value=boost_applied_c if boost_applied else 0.0,
             applied=boost_applied,
-            reason=(DecisionReason.LE2_APPLIED.value if boost_applied
+            reason=(DecisionReason.LEARNING_APPLIED.value if boost_applied
                     else (boost_rejected or DecisionReason.BASELINE.value)),
             fallback_reason=(FallbackReason.NONE.value if boost_applied
                              else FallbackReason.GUARD_BLOCKED.value),
@@ -2013,15 +2013,15 @@ class LearningShadowController:
 
         preheat_min = record.preheat_minutes
         preheat_status = record.preheat_status
-        preheat_is_le2 = preheat_status in ("valid", "valid_hl_prior")
+        preheat_is_learning = preheat_status in ("valid", "valid_hl_prior")
         preheat_entry = DecisionTraceEntry(
             feature="preheat_start",
             baseline_value=recommendation.get("preheat_baseline_minutes"),
-            le2_value=preheat_min if preheat_is_le2 else None,
+            learning_value=preheat_min if preheat_is_learning else None,
             final_value=preheat_min,
             applied=preheat_min > 0.0,
-            reason=("le2_applied" if preheat_is_le2 else "deterministic_baseline"),
-            fallback_reason=("none" if preheat_is_le2 else "shadow_mode"),
+            reason=("learning_applied" if preheat_is_learning else "deterministic_baseline"),
+            fallback_reason=("none" if preheat_is_learning else "shadow_mode"),
             confidence=record.heat_rate_confidence,
             clamp_applied=0.0,
         )
@@ -2032,10 +2032,10 @@ class LearningShadowController:
         ec_entry = DecisionTraceEntry(
             feature="early_cutoff",
             baseline_value=None,
-            le2_value=ec_contribution,
+            learning_value=ec_contribution,
             final_value=ec_contribution if ec_active else None,
             applied=ec_active,
-            reason=("le2_applied" if ec_active else DecisionReason.BASELINE.value),
+            reason=("learning_applied" if ec_active else DecisionReason.BASELINE.value),
             fallback_reason=(FallbackReason.NONE.value if ec_active
                              else FallbackReason.GUARD_BLOCKED.value),
             confidence=None,
@@ -2044,7 +2044,7 @@ class LearningShadowController:
 
         reason_codes: list[str] = []
         if boost_applied:
-            reason_codes.append(DecisionReason.LE2_APPLIED.value)
+            reason_codes.append(DecisionReason.LEARNING_APPLIED.value)
         if boost_rejected:
             reason_codes.append(boost_rejected)
         if not boost_applied and not boost_rejected:
@@ -2068,7 +2068,7 @@ class LearningShadowController:
             applied_any=boost_applied or ec_active,
             entries=(boost_entry, preheat_entry, ec_entry),
             reason_codes=tuple(sorted(set(reason_codes))),
-            preheat_minutes_le2=preheat_min if preheat_is_le2 else None,
+            preheat_minutes_learning=preheat_min if preheat_is_learning else None,
             preheat_status=preheat_status,
             preheat_baseline_minutes=recommendation.get("preheat_baseline_minutes"),
             selected_preheat_min=preheat_min,
@@ -2103,7 +2103,7 @@ class LearningShadowController:
         """
         from ..decision.contracts import BoostEvaluationStatus as _BES
         try:
-            # LE2 disabled / authority not reachable -> boost was NOT evaluated.
+            # Learning disabled / authority not reachable -> boost was NOT evaluated.
             if not self._enabled:
                 recommendation["_boost_applied_c"] = None
                 recommendation["_boost_evaluation_status"] = _BES.NOT_EVALUATED.value
@@ -2205,7 +2205,7 @@ class LearningShadowController:
 
         Gate order (strict):
           0. Restore barrier  (active_control RestoreEntity initialized)
-          1. Learning mode ON  (cfg learning_enabled + LE2 enabled)
+          1. Learning mode ON  (cfg learning_enabled + Learning enabled)
           2. Active Control ON (coordinator _active_control)
           3. Mixed-control zone check
           3.5. Pre-dispatch device availability
@@ -2243,7 +2243,7 @@ class LearningShadowController:
             if restore_pending:
                 return _blocked(BoostBlockReason.RESTORE_PENDING)
 
-            # Gate 1: Learning mode (coordinator-side flag + LE2 health)
+            # Gate 1: Learning mode (coordinator-side flag + Learning health)
             if not learning_mode_on or not self._enabled:
                 return _blocked(BoostBlockReason.LEARNING_MODE_OFF, release=True)
 
@@ -2295,7 +2295,7 @@ class LearningShadowController:
             inner_rejection = recommendation.get("_boost_rejection_reason")
             applied_c: float = float(recommendation.get("_boost_applied_c") or 0.0)
             candidate_c = recommendation.get("_boost_candidate_c")
-            boost_applied = bool(recommendation.get("le2_boost_adjusted", False))
+            boost_applied = bool(recommendation.get("learning_boost_adjusted", False))
             approved_c: float = applied_c if boost_applied else 0.0
 
             clamp_applied = False
@@ -2371,7 +2371,7 @@ class LearningShadowController:
                     decision_id=getattr(zr, "last_decision_id", None))
             trace_dict = trace.support_dict()
             # Enrich trace with TPI authority chain fields (for audit/debug)
-            # These allow verification that LE 2.0 setpoint and TPI baseline are not mixed.
+            # These allow verification that Learning setpoint and TPI baseline are not mixed.
             # tpi_baseline_setpoint_c: written by adjust_recommendation_safe before boost.
             # Falls back to trv_setpoint in shadow mode (no boost → not overwritten).
             _tpi_diag = recommendation.get("tpi_coef_diag") or {}
@@ -2464,8 +2464,8 @@ class LearningShadowController:
                     _boost_outcome_risk: Optional[bool] = None
                     try:
                         from ..contracts import PredictionType as _PT
-                        _le2p = self._get_le2_predictions_for_zone()
-                        _eo_pred = _le2p.get(_PT.EXPECTED_OVERSHOOT)
+                        _learning_preds = self._get_learning_predictions_for_zone()
+                        _eo_pred = _learning_preds.get(_PT.EXPECTED_OVERSHOOT)
                         if _eo_pred is not None:
                             _afterheat_c = float(max(0.0,
                                 _eo_pred.values.get("expected_overshoot", 0.0) or 0.0))
@@ -2475,7 +2475,7 @@ class LearningShadowController:
                                 else "learned")
                         else:
                             _afterheat_status = "unavailable"
-                        _bo_pred = _le2p.get(_PT.BOOST_OUTCOME)
+                        _bo_pred = _learning_preds.get(_PT.BOOST_OUTCOME)
                         if _bo_pred is not None and not getattr(_bo_pred, "fallback_used", True):
                             _bo_ov = _bo_pred.values.get("expected_overshoot")
                             if _bo_ov is not None:
@@ -2545,7 +2545,7 @@ class LearningShadowController:
         return self._last_trace
 
     def confidence_display(self) -> float:
-        """Combined learning confidence [0,1] from the LE-2.0 aggregator (display only)."""
+        """Combined learning confidence [0,1] from the Learning aggregator (display only)."""
         from ..decision.confidence_adapter import combined_confidence
         try:
             zr = self._runtime._zone(self._zone)
@@ -2555,7 +2555,7 @@ class LearningShadowController:
             return 0.0
 
     def confidence_display_attributes(self) -> dict:
-        """Legacy-shaped confidence breakdown sourced purely from LE-2.0 (display only)."""
+        """Legacy-shaped confidence breakdown sourced purely from Learning (display only)."""
         from ..decision.confidence_adapter import confidence_breakdown
         try:
             zr = self._runtime._zone(self._zone)
@@ -2574,7 +2574,7 @@ class LearningShadowController:
     }
 
     def read_forecast_trust_safe(self) -> tuple:
-        """Read LE 2.0 FORECAST_TRUST (dimensionless reliability [0,1]) via validated Read Gate.
+        """Read Learning FORECAST_TRUST (dimensionless reliability [0,1]) via validated Read Gate.
 
         Returns ``(trust, status)`` where:
         - ``trust``: 0.0 when unavailable / cold-start / invalid; float in [0,1] when valid.
@@ -2615,7 +2615,7 @@ class LearningShadowController:
         return 0.0, "not_available"
 
     def read_forecast_bias_safe(self) -> float:
-        """Read LE 2.0 FORECAST_BIAS (signed °C error correction) via validated Read Gate.
+        """Read Learning FORECAST_BIAS (signed °C error correction) via validated Read Gate.
 
         Semantically distinct from FORECAST_TRUST – never used as a reliability score.
         Returns 0.0°C when cold-start (fallback_used=True) or gate rejects.
@@ -2652,7 +2652,7 @@ class LearningShadowController:
     _EARLY_CUTOFF_MAX_C_AT_MIN_CONF: float = 0.5
 
     def read_early_cutoff_safe(self) -> tuple:
-        """Read LE 2.0 RECOMMENDED_EARLY_CUTOFF (expected residual rise °C) via Read Gate.
+        """Read Learning RECOMMENDED_EARLY_CUTOFF (expected residual rise °C) via Read Gate.
 
         Returns ``(residual_rise_c, status)`` where:
         - ``residual_rise_c``: 0.0 when unavailable / cold-start / low-confidence / gate-rejected;
@@ -2752,7 +2752,7 @@ class LearningShadowController:
     # lose heat; using it makes the preheat estimate safer while remaining sub-linear
     # relative to the deterministic baseline net-rate (1.5 °C/h).
     _HEAT_LOSS_PRIOR_C_PER_H: float = 0.3
-    # Absolute maximum preheat allowed from LE2 (prevents runaway early starts).
+    # Absolute maximum preheat allowed from Learning (prevents runaway early starts).
     _PREHEAT_MAX_MIN: float = 180.0
     # Minimum temperature deficit that justifies a preheat command (°C).
     _PREHEAT_MIN_DELTA_C: float = 0.5
@@ -2789,7 +2789,7 @@ class LearningShadowController:
         return round(total, 1), "deterministic_baseline"
 
     def read_onset_delay_safe(self) -> tuple:
-        """Read LE 2.0 ONSET_DELAY (minutes): TRV command → measurable room response.
+        """Read Learning ONSET_DELAY (minutes): TRV command → measurable room response.
 
         Returns ``(delay_min, status)`` where status is:
         - ``"valid"``: learned value, confidence-gated.
@@ -2832,7 +2832,7 @@ class LearningShadowController:
         *,
         outdoor_temp: Optional[float] = None,
     ) -> tuple:
-        """Read LE 2.0 preheat duration (command lead time in minutes).
+        """Read Learning preheat duration (command lead time in minutes).
 
         Returns ``(minutes, status)`` where:
         - ``minutes``: command lead time ≥ 0 (always the right value for the status).
@@ -2846,9 +2846,9 @@ class LearningShadowController:
         - **C Effective Room Heating Duration**: ``deficit / net_heat_rate × 60``
 
         Fallback hierarchy (no LE v1 reads at any level):
-        1. LE 2.0 valid prediction (status "valid") — adaptive, confidence-gated
-        2. LE 2.0 low-confidence → deterministic baseline (status "deterministic_baseline")
-        3. No LE 2.0 evidence → deterministic baseline (status "deterministic_baseline")
+        1. Learning valid prediction (status "valid") — adaptive, confidence-gated
+        2. Learning low-confidence → deterministic baseline (status "deterministic_baseline")
+        3. No Learning evidence → deterministic baseline (status "deterministic_baseline")
         4. No temperature data → (0.0, "unavailable")
         5. Target already reached → (0.0, "target_reached")
         6. Shadow disabled → deterministic baseline (status "deterministic_baseline")
@@ -2926,7 +2926,7 @@ class LearningShadowController:
             total_min = room_heating_min + onset_delay
             total_min = min(total_min, self._PREHEAT_MAX_MIN)
 
-            # "valid" requires both HR and HL from learned LE 2.0 predictions.
+            # "valid" requires both HR and HL from learned Learning predictions.
             # "valid_hl_prior" signals that HR is learned but HL uses the safe prior.
             # A fallback must never be labelled as "valid".
             _status = "valid" if _hl_valid else "valid_hl_prior"
@@ -2936,7 +2936,7 @@ class LearningShadowController:
         return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
     def read_heat_rate_safe(self) -> tuple:
-        """Read LE 2.0 HEAT_RATE (°C/h) for display and diagnostics.
+        """Read Learning HEAT_RATE (°C/h) for display and diagnostics.
 
         Returns ``(rate_c_per_h, status)`` where:
         - ``rate_c_per_h``: 0.0 when unavailable / cold-start / invalid.
@@ -2970,7 +2970,7 @@ class LearningShadowController:
         return 0.0, "not_available"
 
     def read_heat_loss_rate_safe(self) -> tuple:
-        """Read LE 2.0 HEAT_LOSS_RATE (°C/h) for display.
+        """Read Learning HEAT_LOSS_RATE (°C/h) for display.
 
         Returns ``(rate_c_per_h, status)``.
         """
@@ -3004,12 +3004,12 @@ class LearningShadowController:
     _BLEND_WEIGHT_RELATIVE_ONLY_CAP: float = 0.50
 
     def read_tpi_coefficients_safe(self) -> tuple:
-        """Return LE2-derived TPI coefficients with blend diagnostics (5-tuple).
+        """Return Learning-derived TPI coefficients with blend diagnostics (5-tuple).
 
         Returns (coef_int_used, coef_ext, heat_loss_pred_or_none, status, diag) where:
           coef_int_used  — blended coef_int applied to compute_tpi()
           coef_ext       — TPI_COEF_EXT_DEFAULT (always static)
-          heat_loss_pred — learned rate in °C/h, or None for all non-"valid_le2" statuses
+          heat_loss_pred — learned rate in °C/h, or None for all non-"valid_learning" statuses
           status         — gate result string (see below)
           diag           — dict with fields for trace/audit (never raises)
 
@@ -3057,7 +3057,7 @@ class LearningShadowController:
         For TRV-only setups without an outdoor sensor, compute_tpi() skips the ext term.
 
         Validity gates (sequential; first failure returns deterministic defaults + diag):
-          1. shadow enabled                          → le2_disabled
+          1. shadow enabled                          → learning_disabled
           2. both predictions present                → prediction_missing
           3. neither prediction has fallback_used    → cold_start
           4. UNIT_C_PER_H for both quantities        → invalid_unit
@@ -3071,14 +3071,14 @@ class LearningShadowController:
           coef_int_used = blend × coef_int_raw + (1 − blend) × TPI_COEF_INT_DEFAULT
 
         status values:
-          "valid_le2"           — all gates passed; coef_int is LE2-adaptive (possibly blended)
+          "valid_learning"           — all gates passed; coef_int is Learning-adaptive (possibly blended)
           "prediction_missing"  — one or both predictions absent (gate 2)
           "cold_start"          — fallback_used == True; prior-based, not learned (gate 3)
           "invalid_unit"        — unit is not UNIT_C_PER_H (gate 4)
           "stale_or_superseded" — stale or superseded warning present (gate 5)
           "low_confidence"      — confidence below 0.35 (gate 6)
           "invalid_value"       — rate ≤ 0 or non-finite (gate 7)
-          "le2_disabled"        — shadow disabled
+          "learning_disabled"        — shadow disabled
           "not_available"       — unexpected runtime error
 
         Never reads LE v1 _heat_loss_ema.
@@ -3093,7 +3093,7 @@ class LearningShadowController:
             "hr_confidence": None, "hl_confidence": None,
         }
         if not self._enabled:
-            return TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None, "le2_disabled", _default_diag
+            return TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None, "learning_disabled", _default_diag
         try:
             from ..contracts import PredictionType
             zr = self._runtime._zone(self._zone)
@@ -3168,7 +3168,7 @@ class LearningShadowController:
                 "hr_confidence": round(hr_conf, 4),
                 "hl_confidence": round(hl_conf, 4),
             }
-            return coef_int_used, coef_ext, round(heat_loss, 4), "valid_le2", diag
+            return coef_int_used, coef_ext, round(heat_loss, 4), "valid_learning", diag
         except Exception as err:
             self._record_error("tpi_coefficients_read", err)
         return TPI_COEF_INT_DEFAULT, TPI_COEF_EXT_DEFAULT, None, "not_available", _default_diag
@@ -3213,7 +3213,7 @@ class LearningShadowController:
         await self._async_save_research_daily_safe(force=True)
 
     def read_outcome_score_safe(self) -> tuple:
-        """Read LE 2.0 outcome quality score (0–100 %) for display.
+        """Read Learning outcome quality score (0–100 %) for display.
 
         Returns ``(score_pct, status)`` where:
         - ``score_pct``: float 0–100 when enough accepted outcome samples exist, else ``None``.
@@ -3246,7 +3246,7 @@ class LearningShadowController:
         return None, "not_available"
 
     def read_outcome_attributes_safe(self) -> dict:
-        """Read LE 2.0 outcome diagnostics for entity extra_state_attributes.
+        """Read Learning outcome diagnostics for entity extra_state_attributes.
 
         Pure read — no side effects, no state mutation.
         """

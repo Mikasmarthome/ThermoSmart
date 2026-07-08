@@ -171,7 +171,7 @@ class LearningEngine:
     def __init__(self, hass: HomeAssistant, *, clock: "Clock | None" = None) -> None:
         self._hass = hass
         self._clock: Clock = clock if clock is not None else _SystemClock()
-        # Phase 19A-B: LE 2.0 is the single active learning engine. When frozen, this
+        # Phase 19A-B: Learning is the single active learning engine. When frozen, this
         # legacy engine performs NO state mutation and NO store write — it is read-only.
         # Its persisted store is never deleted or migrated. Off by default so the engine
         # remains usable in isolation tests; production wiring calls freeze().
@@ -451,7 +451,7 @@ class LearningEngine:
                 if raw_cool <= 0.5:
                     cool_rate = round(raw_cool, 5)
                     # Phase 19D: _heat_loss_ema mutations silenced.
-                    # LE2 HeatLossModel (PassiveCoolingEpisode) is now the sole
+                    # Learning HeatLossModel (PassiveCoolingEpisode) is now the sole
                     # authority for heat loss. The EMA dict is retained read-only
                     # for backward-compat display; no new values are written here.
         if is_cooling:
@@ -1167,7 +1167,7 @@ class LearningEngine:
             self._hass.async_create_task(self.async_save())
 
     def update_boost_factor(self, zone_id: str, overshot: bool, slow: bool = False) -> None:
-        """No-op: LE v1 boost factor superseded by LE 2.0 BoostModel."""
+        """No-op: LE v1 boost factor superseded by Learning BoostModel."""
 
     def get_stats(self, zone_id: str) -> dict:
         obs = self._observations[zone_id]

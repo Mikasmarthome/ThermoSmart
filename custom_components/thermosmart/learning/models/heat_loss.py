@@ -1,4 +1,4 @@
-"""HeatLossModel for LE 2.0 (pure Python).
+"""HeatLossModel for Learning (pure Python).
 
 Learns how fast a zone cools with no active heat input, from completed,
 undisturbed PassiveCoolingEpisodes. Authoritative quantity: the relative cooling

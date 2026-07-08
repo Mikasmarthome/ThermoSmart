@@ -1,4 +1,4 @@
-"""Prediction snapshot ledger for LE 2.0 shadow runtime (pure Python).
+"""Prediction snapshot ledger for Learning shadow runtime (pure Python).
 
 Records the predictions that were actually available at a controller/shadow
 decision, so later outcomes are evaluated against the prediction that existed

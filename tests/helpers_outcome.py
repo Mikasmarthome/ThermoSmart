@@ -1,4 +1,4 @@
-"""Shared builders for LE 2.0 OutcomeModel tests."""
+"""Shared builders for Learning OutcomeModel tests."""
 from __future__ import annotations
 
 from datetime import datetime, timezone

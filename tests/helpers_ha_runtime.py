@@ -1,7 +1,7 @@
-"""Harness for LE 2.0 HA shadow-integration tests.
+"""Harness for Learning HA shadow-integration tests.
 
 Runs the REAL ThermoSmartCoordinator._async_update_data (with control side-effects
-stubbed and recorded) so the production LE-2.0 shadow hook is exercised. Pure
+stubbed and recorded) so the production Learning shadow hook is exercised. Pure
 Python + MagicMock hass — runs on Windows and in Docker.
 
 ``DispatchingCoordinator`` is the E2E variant: it runs the REAL ``_apply_temperature``
@@ -108,7 +108,7 @@ def attach_shadow(coord, *, store=None, zone_id=None, clock=None, mode=None):
         clock=_clock,
         mode=_mode,
     )
-    coord.attach_le2_shadow(shadow)
+    coord.attach_learning_shadow(shadow)
     return shadow
 
 

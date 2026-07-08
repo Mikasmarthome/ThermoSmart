@@ -2,7 +2,7 @@
 
 Ties the typed contracts together end-to-end:
 
-    recommendation dict + LE2 predictions
+    recommendation dict + Learning predictions
       -> ZoneRuntimeInput + ControllerBaselineDecision (baseline adapter)
       -> FinalResolver (single confidence authority + guards + device)
       -> DecisionTrace + DispatchResult (single dispatch boundary)

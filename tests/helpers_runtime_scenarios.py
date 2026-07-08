@@ -1,4 +1,4 @@
-"""Deterministic multi-cycle scenario driver for LE 2.0 runtime tests (no real time)."""
+"""Deterministic multi-cycle scenario driver for Learning runtime tests (no real time)."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone

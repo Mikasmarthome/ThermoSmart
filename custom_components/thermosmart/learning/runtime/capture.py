@@ -1,4 +1,4 @@
-"""Runtime capture for LE 2.0 shadow foundation (pure Python).
+"""Runtime capture for Learning shadow foundation (pure Python).
 
 Materialises the actually-available ThermoSmart signals into typed snapshots and
 a stable per-zone decision identity, plus a bounded command ledger used to tell

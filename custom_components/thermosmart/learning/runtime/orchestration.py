@@ -1,4 +1,4 @@
-"""Model orchestration for LE 2.0 shadow runtime (pure Python).
+"""Model orchestration for Learning shadow runtime (pure Python).
 
 Owns the per-zone model instances, applies already-materialised typed update
 contexts (eligibility-gated, failure-isolated), collects predictions and calls

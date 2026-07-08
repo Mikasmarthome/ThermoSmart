@@ -1,4 +1,4 @@
-"""Small HA-store-facing retention enforcement layer for LE 2.0 raw segments
+"""Small HA-store-facing retention enforcement layer for Learning raw segments
 and episodes.
 
 Thin glue between the pure decisions in ``retention.py`` and the versioned

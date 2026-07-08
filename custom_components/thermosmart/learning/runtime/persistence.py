@@ -1,4 +1,4 @@
-"""Persistence orchestration for LE 2.0 shadow runtime (pure Python core).
+"""Persistence orchestration for Learning shadow runtime (pure Python core).
 
 Dirty tracking + an explicit, versioned save policy over an INJECTED async store
 (duck-typed: ``async_load()`` / ``async_save(dict)``). Storage failures are

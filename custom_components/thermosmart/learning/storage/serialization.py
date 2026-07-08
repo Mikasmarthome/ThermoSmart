@@ -1,4 +1,4 @@
-"""Authoritative JSON-compatible serialization for LE 2.0 raw records.
+"""Authoritative JSON-compatible serialization for Learning raw records.
 
 One serializer, no competing implementations. Rules:
 

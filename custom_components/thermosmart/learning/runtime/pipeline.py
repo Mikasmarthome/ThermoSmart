@@ -1,4 +1,4 @@
-"""Cross-cycle learning pipeline for LE 2.0 (pure Python).
+"""Cross-cycle learning pipeline for Learning (pure Python).
 
 Drives the existing Phase-4 FeatureExtractor, Phase-5 ThermalRegimeClassifier and
 Phase-6 episode builders from a stream of CapturedSnapshots, producing completed

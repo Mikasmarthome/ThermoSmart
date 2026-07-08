@@ -1,4 +1,4 @@
-"""ManualCorrectionModel for LE 2.0 (pure Python).
+"""ManualCorrectionModel for Learning (pure Python).
 
 Learns from deliberate user corrections: direction (warmer/cooler), magnitude,
 context and whether a prior ThermoSmart decision was systematically off. A single

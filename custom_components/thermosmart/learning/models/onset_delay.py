@@ -1,4 +1,4 @@
-"""OnsetDelayModel for LE 2.0 (pure Python).
+"""OnsetDelayModel for Learning (pure Python).
 
 Learns the effective heating onset delay for a zone: the elapsed time between
 the TRV command (episode.start_ts) and the first measurable, sustained room-
@@ -499,7 +499,7 @@ def _setback_weight_modifier(setback_depth_c: Optional[float],
 # ---------------------------------------------------------------------------
 
 class OnsetDelayModel:
-    """Adaptive onset-delay model following the LE 2.0 Model contract.
+    """Adaptive onset-delay model following the Learning Model contract.
 
     Single authority for: time from TRV command to first sustained room
     temperature response.  HeatRate learning MUST start from after this delay

@@ -1,4 +1,4 @@
-"""Shared robust-statistics helpers for LE 2.0 models (pure Python).
+"""Shared robust-statistics helpers for Learning models (pure Python).
 
 Only genuinely shared numeric utilities live here — no speculative model
 framework. Used now by HeatRateModel; reusable by later rate-style models.

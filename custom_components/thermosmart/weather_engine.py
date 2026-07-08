@@ -4,7 +4,10 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from homeassistant.const import UnitOfSpeed
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.util.unit_conversion import SpeedConverter
 
 from .temperature_units import to_internal_temperature_c
 from .const import (
@@ -23,6 +26,36 @@ from .const import (
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+_VALID_SPEED_UNITS = {
+    UnitOfSpeed.METERS_PER_SECOND,
+    UnitOfSpeed.KILOMETERS_PER_HOUR,
+    UnitOfSpeed.MILES_PER_HOUR,
+    UnitOfSpeed.KNOTS,
+    UnitOfSpeed.FEET_PER_SECOND,
+}
+
+
+def _to_wind_speed_ms(value, unit: str | None) -> float | None:
+    """Normalize a wind-speed reading to m/s.
+
+    Mirrors to_internal_temperature_c()'s unit-aware normalization. Wind
+    sources report their own unit (a sensor's unit_of_measurement, or a
+    weather entity's dedicated wind_speed_unit attribute) — km/h is a common
+    convention for European weather stations, and the config UI explicitly
+    advertises "m/s or km/h" as accepted, so WIND_THRESHOLD_MS must compare
+    against an actually-normalized value, not a raw passthrough.
+    """
+    try:
+        numeric = float(value)
+    except (TypeError, ValueError):
+        return None
+    if unit not in _VALID_SPEED_UNITS:
+        return numeric  # unrecognized/missing unit → assume already m/s
+    try:
+        return SpeedConverter.convert(numeric, unit, UnitOfSpeed.METERS_PER_SECOND)
+    except HomeAssistantError:
+        return None
 
 
 class WeatherEngine:
@@ -53,11 +86,14 @@ class WeatherEngine:
         self._solar_sensor = outdoor_solar_sensor
         self._rain_sensor = outdoor_rain_sensor
 
-    def _read_sensor(self, entity_id: str | None, *, is_temperature: bool = False) -> float | None:
+    def _read_sensor(
+        self, entity_id: str | None, *, is_temperature: bool = False, is_wind: bool = False,
+    ) -> float | None:
         """Einzelnen Sensor lesen. Gibt None zurück wenn unavailable.
 
         ``is_temperature=True`` normalizes the sensor's own unit_of_measurement
-        to °C — humidity/wind/solar/rain sensors are never unit-converted.
+        to °C. ``is_wind=True`` normalizes it to m/s — humidity/solar/rain
+        sensors are never unit-converted.
         """
         if not entity_id:
             return None
@@ -66,6 +102,8 @@ class WeatherEngine:
             if is_temperature:
                 return to_internal_temperature_c(
                     self._hass, state.state, unit=state.attributes.get("unit_of_measurement"))
+            if is_wind:
+                return _to_wind_speed_ms(state.state, state.attributes.get("unit_of_measurement"))
             try:
                 return float(state.state)
             except (ValueError, TypeError):
@@ -97,16 +135,14 @@ class WeatherEngine:
             # values are already expressed in this unit.
             weather_temp_unit = attrs.get("temperature_unit")
 
-            for key, attr in (
-                ("humidity",    "humidity"),
-                ("wind_speed",  "wind_speed"),
-            ):
-                raw = attrs.get(attr)
-                if raw is not None:
-                    try:
-                        data[key] = float(raw)
-                    except (TypeError, ValueError):
-                        pass
+            raw_humidity = attrs.get("humidity")
+            if raw_humidity is not None:
+                try:
+                    data["humidity"] = float(raw_humidity)
+                except (TypeError, ValueError):
+                    pass
+            data["wind_speed"] = _to_wind_speed_ms(
+                attrs.get("wind_speed"), attrs.get("wind_speed_unit"))
             data["temperature"] = to_internal_temperature_c(
                 self._hass, attrs.get("temperature"), unit=weather_temp_unit)
 
@@ -175,7 +211,8 @@ class WeatherEngine:
             "rain":           self._rain_sensor,
         }
         for key, sensor_id in sensor_map.items():
-            value = self._read_sensor(sensor_id, is_temperature=(key == "temperature"))
+            value = self._read_sensor(
+                sensor_id, is_temperature=(key == "temperature"), is_wind=(key == "wind_speed"))
             if value is not None:
                 data[key] = value
                 if key == "temperature":

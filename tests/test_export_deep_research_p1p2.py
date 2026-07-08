@@ -579,3 +579,214 @@ class TestSupportExportTimestampFields:
         export_without_note = json.loads(json.dumps(export))
         export_without_note["storage_layout"]["note"] = ""
         assert _blob_has_no_le_branding(export_without_note) == []
+
+
+# ── Storage-Metadata Commit C: Support Export storage_summary ───────────────
+
+class _FakeMetaStore:
+    def __init__(self, data=None):
+        self.data = data
+
+    async def async_load(self):
+        return self.data
+
+    async def async_save(self, data):
+        self.data = data
+
+    async def async_remove(self):
+        self.data = None
+
+
+def _patch_metadata_factory(monkeypatch, stores_by_key: dict):
+    """Make every StorageMetadataStore constructed anywhere in export.py read
+    from ``stores_by_key`` instead of touching a real HA Store — hermetic,
+    no file I/O, independent of whatever the test's MagicMock hass supports."""
+    from custom_components.thermosmart.learning.storage.stores import HomeAssistantStoreFactory
+
+    def _create(self, key, version):
+        return stores_by_key.setdefault(key, _FakeMetaStore())
+
+    monkeypatch.setattr(HomeAssistantStoreFactory, "create", _create)
+
+
+class TestStorageSummaryExport:
+    async def _run(self, hass) -> dict:
+        ts = datetime(2026, 1, 13, 8, 0, tzinfo=timezone.utc)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            hass.config.path.side_effect = lambda *parts: str(__import__("pathlib").Path(tmpdir, *parts))
+            filepath = await async_export_support_data(hass, ts=ts)
+            with open(filepath, encoding="utf-8") as fh:
+                return json.load(fh)
+
+    def _base_hass(self, entry) -> MagicMock:
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [entry]
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+        hass.data = {DOMAIN: {}}
+        return hass
+
+    def _entry(self, zone_id="zone_1") -> MagicMock:
+        entry = MagicMock()
+        entry.entry_id = zone_id
+        entry.data = {"entry_type": "zone"}
+        entry.options = {}
+        return entry
+
+    async def test_support_export_contains_storage_summary(self, monkeypatch):
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        _patch_metadata_factory(monkeypatch, {})
+
+        export = await self._run(hass)
+        zone = export["zones"][0]
+        assert "storage_summary" in zone
+        assert "stores" in zone["storage_summary"]
+
+    async def test_storage_summary_exists_true_for_written_store(self, monkeypatch):
+        from custom_components.thermosmart.learning.storage import naming
+
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {
+                    "schema_version": 1,
+                    "stores": {
+                        "episodes": {
+                            "exists": True,
+                            "created_at_utc": "2026-01-13T07:00:00Z",
+                            "updated_at_utc": "2026-01-13T07:50:00Z",
+                            "last_write_reason": "episode_closed",
+                            "storage_key_state": "current",
+                        },
+                        "models": {"exists": False},
+                    },
+                },
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(hass)
+        stores = export["zones"][0]["storage_summary"]["stores"]
+        assert stores["episodes"]["exists"] is True
+        assert stores["episodes"]["last_write_reason"] == "episode_closed"
+        assert stores["episodes"]["storage_key_state"] == "current"
+
+    async def test_storage_summary_exists_false_for_missing_store(self, monkeypatch):
+        from custom_components.thermosmart.learning.storage import naming
+
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {"schema_version": 1, "stores": {"models": {"exists": False}}},
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(hass)
+        stores = export["zones"][0]["storage_summary"]["stores"]
+        assert stores["models"] == {"exists": False}
+
+    async def test_age_minutes_derived_from_exported_at_and_updated_at(self, monkeypatch):
+        """ts=08:00 UTC, updated_at_utc=07:50 UTC -> 10 minutes old."""
+        from custom_components.thermosmart.learning.storage import naming
+
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {"schema_version": 1, "stores": {
+                    "episodes": {
+                        "exists": True,
+                        "created_at_utc": "2026-01-13T07:00:00Z",
+                        "updated_at_utc": "2026-01-13T07:50:00Z",
+                        "last_write_reason": "episode_closed",
+                        "storage_key_state": "current",
+                    },
+                }},
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(hass)
+        assert export["zones"][0]["storage_summary"]["stores"]["episodes"]["age_minutes"] == 10.0
+
+    async def test_missing_metadata_store_does_not_break_support_export(self, monkeypatch):
+        """Every StorageMetadataStore construction/read fails -> storage_summary
+        is unavailable, but the rest of the support export still completes."""
+        from custom_components.thermosmart.learning.storage.stores import HomeAssistantStoreFactory
+
+        def _boom(self, key, version):
+            raise RuntimeError("simulated storage-metadata factory failure")
+
+        monkeypatch.setattr(HomeAssistantStoreFactory, "create", _boom)
+
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        export = await self._run(hass)
+        zone = export["zones"][0]
+        assert zone["storage_summary"] == {
+            "available": False, "reason": "storage_metadata_unavailable",
+        }
+        # rest of the export still completed
+        assert "critical_events" in zone
+
+    async def test_corrupt_metadata_store_does_not_break_support_export(self, monkeypatch):
+        from custom_components.thermosmart.learning.storage import naming
+
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            # wrong envelope schema version -> StoreVersionError inside get_store_summary()
+            pair.current: _FakeMetaStore({"store_schema_version": 999, "data": {}}),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(hass)
+        zone = export["zones"][0]
+        assert zone["storage_summary"] == {
+            "available": False, "reason": "storage_metadata_unavailable",
+        }
+        assert "critical_events" in zone
+
+    async def test_storage_summary_has_no_forbidden_identifiers(self, monkeypatch):
+        from custom_components.thermosmart.learning.storage import naming
+
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {"schema_version": 1, "stores": {
+                    "episodes": {
+                        "exists": True,
+                        "created_at_utc": "2026-01-13T07:00:00Z",
+                        "updated_at_utc": "2026-01-13T07:50:00Z",
+                        "last_write_reason": "episode_closed",
+                        "storage_key_state": "current",
+                    },
+                }},
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(hass)
+        assert _blob_has_no_forbidden_substrings(export["zones"][0]["storage_summary"]) == []
+
+    async def test_storage_summary_has_no_le1_le2_branding(self, monkeypatch):
+        entry = self._entry()
+        hass = self._base_hass(entry)
+        _patch_metadata_factory(monkeypatch, {})
+
+        export = await self._run(hass)
+        assert _blob_has_no_le_branding(export["zones"][0]["storage_summary"]) == []

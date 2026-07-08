@@ -1945,6 +1945,87 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
     return filepath
 
 
+def _storage_summary_age_minutes(updated_at_utc: Any, now: datetime) -> float | None:
+    """Minutes between ``updated_at_utc`` (ISO-8601, 'Z' or '+00:00' suffix)
+    and ``now`` — or ``None`` on anything not a clean, parseable timestamp.
+    Never raises."""
+    if not isinstance(updated_at_utc, str):
+        return None
+    try:
+        updated = datetime.fromisoformat(updated_at_utc.replace("Z", "+00:00"))
+        now_utc = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+        return round((now_utc.astimezone(timezone.utc) - updated).total_seconds() / 60.0, 1)
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
+async def _learning_storage_summary_export(
+    hass: HomeAssistant, learning_zone_id: str, *, now: datetime,
+) -> dict:
+    """Per-zone Storage-Metadata summary for the support export (Commit C).
+
+    Reads the zone's ``StorageMetadataStore`` (Commit A/B) — never the real
+    data stores it describes — and reshapes it into a small, public-safe
+    view: per store, whether it exists, its created/updated timestamps, an
+    ``age_minutes`` derived at export time, the last write reason, and the
+    key-migration state. No raw learning data, no entity/device/person ids,
+    no real zone/sensor names — only the small store-name labels and enum
+    values ``StorageMetadataStore`` itself already restricts to (see
+    stores.py's ``StorageMetadataStore`` docstring).
+
+    ``runtime_snapshot``/``raw_segments``/``global_index`` are intentionally
+    never shown here (neither ``exists: true`` nor ``exists: false``): none
+    of them is wired into ``StorageMetadataStore`` as of Commit B — showing
+    them at all would wrongly imply a tracking attempt that never happens
+    for these three. Every store name that actually appears below is exactly
+    whatever the zone's own index currently contains — no fixed/guessed
+    store-name list, so newly tracked raw tracks etc. show up without an
+    export.py change.
+
+    Never raises and never breaks the support export: a missing or corrupt
+    ``StorageMetadataStore`` (construction failure, ``StoreVersionError`` on
+    a mismatched schema version) yields ``{"available": False, "reason":
+    ...}`` instead of failing or omitting the zone, matching the established
+    fallback shape used by ``_learning_critical_events_export`` and friends
+    above. A single malformed per-store entry (not a dict) is skipped rather
+    than aborting the whole summary; a missing/unparseable timestamp simply
+    omits ``age_minutes`` for that store instead of raising.
+    """
+    try:
+        from .learning.storage.stores import HomeAssistantStoreFactory, StorageMetadataStore
+        meta_store = StorageMetadataStore(HomeAssistantStoreFactory(hass), learning_zone_id)
+        summary = await meta_store.get_store_summary()
+    except Exception:
+        return {"available": False, "reason": "storage_metadata_unavailable"}
+
+    stores_out: dict = {}
+    for store_name, entry in (summary.get("stores") or {}).items():
+        if not isinstance(entry, dict):
+            continue  # malformed per-store entry -> skip, never abort the summary
+        if not entry.get("exists"):
+            stores_out[store_name] = {"exists": False}
+            continue
+        out: dict = {"exists": True}
+        created_at_utc = entry.get("created_at_utc")
+        updated_at_utc = entry.get("updated_at_utc")
+        if isinstance(created_at_utc, str):
+            out["created_at_utc"] = created_at_utc
+        if isinstance(updated_at_utc, str):
+            out["updated_at_utc"] = updated_at_utc
+        age_minutes = _storage_summary_age_minutes(updated_at_utc, now)
+        if age_minutes is not None:
+            out["age_minutes"] = age_minutes
+        last_write_reason = entry.get("last_write_reason")
+        if isinstance(last_write_reason, str):
+            out["last_write_reason"] = last_write_reason
+        storage_key_state = entry.get("storage_key_state")
+        if isinstance(storage_key_state, str):
+            out["storage_key_state"] = storage_key_state
+        stores_out[store_name] = out
+
+    return {"available": True, "stores": stores_out}
+
+
 async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
     """Build a support-oriented export covering all zones, write to /config/www/."""
     from homeassistant.const import __version__ as HA_VERSION  # noqa: PLC0415
@@ -2004,6 +2085,13 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
             }
             zone_info["critical_events"] = {"available": False, "reason": "no_coordinator"}
             zone_info["device_profile"] = None
+
+        # Independent of coordinator liveness — StorageMetadataStore only
+        # needs hass + the zone's entry_id (== learning_zone_id), and a
+        # zone's stores can outlive a currently-unloaded coordinator.
+        zone_info["storage_summary"] = await _learning_storage_summary_export(
+            hass, entry.entry_id, now=ts
+        )
 
         zones.append(zone_info)
 

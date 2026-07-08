@@ -790,3 +790,176 @@ class TestStorageSummaryExport:
 
         export = await self._run(hass)
         assert _blob_has_no_le_branding(export["zones"][0]["storage_summary"]) == []
+
+
+# ── Storage-Metadata Commit D: Research Export storage_context ──────────────
+
+class TestStorageContextExport:
+    async def _run(self, tmp_path, learning: dict | None = None) -> dict:
+        entry = MagicMock()
+        entry.entry_id = "zone_1"
+        entry.data = {}
+        entry.options = {}
+
+        le = MagicMock()
+        le.get_export_data.return_value = learning or {}
+
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [entry]
+        hass.data = {DOMAIN: {"learning_engine": le}}
+        hass.config.path.side_effect = lambda *parts: str(tmp_path.joinpath(*parts))
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+
+        ts = datetime(2026, 1, 13, 8, 0, tzinfo=timezone.utc)
+        filepath = await async_export_learning_data(hass, ts=ts)
+        with open(filepath, encoding="utf-8") as fh:
+            return json.load(fh)
+
+    async def test_research_export_contains_storage_context(self, tmp_path, monkeypatch):
+        _patch_metadata_factory(monkeypatch, {})
+        export = await self._run(tmp_path)
+        zone = export["zones"][0]
+        assert "storage_context" in zone
+        assert "stores" in zone["storage_context"]
+
+    async def test_storage_context_has_granularity_and_timestamp_semantics(
+        self, tmp_path, monkeypatch,
+    ):
+        _patch_metadata_factory(monkeypatch, {})
+        export = await self._run(tmp_path)
+        ctx = export["zones"][0]["storage_context"]
+        assert ctx["granularity"] == "store_level"
+        assert ctx["timestamp_semantics"] == "store_write_time"
+
+    async def test_storage_context_exists_true_for_written_store(self, tmp_path, monkeypatch):
+        from custom_components.thermosmart.learning.storage import naming
+
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {"schema_version": 1, "stores": {
+                    "research_daily": {
+                        "exists": True,
+                        "created_at_utc": "2026-01-13T07:00:00Z",
+                        "updated_at_utc": "2026-01-13T07:49:00Z",
+                        "last_write_reason": "research_daily_update",
+                        "storage_key_state": "current",
+                    },
+                }},
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(tmp_path)
+        stores = export["zones"][0]["storage_context"]["stores"]
+        assert stores["research_daily"]["exists"] is True
+        assert stores["research_daily"]["last_write_reason"] == "research_daily_update"
+
+    async def test_age_minutes_derived_from_exported_at_and_updated_at(self, tmp_path, monkeypatch):
+        """ts=08:00 UTC, updated_at_utc=07:49 UTC -> 11 minutes old."""
+        from custom_components.thermosmart.learning.storage import naming
+
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {"schema_version": 1, "stores": {
+                    "research_daily": {
+                        "exists": True,
+                        "created_at_utc": "2026-01-13T07:00:00Z",
+                        "updated_at_utc": "2026-01-13T07:49:00Z",
+                        "last_write_reason": "research_daily_update",
+                        "storage_key_state": "current",
+                    },
+                }},
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(tmp_path)
+        age = export["zones"][0]["storage_context"]["stores"]["research_daily"]["age_minutes"]
+        assert age == 11.0
+
+    async def test_missing_metadata_store_does_not_break_research_export(
+        self, tmp_path, monkeypatch,
+    ):
+        from custom_components.thermosmart.learning.storage.stores import HomeAssistantStoreFactory
+
+        def _boom(self, key, version):
+            raise RuntimeError("simulated storage-metadata factory failure")
+
+        monkeypatch.setattr(HomeAssistantStoreFactory, "create", _boom)
+
+        export = await self._run(tmp_path, _rich_learning_dict())
+        zone = export["zones"][0]
+        assert zone["storage_context"]["available"] is False
+        assert zone["storage_context"]["reason"] == "storage_metadata_unavailable"
+        assert zone["storage_context"]["granularity"] == "store_level"
+        # rest of the research export still completed
+        assert zone["historical_learning_snapshot"]["available"] is True
+
+    async def test_corrupt_metadata_store_does_not_break_research_export(
+        self, tmp_path, monkeypatch,
+    ):
+        from custom_components.thermosmart.learning.storage import naming
+
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            # wrong envelope schema version -> StoreVersionError inside get_store_summary()
+            pair.current: _FakeMetaStore({"store_schema_version": 999, "data": {}}),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(tmp_path, _rich_learning_dict())
+        zone = export["zones"][0]
+        assert zone["storage_context"]["available"] is False
+        assert zone["historical_learning_snapshot"]["available"] is True
+
+    async def test_storage_context_has_no_forbidden_identifiers(self, tmp_path, monkeypatch):
+        from custom_components.thermosmart.learning.storage import naming
+
+        pair = naming.storage_metadata_key_pair("zone_1")
+        stores_by_key = {
+            pair.current: _FakeMetaStore({
+                "store_schema_version": 1,
+                "data": {"schema_version": 1, "stores": {
+                    "research_daily": {
+                        "exists": True,
+                        "created_at_utc": "2026-01-13T07:00:00Z",
+                        "updated_at_utc": "2026-01-13T07:49:00Z",
+                        "last_write_reason": "research_daily_update",
+                        "storage_key_state": "current",
+                    },
+                }},
+            }),
+        }
+        _patch_metadata_factory(monkeypatch, stores_by_key)
+
+        export = await self._run(tmp_path)
+        assert _blob_has_no_forbidden_substrings(export["zones"][0]["storage_context"]) == []
+
+    async def test_storage_context_has_no_le1_le2_branding(self, tmp_path, monkeypatch):
+        _patch_metadata_factory(monkeypatch, {})
+        export = await self._run(tmp_path)
+        assert _blob_has_no_le_branding(export["zones"][0]["storage_context"]) == []
+
+    async def test_content_time_fields_unchanged_alongside_storage_context(
+        self, tmp_path, monkeypatch,
+    ):
+        """storage_context is purely additive — episode_history/research_daily/
+        historical_learning_snapshot keep their own existing content-time
+        fields untouched (no field renamed, removed, or reinterpreted)."""
+        _patch_metadata_factory(monkeypatch, {})
+        learning = _rich_learning_dict()
+        export = await self._run(tmp_path, learning)
+        zone = export["zones"][0]
+        snap = zone["historical_learning_snapshot"]
+        assert snap["available"] is True
+        first_obs = snap["research_events"]["observations"][0]
+        assert first_obs["ts"] == "2026-01-13T06:37:22"
+        assert first_obs["hour"] == 6
+        assert first_obs["minute"] == 37
+        assert first_obs["weekday"] == 1  # datetime.fromisoformat(ts).weekday() -> Tuesday
+        # storage_context present alongside, not instead of, content-time data
+        assert "storage_context" in zone

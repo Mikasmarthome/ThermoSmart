@@ -1901,6 +1901,10 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             _learning_research_daily_export(coord, now=ts) if coord is not None
             else {"available": False, "reason": "no_coordinator"}
         )
+        # Independent of coordinator liveness — see _learning_storage_context_export()'s
+        # docstring: store-level context, never a substitute for the content-time
+        # fields already inside episode_history/research_daily/historical_learning_snapshot.
+        storage_context = await _learning_storage_context_export(hass, entry.entry_id, now=ts)
 
         zones.append({
             "zone_hash": _zone_hash(entry.entry_id),
@@ -1911,6 +1915,7 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             "learning_progress": learning_progress,
             "episode_history": episode_history,
             "research_daily": research_daily,
+            "storage_context": storage_context,
         })
 
     _tz_name = str(hass.config.time_zone) if hass.config.time_zone else None
@@ -1959,14 +1964,16 @@ def _storage_summary_age_minutes(updated_at_utc: Any, now: datetime) -> float | 
         return None
 
 
-async def _learning_storage_summary_export(
+async def _storage_metadata_stores_for_export(
     hass: HomeAssistant, learning_zone_id: str, *, now: datetime,
 ) -> dict:
-    """Per-zone Storage-Metadata summary for the support export (Commit C).
+    """Shared core for the Support Export ``storage_summary`` (Commit C) and
+    the Research Export ``storage_context`` (Commit D): reads the zone's
+    ``StorageMetadataStore`` (Commit A/B) — never the real data stores it
+    describes — and reshapes it into ``{"available": True, "stores": {...}}``
+    or ``{"available": False, "reason": ...}``.
 
-    Reads the zone's ``StorageMetadataStore`` (Commit A/B) — never the real
-    data stores it describes — and reshapes it into a small, public-safe
-    view: per store, whether it exists, its created/updated timestamps, an
+    Per store: whether it exists, its created/updated timestamps, an
     ``age_minutes`` derived at export time, the last write reason, and the
     key-migration state. No raw learning data, no entity/device/person ids,
     no real zone/sensor names — only the small store-name labels and enum
@@ -1982,9 +1989,9 @@ async def _learning_storage_summary_export(
     store-name list, so newly tracked raw tracks etc. show up without an
     export.py change.
 
-    Never raises and never breaks the support export: a missing or corrupt
-    ``StorageMetadataStore`` (construction failure, ``StoreVersionError`` on
-    a mismatched schema version) yields ``{"available": False, "reason":
+    Never raises and never breaks the export it's used from: a missing or
+    corrupt ``StorageMetadataStore`` (construction failure, ``StoreVersionError``
+    on a mismatched schema version) yields ``{"available": False, "reason":
     ...}`` instead of failing or omitting the zone, matching the established
     fallback shape used by ``_learning_critical_events_export`` and friends
     above. A single malformed per-store entry (not a dict) is skipped rather
@@ -2024,6 +2031,47 @@ async def _learning_storage_summary_export(
         stores_out[store_name] = out
 
     return {"available": True, "stores": stores_out}
+
+
+async def _learning_storage_summary_export(
+    hass: HomeAssistant, learning_zone_id: str, *, now: datetime,
+) -> dict:
+    """Per-zone Storage-Metadata summary for the support export (Commit C).
+
+    Thin wrapper around ``_storage_metadata_stores_for_export()`` — see that
+    function's docstring for the full shape/privacy/fallback contract.
+    """
+    return await _storage_metadata_stores_for_export(hass, learning_zone_id, now=now)
+
+
+async def _learning_storage_context_export(
+    hass: HomeAssistant, learning_zone_id: str, *, now: datetime,
+) -> dict:
+    """Per-zone Storage-Metadata context for the research export (Commit D).
+
+    Same underlying data as ``_learning_storage_summary_export()`` (both
+    delegate to ``_storage_metadata_stores_for_export()``), but framed for a
+    different audience: Research Export readers work with *content time*
+    (an episode's/bucket's/observation's own ``ts``/``hour``/``minute``/
+    ``weekday`` fields — when the underlying heating event happened) and
+    could otherwise easily mistake a store's ``updated_at_utc``/
+    ``age_minutes`` for another content timestamp. ``granularity``:
+    ``"store_level"`` and ``timestamp_semantics``: ``"store_write_time"`` are
+    small, constant, machine-readable markers (deliberately not a prose
+    ``note`` — this export favors compact fields) making that distinction
+    explicit and unambiguous wherever this block is read, independent of
+    whether any store data is currently available.
+
+    This block is pure additional context: it never changes, replaces, or
+    reads from the Episode/Research-Daily/Observation payloads themselves —
+    those keep their own existing content-time fields exactly as before.
+    """
+    result = await _storage_metadata_stores_for_export(hass, learning_zone_id, now=now)
+    return {
+        "granularity": "store_level",
+        "timestamp_semantics": "store_write_time",
+        **result,
+    }
 
 
 async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:

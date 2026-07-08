@@ -144,6 +144,17 @@ def research_daily_key(learning_zone_id: str) -> str:
     return _key(learning_zone_id, "research_daily")
 
 
+def storage_metadata_key(learning_zone_id: str) -> str:
+    """Store key for the per-zone storage-metadata index (Storage-Metadata
+    concept, Commit A): tracks per-store created/updated timestamps and
+    last-write-reason for Support/Research export — never raw learning data.
+
+    Parallel to ``episodes_key``/``research_daily_key`` — one store per zone,
+    keyed by the same opaque ``learning_zone_id``, never a real zone name.
+    """
+    return _key(learning_zone_id, "storage_metadata")
+
+
 # ── Neutral-naming migration prep (no production key has switched yet) ──────
 
 @dataclass(frozen=True)
@@ -242,6 +253,25 @@ def research_daily_key_pair(learning_zone_id: str) -> LearningStorageKeyPair:
     return LearningStorageKeyPair(
         current=_neutral_key(learning_zone_id, "research_daily"),
         legacy=research_daily_key(learning_zone_id),
+    )
+
+
+def storage_metadata_key_pair(learning_zone_id: str) -> LearningStorageKeyPair:
+    """Key pair for the storage-metadata index.
+
+    This store type never existed under the legacy ``thermosmart_le2__``
+    prefix (it's new as of the Storage-Metadata concept, introduced after the
+    neutral-naming migration) — no real legacy data can ever be found under
+    ``legacy``. The pair is still built the same way as every other
+    zone-scoped store for two reasons: (1) API uniformity with
+    ``_VersionedStore``/every other ``*_key_pair()`` function here, and (2) it
+    costs nothing — constructing a ``Store`` object doesn't touch disk, and
+    ``_VersionedStore`` never writes to ``legacy``, only reads it as a
+    fallback that will simply stay empty forever for this store type.
+    """
+    return LearningStorageKeyPair(
+        current=_neutral_key(learning_zone_id, "storage_metadata"),
+        legacy=storage_metadata_key(learning_zone_id),
     )
 
 

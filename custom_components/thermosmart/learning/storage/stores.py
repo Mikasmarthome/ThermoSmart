@@ -6,6 +6,8 @@ fake store factory so no real Home Assistant instance is required.
 """
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from enum import Enum
 from typing import Any, Optional, Protocol, runtime_checkable
 
 from homeassistant.helpers.storage import Store
@@ -24,6 +26,21 @@ ADAPTATION_HISTORY_STORE_VERSION = 1
 APPLICATION_LIFECYCLE_STORE_VERSION = 1
 SUPPORT_CRITICAL_EVENT_STORE_VERSION = 1
 RESEARCH_DAILY_STORE_VERSION = 1
+STORAGE_METADATA_STORE_VERSION = 1
+
+# Inner schema version of the storage-metadata index's own "data" payload —
+# independent of STORAGE_METADATA_STORE_VERSION (the _VersionedStore envelope
+# version). Bump this only if the {"schema_version": ..., "stores": {...}}
+# shape itself changes.
+STORAGE_METADATA_SCHEMA_VERSION = 1
+
+
+def _iso_utc_z(value: datetime) -> str:
+    """Format a UTC-aware datetime as ISO-8601 with a literal 'Z' suffix
+    (not '+00:00') — the timestamp style requested for storage-metadata."""
+    if value.tzinfo is None:
+        raise ValueError("timestamp must be timezone-aware")
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
 class StoreError(Exception):
@@ -119,10 +136,31 @@ class _VersionedStore:
         await self.save(legacy_data)
         return legacy_data
 
-    async def save(self, data: Any) -> None:
-        await self._store.async_save(
-            {"store_schema_version": self._version, "data": data}
-        )
+    async def save(self, data: Any, *, now_utc: Optional[datetime] = None) -> None:
+        """Save ``data`` under the schema-version envelope.
+
+        ``now_utc``, if given, additionally stamps ``created_at_utc``/
+        ``updated_at_utc`` at the envelope's top level (next to
+        ``store_schema_version``, alongside — never inside — ``data``).
+        ``created_at_utc`` is preserved across saves once set (one extra
+        read of the current envelope to check); ``updated_at_utc`` always
+        reflects this save. Omitting ``now_utc`` (the default — every
+        existing call site today) leaves the envelope exactly as before this
+        was added: no timestamp fields at all. This is intentionally inert
+        until a caller opts in by passing a clock-derived ``now_utc``.
+        """
+        envelope: dict[str, Any] = {"store_schema_version": self._version, "data": data}
+        if now_utc is not None:
+            created = _iso_utc_z(now_utc)
+            try:
+                existing_raw = await self._store.async_load()
+                if isinstance(existing_raw, dict) and existing_raw.get("created_at_utc"):
+                    created = existing_raw["created_at_utc"]
+            except Exception:
+                pass  # best-effort only — a read failure here must never block the save
+            envelope["created_at_utc"] = created
+            envelope["updated_at_utc"] = _iso_utc_z(now_utc)
+        await self._store.async_save(envelope)
 
     async def delete(self) -> None:
         try:
@@ -269,3 +307,111 @@ class ResearchDailyStore(_VersionedStore):
             naming.research_daily_key_pair(learning_zone_id),
             RESEARCH_DAILY_STORE_VERSION,
         )
+
+
+# ── Storage-Metadata concept (Commit A: foundation, not yet wired) ──────────
+
+class StorageWriteReason(Enum):
+    """Stable, small catalog of why a store was last written.
+
+    One value per store type's own save path (so it's always unambiguous
+    which caller set it), plus ``migration`` (set when a lazy legacy-key
+    migration triggered the save) and ``reset``/``unspecified`` fallbacks.
+    ``zone_remove`` is deliberately not a member: on zone removal the whole
+    storage-metadata index is deleted, so no reason value for that event
+    would ever be read back.
+    """
+    RUNTIME_SNAPSHOT_UPDATE = "runtime_snapshot_update"
+    MODEL_UPDATE = "model_update"
+    EPISODE_CLOSED = "episode_closed"
+    RAW_SAMPLE_APPEND = "raw_sample_append"
+    RESEARCH_DAILY_UPDATE = "research_daily_update"
+    SUPPORT_EVENT_APPEND = "support_event_append"
+    ADAPTATION_HISTORY_UPDATE = "adaptation_history_update"
+    LIFECYCLE_UPDATE = "lifecycle_update"
+    MIGRATION = "migration"
+    RESET = "reset"
+    UNSPECIFIED = "unspecified"
+
+
+class StorageKeyState(Enum):
+    """Which key variant a store's data currently lives under (or would, if
+    the store existed) — surfaced in Support/Research export so a stale
+    installation's still-legacy-only zones are visible at a glance."""
+    CURRENT = "current"
+    MIGRATED_FROM_LEGACY = "migrated_from_legacy"
+    MISSING = "missing"
+    UNKNOWN = "unknown"
+
+
+class StorageMetadataStore(_VersionedStore):
+    """Per-zone index of when each learning store was last created/updated,
+    and why — used by Support/Research export to answer "when was store X
+    last written" without touching the actual data stores.
+
+    Never stores raw learning data, entity ids, device ids, or person ids —
+    only store names (short internal labels like "episodes"/"models"),
+    ISO-8601 UTC timestamps, and the small enums above. Store names are
+    accepted as plain strings, not validated against a fixed list: an
+    unknown/future store name is simply recorded as-is, never rejected —
+    this index must never be the reason a real save path breaks.
+
+    Tolerant by design: a missing index (``get_store_summary()`` returns an
+    empty v1 shell) or a corrupt one (``load()`` raising ``StoreVersionError``
+    is the caller's responsibility to catch, exactly like every other store
+    here) must never affect the actual data stores this index describes —
+    it is purely descriptive, never authoritative.
+    """
+
+    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
+        super().__init__(
+            factory,
+            naming.storage_metadata_key_pair(learning_zone_id),
+            STORAGE_METADATA_STORE_VERSION,
+        )
+
+    async def get_store_summary(self) -> dict:
+        """Return the current ``{"schema_version": ..., "stores": {...}}``
+        dict, or an empty v1 shell if nothing has been recorded yet. Never
+        raises for "not found" — only a genuine schema-version mismatch on
+        the envelope itself propagates (see ``_VersionedStore.load()``)."""
+        data = await self.load()
+        if not isinstance(data, dict) or "stores" not in data:
+            return {"schema_version": STORAGE_METADATA_SCHEMA_VERSION, "stores": {}}
+        return data
+
+    async def mark_store_written(
+        self,
+        store_name: str,
+        reason: StorageWriteReason,
+        now_utc: datetime,
+        *,
+        storage_key_state: StorageKeyState = StorageKeyState.CURRENT,
+    ) -> None:
+        """Record that ``store_name`` was just written. ``created_at_utc``
+        is set once (first call for this store name) and preserved on every
+        later call; ``updated_at_utc`` always reflects this call."""
+        summary = await self.get_store_summary()
+        stores = summary.setdefault("stores", {})
+        existing = stores.get(store_name) or {}
+        created = existing.get("created_at_utc") or _iso_utc_z(now_utc)
+        stores[store_name] = {
+            "exists": True,
+            "created_at_utc": created,
+            "updated_at_utc": _iso_utc_z(now_utc),
+            "last_write_reason": reason.value,
+            "storage_key_state": storage_key_state.value,
+        }
+        await self.save(summary)
+
+    async def mark_store_missing(
+        self, store_name: str, now_utc: Optional[datetime] = None,
+    ) -> None:
+        """Record that ``store_name`` does not (or no longer) exist —
+        e.g. after an explicit reset deleted it. ``now_utc`` is currently
+        unused (kept as an explicit parameter for a future last-cleared
+        timestamp) — only ``exists: false`` is recorded for v1."""
+        summary = await self.get_store_summary()
+        stores = summary.setdefault("stores", {})
+        stores[store_name] = {"exists": False}
+        await self.save(summary)

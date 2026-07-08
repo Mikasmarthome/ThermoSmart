@@ -1,6 +1,6 @@
-"""Learning Naming / Storage-Key-Migration audit — Commit 1 smoke tests.
+"""Learning Naming / Storage-Key-Migration audit — Commit 1 + Commit 2 tests.
 
-Covers the additive, non-production-affecting groundwork only:
+Commit 1 (key-derivation groundwork, non-production-affecting):
   - the new neutral prefix (LEARNING_STORAGE_PREFIX) vs the legacy prefix
     every existing *_key() function still actually produces
   - LearningStorageKeyPair is computable for every store type
@@ -8,16 +8,34 @@ Covers the additive, non-production-affecting groundwork only:
     already neutral and must never be renamed
   - the global-index and runtime-snapshot key pairs specifically
 
-No store's actual read/write key has changed in this commit — every existing
-naming.*_key() function and ha_store.store_key() are asserted to still
-produce exactly their pre-existing thermosmart_le2__ values.
+Every existing naming.*_key() function and ha_store.store_key() still
+produce exactly their pre-existing thermosmart_le2__ values (those are the
+legacy half of each pair now).
+
+Commit 2 (the classes below `TestVersionedStoreMigration` onward): the actual
+lazy read-migration wired into `learning/storage/stores.py`'s
+`_VersionedStore` and `learning/runtime/ha_store.py`'s
+`HomeAssistantStoreAdapter` — new key first, legacy key as read-fallback,
+migrate-on-read, legacy never deleted except via explicit zone removal.
 """
 from __future__ import annotations
+
+from unittest.mock import patch
 
 from custom_components.thermosmart.const import STORAGE_KEY
 from custom_components.thermosmart.learning.raw_schemas import RawTrackName
 from custom_components.thermosmart.learning.runtime import ha_store
+from custom_components.thermosmart.learning.runtime.ha_store import HomeAssistantStoreAdapter
 from custom_components.thermosmart.learning.storage import naming
+from custom_components.thermosmart.learning.storage.stores import (
+    EpisodesStore,
+    GlobalIndexStore,
+    ModelStateStore,
+    RawSegmentIndexStore,
+    RawSegmentStore,
+    StoreVersionError,
+    ZoneMetadataStore,
+)
 
 
 class TestNeutralPrefixConstants:
@@ -206,3 +224,253 @@ class TestZoneSegmentConsolidation:
         seg = naming.zone_segment("entry_abc")
         pair = ha_store.store_key_pair(seg)
         assert pair.legacy == ha_store.store_key(naming.zone_segment("entry_abc"))
+
+
+# ── Commit 2: actual lazy read-migration behavior ────────────────────────────
+
+class FakeStore:
+    def __init__(self):
+        self.data = None
+        self.saves = 0
+        self.loads = 0
+        self.removed = False
+
+    async def async_load(self):
+        self.loads += 1
+        return self.data
+
+    async def async_save(self, data):
+        self.data = data
+        self.saves += 1
+
+    async def async_remove(self):
+        self.data = None
+        self.removed = True
+
+
+class FakeFactory:
+    """Matches learning/storage/stores.py's StoreFactory protocol."""
+
+    def __init__(self):
+        self.stores: dict[str, FakeStore] = {}
+
+    def create(self, key: str, version: int) -> FakeStore:
+        return self.stores.setdefault(key, FakeStore())
+
+
+class TestVersionedStoreMigration:
+    """learning/storage/stores.py's _VersionedStore, exercised through
+    ZoneMetadataStore (any *_key_pair()-based subclass behaves identically)."""
+
+    async def test_new_key_present_loads_new_without_touching_legacy(self):
+        factory = FakeFactory()
+        pair = naming.container_key_pair("lz_1")
+        factory.stores[pair.current] = FakeStore()
+        factory.stores[pair.current].data = {"store_schema_version": 1, "data": {"v": "new"}}
+        store = ZoneMetadataStore(factory, "lz_1")
+
+        result = await store.load()
+
+        assert result == {"v": "new"}
+        assert factory.stores[pair.legacy].loads == 0  # legacy never even read
+
+    async def test_new_key_missing_legacy_present_loads_legacy_and_writes_new(self):
+        factory = FakeFactory()
+        pair = naming.container_key_pair("lz_1")
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"v": "old"}}
+        store = ZoneMetadataStore(factory, "lz_1")
+
+        result = await store.load()
+
+        assert result == {"v": "old"}
+        assert factory.stores[pair.current].data == {"store_schema_version": 1, "data": {"v": "old"}}
+        assert factory.stores[pair.legacy].removed is False  # legacy NOT deleted
+
+    async def test_migration_is_idempotent(self):
+        factory = FakeFactory()
+        pair = naming.container_key_pair("lz_1")
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"v": "old"}}
+        store = ZoneMetadataStore(factory, "lz_1")
+
+        first = await store.load()
+        saves_after_first = factory.stores[pair.current].saves
+        second = await store.load()  # new key now present -> legacy never read again
+
+        assert first == second == {"v": "old"}
+        assert factory.stores[pair.current].saves == saves_after_first  # no duplicate write
+
+    async def test_both_keys_absent_returns_none(self):
+        factory = FakeFactory()
+        store = ZoneMetadataStore(factory, "lz_1")
+        assert await store.load() is None
+
+    async def test_new_writes_use_new_key_only(self):
+        factory = FakeFactory()
+        pair = naming.container_key_pair("lz_1")
+        store = ZoneMetadataStore(factory, "lz_1")
+
+        await store.save({"v": "fresh"})
+
+        assert factory.stores[pair.current].data == {"store_schema_version": 1, "data": {"v": "fresh"}}
+        assert factory.stores[pair.legacy].data is None
+        assert factory.stores[pair.legacy].saves == 0
+
+    async def test_new_key_invalid_does_not_silently_fall_back_to_legacy(self):
+        """A version mismatch on the new key must raise, not be swallowed by
+        quietly returning legacy data instead — conservative-by-design."""
+        factory = FakeFactory()
+        pair = naming.container_key_pair("lz_1")
+        factory.stores[pair.current] = FakeStore()
+        factory.stores[pair.current].data = {"store_schema_version": 999, "data": {}}
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"v": "old"}}
+        store = ZoneMetadataStore(factory, "lz_1")
+
+        import pytest
+        with pytest.raises(StoreVersionError):
+            await store.load()
+
+    async def test_delete_removes_both_new_and_legacy(self):
+        factory = FakeFactory()
+        pair = naming.container_key_pair("lz_1")
+        store = ZoneMetadataStore(factory, "lz_1")
+        await store.save({"v": 1})
+
+        await store.delete()
+
+        assert factory.stores[pair.current].removed is True
+        assert factory.stores[pair.legacy].removed is True
+
+    async def test_multi_zone_migration_does_not_cross_contaminate(self):
+        """Migrating zone A's legacy data must never populate zone B's keys."""
+        factory = FakeFactory()
+        pair_a = naming.container_key_pair("lz_a")
+        pair_b = naming.container_key_pair("lz_b")
+        factory.stores[pair_a.legacy] = FakeStore()
+        factory.stores[pair_a.legacy].data = {"store_schema_version": 1, "data": {"zone": "a"}}
+
+        store_a = ZoneMetadataStore(factory, "lz_a")
+        store_b = ZoneMetadataStore(factory, "lz_b")
+
+        result_a = await store_a.load()
+        result_b = await store_b.load()
+
+        assert result_a == {"zone": "a"}
+        assert result_b is None
+        assert factory.stores[pair_b.current].data is None
+        assert factory.stores[pair_b.legacy].data is None
+
+
+class TestEachStoreTypeMigrates:
+    """One migration assertion per remaining store type sharing _VersionedStore."""
+
+    async def test_episodes_old_to_new(self):
+        factory = FakeFactory()
+        pair = naming.episodes_key_pair("lz_1")
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"e": 1}}
+        store = EpisodesStore(factory, "lz_1")
+        assert await store.load() == {"e": 1}
+        assert factory.stores[pair.current].data["data"] == {"e": 1}
+
+    async def test_models_old_to_new(self):
+        factory = FakeFactory()
+        pair = naming.model_state_key_pair("lz_1")
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"m": 1}}
+        store = ModelStateStore(factory, "lz_1")
+        assert await store.load() == {"m": 1}
+        assert factory.stores[pair.current].data["data"] == {"m": 1}
+
+    async def test_global_index_old_to_new(self):
+        factory = FakeFactory()
+        pair = naming.global_index_key_pair()
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"g": 1}}
+        store = GlobalIndexStore(factory)
+        assert await store.load() == {"g": 1}
+        assert factory.stores[pair.current].data["data"] == {"g": 1}
+
+    async def test_raw_index_old_to_new(self):
+        factory = FakeFactory()
+        pair = naming.raw_index_key_pair("lz_1", RawTrackName.ROOM)
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"i": 1}}
+        store = RawSegmentIndexStore(factory, "lz_1", RawTrackName.ROOM)
+        assert await store.load() == {"i": 1}
+        assert factory.stores[pair.current].data["data"] == {"i": 1}
+
+    async def test_raw_segment_old_to_new(self):
+        factory = FakeFactory()
+        pair = naming.raw_segment_key_pair("lz_1", RawTrackName.ROOM, 0)
+        factory.stores[pair.legacy] = FakeStore()
+        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"s": 1}}
+        store = RawSegmentStore(factory, "lz_1", RawTrackName.ROOM)
+        assert await store.load_segment(0) == {"s": 1}
+        assert factory.stores[pair.current].data["data"] == {"s": 1}
+
+
+class TestRuntimeSnapshotAdapterMigration:
+    """HomeAssistantStoreAdapter — the runtime-snapshot store (hashed zone
+    segment, no naming.py suffix). Patches homeassistant.helpers.storage.Store
+    so both the new and legacy Store objects are fakes under test control."""
+
+    def _patched_store_map(self):
+        stores: dict[str, FakeStore] = {}
+
+        def _factory(hass, version, key):
+            return stores.setdefault(key, FakeStore())
+
+        return stores, _factory
+
+    async def test_new_key_present_loads_new(self):
+        stores, factory_fn = self._patched_store_map()
+        pair = ha_store.store_key_pair("seg1")
+        with patch("homeassistant.helpers.storage.Store", side_effect=factory_fn):
+            adapter = HomeAssistantStoreAdapter(hass=None, zone_segment="seg1")
+        stores[pair.current].data = {"v": "new"}
+
+        assert await adapter.async_load() == {"v": "new"}
+        assert pair.legacy not in stores or stores[pair.legacy].data is None
+
+    async def test_new_key_missing_legacy_present_migrates(self):
+        stores, factory_fn = self._patched_store_map()
+        pair = ha_store.store_key_pair("seg1")
+        with patch("homeassistant.helpers.storage.Store", side_effect=factory_fn):
+            adapter = HomeAssistantStoreAdapter(hass=None, zone_segment="seg1")
+        stores[pair.legacy].data = {"v": "old"}
+
+        result = await adapter.async_load()
+
+        assert result == {"v": "old"}
+        assert stores[pair.current].data == {"v": "old"}
+        assert stores[pair.legacy].removed is False
+
+    async def test_both_absent_returns_none(self):
+        stores, factory_fn = self._patched_store_map()
+        with patch("homeassistant.helpers.storage.Store", side_effect=factory_fn):
+            adapter = HomeAssistantStoreAdapter(hass=None, zone_segment="seg1")
+        assert await adapter.async_load() is None
+
+    async def test_delete_removes_both(self):
+        stores, factory_fn = self._patched_store_map()
+        pair = ha_store.store_key_pair("seg1")
+        with patch("homeassistant.helpers.storage.Store", side_effect=factory_fn):
+            adapter = HomeAssistantStoreAdapter(hass=None, zone_segment="seg1")
+        await adapter.async_save({"v": 1})
+
+        await adapter.async_delete()
+
+        assert stores[pair.current].removed is True
+        assert stores[pair.legacy].removed is True
+
+    async def test_explicit_store_override_skips_legacy_entirely(self):
+        """The store= override (used by shadow-controller tests) must behave
+        exactly as before — no legacy store created, no migration attempted."""
+        fake = FakeStore()
+        adapter = HomeAssistantStoreAdapter(hass=None, zone_segment="seg1", store=fake)
+        await adapter.async_save({"x": 1})
+        assert fake.saves == 1
+        assert await adapter.async_load() == {"x": 1}

@@ -6,17 +6,21 @@ filesystem-safe (Home Assistant persists each store as a ``.storage`` file),
 versioned, and collision-free across zones, tracks and segments.
 
 Neutral naming migration (Learning Naming / Storage-Key audit):
-  The historical ``thermosmart_le2__`` prefix exposes an internal generation
+  The historical ``thermosmart_le2__`` prefix exposed an internal generation
   codename ("LE2") directly in ``.storage`` filenames — a technically curious
-  user browsing that folder sees it. ``LEARNING_STORAGE_PREFIX`` is the target
-  neutral prefix; ``LEGACY_LEARNING_STORAGE_PREFIX`` is the current/actual
-  prefix every ``*_key()`` function below still produces (production behavior
-  is UNCHANGED by this module — no store has switched prefixes yet). The
-  ``*_key_pair()`` functions compute both variants side by side so a future,
-  separate commit can wire an actual read-fallback (new key first, legacy key
-  second) without this module needing to change again. Suffixes (``container``,
-  ``models``, ``episodes``, ...) are identical between the two prefixes — only
-  the domain/generation prefix differs.
+  user browsing that folder would see it. ``LEARNING_STORAGE_PREFIX`` is the
+  neutral prefix every store now saves under; ``LEGACY_LEARNING_STORAGE_PREFIX``
+  is the old prefix, still read as a one-time lazy-migration fallback by the
+  store wrapper classes in ``storage/stores.py`` and by
+  ``runtime/ha_store.py``'s ``HomeAssistantStoreAdapter`` (both read the
+  neutral key first, then the legacy key if the neutral one is empty,
+  persisting the legacy data onto the neutral key on that same read — the
+  legacy key itself is never deleted by this, only on explicit zone removal).
+  The plain ``*_key()`` functions below therefore now only describe the
+  legacy half of each pair; production code builds keys through the
+  ``*_key_pair()`` functions instead. Suffixes (``container``, ``models``,
+  ``episodes``, ...) are identical between the two prefixes — only the
+  domain/generation prefix differs.
 """
 from __future__ import annotations
 

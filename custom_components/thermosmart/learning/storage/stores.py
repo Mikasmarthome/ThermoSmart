@@ -59,29 +59,65 @@ class HomeAssistantStoreFactory:
 
 
 class _VersionedStore:
-    """Wraps one keyed store with a schema-version envelope."""
+    """Wraps one keyed store with a schema-version envelope.
 
-    def __init__(self, factory: StoreFactory, key: str, version: int) -> None:
-        self._key = key
+    Accepts either a plain ``str`` key (no migration — used by callers/tests
+    that only ever care about one fixed key) or a
+    ``naming.LearningStorageKeyPair`` (neutral ``current`` key plus the
+    legacy ``thermosmart_le2__`` fallback). With a pair:
+
+    - ``load()`` tries ``current`` first. If it holds valid data, that's
+      returned — legacy is never even read.
+    - If ``current`` is absent, ``legacy`` is tried. Valid legacy data is
+      returned AND persisted under ``current`` (lazy migration on read) —
+      ``legacy`` itself is left untouched, exactly as before.
+    - A version mismatch on ``current`` raises ``StoreVersionError`` rather
+      than silently falling back to legacy — an existing-but-unreadable new
+      store must never be quietly superseded by old data.
+    - ``delete()`` removes both keys — only ever reached via explicit zone
+      removal (``learning/reset.py``), never unload/reload.
+    """
+
+    def __init__(self, factory: StoreFactory, key, version: int) -> None:
+        if isinstance(key, str):
+            current, legacy = key, None
+        else:
+            current, legacy = key.current, key.legacy
+        self._key = current
+        self._legacy_key = legacy
         self._version = version
-        self._store = factory.create(key, version)
+        self._store = factory.create(current, version)
+        self._legacy_store = factory.create(legacy, version) if legacy else None
 
     @property
     def key(self) -> str:
         return self._key
 
-    async def load(self) -> Optional[Any]:
-        raw = await self._store.async_load()
-        if raw is None:
-            return None
+    def _parse(self, raw: Any, *, key_for_error: str) -> Any:
         if not isinstance(raw, dict) or "store_schema_version" not in raw:
-            raise StoreVersionError(f"store '{self._key}' has no schema version")
+            raise StoreVersionError(f"store '{key_for_error}' has no schema version")
         found = raw["store_schema_version"]
         if found != self._version:
             raise StoreVersionError(
-                f"store '{self._key}' schema version {found} != expected {self._version}"
+                f"store '{key_for_error}' schema version {found} != expected {self._version}"
             )
         return raw.get("data")
+
+    async def load(self) -> Optional[Any]:
+        raw = await self._store.async_load()
+        if raw is not None:
+            return self._parse(raw, key_for_error=self._key)
+        if self._legacy_store is None:
+            return None
+        legacy_raw = await self._legacy_store.async_load()
+        if legacy_raw is None:
+            return None
+        legacy_data = self._parse(legacy_raw, key_for_error=self._legacy_key)
+        # Lazy migration: persist under the neutral key now that it's been
+        # read once. Legacy key is a deliberate safety fallback — never
+        # deleted here (only on explicit zone removal, see delete() below).
+        await self.save(legacy_data)
+        return legacy_data
 
     async def save(self, data: Any) -> None:
         await self._store.async_save(
@@ -89,14 +125,18 @@ class _VersionedStore:
         )
 
     async def delete(self) -> None:
-        await self._store.async_remove()
+        try:
+            await self._store.async_remove()
+        finally:
+            if self._legacy_store is not None:
+                await self._legacy_store.async_remove()
 
 
 class ZoneMetadataStore(_VersionedStore):
     """Authority for ``learning_zone_id`` and store versions of a zone."""
 
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(factory, naming.container_key(learning_zone_id),
+        super().__init__(factory, naming.container_key_pair(learning_zone_id),
                          ZONE_METADATA_STORE_VERSION)
 
 
@@ -105,7 +145,7 @@ class RawSegmentIndexStore(_VersionedStore):
 
     def __init__(self, factory: StoreFactory, learning_zone_id: str,
                  track_name: RawTrackName) -> None:
-        super().__init__(factory, naming.raw_index_key(learning_zone_id, track_name),
+        super().__init__(factory, naming.raw_index_key_pair(learning_zone_id, track_name),
                          RAW_INDEX_STORE_VERSION)
 
 
@@ -119,7 +159,7 @@ class RawSegmentStore:
         self._track = track_name
 
     def _segment(self, sequence_number: int) -> _VersionedStore:
-        key = naming.raw_segment_key(self._zone, self._track, sequence_number)
+        key = naming.raw_segment_key_pair(self._zone, self._track, sequence_number)
         return _VersionedStore(self._factory, key, RAW_SEGMENT_STORE_VERSION)
 
     async def load_segment(self, sequence_number: int) -> Optional[Any]:
@@ -136,7 +176,7 @@ class EpisodesStore(_VersionedStore):
     """Generic typed container for materialised episodes (form only in Phase 3)."""
 
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(factory, naming.episodes_key(learning_zone_id),
+        super().__init__(factory, naming.episodes_key_pair(learning_zone_id),
                          EPISODES_STORE_VERSION)
 
 
@@ -144,7 +184,7 @@ class ModelStateStore(_VersionedStore):
     """Generic versioned container for model state (form only in Phase 3)."""
 
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(factory, naming.model_state_key(learning_zone_id),
+        super().__init__(factory, naming.model_state_key_pair(learning_zone_id),
                          MODEL_STATE_STORE_VERSION)
 
 
@@ -152,7 +192,7 @@ class GlobalIndexStore(_VersionedStore):
     """Fully reconstructable global cache; never an identity authority."""
 
     def __init__(self, factory: StoreFactory) -> None:
-        super().__init__(factory, naming.global_index_key(),
+        super().__init__(factory, naming.global_index_key_pair(),
                          GLOBAL_INDEX_STORE_VERSION)
 
 
@@ -166,7 +206,7 @@ class AdaptationHistoryStore(_VersionedStore):
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
         super().__init__(
             factory,
-            naming.adaptation_history_key(learning_zone_id),
+            naming.adaptation_history_key_pair(learning_zone_id),
             ADAPTATION_HISTORY_STORE_VERSION,
         )
 
@@ -182,7 +222,7 @@ class ApplicationLifecycleStore(_VersionedStore):
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
         super().__init__(
             factory,
-            naming.application_lifecycle_key(learning_zone_id),
+            naming.application_lifecycle_key_pair(learning_zone_id),
             APPLICATION_LIFECYCLE_STORE_VERSION,
         )
 
@@ -204,7 +244,7 @@ class SupportCriticalEventStore(_VersionedStore):
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
         super().__init__(
             factory,
-            naming.support_critical_events_key(learning_zone_id),
+            naming.support_critical_events_key_pair(learning_zone_id),
             SUPPORT_CRITICAL_EVENT_STORE_VERSION,
         )
 
@@ -226,6 +266,6 @@ class ResearchDailyStore(_VersionedStore):
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
         super().__init__(
             factory,
-            naming.research_daily_key(learning_zone_id),
+            naming.research_daily_key_pair(learning_zone_id),
             RESEARCH_DAILY_STORE_VERSION,
         )

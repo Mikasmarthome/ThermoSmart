@@ -67,11 +67,7 @@
         "description": "Chi è a casa? ThermoSmart passa automaticamente alla modalità assenza quando tutti escono.",
         "data": {
           "presence_persons": "Persone per il rilevamento della presenza",
-          "home_zone": "Zona casa (predefinito: zone.home)",
-          "learning_enabled": "Abilita algoritmo di apprendimento"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart impara le velocità di riscaldamento, raffreddamento e le temperature ottimali per questa zona."
+          "home_zone": "Zona casa (predefinito: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Chi è a casa? ThermoSmart passa automaticamente alla modalità assenza quando tutti escono.",
         "data": {
           "presence_persons": "Persone per il rilevamento della presenza",
-          "home_zone": "Zona casa (predefinito: zone.home)",
-          "learning_enabled": "Abilita algoritmo di apprendimento"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart impara le velocità di riscaldamento, raffreddamento e le temperature ottimali per questa zona."
+          "home_zone": "Zona casa (predefinito: zone.home)"
         }
       },
       "weather": {

@@ -67,11 +67,7 @@
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
-          "home_zone": "Thuiszone (standaard: zone.home)",
-          "learning_enabled": "Leeralgoritme inschakelen"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart leert verwarmings- en afkoelsnelheden en optimale temperaturen voor deze zone."
+          "home_zone": "Thuiszone (standaard: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
-          "home_zone": "Thuiszone (standaard: zone.home)",
-          "learning_enabled": "Leeralgoritme inschakelen"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart leert verwarmings- en afkoelsnelheden en optimale temperaturen voor deze zone."
+          "home_zone": "Thuiszone (standaard: zone.home)"
         }
       },
       "weather": {

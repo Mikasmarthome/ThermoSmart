@@ -67,11 +67,7 @@
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
-          "home_zone": "Zona de acasă (implicit: zone.home)",
-          "learning_enabled": "Activare algoritm de învățare"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart învață ratele de încălzire, răcire și temperaturile optime pentru această zonă."
+          "home_zone": "Zona de acasă (implicit: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
-          "home_zone": "Zona de acasă (implicit: zone.home)",
-          "learning_enabled": "Activare algoritm de învățare"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart învață ratele de încălzire, răcire și temperaturile optime pentru această zonă."
+          "home_zone": "Zona de acasă (implicit: zone.home)"
         }
       },
       "weather": {

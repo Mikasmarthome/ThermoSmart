@@ -67,11 +67,7 @@
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
-          "home_zone": "Hjemzone (standard: zone.home)",
-          "learning_enabled": "Aktivér læringsalgoritme"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart lærer opvarmnings- og nedkølingshastigheder samt optimale temperaturer for denne zone."
+          "home_zone": "Hjemzone (standard: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
-          "home_zone": "Hjemzone (standard: zone.home)",
-          "learning_enabled": "Aktivér læringsalgoritme"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart lærer opvarmnings- og nedkølingshastigheder samt optimale temperaturer for denne zone."
+          "home_zone": "Hjemzone (standard: zone.home)"
         }
       },
       "weather": {

@@ -67,11 +67,7 @@
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
-          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)",
-          "learning_enabled": "Tanulási algoritmus engedélyezése"
-        },
-        "data_description": {
-          "learning_enabled": "A ThermoSmart megtanulja a fűtési és hűtési sebességeket, valamint az optimális hőmérsékleteket ehhez a zónához."
+          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
-          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)",
-          "learning_enabled": "Tanulási algoritmus engedélyezése"
-        },
-        "data_description": {
-          "learning_enabled": "A ThermoSmart megtanulja a fűtési és hűtési sebességeket, valamint az optimális hőmérsékleteket ehhez a zónához."
+          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)"
         }
       },
       "weather": {

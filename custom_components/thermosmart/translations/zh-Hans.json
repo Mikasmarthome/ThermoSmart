@@ -67,11 +67,7 @@
         "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
         "data": {
           "presence_persons": "用于检测在家状态的人员",
-          "home_zone": "家庭区域（默认：zone.home）",
-          "learning_enabled": "启用学习算法"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart 学习此区域的加热、冷却速率和最佳温度。"
+          "home_zone": "家庭区域（默认：zone.home）"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
         "data": {
           "presence_persons": "用于检测在家状态的人员",
-          "home_zone": "家庭区域（默认：zone.home）",
-          "learning_enabled": "启用学习算法"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart 学习此区域的加热、冷却速率和最佳温度。"
+          "home_zone": "家庭区域（默认：zone.home）"
         }
       },
       "weather": {

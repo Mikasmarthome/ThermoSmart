@@ -67,11 +67,7 @@
         "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
-          "home_zone": "Strefa domowa (domyślnie: zone.home)",
-          "learning_enabled": "Włącz algorytm uczenia"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart uczy się szybkości ogrzewania, chłodzenia i optymalnych temperatur dla tej strefy."
+          "home_zone": "Strefa domowa (domyślnie: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
-          "home_zone": "Strefa domowa (domyślnie: zone.home)",
-          "learning_enabled": "Włącz algorytm uczenia"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart uczy się szybkości ogrzewania, chłodzenia i optymalnych temperatur dla tej strefy."
+          "home_zone": "Strefa domowa (domyślnie: zone.home)"
         }
       },
       "weather": {

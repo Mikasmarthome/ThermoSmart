@@ -67,11 +67,7 @@
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke (oletus: zone.home)",
-          "learning_enabled": "Ota oppimisalgoritmi käyttöön"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart oppii lämmitys- ja jäähdytysnopeudet sekä optimaaliset lämpötilat tälle vyöhykkeelle."
+          "home_zone": "Kotivyöhyke (oletus: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke (oletus: zone.home)",
-          "learning_enabled": "Ota oppimisalgoritmi käyttöön"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart oppii lämmitys- ja jäähdytysnopeudet sekä optimaaliset lämpötilat tälle vyöhykkeelle."
+          "home_zone": "Kotivyöhyke (oletus: zone.home)"
         }
       },
       "weather": {

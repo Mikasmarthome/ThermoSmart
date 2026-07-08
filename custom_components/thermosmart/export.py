@@ -125,6 +125,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
+from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
@@ -332,6 +333,7 @@ def _historical_learning_snapshot_for_research(learning: dict) -> dict:
             "available": True,
             "frozen": True,
             "raw_legacy_dump_included": False,
+            "historical_learning_dump_included": False,
             "privacy_checked": True,
             "event_count_summary": {
                 "observations": int(learning.get("observation_count") or 0),
@@ -359,6 +361,7 @@ def _historical_learning_snapshot_for_research(learning: dict) -> dict:
             "reason": "historical_snapshot_unavailable",
             "frozen": True,
             "raw_legacy_dump_included": False,
+            "historical_learning_dump_included": False,
             "privacy_checked": True,
         }
 
@@ -1910,11 +1913,15 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
             "research_daily": research_daily,
         })
 
+    _tz_name = str(hass.config.time_zone) if hass.config.time_zone else None
     export: dict = {
         "thermosmart_version": VERSION,
         "export_type": "research",
         "export_format_version": EXPORT_FORMAT_VERSION,
         "export_timestamp": ts.isoformat(),
+        "exported_at_utc": ts.isoformat(),
+        "exported_at_local": dt_util.as_local(ts).isoformat(),
+        "timezone": _tz_name,
         "zone_count": len(zones),
         "total_trv_count": sum(z["trv_count"] for z in zones),
         "total_temp_sensor_count": sum(z["temp_sensor_count"] for z in zones),
@@ -2000,11 +2007,15 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
 
         zones.append(zone_info)
 
+    _tz_name = str(hass.config.time_zone) if hass.config.time_zone else None
     export: dict = {
         "thermosmart_version": VERSION,
         "export_type": "support",
         "export_format_version": EXPORT_FORMAT_VERSION,
         "export_timestamp": ts.isoformat(),
+        "exported_at_utc": ts.isoformat(),
+        "exported_at_local": dt_util.as_local(ts).isoformat(),
+        "timezone": _tz_name,
         "system": {
             "ha_version": HA_VERSION,
             "zone_count": len(zones),

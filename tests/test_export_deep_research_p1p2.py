@@ -116,6 +116,9 @@ class TestHistoricalSnapshotStructure:
         assert snap["available"] is True
         assert snap["frozen"] is True
         assert snap["raw_legacy_dump_included"] is False
+        # Neutral compat key alongside the pre-existing one (Export-Naming
+        # cleanup) — same value, additive, old key not removed.
+        assert snap["historical_learning_dump_included"] is False
         assert snap["privacy_checked"] is True
 
     def test_event_count_summary_reflects_true_totals(self):
@@ -436,3 +439,143 @@ class TestSupportExportIntegration:
 
         export = await self._run(hass)
         assert _blob_has_no_forbidden_substrings(export) == []
+
+
+# ── Export-creation top-level timestamp fields ───────────────────────────────
+
+_LE_BRANDING_SUBSTRINGS = ("le1", "le2", "thermosmart_le2")
+
+
+def _blob_has_no_le_branding(payload: dict, *, allow: tuple[str, ...] = ()) -> list[str]:
+    """Like _blob_has_no_forbidden_substrings, but for LE1/LE2 branding terms.
+
+    ``allow`` lets a caller permit specific sanctioned substrings (e.g. the
+    storage_layout note's deliberate thermosmart_le2__ migration-fallback
+    mention) without disabling the check entirely.
+    """
+    blob = json.dumps(payload).lower()
+    return [s for s in _LE_BRANDING_SUBSTRINGS if s in blob and s not in allow]
+
+
+class TestResearchExportTimestampFields:
+    async def _run(self, tmp_path, learning: dict | None = None, *, tz: str = "Europe/Berlin") -> dict:
+        # dt_util.as_local() (used for exported_at_local) reads the process-wide
+        # HA default timezone, not hass.config.time_zone directly — in real HA
+        # these are kept in sync by core startup; tests must set it explicitly.
+        from homeassistant.util import dt as dt_util
+        previous_tz = dt_util.DEFAULT_TIME_ZONE
+        dt_util.set_default_time_zone(dt_util.get_time_zone(tz))
+        try:
+            entry = MagicMock()
+            entry.entry_id = "zone_1"
+            entry.data = {}
+            entry.options = {}
+
+            le = MagicMock()
+            le.get_export_data.return_value = learning or {}
+
+            hass = MagicMock()
+            hass.config_entries.async_entries.return_value = [entry]
+            hass.data = {DOMAIN: {"learning_engine": le}}
+            hass.config.path.side_effect = lambda *parts: str(tmp_path.joinpath(*parts))
+            hass.config.time_zone = tz
+            hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+
+            ts = datetime(2026, 1, 13, 8, 0, tzinfo=timezone.utc)
+            filepath = await async_export_learning_data(hass, ts=ts)
+            with open(filepath, encoding="utf-8") as fh:
+                return json.load(fh)
+        finally:
+            dt_util.set_default_time_zone(previous_tz)
+
+    async def test_contains_exported_at_utc(self, tmp_path):
+        export = await self._run(tmp_path)
+        assert export["exported_at_utc"] == "2026-01-13T08:00:00+00:00"
+
+    async def test_contains_exported_at_local(self, tmp_path):
+        export = await self._run(tmp_path, tz="Europe/Berlin")
+        # 2026-01-13 08:00 UTC -> 09:00 CET (Europe/Berlin, standard time in January)
+        assert export["exported_at_local"] == "2026-01-13T09:00:00+01:00"
+
+    async def test_contains_timezone_name(self, tmp_path):
+        export = await self._run(tmp_path, tz="Europe/Berlin")
+        assert export["timezone"] == "Europe/Berlin"
+
+    async def test_legacy_export_timestamp_field_still_present(self, tmp_path):
+        """Compatibility: the pre-existing export_timestamp field must not be
+        removed — exported_at_utc is additive, not a replacement."""
+        export = await self._run(tmp_path)
+        assert export["export_timestamp"] == export["exported_at_utc"]
+
+    async def test_export_has_no_le1_le2_branding(self, tmp_path):
+        export = await self._run(tmp_path, _rich_learning_dict())
+        assert _blob_has_no_le_branding(export) == []
+
+
+class TestSupportExportTimestampFields:
+    async def _run(self, hass, tz: str = "Europe/Berlin") -> dict:
+        from homeassistant.util import dt as dt_util
+        ts = datetime(2026, 1, 13, 8, 0, tzinfo=timezone.utc)
+        hass.config.time_zone = tz
+        previous_tz = dt_util.DEFAULT_TIME_ZONE
+        dt_util.set_default_time_zone(dt_util.get_time_zone(tz))
+        try:
+            import tempfile
+            with tempfile.TemporaryDirectory() as tmpdir:
+                hass.config.path.side_effect = lambda *parts: str(__import__("pathlib").Path(tmpdir, *parts))
+                filepath = await async_export_support_data(hass, ts=ts)
+                with open(filepath, encoding="utf-8") as fh:
+                    return json.load(fh)
+        finally:
+            dt_util.set_default_time_zone(previous_tz)
+
+    def _base_hass(self, entry) -> MagicMock:
+        hass = MagicMock()
+        hass.config_entries.async_entries.return_value = [entry]
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn: fn())
+        return hass
+
+    async def test_contains_exported_at_utc(self):
+        entry = MagicMock()
+        entry.entry_id = "zone_1"
+        entry.data = {"entry_type": "zone"}
+        entry.options = {}
+        hass = self._base_hass(entry)
+        hass.data = {DOMAIN: {}}
+
+        export = await self._run(hass)
+        assert export["exported_at_utc"] == "2026-01-13T08:00:00+00:00"
+
+    async def test_contains_exported_at_local_and_timezone(self):
+        entry = MagicMock()
+        entry.entry_id = "zone_1"
+        entry.data = {"entry_type": "zone"}
+        entry.options = {}
+        hass = self._base_hass(entry)
+        hass.data = {DOMAIN: {}}
+
+        export = await self._run(hass, tz="Europe/Berlin")
+        assert export["exported_at_local"] == "2026-01-13T09:00:00+01:00"
+        assert export["timezone"] == "Europe/Berlin"
+
+    async def test_storage_layout_note_only_sanctioned_le2_mention(self):
+        """The note may mention thermosmart_le2__ solely as the legacy
+        migration-fallback key — never as if it were still the active/only
+        naming scheme (no other LE1/LE2 branding anywhere in the export)."""
+        entry = MagicMock()
+        entry.entry_id = "zone_1"
+        entry.data = {"entry_type": "zone"}
+        entry.options = {}
+        hass = self._base_hass(entry)
+        hass.data = {DOMAIN: {}}
+
+        export = await self._run(hass)
+        note = export["storage_layout"]["note"]
+        assert "thermosmart_learning__" in note
+        assert "thermosmart_le2__" in note  # sanctioned: legacy migration-fallback key only
+
+        # Confirm that mention is the ONLY place "le2" appears anywhere in the
+        # export — strip the note out, then the broader check must be clean.
+        export_without_note = json.loads(json.dumps(export))
+        export_without_note["storage_layout"]["note"] = ""
+        assert _blob_has_no_le_branding(export_without_note) == []

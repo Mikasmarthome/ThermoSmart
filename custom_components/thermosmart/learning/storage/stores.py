@@ -309,7 +309,8 @@ class ResearchDailyStore(_VersionedStore):
         )
 
 
-# ── Storage-Metadata concept (Commit A: foundation, not yet wired) ──────────
+# ── Storage-Metadata concept (Commit A: foundation; Commit B: wired into the ──
+# ── production save paths in ha_integration.py/reset.py) ────────────────────
 
 class StorageWriteReason(Enum):
     """Stable, small catalog of why a store was last written.

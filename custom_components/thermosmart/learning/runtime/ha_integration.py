@@ -324,6 +324,18 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: capture storage foundation stays unavailable
+        # Storage-Metadata index (Commit B) — per-zone record of when each
+        # store was last written and why, for Support/Research export. Best-
+        # effort only: a construction failure here must never affect any of
+        # the real data stores above.
+        self._storage_metadata_store = None
+        try:
+            from ..storage.stores import HomeAssistantStoreFactory, StorageMetadataStore
+            self._storage_metadata_store = StorageMetadataStore(
+                HomeAssistantStoreFactory(hass), zone_id,
+            )
+        except Exception:
+            pass  # non-fatal: storage-metadata bookkeeping stays unavailable
         # Episode history — in-memory with persistent backing store, reached via the
         # LearningCaptureStores facade above (EpisodesStore). Live-wired: the append
         # hook is record_completed_episode_safe() below, bound as LearningRuntime's
@@ -606,18 +618,23 @@ class LearningShadowController:
         if self._adaptation_store is None or not self._adaptation_save_needed:
             return
         try:
+            from datetime import datetime
             from ..adaptation.history_store_schema import (
                 AdaptationHistoryState, prune_history_entries, serialize_history_state,
             )
+            from ..storage.stores import StorageWriteReason
             now_ts = self._utcnow_iso()
+            now_utc = datetime.fromisoformat(now_ts)
             entries = prune_history_entries(self._adaptation_history, now_ts=now_ts)
             state = AdaptationHistoryState(
                 learning_zone_id=self._zone,
                 updated_at=now_ts,
                 entries=entries,
             )
-            await self._adaptation_store.save(serialize_history_state(state))
+            await self._adaptation_store.save(serialize_history_state(state), now_utc=now_utc)
             self._adaptation_save_needed = False
+            await self._async_mark_storage_written_safe(
+                "adaptation_history", StorageWriteReason.ADAPTATION_HISTORY_UPDATE)
         except Exception as err:
             self._adaptation_last_error = str(err)
 
@@ -653,11 +670,17 @@ class LearningShadowController:
         try:
             if self._application_lifecycle_state is None:
                 return
+            from datetime import datetime
             from ..adaptation.application_state import serialize_application_lifecycle_state
+            from ..storage.stores import StorageWriteReason
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
             await self._application_lifecycle_store.save(
-                serialize_application_lifecycle_state(self._application_lifecycle_state)
+                serialize_application_lifecycle_state(self._application_lifecycle_state),
+                now_utc=now_utc,
             )
             self._application_lifecycle_save_needed = False
+            await self._async_mark_storage_written_safe(
+                "application_lifecycle", StorageWriteReason.LIFECYCLE_UPDATE)
         except Exception as err:
             self._application_lifecycle_last_error = str(err)
             # dirty flag remains — will retry on next save opportunity
@@ -719,9 +742,14 @@ class LearningShadowController:
         if self._capture_stores is None or not self._episode_save_needed:
             return
         try:
+            from datetime import datetime
+            from ..storage.stores import StorageWriteReason
             store = self._capture_stores.episodes_store()
-            await store.save({"episodes": dict(self._episode_history)})
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            await store.save({"episodes": dict(self._episode_history)}, now_utc=now_utc)
             self._episode_save_needed = False
+            await self._async_mark_storage_written_safe(
+                "episodes", StorageWriteReason.EPISODE_CLOSED)
         except Exception as err:
             self._episode_last_error = str(err)
             # dirty flag remains — will retry on next save opportunity
@@ -892,6 +920,27 @@ class LearningShadowController:
             return True
         return (now_utc - first_utc).total_seconds() >= self._SUPPORT_RESEARCH_SAVE_DEBOUNCE_S
 
+    async def _async_mark_storage_written_safe(self, store_name: str, reason: Any) -> None:
+        """Best-effort Storage-Metadata bookkeeping after a successful store save.
+
+        ``reason`` is a ``StorageWriteReason`` (imported lazily by callers to
+        keep this method free of a hard import-time dependency). Never
+        raises: a StorageMetadataStore failure is purely descriptive
+        bookkeeping and must never be surfaced as a failure of the real save
+        it decorates — every exception here is swallowed.
+        """
+        if self._storage_metadata_store is None:
+            return
+        try:
+            from datetime import datetime
+            from ..storage.stores import StorageKeyState
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            await self._storage_metadata_store.mark_store_written(
+                store_name, reason, now_utc, storage_key_state=StorageKeyState.CURRENT,
+            )
+        except Exception:
+            pass  # bookkeeping only — must never affect the real save path
+
     def _record_storage_landmark_event_safe(
         self, *, event_type: Any, severity: Any, reason: str, summary: str,
         details: Mapping[str, Any], dedupe_window_s: Optional[float] = None,
@@ -1026,10 +1075,15 @@ class LearningShadowController:
             return
         from .. import support_event_schemas as _schemas
         try:
+            from datetime import datetime
+            from ..storage.stores import StorageWriteReason
             store = self._capture_stores.support_critical_events_store()
-            await store.save({"events": dict(self._support_critical_events)})
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            await store.save({"events": dict(self._support_critical_events)}, now_utc=now_utc)
             self._support_critical_events_save_needed = False
             self._support_critical_events_first_dirty_ts = None
+            await self._async_mark_storage_written_safe(
+                "support_critical_events", StorageWriteReason.SUPPORT_EVENT_APPEND)
             if self._support_critical_events_save_failure_notified:
                 self._support_critical_events_save_failure_notified = False
                 self._record_storage_landmark_event_safe(
@@ -1276,10 +1330,15 @@ class LearningShadowController:
         if not force and not self._save_debounce_elapsed(self._research_daily_first_dirty_ts):
             return
         try:
+            from datetime import datetime
+            from ..storage.stores import StorageWriteReason
             store = self._capture_stores.research_daily_store()
-            await store.save({"buckets": dict(self._research_daily_buckets)})
+            now_utc = datetime.fromisoformat(self._utcnow_iso())
+            await store.save({"buckets": dict(self._research_daily_buckets)}, now_utc=now_utc)
             self._research_daily_save_needed = False
             self._research_daily_first_dirty_ts = None
+            await self._async_mark_storage_written_safe(
+                "research_daily", StorageWriteReason.RESEARCH_DAILY_UPDATE)
         except Exception as err:
             self._research_daily_last_error = str(err)
             # dirty flag remains — will retry on next save opportunity

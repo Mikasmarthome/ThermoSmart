@@ -362,6 +362,16 @@ async def reset_v2_learning_state(
 
     Only ever called explicitly. Touches no config / options / entities /
     device bindings, and never the v1 store. Requires a structured reason.
+
+    Intentionally does NOT delete SupportCriticalEventStore or
+    ResearchDailyStore (see the comment further below, at the point they're
+    skipped): both are diagnostic/research history, not learning-model
+    state, and nothing in the runtime ever reads them back into a decision —
+    they only ever get written to and exported (see storage/stores.py and
+    export.py). That history is exactly what remains useful to explain or
+    audit a reset after the fact. Zone removal (async_purge_zone_storage)
+    is the actual full-delete path — it removes every store, these two
+    included.
     """
     if not isinstance(reason, ResetReason):
         raise InitializationError("reset requires a ResetReason")
@@ -373,8 +383,14 @@ async def reset_v2_learning_state(
     # Storage-Metadata bookkeeping deliberately mirrors the existing
     # asymmetry: only the stores this reset actually deletes are marked
     # missing below. SupportCriticalEventStore/ResearchDailyStore are NOT
-    # touched by this reset path (pre-existing behavior) — their metadata
-    # entries are left as-is, still reflecting exists=True.
+    # touched by this reset path — deliberately, not an oversight: both are
+    # diagnostic/research history rather than learning-model state, and
+    # neither ever feeds back into a runtime/learning decision, so keeping
+    # them across a learning reset preserves exactly the context (including
+    # the reset itself) that support/research analysis would otherwise
+    # lose. Their metadata entries are left as-is, still reflecting
+    # exists=True. Zone removal (async_purge_zone_storage) remains the full
+    # delete path for both stores.
     for track in tracks:
         await RawSegmentIndexStore(factory, lz, track).delete()
         await _mark_storage_missing_safe(factory, lz, _comp_raw_index(track), now_utc)

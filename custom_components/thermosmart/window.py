@@ -10,7 +10,7 @@ Zwei Erkennungsstrategien:
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from .const import (
     WINDOW_SLOPE_EMA_ALPHA,
@@ -39,12 +39,29 @@ class WindowMixin:
             if ws is None:
                 continue
 
+            # HA's own last-changed timestamp for this entity, when it is a
+            # real aware datetime (never true for the plain-Mock states used
+            # by tests that don't care about restart behavior). Used below
+            # to reconstruct in-progress open/close delays that would
+            # otherwise be silently lost whenever the coordinator's
+            # in-memory _window_open_at/_window_close_at dicts are reset by
+            # an integration reload or HA restart.
+            last_changed = getattr(ws, "last_changed", None)
+            if not isinstance(last_changed, datetime):
+                last_changed = None
+
             if ws.state == "on":
                 if ws_id not in self._window_open_at:
-                    self._window_open_at[ws_id] = now - open_delay
+                    self._window_open_at[ws_id] = last_changed if last_changed is not None else (now - open_delay)
                 if now - self._window_open_at[ws_id] >= open_delay:
                     sensor_detected = True
             else:
+                if (
+                    ws_id not in self._window_close_at
+                    and last_changed is not None
+                    and now - last_changed < close_delay
+                ):
+                    self._window_close_at[ws_id] = last_changed
                 if ws_id in self._window_close_at:
                     if now - self._window_close_at[ws_id] < close_delay:
                         sensor_detected = True

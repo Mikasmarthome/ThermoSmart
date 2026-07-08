@@ -18,7 +18,7 @@
         "data": {
           "name": "Zone name (e.g. Living Room)",
           "climate_entities": "Thermostats / TRVs",
-          "temp_sensors": "Indoor temperature sensors (averaged)",
+          "temp_sensors": "Indoor temperature sensors",
           "humidity_sensors": "Indoor humidity sensors",
           "window_sensors": "Window sensors (binary_sensor)",
           "window_open_delay": "Heating off – delay after window opens",

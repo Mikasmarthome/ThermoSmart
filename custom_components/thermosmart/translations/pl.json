@@ -18,7 +18,7 @@
         "data": {
           "name": "Nazwa strefy (np. Salon)",
           "climate_entities": "Termostaty / zawory TRV",
-          "temp_sensors": "Czujniki temperatury wewnętrznej (obliczana średnia)",
+          "temp_sensors": "Czujniki temperatury wewnętrznej",
           "humidity_sensors": "Czujniki wilgotności wewnętrznej",
           "window_sensors": "Czujniki okien (binary_sensor)",
           "window_open_delay": "Ogrzewanie wyłączone – opóźnienie po otwarciu okna",

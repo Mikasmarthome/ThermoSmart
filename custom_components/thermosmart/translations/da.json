@@ -18,7 +18,7 @@
         "data": {
           "name": "Zonenavn (f.eks. Stue)",
           "climate_entities": "Termostater / TRV'er",
-          "temp_sensors": "Indendørs temperatursensorer (gennemsnit beregnes)",
+          "temp_sensors": "Indendørs temperatursensorer",
           "humidity_sensors": "Indendørs fugtighedssensorer",
           "window_sensors": "Vindussensorer (binary_sensor)",
           "window_open_delay": "Varme slukket – forsinkelse efter vindue åbnes",

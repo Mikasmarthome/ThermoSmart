@@ -18,7 +18,7 @@
         "data": {
           "name": "Zonenaam (bijv. Woonkamer)",
           "climate_entities": "Thermostaten / TRV's",
-          "temp_sensors": "Binnentemperatuursensoren (gemiddelde wordt berekend)",
+          "temp_sensors": "Binnentemperatuursensoren",
           "humidity_sensors": "Binnenluchtvochtigheidsensoren",
           "window_sensors": "Raamsensoren (binary_sensor)",
           "window_open_delay": "Verwarming uit – vertraging na openen raam",

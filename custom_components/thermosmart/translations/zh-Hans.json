@@ -18,7 +18,7 @@
         "data": {
           "name": "区域名称（例如 客厅）",
           "climate_entities": "温控器 / TRV",
-          "temp_sensors": "室内温度传感器（计算平均值）",
+          "temp_sensors": "室内温度传感器",
           "humidity_sensors": "室内湿度传感器",
           "window_sensors": "窗户传感器（binary_sensor）",
           "window_open_delay": "供暖关闭 – 窗户打开后延迟",

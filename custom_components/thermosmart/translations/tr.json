@@ -18,7 +18,7 @@
         "data": {
           "name": "Bölge adı (ör. Oturma odası)",
           "climate_entities": "Termostatlar / TRV'ler",
-          "temp_sensors": "İç mekan sıcaklık sensörleri (ortalama hesaplanır)",
+          "temp_sensors": "İç mekan sıcaklık sensörleri",
           "humidity_sensors": "İç mekan nem sensörleri",
           "window_sensors": "Pencere sensörleri (binary_sensor)",
           "window_open_delay": "Isıtma kapat – pencere açıldıktan sonra gecikme",

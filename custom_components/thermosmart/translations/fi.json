@@ -18,7 +18,7 @@
         "data": {
           "name": "Vyöhykkeen nimi (esim. Olohuone)",
           "climate_entities": "Termostaatit / TRV:t",
-          "temp_sensors": "Sisälämpötila-anturit (keskiarvo lasketaan)",
+          "temp_sensors": "Sisälämpötila-anturit",
           "humidity_sensors": "Sisäilman kosteusanturit",
           "window_sensors": "Ikkunanturit (binary_sensor)",
           "window_open_delay": "Lämmitys pois – viive ikkunan avaamisen jälkeen",

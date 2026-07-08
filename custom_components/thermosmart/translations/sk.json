@@ -18,7 +18,7 @@
         "data": {
           "name": "Názov zóny (napr. Obývačka)",
           "climate_entities": "Termostaty / TRV",
-          "temp_sensors": "Senzory vnútornej teploty (vypočíta sa priemer)",
+          "temp_sensors": "Senzory vnútornej teploty",
           "humidity_sensors": "Senzory vnútornej vlhkosti",
           "window_sensors": "Senzory okien (binary_sensor)",
           "window_open_delay": "Vykurovanie vyp. – oneskorenie po otvorení okna",

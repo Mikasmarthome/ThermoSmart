@@ -18,7 +18,7 @@
         "data": {
           "name": "Nome della zona (es. Soggiorno)",
           "climate_entities": "Termostati / valvole TRV",
-          "temp_sensors": "Sensori temperatura interna (viene calcolata la media)",
+          "temp_sensors": "Sensori temperatura interna",
           "humidity_sensors": "Sensori umidità interna",
           "window_sensors": "Sensori finestre (binary_sensor)",
           "window_open_delay": "Riscaldamento spento – ritardo dopo apertura finestra",

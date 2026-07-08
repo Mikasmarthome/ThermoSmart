@@ -18,7 +18,7 @@
         "data": {
           "name": "Nom de la zona (p. ex. Sala d'estar)",
           "climate_entities": "Termòstats / TRVs",
-          "temp_sensors": "Sensors de temperatura interior (es calcula la mitjana)",
+          "temp_sensors": "Sensors de temperatura interior",
           "humidity_sensors": "Sensors d'humitat interior",
           "window_sensors": "Sensors de finestra (binary_sensor)",
           "window_open_delay": "Calefacció apagada – retard després d'obrir la finestra",

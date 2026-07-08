@@ -18,7 +18,7 @@
         "data": {
           "name": "Zonenname (z. B. Wohnzimmer)",
           "climate_entities": "Thermostate / TRVs",
-          "temp_sensors": "Temperatursensoren im Raum (Durchschnitt wird gebildet)",
+          "temp_sensors": "Temperatursensoren im Raum",
           "humidity_sensors": "Luftfeuchtigkeitssensoren im Raum",
           "window_sensors": "Fenstersensoren (binary_sensor)",
           "window_open_delay": "Heizung aus – Verzögerung nach Fenster öffnen",

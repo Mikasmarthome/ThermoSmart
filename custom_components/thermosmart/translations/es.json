@@ -18,7 +18,7 @@
         "data": {
           "name": "Nombre de zona (p. ej. Salón)",
           "climate_entities": "Termostatos / TRVs",
-          "temp_sensors": "Sensores de temperatura interior (se calcula la media)",
+          "temp_sensors": "Sensores de temperatura interior",
           "humidity_sensors": "Sensores de humedad interior",
           "window_sensors": "Sensores de ventana (binary_sensor)",
           "window_open_delay": "Calefacción apagada – retraso tras abrir ventana",

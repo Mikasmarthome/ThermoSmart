@@ -18,7 +18,7 @@
         "data": {
           "name": "Zonnamn (t.ex. Vardagsrum)",
           "climate_entities": "Termostater / TRV:er",
-          "temp_sensors": "Inomhustemperatursensorer (medelvärde beräknas)",
+          "temp_sensors": "Inomhustemperatursensorer",
           "humidity_sensors": "Inomhusluftfuktighetssensorer",
           "window_sensors": "Fönstensensorer (binary_sensor)",
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",

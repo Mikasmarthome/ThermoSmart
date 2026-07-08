@@ -18,7 +18,7 @@
         "data": {
           "name": "Numele zonei (ex. Living)",
           "climate_entities": "Termostate / TRV-uri",
-          "temp_sensors": "Senzori de temperatură interior (se calculează media)",
+          "temp_sensors": "Senzori de temperatură interior",
           "humidity_sensors": "Senzori de umiditate interior",
           "window_sensors": "Senzori de fereastră (binary_sensor)",
           "window_open_delay": "Încălzire oprită – întârziere după deschiderea ferestrei",

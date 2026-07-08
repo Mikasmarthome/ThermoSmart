@@ -18,7 +18,7 @@
         "data": {
           "name": "Ime cone (npr. Dnevna soba)",
           "climate_entities": "Termostati / TRV-ji",
-          "temp_sensors": "Senzorji notranje temperature (izračuna se povprečje)",
+          "temp_sensors": "Senzorji notranje temperature",
           "humidity_sensors": "Senzorji notranje vlažnosti",
           "window_sensors": "Senzorji oken (binary_sensor)",
           "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",

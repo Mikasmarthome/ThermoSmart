@@ -18,7 +18,7 @@
         "data": {
           "name": "Název zóny (např. Obývací pokoj)",
           "climate_entities": "Termostaty / ventily TRV",
-          "temp_sensors": "Senzory teploty uvnitř (průměr se počítá)",
+          "temp_sensors": "Senzory teploty uvnitř",
           "humidity_sensors": "Senzory vlhkosti uvnitř",
           "window_sensors": "Senzory oken (binary_sensor)",
           "window_open_delay": "Topení vypnuto – prodleva po otevření okna",

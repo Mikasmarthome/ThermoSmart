@@ -1145,6 +1145,14 @@ class ThermoSmartCoordinator(
             #                      (conservative zone truth; absorbs clamp/step reduction).
             #   partial/failed   → 0.0 public; per-device offsets preserved for provenance.
             #   not_attempted    → 0.0 (approved-but-not-dispatched must not appear as applied; lifecycle not touched).
+            #
+            # recommendation["_boost_per_device_applied_c"] (set in all three branches
+            # below) is internal provenance, not part of the public/exported
+            # diagnostics surface — no entity, export, or ha_integration.py code reads
+            # it. Its purpose is to let the private boost test suite verify the
+            # conservative-minimum derivation above (applied_boost_offset_c must never
+            # exceed any individual device's own offset) without duplicating this
+            # per-device counterfactual computation in test code.
             if self._learning_shadow is not None and bool(recommendation.get("learning_boost_adjusted")):
                 _baseline_c = float(recommendation.get("tpi_baseline_setpoint") or 0.0)
                 _eff_by_eid = _sp_stats.effective_setpoints_by_entity

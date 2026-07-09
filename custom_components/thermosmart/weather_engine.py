@@ -165,11 +165,17 @@ class WeatherEngine:
                 try:
                     _high = to_internal_temperature_c(
                         self._hass, legacy_forecast[0].get("temperature"), unit=weather_temp_unit)
-                    data["forecast_high"] = _high if _high is not None else None
+                    # Same garbage/sentinel guard as the current-temperature
+                    # paths above — an implausible forecast must never reach
+                    # compute_forecast_suppression() (it directly gates
+                    # heating: forecast_high >= target_temp fully suppresses).
+                    data["forecast_high"] = _high if is_plausible_temperature_c(_high) else None
                     _low_raw = legacy_forecast[0].get("templow")
-                    data["forecast_low"] = (
-                        to_internal_temperature_c(self._hass, _low_raw, unit=weather_temp_unit)
-                        if _low_raw is not None else data["forecast_high"])
+                    if _low_raw is not None:
+                        _low = to_internal_temperature_c(self._hass, _low_raw, unit=weather_temp_unit)
+                        data["forecast_low"] = _low if is_plausible_temperature_c(_low) else None
+                    else:
+                        data["forecast_low"] = data["forecast_high"]
                 except (TypeError, ValueError, AttributeError):
                     pass
         elif self._weather_entity:
@@ -198,12 +204,18 @@ class WeatherEngine:
                     # entity's own display unit (same weather_temp_unit as above).
                     _high = to_internal_temperature_c(
                         self._hass, first.get("temperature"), unit=weather_temp_unit)
-                    if _high is not None:
+                    # Same garbage/sentinel guard as the legacy-forecast path
+                    # above — an implausible value here must never overwrite
+                    # an already-plausible legacy fallback, so it's treated
+                    # exactly like "no value returned" (skip the overwrite).
+                    if is_plausible_temperature_c(_high):
                         data["forecast_high"] = _high
                     _low_raw = first.get("templow")
                     if _low_raw is not None:
-                        data["forecast_low"] = to_internal_temperature_c(
+                        _low = to_internal_temperature_c(
                             self._hass, _low_raw, unit=weather_temp_unit)
+                        if is_plausible_temperature_c(_low):
+                            data["forecast_low"] = _low
                     elif data["forecast_high"] is not None:
                         data["forecast_low"] = data["forecast_high"]
         except TimeoutError:

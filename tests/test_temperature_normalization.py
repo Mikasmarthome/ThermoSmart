@@ -27,7 +27,10 @@ def _sensor_state(value, unit_of_measurement: str | None = None) -> MagicMock:
     return st
 
 
-def _weather_state(temperature=None, temperature_unit=None) -> MagicMock:
+def _weather_state(
+    temperature=None, temperature_unit=None, *,
+    forecast_high=None, forecast_low=None,
+) -> MagicMock:
     st = MagicMock()
     st.state = "sunny"
     attrs: dict = {}
@@ -35,6 +38,13 @@ def _weather_state(temperature=None, temperature_unit=None) -> MagicMock:
         attrs["temperature"] = temperature
     if temperature_unit is not None:
         attrs["temperature_unit"] = temperature_unit
+    if forecast_high is not None or forecast_low is not None:
+        entry: dict = {}
+        if forecast_high is not None:
+            entry["temperature"] = forecast_high
+        if forecast_low is not None:
+            entry["templow"] = forecast_low
+        attrs["forecast"] = [entry]
     st.attributes = attrs
     return st
 
@@ -132,3 +142,87 @@ class TestWeatherEntityTemperaturePlausibility:
         )
         data = await eng.async_get_data()
         assert data["temperature"] == pytest.approx(-5.0)
+
+
+class TestForecastHighLowPlausibility:
+    """Legacy-forecast path (weather_state.attributes["forecast"]) — the new
+    HA get_forecasts() service path shares the same is_plausible_temperature_c()
+    guard but isn't exercised here since _engine() makes that service call
+    raise (no forecast service available in these pure unit tests), leaving
+    the legacy-forecast attribute as the only populated source — sufficient
+    to cover the plausibility filter itself, which is identical on both paths.
+    """
+
+    async def test_forecast_high_200c_is_ignored(self):
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°C", forecast_high=200.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_high"] is None
+
+    async def test_forecast_low_minus_100_is_ignored(self):
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°C",
+                forecast_high=15.0, forecast_low=-100.0),
+        })
+        data = await eng.async_get_data()
+        # forecast_high stays valid; only the implausible forecast_low is dropped
+        assert data["forecast_high"] == pytest.approx(15.0)
+        assert data["forecast_low"] is None
+
+    async def test_forecast_high_35c_stays_valid(self):
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°C", forecast_high=35.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_high"] == pytest.approx(35.0)
+
+    async def test_forecast_low_minus_10c_stays_valid(self):
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°C",
+                forecast_high=5.0, forecast_low=-10.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_low"] == pytest.approx(-10.0)
+
+    async def test_forecast_fahrenheit_converted_then_plausible(self):
+        """68°F -> 20°C, well inside the plausible band."""
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°F", forecast_high=68.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_high"] == pytest.approx(20.0, abs=0.1)
+
+    async def test_forecast_fahrenheit_converted_then_implausible(self):
+        """451°F -> ~232.8°C, well outside the plausible band even after a
+        correct unit conversion."""
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°F", forecast_high=451.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_high"] is None
+
+    async def test_missing_templow_falls_back_to_plausible_forecast_high(self):
+        """No templow provided -> forecast_low mirrors the (already
+        plausibility-checked) forecast_high, exactly as before this fix."""
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°C", forecast_high=12.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_low"] == pytest.approx(12.0)
+
+    async def test_missing_templow_with_implausible_forecast_high_stays_none(self):
+        eng = _engine(states={
+            "weather.home": _weather_state(
+                temperature=10.0, temperature_unit="°C", forecast_high=200.0),
+        })
+        data = await eng.async_get_data()
+        assert data["forecast_high"] is None
+        assert data["forecast_low"] is None

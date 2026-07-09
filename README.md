@@ -285,12 +285,12 @@ In **Observation mode** ThermoSmart does not write setpoints, so the TRV stays i
 ThermoSmart can export an anonymized snapshot of its learning data as a JSON file — for voluntary debugging or to contribute data to future Learning Engine improvements.
 
 **How to export:**
-- Press the **Export Learning Data** button in the *ThermoSmart System* device card, **or**
+- Press the **Create Research Export** button in the *ThermoSmart System* device card, **or**
 - Call the service `thermosmart.export_learning_data` from Developer Tools → Services.
 
 The file is saved to `/config/www/` and can be opened via `/local/<filename>` appended to your Home Assistant URL.
 
-> **Note for automations:** the completion notification's `notification_id` differs by trigger — the **Export Learning Data** button uses `thermosmart_research_export`, while the `thermosmart.export_learning_data` service call uses `thermosmart_export`. If you have an automation matching on the notification ID, check which trigger you use.
+> **Note for automations:** the completion notification's `notification_id` differs by trigger — the **Create Research Export** button uses `thermosmart_research_export`, while the `thermosmart.export_learning_data` service call uses `thermosmart_export`. If you have an automation matching on the notification ID, check which trigger you use.
 
 **Privacy — what the export contains:**
 - ThermoSmart version, export timestamp, zone count

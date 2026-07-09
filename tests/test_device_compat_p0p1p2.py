@@ -233,6 +233,7 @@ class TestMaintenanceClampedDispatch:
         })
         coord._device_profiles = {}
         coord._is_summer = True
+        coord._active_control = True
         coord._maintenance_running = False
         coord._last_maintenance = None
         from custom_components.thermosmart.learning.clock import FakeClock

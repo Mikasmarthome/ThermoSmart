@@ -1261,9 +1261,11 @@ class ThermoSmartCoordinator(
                 else:
                     self._learning_shadow.clear_last_trace()
 
-            # Valve maintenance runs in summer mode or observation mode.
-            # Must be called outside the active-control blocks — the function
-            # self-guards via valve_likely_idle = is_summer or not active_control.
+            # Valve maintenance runs only in summer/vacation mode AND only
+            # while Active Control is on — the function self-guards via
+            # active_control plus valve_likely_idle = is_summer or in_vacation.
+            # Called outside the active-control dispatch blocks above since
+            # its own internal gate (not the outer branching) decides eligibility.
             await self._async_valve_maintenance(cfg, recommendation)
 
             recommendation["heating_failure"] = self._heating_failure_notified

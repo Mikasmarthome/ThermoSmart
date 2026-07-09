@@ -30,10 +30,17 @@ class MaintenanceMixin:
           - Urlaubsmodus: Zieltemp ~12°C, Ventile kaum bewegt
         Beobachtungsmodus: externer Regler bewegt Ventile – keine Wartung nötig.
         Im Winter mit aktiver Steuerung bewegen sich Ventile ohnehin regelmäßig.
+
+        Active Control ist eine harte Grenze für jeden echten Dispatch — auch
+        für diese Wartungsroutine. Ist Active Control aus, wird kein
+        climate.set_temperature Service Call ausgelöst, unabhängig von
+        Sommer-/Urlaubsmodus.
         """
         if not cfg.get(CONF_VALVE_MAINTENANCE, True):
             return
         if self._maintenance_running:
+            return
+        if not self._active_control:
             return
 
         in_vacation = recommendation.get("mode") == HEATING_MODE_VACATION

@@ -9,7 +9,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.util.unit_conversion import SpeedConverter
 
-from .temperature_units import to_internal_temperature_c
+from .temperature_units import is_plausible_temperature_c, to_internal_temperature_c
 from .const import (
     WEATHER_COLD_THRESHOLD,
     WEATHER_MILD_THRESHOLD,
@@ -100,8 +100,14 @@ class WeatherEngine:
         state = self._hass.states.get(entity_id)
         if state and state.state not in ("unknown", "unavailable", "None"):
             if is_temperature:
-                return to_internal_temperature_c(
+                celsius = to_internal_temperature_c(
                     self._hass, state.state, unit=state.attributes.get("unit_of_measurement"))
+                # Reject garbage/sentinel values that survive unit conversion
+                # (e.g. a Zigbee error sentinel, or a misconfigured/broken
+                # outdoor sensor) before they ever reach the TPI/weather-offset
+                # calculation — same shared band already used for room/TRV
+                # readings (temperature_units.py).
+                return celsius if is_plausible_temperature_c(celsius) else None
             if is_wind:
                 return _to_wind_speed_ms(state.state, state.attributes.get("unit_of_measurement"))
             try:
@@ -143,8 +149,14 @@ class WeatherEngine:
                     pass
             data["wind_speed"] = _to_wind_speed_ms(
                 attrs.get("wind_speed"), attrs.get("wind_speed_unit"))
-            data["temperature"] = to_internal_temperature_c(
+            _weather_temp_c = to_internal_temperature_c(
                 self._hass, attrs.get("temperature"), unit=weather_temp_unit)
+            # Same garbage/sentinel guard as the dedicated-sensor path above —
+            # a misbehaving weather integration must not feed an implausible
+            # value into TPI/weather-offset just because it parsed and
+            # unit-converted "successfully".
+            data["temperature"] = (
+                _weather_temp_c if is_plausible_temperature_c(_weather_temp_c) else None)
 
             # Letzter Fallback: Legacy-Forecast aus Entity-Attributen
             # (für Integrationen die den neuen Service nicht unterstützen)

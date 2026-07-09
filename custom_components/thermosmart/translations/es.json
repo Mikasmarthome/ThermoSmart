@@ -18,7 +18,7 @@
         "data": {
           "name": "Nombre de zona (p. ej. Salón)",
           "climate_entities": "Termostatos / TRVs",
-          "temp_sensors": "Sensores de temperatura interior (se calcula la media)",
+          "temp_sensors": "Sensores de temperatura interior",
           "humidity_sensors": "Sensores de humedad interior",
           "window_sensors": "Sensores de ventana (binary_sensor)",
           "window_open_delay": "Calefacción apagada – retraso tras abrir ventana",
@@ -67,11 +67,7 @@
         "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
-          "home_zone": "Zona de inicio (predeterminado: zone.home)",
-          "learning_enabled": "Activar algoritmo de aprendizaje"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart aprende velocidades de calentamiento, enfriamiento y temperaturas óptimas para esta zona."
+          "home_zone": "Zona de inicio (predeterminado: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
-          "home_zone": "Zona de inicio (predeterminado: zone.home)",
-          "learning_enabled": "Activar algoritmo de aprendizaje"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart aprende velocidades de calentamiento, enfriamiento y temperaturas óptimas para esta zona."
+          "home_zone": "Zona de inicio (predeterminado: zone.home)"
         }
       },
       "weather": {

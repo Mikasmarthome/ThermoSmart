@@ -1,7 +1,7 @@
 """B2b-7/8: the single authoritative boost ACTIVATION-READINESS contract (pure Python).
 
 This is the one place the future control layer asks: *may the currently selected boost
-factor, in this context, be used for real control at all?* It answers ONLY the LE2
+factor, in this context, be used for real control at all?* It answers ONLY the Learning
 learning eligibility — it is NOT user consent and NOT active control:
 
     Learning Readiness  ≠  Adaptive-Boost switch  ≠  Active Control
@@ -55,7 +55,7 @@ class BoostEligibilityReason:
 
 @dataclass(frozen=True)
 class BoostActivationReadiness:
-    """The verbatim contract the control layer consumes. ``eligibility`` is an LE2 statement,
+    """The verbatim contract the control layer consumes. ``eligibility`` is an Learning statement,
     NOT a device release."""
     learning_readiness: str
     factor_usable: bool
@@ -74,7 +74,7 @@ class BoostActivationReadiness:
     rehabilitation_progress: float
     current_factor_c: float
     control_type: str
-    eligibility: bool                         # the hard LE2 control-eligibility verdict
+    eligibility: bool                         # the hard Learning control-eligibility verdict
     eligibility_reason: str
     blocking_reasons: tuple = ()
     degrading_reasons: tuple = ()

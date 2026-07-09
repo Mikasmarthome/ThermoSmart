@@ -61,3 +61,21 @@ class DeviceProfile:
     calibration_plausibility_limit: float = 7.0
     minimum_setpoint: float | None = None
     maximum_setpoint: float | None = None
+
+
+def device_profile_status(profile: DeviceProfile) -> dict:
+    """Return a small, public-safe, user/support-facing compatibility summary
+    for one DeviceProfile.
+
+    Pure presentation only — reads existing DeviceProfile fields, never
+    matches/enforces/mutates anything. No entity ids, no device ids: only
+    the profile's own display name and capability flags, which are already
+    public (profiles.py is committed source, not per-installation data).
+    """
+    return {
+        "name": profile.display_name,
+        "active": profile.is_active,
+        "mode": "control" if profile.is_active else "observe_only",
+        "warning": profile.warning,
+        "valve_semantics": profile.valve_semantics,
+    }

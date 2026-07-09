@@ -74,7 +74,7 @@ class ThermoSmartSupportExportButton(ButtonEntity):
 
     _attr_has_entity_name = True
     _attr_translation_key = "create_support_export"
-    _attr_icon = "mdi:database-search"
+    _attr_icon = "mdi:lifebuoy"
     _attr_entity_category = EntityCategory.CONFIG
     _attr_unique_id = f"{DOMAIN}_create_support_export"
 

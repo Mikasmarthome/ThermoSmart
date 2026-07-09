@@ -18,7 +18,7 @@
         "data": {
           "name": "Nom de la zona (p. ex. Sala d'estar)",
           "climate_entities": "Termòstats / TRVs",
-          "temp_sensors": "Sensors de temperatura interior (es calcula la mitjana)",
+          "temp_sensors": "Sensors de temperatura interior",
           "humidity_sensors": "Sensors d'humitat interior",
           "window_sensors": "Sensors de finestra (binary_sensor)",
           "window_open_delay": "Calefacció apagada – retard després d'obrir la finestra",
@@ -67,11 +67,7 @@
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
-          "home_zone": "Zona de casa (per defecte: zone.home)",
-          "learning_enabled": "Activar algorisme d'aprenentatge"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart aprèn les velocitats de calefacció, refrigeració i les temperatures òptimes per a aquesta zona."
+          "home_zone": "Zona de casa (per defecte: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
-          "home_zone": "Zona de casa (per defecte: zone.home)",
-          "learning_enabled": "Activar algorisme d'aprenentatge"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart aprèn les velocitats de calefacció, refrigeració i les temperatures òptimes per a aquesta zona."
+          "home_zone": "Zona de casa (per defecte: zone.home)"
         }
       },
       "weather": {

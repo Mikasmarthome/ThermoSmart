@@ -18,7 +18,7 @@
         "data": {
           "name": "Ime cone (npr. Dnevna soba)",
           "climate_entities": "Termostati / TRV-ji",
-          "temp_sensors": "Senzorji notranje temperature (izračuna se povprečje)",
+          "temp_sensors": "Senzorji notranje temperature",
           "humidity_sensors": "Senzorji notranje vlažnosti",
           "window_sensors": "Senzorji oken (binary_sensor)",
           "window_open_delay": "Ogrevanje izklop – zamuda po odpiranju okna",
@@ -67,11 +67,7 @@
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
-          "home_zone": "Domača cona (privzeto: zone.home)",
-          "learning_enabled": "Aktivacija algoritma učenja"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart se uči hitrosti ogrevanja, hlajenja in optimalne temperature za to cono."
+          "home_zone": "Domača cona (privzeto: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
-          "home_zone": "Domača cona (privzeto: zone.home)",
-          "learning_enabled": "Aktivacija algoritma učenja"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart se uči hitrosti ogrevanja, hlajenja in optimalne temperature za to cono."
+          "home_zone": "Domača cona (privzeto: zone.home)"
         }
       },
       "weather": {

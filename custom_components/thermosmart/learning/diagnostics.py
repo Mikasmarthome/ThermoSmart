@@ -1,4 +1,4 @@
-"""Engine-wide diagnostics orchestration for LE 2.0 (pure Python).
+"""Engine-wide diagnostics orchestration for Learning (pure Python).
 
 Merges per-model ``diagnostics()`` / ``confidence()`` output and injected typed
 summaries into a privacy-safe, deterministic engine/zone/model diagnostics tree.
@@ -164,7 +164,7 @@ class DiagnosticsOrchestrator:
                                          confidence=None, aggregates={})
         try:
             diag = model.diagnostics()
-            conf = model.confidence()
+            conf = model.confidence(now=self._in.generated_at)
         except Exception as err:  # isolate one broken model
             self._errors.append(f"model_diagnostics_failed:{pz}/{name}:{type(err).__name__}")
             return ModelDiagnosticsEntry(name=name, status=ModelDiagnosticsStatus.FAILED,

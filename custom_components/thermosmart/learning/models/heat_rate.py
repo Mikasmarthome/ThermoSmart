@@ -1,4 +1,4 @@
-"""HeatRateModel for LE 2.0 (pure Python).
+"""HeatRateModel for Learning (pure Python).
 
 Learns a zone's heating rate (deg C per hour) from completed, undisturbed
 ACTIVE_HEATING episodes. Two levels: a general zone rate (the TRV-only fallback)
@@ -34,7 +34,7 @@ from ..contracts import (
 )
 from ..episode_schemas import EpisodeType, HeatingEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
-from .base import clamp, is_finite, outlier_z, robust_ema_update
+from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
 PARAMETER_VERSION = 1
@@ -272,7 +272,7 @@ def _bucket_index(value: float, edges: Sequence[float]) -> int:
 # -- model --------------------------------------------------------------------
 
 class HeatRateModel:
-    """Pure heating-rate model implementing the LE 2.0 Model contract."""
+    """Pure heating-rate model implementing the Learning Model contract."""
 
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
@@ -604,7 +604,7 @@ class HeatRateModel:
         rel = max(self._state.aggregate_reliability, 0.1)
         return clamp(coverage * spread_penalty * rel, 0.0, 1.0)
 
-    def confidence(self) -> ConfidenceContribution:
+    def confidence(self, *, now: Optional[str] = None) -> ConfidenceContribution:
         g = self._state.general
         reasons: list[str] = []
         if not g.has_evidence:
@@ -612,8 +612,9 @@ class HeatRateModel:
         if g.sample_count < self._params.bucket_min_samples:
             reasons.append("few_samples")
         value = self._confidence_value(g.sample_count, not g.has_evidence)
+        freshness, status = freshness_from_age(now, self._state.last_update_ts)
         return ConfidenceContribution(value=value, evidence_count=g.sample_count,
-                                      reasons=tuple(reasons))
+                                      reasons=tuple(reasons), freshness=freshness, status=status)
 
     # -- diagnostics / export -------------------------------------------
 

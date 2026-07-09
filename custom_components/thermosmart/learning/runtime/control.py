@@ -1,7 +1,7 @@
-"""Controlled Runtime Switch for LE 2.0 (pure Python, Phase 18).
+"""Controlled Runtime Switch for Learning (pure Python, Phase 18).
 
 A baseline-first, fully reversible control policy: the existing ThermoSmart
-result is the input and the safe fallback. An LE-2.0 prediction may only adjust a
+result is the input and the safe fallback. An Learning prediction may only adjust a
 control parameter when its release flag is on, its ConfidenceResult allows control
 (no hard cap, gate open), the value is plausible, and the change is clamped /
 rolled-in conservatively. Any doubt -> the baseline is returned unchanged.
@@ -122,7 +122,7 @@ class ControlFallback:
     baseline_value: Optional[float]
     unit: str
     reason: str
-    le2_prediction: Optional[float]
+    learning_prediction: Optional[float]
     confidence: Optional[ConfidenceSummary]
     applied: bool = False
     safe: bool = True
@@ -215,7 +215,7 @@ class ControlPolicy:
 
     def _fallback(self, feature, baseline, unit, reason, prediction, conf) -> ControlDecision:
         fb = ControlFallback(baseline_source="existing_controller", baseline_value=baseline,
-                             unit=unit, reason=reason, le2_prediction=prediction,
+                             unit=unit, reason=reason, learning_prediction=prediction,
                              confidence=conf, applied=False, safe=True)
         status = (ControlDecisionStatus.ADVISORY if reason == ControlRejection.FEATURE_NOT_ENABLED.value
                   and conf is not None else ControlDecisionStatus.FALLBACK)

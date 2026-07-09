@@ -1,4 +1,4 @@
-"""Pure, calibrated LE2 learning-progress calculation (0.0-100.0 %).
+"""Pure, calibrated Learning learning-progress calculation (0.0-100.0 %).
 
 Replaces the previous additive per-model saturation formula, which could
 produce an artificial plateau: a single 25%-weighted model (heat_rate,

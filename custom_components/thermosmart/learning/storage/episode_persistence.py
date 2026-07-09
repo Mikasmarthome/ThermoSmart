@@ -2,11 +2,10 @@
 EpisodesStore-shaped payload, with per-episode-type retention pruning applied
 immediately after every append.
 
-Foundation only in this step — nothing here performs storage I/O, and nothing
-in the live runtime calls it yet. See the module docstring section "Why no
-runtime wiring in this step" further down, and the accompanying report, for
-the exact reasoning and the two concrete next-step hook points identified in
-``learning/runtime/lifecycle.py``.
+Live-wired: called from ``LearningShadowController.record_completed_episode_safe()``
+(``learning/runtime/ha_integration.py``), bound as ``LearningRuntime``'s
+``episode_sink`` and invoked from ``run_cycle()``'s completed-episode loop
+(``learning/runtime/lifecycle.py``).
 
 Pipeline:
     completed episode dataclass(es)
@@ -23,37 +22,6 @@ caller decides if/when to persist the resulting payload through
 ``EpisodesStore`` (via ``LearningCaptureStores.episodes_store()``). Never
 mutates the ``episode`` objects passed in, nor the input ``payload`` in place
 (a new dict is always returned).
-
-Why no runtime wiring in this step
------------------------------------
-Completed episodes are produced and consumed entirely inside
-``LearningRuntime.run_cycle()`` (``learning/runtime/lifecycle.py``, roughly
-lines 445-489): a dense, carefully ordered transaction block with several
-already-tuned, comment-flagged behaviours (the ``B2b-*`` markers) — including
-model-specific branching for ``"outcome"``/``"boost"`` that constructs an
-additional confounder-augmented ``bound_episode`` variant beyond the plain
-``ce.episode``. Inserting even a non-fatal side call there is materially
-riskier than the small, well-isolated insertions made in previous steps
-(``coordinator.py``'s single guarded block, ``ha_integration.py``'s
-write-nothing store construction) — it sits inside logic whose exact ordering
-has visible prior tuning history. Per this step's own explicit guidance
-("Wenn Live-Anbindung zu groß/riskant ist: bitte nur Foundation + Tests
-bauen"), this module stops at a fully tested, standalone foundation.
-
-Next-step hook points (for a future, separately-approved wiring step):
-  1. Simple types (heating/afterheat/passive_cooling/window_cooling): right
-     after ``ok = zr.orchestrator.apply_update(ce.model_name, ce.episode)``
-     (lifecycle.py ~line 452), call
-     ``append_completed_episode(pending_payload, ce.episode, ...)`` and mark
-     a NEW, separate dirty flag (distinct from the existing model/adaptation
-     dirty flags) so ``LearningShadowController.async_save_if_due()`` can
-     flush it through ``LearningCaptureStores.episodes_store()`` — mirroring
-     exactly how ``AdaptationHistoryStore``/``ApplicationLifecycleStore``
-     already piggyback on that same periodic save call.
-  2. The "outcome" type's confounder-augmented ``bound_episode`` (line ~468)
-     is the more complete variant worth persisting instead of the plain
-     ``ce.episode`` — the hook for OUTCOME episodes specifically belongs
-     after that augmentation, not at the generic loop top.
 """
 from __future__ import annotations
 

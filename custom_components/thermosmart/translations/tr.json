@@ -18,7 +18,7 @@
         "data": {
           "name": "Bölge adı (ör. Oturma odası)",
           "climate_entities": "Termostatlar / TRV'ler",
-          "temp_sensors": "İç mekan sıcaklık sensörleri (ortalama hesaplanır)",
+          "temp_sensors": "İç mekan sıcaklık sensörleri",
           "humidity_sensors": "İç mekan nem sensörleri",
           "window_sensors": "Pencere sensörleri (binary_sensor)",
           "window_open_delay": "Isıtma kapat – pencere açıldıktan sonra gecikme",
@@ -67,11 +67,7 @@
         "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
-          "home_zone": "Ev bölgesi (varsayılan: zone.home)",
-          "learning_enabled": "Öğrenme algoritmasını etkinleştir"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart bu bölge için ısıtma ve soğutma hızlarını ve optimal sıcaklıkları öğrenir."
+          "home_zone": "Ev bölgesi (varsayılan: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
-          "home_zone": "Ev bölgesi (varsayılan: zone.home)",
-          "learning_enabled": "Öğrenme algoritmasını etkinleştir"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart bu bölge için ısıtma ve soğutma hızlarını ve optimal sıcaklıkları öğrenir."
+          "home_zone": "Ev bölgesi (varsayılan: zone.home)"
         }
       },
       "weather": {

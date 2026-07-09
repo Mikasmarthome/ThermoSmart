@@ -1,8 +1,14 @@
-"""LE 2.0 passive shadow runtime foundation (Phase 17).
+"""Pure-core Learning runtime foundation.
 
-Pure-core, injected-dependency runtime: capture, evidence materialisation, model
-orchestration, shadow comparison and persistence policy. No control effect, no HA
-imports in the pure core; the async lifecycle uses an injected store + clock.
+Injected-dependency runtime: capture, evidence materialisation, model
+orchestration, shadow comparison and persistence policy. This core is
+prediction/observation-only — it never dispatches Home Assistant service
+calls and has no HA imports; the async lifecycle uses an injected store +
+clock. The separate Home Assistant integration layer
+(``learning/runtime/ha_integration.py``) builds on this core and
+additionally exposes bounded adaptive-control adjustments — the coordinator
+decides per cycle whether those adjustments are ignored, shadowed, or
+applied (see ``ControlAdaptationMode`` in ``coordinator.py``).
 """
 from .capture import (
     CaptureCoordinator,

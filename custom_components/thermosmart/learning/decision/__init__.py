@@ -1,7 +1,7 @@
-"""LE 2.0 decision architecture (Phase 19A).
+"""Learning decision architecture (Phase 19A).
 
 Typed, pure-Python internal pipeline that unifies the deterministic baseline and
-LE 2.0 predictions behind a single resolver, guard layer, device adapter and
+Learning predictions behind a single resolver, guard layer, device adapter and
 dispatch boundary. The public Home Assistant surface is unchanged; SHADOW remains
 the productive default and computes the full decision without dispatching.
 """

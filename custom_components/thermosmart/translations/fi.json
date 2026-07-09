@@ -18,7 +18,7 @@
         "data": {
           "name": "Vyöhykkeen nimi (esim. Olohuone)",
           "climate_entities": "Termostaatit / TRV:t",
-          "temp_sensors": "Sisälämpötila-anturit (keskiarvo lasketaan)",
+          "temp_sensors": "Sisälämpötila-anturit",
           "humidity_sensors": "Sisäilman kosteusanturit",
           "window_sensors": "Ikkunanturit (binary_sensor)",
           "window_open_delay": "Lämmitys pois – viive ikkunan avaamisen jälkeen",
@@ -67,11 +67,7 @@
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke (oletus: zone.home)",
-          "learning_enabled": "Ota oppimisalgoritmi käyttöön"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart oppii lämmitys- ja jäähdytysnopeudet sekä optimaaliset lämpötilat tälle vyöhykkeelle."
+          "home_zone": "Kotivyöhyke (oletus: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke (oletus: zone.home)",
-          "learning_enabled": "Ota oppimisalgoritmi käyttöön"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart oppii lämmitys- ja jäähdytysnopeudet sekä optimaaliset lämpötilat tälle vyöhykkeelle."
+          "home_zone": "Kotivyöhyke (oletus: zone.home)"
         }
       },
       "weather": {

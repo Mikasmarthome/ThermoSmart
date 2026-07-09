@@ -18,7 +18,7 @@
         "data": {
           "name": "Zonnamn (t.ex. Vardagsrum)",
           "climate_entities": "Termostater / TRV:er",
-          "temp_sensors": "Inomhustemperatursensorer (medelvärde beräknas)",
+          "temp_sensors": "Inomhustemperatursensorer",
           "humidity_sensors": "Inomhusluftfuktighetssensorer",
           "window_sensors": "Fönstensensorer (binary_sensor)",
           "window_open_delay": "Uppvärmning av – fördröjning efter fönster öppnas",
@@ -67,11 +67,7 @@
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
-          "home_zone": "Hemzon (standard: zone.home)",
-          "learning_enabled": "Aktivera inlärningsalgoritm"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart lär sig uppvärmnings- och kylhastigheter samt optimala temperaturer för denna zon."
+          "home_zone": "Hemzon (standard: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
-          "home_zone": "Hemzon (standard: zone.home)",
-          "learning_enabled": "Aktivera inlärningsalgoritm"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart lär sig uppvärmnings- och kylhastigheter samt optimala temperaturer för denna zon."
+          "home_zone": "Hemzon (standard: zone.home)"
         }
       },
       "weather": {

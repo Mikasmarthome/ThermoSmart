@@ -5,10 +5,14 @@ import asyncio
 import logging
 import math
 
+from homeassistant.components.climate import ClimateEntityFeature
+from homeassistant.const import UnitOfTemperature
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
+from homeassistant.util.unit_conversion import TemperatureConverter
 
 from .device_profiles import DeviceProfile, get_profile, VALVE_MAX_LIMIT, SETPOINT_HVAC_FIRST
+from .temperature_units import from_internal_temperature_c, to_internal_temperature_c
 from .const import (
     AUTO_QUIRK_PATTERNS,
     AUTO_CALIBRATION_PATTERNS,
@@ -35,7 +39,7 @@ class _DispatchStats:
     """Accumulates per-entity dispatch results without exposing entity IDs."""
     __slots__ = ("targets_total", "targets_succeeded", "targets_failed",
                  "failure_reasons", "effective_setpoints",
-                 "effective_setpoints_by_entity")
+                 "effective_setpoints_by_entity", "failed_entity_ids")
 
     def __init__(self) -> None:
         self.targets_total: int = 0
@@ -45,17 +49,25 @@ class _DispatchStats:
         self.effective_setpoints: list = []  # actual per-device °C values written (successes only)
         # entity_id → effective °C written (successes only; keyed for counterfactual baseline).
         self.effective_setpoints_by_entity: dict = {}
+        # entity_id per failed dispatch attempt (may repeat within one cycle across
+        # dispatch paths) — feeds the coordinator's per-entity consecutive-failure
+        # counter (Device Compatibility P1). Not privacy-sensitive: consumed only
+        # in-process by the coordinator, never itself exported or stored.
+        self.failed_entity_ids: list = []
 
     def record(self, exc=None, *, effective_c=None, entity_id: str | None = None) -> None:
         """Record one dispatch attempt; pass exc to mark it as failed.
 
         effective_c: actual setpoint °C that was written (for success, ignored on failure).
-        entity_id: entity whose setpoint was written; populates effective_setpoints_by_entity.
+        entity_id: entity whose setpoint was written; populates
+        effective_setpoints_by_entity on success, failed_entity_ids on failure.
         """
         self.targets_total += 1
         if exc is not None:
             self.targets_failed += 1
             self.failure_reasons.append(_normalize_dispatch_error(exc))
+            if entity_id is not None:
+                self.failed_entity_ids.append(entity_id)
         else:
             self.targets_succeeded += 1
             if effective_c is not None:
@@ -85,6 +97,7 @@ class _DispatchStats:
         merged.effective_setpoints = self.effective_setpoints + other.effective_setpoints
         merged.effective_setpoints_by_entity = {
             **self.effective_setpoints_by_entity, **other.effective_setpoints_by_entity}
+        merged.failed_entity_ids = self.failed_entity_ids + other.failed_entity_ids
         return merged
 
     @property
@@ -339,6 +352,39 @@ class TRVControlMixin:
             )
         return state
 
+    def _supports_single_setpoint(self, entity_id: str, state) -> bool:
+        """Return False only when a climate entity EXPLICITLY declares
+        TARGET_TEMPERATURE_RANGE support and NOT single TARGET_TEMPERATURE —
+        a genuine dual-setpoint / HEAT_COOL-only device.
+
+        ThermoSmart only ever calls ``climate.set_temperature`` with a single
+        ``temperature`` value; such an entity would reject that on every
+        single cycle. Warns ONCE per entity (never a silent, repeating
+        failure loop) and the caller skips dispatch for it entirely — the
+        entity is never even attempted, so it cannot pollute the consecutive-
+        dispatch-failure counter either. No new UI, no crash.
+
+        A missing/zero ``supported_features`` (no positive evidence either
+        way — e.g. an integration that has not populated it) is treated as
+        single-setpoint-capable, matching prior behavior: this guard only
+        acts on a real, positive dual-setpoint-only signal, never on absence
+        of information.
+        """
+        supported = state.attributes.get("supported_features", 0) or 0
+        if supported & ClimateEntityFeature.TARGET_TEMPERATURE:
+            return True
+        if not (supported & ClimateEntityFeature.TARGET_TEMPERATURE_RANGE):
+            return True
+        if entity_id not in self._dual_setpoint_warned:
+            self._dual_setpoint_warned.add(entity_id)
+            _LOGGER.warning(
+                "ThermoSmart '%s': %s unterstützt kein einzelnes Sollwert-Attribut "
+                "(nur TARGET_TEMPERATURE_RANGE / HEAT_COOL) – ThermoSmart kann "
+                "diesen TRV nicht direkt ansteuern und überspringt ihn.",
+                self.zone_name, entity_id,
+            )
+        return False
+
     # ── Watchdog ─────────────────────────────────────────────────────
 
     # HVAC-Modi die ThermoSmart niemals beim TRV haben möchte:
@@ -449,13 +495,13 @@ class TRVControlMixin:
                     )
                     continue
 
-            trv_temp: float | None = None
             trv_state = self._get_trv_state(climate_id)
+            trv_temp: float | None = None
             if trv_state:
-                try:
-                    trv_temp = float(trv_state.attributes.get("current_temperature", 0))
-                except (TypeError, ValueError):
-                    pass
+                # climate.current_temperature carries no unit attribute of its
+                # own — HA already normalizes it to the system unit.
+                trv_temp = to_internal_temperature_c(
+                    self.hass, trv_state.attributes.get("current_temperature"))
 
             if trv_temp is None:
                 continue
@@ -558,7 +604,22 @@ class TRVControlMixin:
         return round(math.floor(value / step + 0.5) * step, 2)
 
     def _snap_to_device_step(self, entity_id: str, state, value: float) -> float:
-        """Snap value to the TRV's target_temp_step if the attribute is present."""
+        """Snap value to the TRV's target_temp_step if the attribute is present.
+
+        Known documented limitation (Temperature-Unit audit): unlike
+        min_temp/max_temp/current_temperature/temperature, HA's climate
+        platform does NOT normalize target_temp_step to the system unit —
+        it is exposed exactly as the entity itself reports it. A step is an
+        INTERVAL, not an absolute reading, so it cannot be corrected with
+        to_internal_temperature_c() (a point conversion; Fahrenheit-to-Celsius
+        includes a +32 offset that must never apply to a delta). Converting
+        it correctly would need HA's separate interval-conversion API. Left
+        unconverted here: the practical impact is at most a slightly coarser
+        or finer snap granularity on a non-Celsius-system installation with a
+        device reporting a foreign-unit step — never a safety issue, since
+        min/max clamping (already unit-safe above) always runs before and
+        after this snap.
+        """
         try:
             step = float(state.attributes.get("target_temp_step", 0))
             if step > 0:
@@ -600,18 +661,22 @@ class TRVControlMixin:
             Effective °C after all per-device clamps, snap, and ceiling.
         """
         eff = setpoint
+        # min_temp/max_temp are HA climate capability_attributes — already
+        # normalized to the HA system unit (never the device's native unit)
+        # by HA's own climate platform, so a plain unit-less conversion here
+        # (falls back to hass.config.units.temperature_unit) is correct and
+        # prevents a Fahrenheit-system installation from silently disabling
+        # this plausibility band (e.g. 41°F would fail a raw "<= 30" check).
+        dev_min = to_internal_temperature_c(self.hass, state.attributes.get("min_temp"))
+        dev_max = to_internal_temperature_c(self.hass, state.attributes.get("max_temp"))
         # 1. HA min_temp clamp
-        try:
-            dev_min = float(state.attributes.get("min_temp", 0))
-            if 0 < dev_min <= 30 and dev_min > eff:
-                _LOGGER.debug(
-                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
-                    " due to device min_temp",
-                    self.zone_name, entity_id, eff, dev_min,
-                )
-                eff = dev_min
-        except (TypeError, ValueError):
-            pass
+        if dev_min is not None and 0 < dev_min <= 30 and dev_min > eff:
+            _LOGGER.debug(
+                "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                " due to device min_temp",
+                self.zone_name, entity_id, eff, dev_min,
+            )
+            eff = dev_min
         # 2. Profile minimum_setpoint clamp
         if profile is not None and getattr(profile, "minimum_setpoint", None) is not None:
             if profile.minimum_setpoint > eff:
@@ -624,27 +689,19 @@ class TRVControlMixin:
         # 3. Step-snap (target_temp_step attribute)
         eff = self._snap_to_device_step(entity_id, state, eff)
         # 4. Re-clamp min after snap (snap may have rounded down below floor)
-        try:
-            dev_min = float(state.attributes.get("min_temp", 0))
-            if 0 < dev_min <= 30 and dev_min > eff:
-                eff = dev_min
-        except (TypeError, ValueError):
-            pass
+        if dev_min is not None and 0 < dev_min <= 30 and dev_min > eff:
+            eff = dev_min
         if profile is not None and getattr(profile, "minimum_setpoint", None) is not None:
             if profile.minimum_setpoint > eff:
                 eff = profile.minimum_setpoint
         # 5. HA max_temp clamp (device ceiling, applied after step-snap)
-        try:
-            dev_max = float(state.attributes.get("max_temp", 0))
-            if dev_max > 0 and eff > dev_max:
-                _LOGGER.debug(
-                    "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
-                    " due to device max_temp",
-                    self.zone_name, entity_id, eff, dev_max,
-                )
-                eff = dev_max
-        except (TypeError, ValueError):
-            pass
+        if dev_max is not None and dev_max > 0 and eff > dev_max:
+            _LOGGER.debug(
+                "ThermoSmart '%s': clamped setpoint for %s from %.1f°C to %.1f°C"
+                " due to device max_temp",
+                self.zone_name, entity_id, eff, dev_max,
+            )
+            eff = dev_max
         # 6. Profile maximum_setpoint clamp (may be stricter than HA max)
         if profile is not None and getattr(profile, "maximum_setpoint", None) is not None:
             if eff > profile.maximum_setpoint:
@@ -678,18 +735,19 @@ class TRVControlMixin:
                     state = self._get_trv_state(entity_id)
                     if state is None:
                         continue
+                    if not self._supports_single_setpoint(entity_id, state):
+                        continue
                     frost_temp = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
-                    try:
-                        device_min = float(state.attributes.get("min_temp", 0))
-                        if 0 < device_min <= 30 and device_min > frost_temp:
-                            _LOGGER.debug(
-                                "ThermoSmart '%s': clamped window-open setpoint for %s"
-                                " from %.1f°C to %.1f°C due to device min_temp",
-                                self.zone_name, entity_id, frost_temp, device_min,
-                            )
-                            frost_temp = device_min
-                    except (TypeError, ValueError):
-                        pass
+                    # min_temp is already normalized to the HA system unit by
+                    # HA's climate platform — see resolve_device_effective_setpoint().
+                    device_min = to_internal_temperature_c(self.hass, state.attributes.get("min_temp"))
+                    if device_min is not None and 0 < device_min <= 30 and device_min > frost_temp:
+                        _LOGGER.debug(
+                            "ThermoSmart '%s': clamped window-open setpoint for %s"
+                            " from %.1f°C to %.1f°C due to device min_temp",
+                            self.zone_name, entity_id, frost_temp, device_min,
+                        )
+                        frost_temp = device_min
                     _wp = self._device_profiles.get(entity_id)
                     if _wp is not None and not _wp.is_active:
                         _LOGGER.debug(
@@ -706,23 +764,19 @@ class TRVControlMixin:
                         frost_temp = _wp.minimum_setpoint
                     frost_temp = self._snap_to_device_step(entity_id, state, frost_temp)
                     # Final clamp: snap must not fall below device or profile minimum
-                    try:
-                        _dev_min = float(state.attributes.get("min_temp", 0))
-                        if 0 < _dev_min <= 30 and _dev_min > frost_temp:
-                            frost_temp = _dev_min
-                    except (TypeError, ValueError):
-                        pass
+                    if device_min is not None and 0 < device_min <= 30 and device_min > frost_temp:
+                        frost_temp = device_min
                     if _wp is not None and _wp.minimum_setpoint is not None and _wp.minimum_setpoint > frost_temp:
                         frost_temp = _wp.minimum_setpoint
                     effective_frost = frost_temp  # track clamped value for sensor display
-                    try:
-                        if abs(float(state.attributes.get("temperature", 0)) - frost_temp) < 0.3:
-                            continue
-                    except (TypeError, ValueError):
-                        pass
+                    current_setpoint_c = to_internal_temperature_c(
+                        self.hass, state.attributes.get("temperature"))
+                    if current_setpoint_c is not None and abs(current_setpoint_c - frost_temp) < 0.3:
+                        continue
                     _frost_pending.append((entity_id, frost_temp, self.hass.services.async_call(
                         "climate", "set_temperature",
-                        {"entity_id": entity_id, "temperature": frost_temp},
+                        {"entity_id": entity_id,
+                         "temperature": from_internal_temperature_c(self.hass, frost_temp)},
                         blocking=True,
                     )))
                 if _frost_pending:
@@ -734,7 +788,7 @@ class TRVControlMixin:
                                 "ThermoSmart '%s': window-open setpoint failed for %s: %s",
                                 self.zone_name, eid, result,
                             )
-                            stats.record(result)
+                            stats.record(result, entity_id=eid)
                         else:
                             self._last_written_setpoints[eid] = sp  # success only
                             stats.record(None)
@@ -767,15 +821,14 @@ class TRVControlMixin:
                     self.zone_name, entity_id,
                 )
                 continue
+            if not self._supports_single_setpoint(entity_id, state):
+                continue
             effective_setpoint = self.resolve_device_effective_setpoint(
                 entity_id, state, trv_setpoint, _profile)
-            current_setpoint = state.attributes.get("temperature")
+            current_setpoint = to_internal_temperature_c(self.hass, state.attributes.get("temperature"))
             if current_setpoint is not None:
-                try:
-                    if abs(float(current_setpoint) - effective_setpoint) < tolerance:
-                        continue
-                except (TypeError, ValueError):
-                    pass
+                if abs(current_setpoint - effective_setpoint) < tolerance:
+                    continue
             _LOGGER.debug(
                 "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",
                 self.zone_name, entity_id, effective_setpoint, target, effective_setpoint - target,
@@ -805,7 +858,8 @@ class TRVControlMixin:
                 try:
                     await self.hass.services.async_call(
                         "climate", "set_temperature",
-                        {"entity_id": entity_id, "temperature": effective_setpoint},
+                        {"entity_id": entity_id,
+                         "temperature": from_internal_temperature_c(self.hass, effective_setpoint)},
                         blocking=True,
                     )
                     self._last_written_setpoints[entity_id] = effective_setpoint  # success only
@@ -817,11 +871,12 @@ class TRVControlMixin:
                     _hvac_first_exc = err
                 stats.record(_hvac_first_exc,
                              effective_c=effective_setpoint if _hvac_first_exc is None else None,
-                             entity_id=entity_id if _hvac_first_exc is None else None)
+                             entity_id=entity_id)
             else:
                 _sp_pending.append((entity_id, effective_setpoint, self.hass.services.async_call(
                     "climate", "set_temperature",
-                    {"entity_id": entity_id, "temperature": effective_setpoint},
+                    {"entity_id": entity_id,
+                     "temperature": from_internal_temperature_c(self.hass, effective_setpoint)},
                     blocking=True,
                 )))
 
@@ -834,7 +889,7 @@ class TRVControlMixin:
                         "ThermoSmart '%s': Temperatur-Setpoint fehlgeschlagen: %s",
                         self.zone_name, result,
                     )
-                    stats.record(result)
+                    stats.record(result, entity_id=eid)
                 else:
                     self._last_written_setpoints[eid] = sp  # success only
                     stats.record(None, effective_c=sp, entity_id=eid)
@@ -984,15 +1039,21 @@ class TRVControlMixin:
             if state is None or state.state in ("unavailable", "unknown"):
                 continue
 
-            try:
-                current_val = float(state.state)
-            except (TypeError, ValueError):
-                current_val = None
+            # This is a `number` entity — number.set_value performs no unit
+            # conversion of its own (unlike climate.set_temperature), so the
+            # value read/written here must use this entity's own
+            # unit_of_measurement, not the HA system unit.
+            ext_unit = state.attributes.get("unit_of_measurement")
+            current_val = to_internal_temperature_c(self.hass, state.state, unit=ext_unit)
 
             if current_val is not None and abs(current_val - room_temp) < 0.5:
                 continue
 
             clamped = round(max(0.0, min(99.9, room_temp)), 1)
+            write_value = clamped
+            if ext_unit in (UnitOfTemperature.FAHRENHEIT, UnitOfTemperature.KELVIN):
+                write_value = round(
+                    TemperatureConverter.convert(clamped, UnitOfTemperature.CELSIUS, ext_unit), 1)
             _LOGGER.debug(
                 "ThermoSmart '%s': TRVZB external_temperature_input → %.1f°C (%s)",
                 self.zone_name, clamped, ext_entity,
@@ -1000,7 +1061,7 @@ class TRVControlMixin:
             self.hass.async_create_task(
                 self.hass.services.async_call(
                     "number", "set_value",
-                    {"entity_id": ext_entity, "value": clamped},
+                    {"entity_id": ext_entity, "value": write_value},
                     blocking=False,
                 )
             )

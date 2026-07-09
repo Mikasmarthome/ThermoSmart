@@ -1,4 +1,4 @@
-"""LE 2.0 concrete learning models (pure Python).
+"""Learning concrete learning models (pure Python).
 
 Models depend on no Home Assistant, storage, coordinator or other concrete model;
 they consume episodes and features and produce typed predictions.

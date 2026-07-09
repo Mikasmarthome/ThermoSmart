@@ -1,4 +1,4 @@
-"""Evidence materialisation for LE 2.0 shadow runtime (pure Python).
+"""Evidence materialisation for Learning shadow runtime (pure Python).
 
 Turns captured snapshots/decisions into reproducible, persistable typed update
 contexts BEFORE any model update — so updates never depend on transient values.

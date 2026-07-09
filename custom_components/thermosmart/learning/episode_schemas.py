@@ -1,4 +1,4 @@
-"""Typed episode schemas for LE 2.0 (pure Python, no Home Assistant).
+"""Typed episode schemas for Learning (pure Python, no Home Assistant).
 
 Episodes are materialised, self-contained historical records. They carry their
 own schema / builder / classifier versions so a later reclassification never

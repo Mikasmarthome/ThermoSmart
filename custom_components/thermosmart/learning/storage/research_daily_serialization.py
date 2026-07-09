@@ -1,4 +1,4 @@
-"""Versioned, defensive serialization for LE2 Research Daily Buckets.
+"""Versioned, defensive serialization for Learning Research Daily Buckets.
 
 Mirrors ``episode_serialization.py``/``support_event_serialization.py``'s
 pattern: a flat, JSON-safe dict shape and a schema-version guard.

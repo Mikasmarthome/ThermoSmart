@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.2.0-beta.4"
+VERSION = "1.2.0"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"
@@ -66,7 +66,7 @@ TEMP_SOURCE_SENSOR_GRACE_SECONDS = 300
 # TPI-Regler Konstanten
 TPI_COEF_INT_DEFAULT  = 0.6    # Duty-Cycle-Anteil pro °C Raumfehler (0→100%)
 TPI_COEF_EXT_DEFAULT  = 0.01   # Duty-Cycle-Anteil pro °C Außentemperatur-Delta
-# Central unit string for all LE2 rate predictions (°C/h).
+# Central unit string for all Learning rate predictions (°C/h).
 # Gate 4 in read_tpi_coefficients_safe() and all unit assertions use this constant.
 UNIT_C_PER_H = "C/h"
 TPI_MAX_BOOST_CELSIUS = 8.0    # max. °C über Zieltemp für Setpoint-Konvertierung
@@ -179,6 +179,9 @@ WINDOW_SLOPE_MIN_POINTS = 2     # Mindest-Messpunkte unter Schwellwert bevor Ala
 HEATING_FAILURE_DELAY_MIN = 35      # Minuten fallender Temp trotz Heizbefehl bis zur Warnung
 HEATING_FAILURE_SLOPE_THRESH = -0.01  # °C/min – negativer Trend trotz aktivem Heizbefehl
 HEATING_FAILURE_CMD_DELTA = 2.0     # °C – Mindest-Delta Setpoint > Ist für "Heizbefehl aktiv"
+
+# Dispatch-Fehler-Erkennung (Command-Fehler-Zähler)
+DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD = 5  # aufeinanderfolgende Fehlschläge → Support-Event
 
 
 # Storage keys

@@ -1,4 +1,4 @@
-"""Canonical LE2 raw-track and episode-type registry definitions.
+"""Canonical Learning raw-track and episode-type registry definitions.
 
 Builds the real ``RawTrackRegistry``/``EpisodeRegistry`` graph — the single
 authoritative place declaring which raw tracks and episode types exist, and

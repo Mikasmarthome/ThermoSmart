@@ -18,7 +18,7 @@
         "data": {
           "name": "Název zóny (např. Obývací pokoj)",
           "climate_entities": "Termostaty / ventily TRV",
-          "temp_sensors": "Senzory teploty uvnitř (průměr se počítá)",
+          "temp_sensors": "Senzory teploty uvnitř",
           "humidity_sensors": "Senzory vlhkosti uvnitř",
           "window_sensors": "Senzory oken (binary_sensor)",
           "window_open_delay": "Topení vypnuto – prodleva po otevření okna",
@@ -67,11 +67,7 @@
         "description": "Kdo je doma? ThermoSmart automaticky přepne do režimu nepřítomnosti, když všichni odejdou.",
         "data": {
           "presence_persons": "Osoby pro detekci přítomnosti",
-          "home_zone": "Domovská zóna (výchozí: zone.home)",
-          "learning_enabled": "Aktivovat učicí algoritmus"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart se učí rychlosti topení, chlazení a optimální teploty pro tuto zónu."
+          "home_zone": "Domovská zóna (výchozí: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Kdo je doma? ThermoSmart automaticky přepne do režimu nepřítomnosti, když všichni odejdou.",
         "data": {
           "presence_persons": "Osoby pro detekci přítomnosti",
-          "home_zone": "Domovská zóna (výchozí: zone.home)",
-          "learning_enabled": "Aktivovat učicí algoritmus"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart se učí rychlosti topení, chlazení a optimální teploty pro tuto zónu."
+          "home_zone": "Domovská zóna (výchozí: zone.home)"
         }
       },
       "weather": {

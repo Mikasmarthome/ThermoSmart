@@ -1,4 +1,4 @@
-"""Registry foundations for LE 2.0 (pure Python, no Home Assistant).
+"""Registry foundations for Learning (pure Python, no Home Assistant).
 
 Three explicit, instantiable registries hold *declarations* (not active
 services):

@@ -152,10 +152,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if "learning_engine" not in hass.data[DOMAIN]:
         learning_engine = LearningEngine(hass)
         await learning_engine.async_load()
-        # Phase 19A-B: LE 2.0 is the single active learning engine. The legacy engine
+        # Phase 19A-B: Learning is the single active learning engine. The legacy engine
         # is frozen immediately after load — read-only, no further state mutation and no
         # store write (store is never deleted or migrated). Its loaded values may still
-        # be READ by not-yet-transferred truths until each read is transferred to LE 2.0.
+        # be READ by not-yet-transferred truths until each read is transferred to Learning.
         learning_engine.freeze()
 
         # Veraltete Zonen bereinigen (nicht mehr in Config-Entries vorhanden)
@@ -218,32 +218,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     }
     hass.data[DOMAIN][entry.entry_id] = entry_store
 
-    # ── LE 2.0 passive shadow runtime (no control effect) ───────────
+    # ── Learning learning runtime (supports adaptive control) ─────────
+    # The runtime is started with CONTROL capability, but its EFFECTIVE
+    # behavior each cycle is gated by the two user-visible switches (Learning,
+    # Active Control) via ControlAdaptationMode.derive() in coordinator.py:
+    # Active Control OFF -> shadow-only (observe/learn, no service calls);
+    # Active Control ON + Learning OFF -> deterministic TPI-only control;
+    # Active Control ON + Learning ON -> adaptive control.
     # Setup failure here must never fail the zone or affect heating.
     try:
         from .learning.runtime.ha_integration import LearningShadowController
         from .learning.runtime.lifecycle import LearningRuntimeMode
 
-        le2_shadow = LearningShadowController(
+        learning_shadow = LearningShadowController(
             hass, entry.entry_id,
             clock=coordinator._clock,
             mode=LearningRuntimeMode.CONTROL,
         )
-        await le2_shadow.async_setup()
-        coordinator.attach_le2_shadow(le2_shadow)
-        entry_store["le2_shadow"] = le2_shadow
+        await learning_shadow.async_setup()
+        coordinator.attach_learning_shadow(learning_shadow)
+        entry_store["learning_shadow"] = learning_shadow
         # NOTE: the flush/unload happens via the awaited call in async_unload_entry
         # (block-on-finish), never as a fire-and-forget task, so pending state is
         # guaranteed written by the time the unload completes.
-        _LOGGER.debug("ThermoSmart: LE 2.0 shadow runtime attached (passive)")
-    except Exception as err:  # learning is strictly optional and passive
-        _LOGGER.warning("ThermoSmart: LE 2.0 shadow setup skipped: %s", type(err).__name__)
+        _LOGGER.debug(
+            "ThermoSmart: Learning runtime attached; effective adaptation is "
+            "gated by Learning and Active Control switches"
+        )
+    except Exception as err:  # learning is strictly optional; setup failure is non-fatal
+        _LOGGER.warning("ThermoSmart: Learning Engine setup skipped: %s", type(err).__name__)
 
     await hass.config_entries.async_forward_entry_setups(entry, ZONE_PLATFORMS)
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     _LOGGER.info(
-        "ThermoSmart Zone '%s' geladen – Beobachtungsmodus (Aktive Steuerung AUS)",
+        "ThermoSmart Zone '%s' geladen – effektiver Adaptionsmodus wird pro Zyklus "
+        "aus den Schaltern Lernen und Aktive Steuerung abgeleitet",
         cfg.get("name", entry.entry_id),
     )
     return True
@@ -258,10 +268,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
         if coordinator := entry_data.get("coordinator"):
             await coordinator._async_restore_temp_source()
-        # flush + unload the passive LE 2.0 shadow runtime (guarded)
-        if le2_shadow := entry_data.get("le2_shadow"):
+            # cancel any in-flight valve-maintenance task (guarded — must never
+            # block unload, and a maintenance cycle must never outlive its entry)
             try:
-                await le2_shadow.async_unload()
+                await coordinator.async_cancel_maintenance()
+            except Exception:
+                pass
+        # flush + unload the Learning learning runtime (guarded)
+        if learning_shadow := entry_data.get("learning_shadow"):
+            try:
+                await learning_shadow.async_unload()
             except Exception:  # never block unload on learning
                 pass
 
@@ -286,24 +302,82 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
+async def _async_purge_learning_zone_storage(
+    hass: HomeAssistant, entry_id: str, *, last_zone: bool
+) -> None:
+    """Delete all Learning storage for one removed zone.
+
+    On the last remaining zone, also clears the shared legacy learning-engine
+    store and the Learning global index — both are zone-independent, so they
+    are only ever removed once no ThermoSmart zone remains at all. Only ever
+    called from ``async_remove_entry`` (real removal) — never from
+    ``async_unload_entry`` (reload/restart/unload must never lose data).
+    Best-effort: a failure here is logged but never raised further up.
+    """
+    from homeassistant.helpers.storage import Store as _HAStore
+
+    from .const import STORAGE_KEY, STORAGE_VERSION
+    from .learning.reset import async_purge_zone_storage
+    from .learning.runtime.ha_store import HomeAssistantStoreAdapter
+    from .learning.storage.capture_registry import build_raw_track_registry
+    from .learning.storage.stores import GlobalIndexStore, HomeAssistantStoreFactory
+
+    factory = HomeAssistantStoreFactory(hass)
+    result = await async_purge_zone_storage(
+        factory, entry_id, raw_registry=build_raw_track_registry(),
+    )
+    if result.errors:
+        _LOGGER.warning(
+            "ThermoSmart: Lern-Storage-Bereinigung für Zone %s teilweise fehlgeschlagen: %s",
+            entry_id, result.errors,
+        )
+
+    # Same hash the shadow controller uses to key its store (ha_integration.py's
+    # _zone_segment(), which now delegates to this same consolidated helper).
+    # naming.py is already pulled in transitively via storage.stores above —
+    # importing it directly here still avoids any dependency on the heavier
+    # live runtime module (ha_integration.py), matching the original intent.
+    from .learning.storage.naming import zone_segment as _zone_segment_fn
+    zone_segment = _zone_segment_fn(entry_id)
+    await HomeAssistantStoreAdapter(hass, zone_segment).async_delete()
+
+    if last_zone:
+        await _HAStore(hass, STORAGE_VERSION, STORAGE_KEY).async_remove()
+        await GlobalIndexStore(factory).delete()
+
+
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Lerndaten der entfernten Zone sofort bereinigen.
 
     Wird von HA aufgerufen NACHDEM die Zone vollständig aus config_entries entfernt
     wurde – zu diesem Zeitpunkt ist die zone_id bereits aus dem Entry-Register verschwunden,
     sodass prune_orphaned_zones sie korrekt als verwaist erkennt.
+
+    Only ever called on REAL removal — never on unload/reload/restart, which
+    must never delete learning/support/research storage.
     """
     if entry.data.get("entry_type") == "system":
         return
-    le = hass.data.get(DOMAIN, {}).get("learning_engine")
-    if le is None:
-        return
+
     active_zone_ids = {
         e.entry_id
         for e in hass.config_entries.async_entries(DOMAIN)
         if e.data.get("entry_type") != "system"
     }
-    le.prune_orphaned_zones(active_zone_ids)
+
+    if le := hass.data.get(DOMAIN, {}).get("learning_engine"):
+        le.prune_orphaned_zones(active_zone_ids)
+
+    try:
+        await _async_purge_learning_zone_storage(
+            hass, entry.entry_id, last_zone=not active_zone_ids
+        )
+    except Exception as err:
+        _LOGGER.warning(
+            "ThermoSmart: Zone '%s' Lern-Storage-Bereinigung fehlgeschlagen: %s",
+            entry.data.get("name", entry.entry_id), type(err).__name__,
+        )
+
     _LOGGER.info(
         "ThermoSmart: Zone '%s' entfernt – Lerndaten sofort bereinigt",
         entry.data.get("name", entry.entry_id),

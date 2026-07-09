@@ -1,4 +1,4 @@
-"""LE 2.0 zone initialization and reset (HA-dependent storage shell).
+"""Learning zone initialization and reset (HA-dependent storage shell).
 
 Creates only empty, versioned v2 store structures — never fabricated model
 states or priors. Idempotent, recovery-safe, and driven by explicitly provided
@@ -9,6 +9,7 @@ store ``thermosmart_learning_data``.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Optional
 
 from .clock import Clock, SystemClock
@@ -38,8 +39,14 @@ from .storage.stores import (
     GlobalIndexStore,
     ModelStateStore,
     RawSegmentIndexStore,
+    RawSegmentStore,
+    ResearchDailyStore,
+    StorageKeyState,
+    StorageMetadataStore,
+    StorageWriteReason,
     StoreFactory,
     StoreVersionError,
+    SupportCriticalEventStore,
     ZoneMetadataStore,
 )
 
@@ -72,6 +79,31 @@ def _empty_episodes() -> dict:
 def _empty_model_state() -> dict:
     # Empty and versioned. Concrete models add their state additively later.
     return {"models": {}, "model_state_container_version": _MODEL_STATE_CONTAINER_VERSION}
+
+
+# -- Storage-Metadata bookkeeping (Commit B) -----------------------------------
+# Small, best-effort helpers only — mirrors the ones in ha_integration.py.
+# A StorageMetadataStore failure must never break init/reset.
+
+async def _mark_storage_written_safe(
+    factory: StoreFactory, lz: str, store_name: str, reason: StorageWriteReason,
+    now_utc,
+) -> None:
+    try:
+        await StorageMetadataStore(factory, lz).mark_store_written(
+            store_name, reason, now_utc, storage_key_state=StorageKeyState.CURRENT,
+        )
+    except Exception:
+        pass  # bookkeeping only — must never affect init/reset itself
+
+
+async def _mark_storage_missing_safe(
+    factory: StoreFactory, lz: str, store_name: str, now_utc,
+) -> None:
+    try:
+        await StorageMetadataStore(factory, lz).mark_store_missing(store_name, now_utc)
+    except Exception:
+        pass  # bookkeeping only — must never affect init/reset itself
 
 
 # -- v1 detection (read-only, never imported / modified) ----------------------
@@ -136,14 +168,18 @@ async def _load_components(
     return present, missing, corrupted
 
 
-async def _create_component(factory: StoreFactory, lz: str, name: str) -> None:
+async def _create_component(factory: StoreFactory, lz: str, name: str, *, clock: Clock) -> None:
+    now_utc = clock.now_utc()
     if name.startswith("raw_index:"):
         track = RawTrackName(name.split(":", 1)[1])
-        await RawSegmentIndexStore(factory, lz, track).save(_empty_raw_index(track))
+        await RawSegmentIndexStore(factory, lz, track).save(_empty_raw_index(track), now_utc=now_utc)
+        await _mark_storage_written_safe(factory, lz, name, StorageWriteReason.RESET, now_utc)
     elif name == "episodes":
-        await EpisodesStore(factory, lz).save(_empty_episodes())
+        await EpisodesStore(factory, lz).save(_empty_episodes(), now_utc=now_utc)
+        await _mark_storage_written_safe(factory, lz, "episodes", StorageWriteReason.RESET, now_utc)
     elif name == "models":
-        await ModelStateStore(factory, lz).save(_empty_model_state())
+        await ModelStateStore(factory, lz).save(_empty_model_state(), now_utc=now_utc)
+        await _mark_storage_written_safe(factory, lz, "models", StorageWriteReason.RESET, now_utc)
 
 
 def _all_component_names(tracks: tuple[RawTrackName, ...]) -> list[str]:
@@ -155,6 +191,7 @@ async def _write_container(
     *, clock: Clock, v1_detected: bool, components: list[str], info_logged: bool,
     created_ts: str,
 ) -> None:
+    now_utc = clock.now_utc()
     await ZoneMetadataStore(factory, lz).save({
         "learning_zone_id": lz,
         "entry_id": entry_id,
@@ -162,14 +199,15 @@ async def _write_container(
         "init_status": status.value,
         "init_version": INIT_VERSION,
         "created_ts": created_ts,
-        "initialized_ts": clock.now_utc().isoformat()
+        "initialized_ts": now_utc.isoformat()
         if status is InitializationStatus.INITIALIZED else None,
         "raw_tracks": [c.split(":", 1)[1] for c in components if c.startswith("raw_index:")],
         "v1_detected": v1_detected,
         "v1_import_skipped": True,
         "components": components,
         "info_logged": info_logged,
-    })
+    }, now_utc=now_utc)
+    await _mark_storage_written_safe(factory, lz, "container", StorageWriteReason.RESET, now_utc)
 
 
 # -- public API ---------------------------------------------------------------
@@ -239,7 +277,7 @@ async def ensure_v2_initialized(
                                components=_all_component_names(tracks),
                                info_logged=info_already, created_ts=created_ts)
         for name in missing:
-            await _create_component(factory, lz, name)
+            await _create_component(factory, lz, name, clock=clock)
             created.append(name)
         # validate everything before flipping the marker
         present2, missing2, corrupted2 = await _load_components(factory, lz, tracks)
@@ -324,24 +362,52 @@ async def reset_v2_learning_state(
 
     Only ever called explicitly. Touches no config / options / entities /
     device bindings, and never the v1 store. Requires a structured reason.
+
+    Intentionally does NOT delete SupportCriticalEventStore or
+    ResearchDailyStore (see the comment further below, at the point they're
+    skipped): both are diagnostic/research history, not learning-model
+    state, and nothing in the runtime ever reads them back into a decision —
+    they only ever get written to and exported (see storage/stores.py and
+    export.py). That history is exactly what remains useful to explain or
+    audit a reset after the fact. Zone removal (async_purge_zone_storage)
+    is the actual full-delete path — it removes every store, these two
+    included.
     """
     if not isinstance(reason, ResetReason):
         raise InitializationError("reset requires a ResetReason")
     clock = clock or SystemClock()
     lz = naming.validate_learning_zone_id(entry_id)
     tracks = _raw_tracks(raw_registry)
+    now_utc = clock.now_utc()
 
+    # Storage-Metadata bookkeeping deliberately mirrors the existing
+    # asymmetry: only the stores this reset actually deletes are marked
+    # missing below. SupportCriticalEventStore/ResearchDailyStore are NOT
+    # touched by this reset path — deliberately, not an oversight: both are
+    # diagnostic/research history rather than learning-model state, and
+    # neither ever feeds back into a runtime/learning decision, so keeping
+    # them across a learning reset preserves exactly the context (including
+    # the reset itself) that support/research analysis would otherwise
+    # lose. Their metadata entries are left as-is, still reflecting
+    # exists=True. Zone removal (async_purge_zone_storage) remains the full
+    # delete path for both stores.
     for track in tracks:
         await RawSegmentIndexStore(factory, lz, track).delete()
+        await _mark_storage_missing_safe(factory, lz, _comp_raw_index(track), now_utc)
     await EpisodesStore(factory, lz).delete()
+    await _mark_storage_missing_safe(factory, lz, "episodes", now_utc)
     await ModelStateStore(factory, lz).delete()
+    await _mark_storage_missing_safe(factory, lz, "models", now_utc)
     await ZoneMetadataStore(factory, lz).delete()
+    await _mark_storage_missing_safe(factory, lz, "container", now_utc)
     try:
         await AdaptationHistoryStore(factory, lz).delete()
+        await _mark_storage_missing_safe(factory, lz, "adaptation_history", now_utc)
     except Exception:
         pass  # non-fatal: store may not exist yet on first reset
     try:
         await ApplicationLifecycleStore(factory, lz).delete()
+        await _mark_storage_missing_safe(factory, lz, "application_lifecycle", now_utc)
     except Exception:
         pass  # non-fatal: store may not exist yet on first reset
 
@@ -353,6 +419,73 @@ async def reset_v2_learning_state(
     return await ensure_v2_initialized(
         factory, entry_id, raw_registry=raw_registry, episode_registry=episode_registry,
         model_registry=model_registry, clock=clock)
+
+
+@dataclass(frozen=True)
+class ZonePurgeResult:
+    """Outcome of purging one zone's Learning storage on real removal. Never raises."""
+    deleted_keys: tuple[str, ...]
+    errors: tuple[str, ...]
+
+
+async def async_purge_zone_storage(
+    factory: StoreFactory, entry_id: str, *, raw_registry: RawTrackRegistry,
+) -> ZonePurgeResult:
+    """Delete every known Learning storage key for one zone.
+
+    Only ever called on REAL zone/entry removal (``async_remove_entry`` in
+    ``__init__.py``) — never on unload/reload, which must never lose data.
+    Every key deleted here is derived the same way it was created (via
+    ``learning/storage/naming.py`` through the store wrapper classes) — no
+    directory scan, no wildcard, no cross-zone reach. Best-effort per store:
+    one failing delete never blocks the rest. Does not touch the v1 store
+    ``thermosmart_learning_data`` (shared across zones — that is the caller's
+    responsibility once it has confirmed no zone remains) nor the Learning
+    shadow-state store (a different key scheme; see
+    ``learning/runtime/ha_store.py``'s ``HomeAssistantStoreAdapter.async_delete()``).
+    """
+    lz = naming.validate_learning_zone_id(entry_id)
+    deleted: list[str] = []
+    errors: list[str] = []
+
+    async def _delete(store, key: str) -> None:
+        try:
+            await store.delete()
+            deleted.append(key)
+        except Exception as err:
+            errors.append(f"{key}: {type(err).__name__}")
+
+    await _delete(ZoneMetadataStore(factory, lz), naming.container_key(lz))
+    await _delete(ModelStateStore(factory, lz), naming.model_state_key(lz))
+    await _delete(AdaptationHistoryStore(factory, lz), naming.adaptation_history_key(lz))
+    await _delete(ApplicationLifecycleStore(factory, lz), naming.application_lifecycle_key(lz))
+    await _delete(EpisodesStore(factory, lz), naming.episodes_key(lz))
+    await _delete(SupportCriticalEventStore(factory, lz), naming.support_critical_events_key(lz))
+    await _delete(ResearchDailyStore(factory, lz), naming.research_daily_key(lz))
+    # Storage-Metadata index: the whole per-zone index is gone once the zone
+    # itself is gone — no per-store mark_store_missing() needed here.
+    await _delete(StorageMetadataStore(factory, lz), naming.storage_metadata_key(lz))
+
+    for track in raw_registry.names():
+        index_key = naming.raw_index_key(lz, track)
+        next_seq = 0
+        try:
+            raw = await RawSegmentIndexStore(factory, lz, track).load()
+            next_seq = int((raw or {}).get("next_sequence_number", 0))
+        except Exception as err:
+            errors.append(f"{index_key} (index load): {type(err).__name__}")
+        await _delete(RawSegmentIndexStore(factory, lz, track), index_key)
+
+        segment_store = RawSegmentStore(factory, lz, track)
+        for seq in range(next_seq):
+            seg_key = naming.raw_segment_key(lz, track, seq)
+            try:
+                await segment_store.delete_segment(seq)
+                deleted.append(seg_key)
+            except Exception as err:
+                errors.append(f"{seg_key}: {type(err).__name__}")
+
+    return ZonePurgeResult(deleted_keys=tuple(deleted), errors=tuple(errors))
 
 
 async def rebuild_global_index(

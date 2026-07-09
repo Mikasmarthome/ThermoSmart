@@ -18,7 +18,7 @@
         "data": {
           "name": "Sonenavn (f.eks. Stue)",
           "climate_entities": "Termostater / TRV-er",
-          "temp_sensors": "Innendørs temperatursensorer (gjennomsnitt beregnes)",
+          "temp_sensors": "Innendørs temperatursensorer",
           "humidity_sensors": "Innendørs fuktighetssensorer",
           "window_sensors": "Vinduensensorer (binary_sensor)",
           "window_open_delay": "Varme av – forsinkelse etter vindu åpnes",
@@ -67,11 +67,7 @@
         "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
-          "home_zone": "Hjemmesone (standard: zone.home)",
-          "learning_enabled": "Aktiver læringsalgoritme"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart lærer oppvarmings- og avkjølingshastigheter samt optimale temperaturer for denne sonen."
+          "home_zone": "Hjemmesone (standard: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
-          "home_zone": "Hjemmesone (standard: zone.home)",
-          "learning_enabled": "Aktiver læringsalgoritme"
-        },
-        "data_description": {
-          "learning_enabled": "ThermoSmart lærer oppvarmings- og avkjølingshastigheter samt optimale temperaturer for denne sonen."
+          "home_zone": "Hjemmesone (standard: zone.home)"
         }
       },
       "weather": {

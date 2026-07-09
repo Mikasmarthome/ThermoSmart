@@ -1,4 +1,4 @@
-"""Production adapter: real LE 2.0 runtime predictions -> typed LearningPredictionSet.
+"""Production adapter: real Learning runtime predictions -> typed LearningPredictionSet.
 
 Maps the runtime's stored ``Prediction`` objects (keyed by ``PredictionType``) and
 ``ConfidenceResult`` objects (keyed by purpose) into the typed decision contract,

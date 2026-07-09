@@ -30,9 +30,9 @@ def baseline_from_recommendation(zone_id: str, rec: Mapping,
     # Prefer tpi_baseline_setpoint (written by adjust_recommendation_safe before boost).
     # Falls back to trv_setpoint in shadow mode where the original TPI value is unchanged.
     setpoint = _f(rec, "tpi_baseline_setpoint", "trv_setpoint")
-    # boost_offset_c = raw LE2 prediction (pre-guard, historical semantics).
+    # boost_offset_c = raw Learning prediction (pre-guard, historical semantics).
     # 0.0 when no prediction was made or all gates blocked before model evaluation.
-    # Replaces the previous max(0, setpoint-target) which conflated TPI duty with le2.
+    # Replaces the previous max(0, setpoint-target) which conflated TPI duty with learning.
     boost_offset = _f(rec, "boost_offset_c") or 0.0
     return ControllerBaselineDecision(
         zone_id=zone_id,
@@ -70,7 +70,7 @@ def zone_input_from_recommendation(zone_id: str, ts: str, rec: Mapping,
         forecast_high_c=_f(rec, "forecast_high"),
         early_cutoff_state=rec.get("early_cutoff_state"),
         tpi_valve_direct=bool(rec.get("tpi_valve_direct", False)),
-        preheat_minutes_le2=_f(rec, "preheat_minutes") if rec.get("preheat_status") not in (None, "not_available", "unavailable") else None,
+        preheat_minutes_learning=_f(rec, "preheat_minutes") if rec.get("preheat_status") not in (None, "not_available", "unavailable") else None,
         preheat_status=rec.get("preheat_status"),
         deterministic_baseline_preheat_min=_f(rec, "preheat_baseline_minutes"),
         onset_delay_min=_f(rec, "onset_delay_min"),

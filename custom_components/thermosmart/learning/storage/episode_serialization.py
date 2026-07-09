@@ -1,4 +1,4 @@
-"""Versioned, defensive serialization for LE 2.0 episode dataclasses.
+"""Versioned, defensive serialization for Learning episode dataclasses.
 
 Mirrors the pattern already established for raw records in
 ``serialization.py``: one encoder/decoder pair per type, a small dispatch

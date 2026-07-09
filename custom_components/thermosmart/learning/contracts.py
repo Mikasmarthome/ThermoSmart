@@ -1,4 +1,4 @@
-"""Typed contracts for the LE 2.0 model layer (pure Python, no Home Assistant).
+"""Typed contracts for the Learning model layer (pure Python, no Home Assistant).
 
 Defines the cross-cutting vocabulary every learning component shares:
 

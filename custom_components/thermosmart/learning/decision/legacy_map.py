@@ -1,14 +1,14 @@
 """Typed legacy inventory for ThermoSmart (Phase 19A, pure Python).
 
 A machine-checkable map of every production responsibility: its owner module, its
-disposition under the new decision architecture, and (if learning) its LE 2.0
+disposition under the new decision architecture, and (if learning) its Learning
 replacement. NOTHING is deleted in Phase 19A — this is the authoritative inventory
 that a later teardown (Phase 19B, gated) will act on.
 
 Dispositions:
   KEEP      - deterministic baseline / device / safety logic stays as-is
   MOVE      - same logic, relocates behind a typed contract / adapter
-  REPLACE   - LE-v1 learning logic superseded by an LE 2.0 model/prediction
+  REPLACE   - LE-v1 learning logic superseded by an Learning model/prediction
   REMOVE    - safe to delete (only after its REPLACE is validated; not in 19A)
   UNCLEAR   - needs more evidence before disposition
 """
@@ -31,7 +31,7 @@ class LegacyEntry:
     responsibility: str
     owner: str
     disposition: Disposition
-    le2_replacement: str = ""
+    learning_replacement: str = ""
     note: str = ""
 
 
@@ -71,7 +71,7 @@ LEGACY_INVENTORY: tuple[LegacyEntry, ...] = (
     LegacyEntry("recommendation_dict", "coordinator._compute_recommendation", Disposition.MOVE,
                 note="adapted to ZoneRuntimeInput/ControllerBaselineDecision at the edge"),
 
-    # ---- LE v1 learning: REPLACE by LE 2.0 (remove only after validation, not in 19A) ----
+    # ---- LE v1 learning: REPLACE by Learning (remove only after validation, not in 19A) ----
     LegacyEntry("heat_rate", "learning_engine._get_heat_rate/_learned_heat_rate_multifactor",
                 Disposition.REPLACE, "models.heat_rate.HeatRateModel"),
     LegacyEntry("heat_loss", "learning_engine.get_heat_loss_rate", Disposition.REPLACE,
@@ -103,7 +103,7 @@ LEGACY_INVENTORY: tuple[LegacyEntry, ...] = (
                 note="deterministic current weather correction stays authoritative"),
     LegacyEntry("forecast_trust_bias", "weather_engine.compute_forecast_suppression",
                 Disposition.REPLACE, "models.forecast.ForecastModel",
-                note="learned forecast trust/bias is LE2's; weather_engine keeps no learned "
+                note="learned forecast trust/bias is Learning's; weather_engine keeps no learned "
                      "forecast confidence. ForecastModel must not duplicate a current "
                      "weather rule; it only gates whether a forecast-dependent path is used."),
 )
@@ -114,13 +114,13 @@ def by_disposition(disposition: Disposition) -> tuple[LegacyEntry, ...]:
 
 
 def validate_inventory() -> None:
-    """Each REPLACE row must name an LE 2.0 target; no duplicate responsibilities."""
+    """Each REPLACE row must name an Learning target; no duplicate responsibilities."""
     seen: set[str] = set()
     for e in LEGACY_INVENTORY:
         if e.responsibility in seen:
             raise ValueError(f"duplicate responsibility: {e.responsibility}")
         seen.add(e.responsibility)
-        if e.disposition is Disposition.REPLACE and not e.le2_replacement:
-            raise ValueError(f"REPLACE without LE2 target: {e.responsibility}")
+        if e.disposition is Disposition.REPLACE and not e.learning_replacement:
+            raise ValueError(f"REPLACE without Learning target: {e.responsibility}")
         if e.disposition is Disposition.REMOVE:
             raise ValueError(f"no REMOVE permitted in Phase 19A: {e.responsibility}")

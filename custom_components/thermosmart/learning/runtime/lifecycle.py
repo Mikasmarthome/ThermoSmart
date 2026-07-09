@@ -1,4 +1,4 @@
-"""LearningRuntime: passive shadow runtime foundation for LE 2.0 (pure core).
+"""LearningRuntime: passive shadow runtime foundation for Learning (pure core).
 
 Ties capture -> evidence -> model orchestration -> shadow -> persistence into a
 deterministic per-cycle pipeline across zones. STRICTLY passive: it returns only
@@ -411,7 +411,7 @@ class LearningRuntime:
         except Exception:
             pass
 
-    # -- core cycle (pure-ish; mutates only LE2 state) ------------------
+    # -- core cycle (pure-ish; mutates only Learning state) ------------------
 
     def run_cycle(self, inp: RuntimeCycleInput) -> RuntimeCycleResult:
         mode = self._mode
@@ -537,7 +537,7 @@ class LearningRuntime:
 
         if mode in (LearningRuntimeMode.SHADOW, LearningRuntimeMode.ADVISORY,
                     LearningRuntimeMode.CONTROL):
-            result = zr.orchestrator.run()
+            result = zr.orchestrator.run(now=inp.ts)
             predictions = dict(result.predictions)
             confidence_results = dict(result.confidence_results)
             model_errors = result.model_errors

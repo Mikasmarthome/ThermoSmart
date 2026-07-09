@@ -18,7 +18,7 @@
         "data": {
           "name": "Nome da zona (ex. Sala)",
           "climate_entities": "Termostatos / válvulas TRV",
-          "temp_sensors": "Sensores de temperatura interior (calcula-se a média)",
+          "temp_sensors": "Sensores de temperatura interior",
           "humidity_sensors": "Sensores de humidade interior",
           "window_sensors": "Sensores de janela (binary_sensor)",
           "window_open_delay": "Aquecimento desligado – atraso após abertura da janela",
@@ -67,11 +67,7 @@
         "description": "Quem está em casa? O ThermoSmart muda automaticamente para o modo ausência quando todos saem.",
         "data": {
           "presence_persons": "Pessoas para deteção de presença",
-          "home_zone": "Zona de casa (predefinição: zone.home)",
-          "learning_enabled": "Ativar algoritmo de aprendizagem"
-        },
-        "data_description": {
-          "learning_enabled": "O ThermoSmart aprende taxas de aquecimento, arrefecimento e temperaturas ótimas para esta zona."
+          "home_zone": "Zona de casa (predefinição: zone.home)"
         }
       },
       "weather": {
@@ -170,11 +166,7 @@
         "description": "Quem está em casa? O ThermoSmart muda automaticamente para o modo ausência quando todos saem.",
         "data": {
           "presence_persons": "Pessoas para deteção de presença",
-          "home_zone": "Zona de casa (predefinição: zone.home)",
-          "learning_enabled": "Ativar algoritmo de aprendizagem"
-        },
-        "data_description": {
-          "learning_enabled": "O ThermoSmart aprende taxas de aquecimento, arrefecimento e temperaturas ótimas para esta zona."
+          "home_zone": "Zona de casa (predefinição: zone.home)"
         }
       },
       "weather": {

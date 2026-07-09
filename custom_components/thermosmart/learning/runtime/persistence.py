@@ -1,4 +1,4 @@
-"""Persistence orchestration for LE 2.0 shadow runtime (pure Python core).
+"""Persistence orchestration for Learning shadow runtime (pure Python core).
 
 Dirty tracking + an explicit, versioned save policy over an INJECTED async store
 (duck-typed: ``async_load()`` / ``async_save(dict)``). Storage failures are
@@ -48,6 +48,12 @@ class _DirtyState:
 
 class PersistenceOrchestrator:
     """Decides when to persist; performs isolated saves via the injected store."""
+
+    # Bounded warnings buffer: keeps the most recent N save/load failure
+    # markers. Diagnostics/export only ever need "what's failing now", not
+    # an unbounded history since process start — a long-running session
+    # with a persistent storage fault must not grow this without limit.
+    _MAX_WARNINGS = 100
 
     def __init__(self, store: AsyncStore, *, policy: Optional[SavePolicy] = None) -> None:
         self._store = store
@@ -122,6 +128,8 @@ class PersistenceOrchestrator:
         except Exception as err:  # storage failure must not break heating
             self._s.failed_saves += 1
             self._warnings.append(f"save_failed:{type(err).__name__}")
+            if len(self._warnings) > self._MAX_WARNINGS:
+                self._warnings = self._warnings[-self._MAX_WARNINGS:]
             return False
         self._s.dirty = False
         self._s.important = False
@@ -135,6 +143,8 @@ class PersistenceOrchestrator:
             return await self._store.async_load()
         except Exception as err:
             self._warnings.append(f"load_failed:{type(err).__name__}")
+            if len(self._warnings) > self._MAX_WARNINGS:
+                self._warnings = self._warnings[-self._MAX_WARNINGS:]
             return None
 
     def health(self) -> dict:

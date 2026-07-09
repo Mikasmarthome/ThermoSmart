@@ -1,4 +1,4 @@
-"""Typed schema for LE2 Research Daily Buckets (pure Python, no Home Assistant).
+"""Typed schema for Learning Research Daily Buckets (pure Python, no Home Assistant).
 
 Research Daily Buckets are bounded, per-day AGGREGATE counters/summaries —
 never a raw event/episode log. They exist to answer longitudinal research

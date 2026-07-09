@@ -1,4 +1,4 @@
-"""Pure retention-enforcement decisions for LE 2.0 raw segments and episodes.
+"""Pure retention-enforcement decisions for Learning raw segments and episodes.
 
 Operates only on already-loaded data structures — a :class:`SegmentIndex` plus
 a mapping of sealed segment metadata dicts, or an ``EpisodesStore`` payload

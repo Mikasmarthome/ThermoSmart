@@ -1,4 +1,4 @@
-"""Pure, bounded helpers for creating, aggregating, and retaining LE2
+"""Pure, bounded helpers for creating, aggregating, and retaining Learning
 Research Daily Buckets.
 
 Pure helper/storage logic only — this module itself constructs no

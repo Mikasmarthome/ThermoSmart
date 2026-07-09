@@ -1,4 +1,4 @@
-"""Public facade for the LE 2.0 episode builder layer (Phase 6).
+"""Public facade for the Learning episode builder layer (Phase 6).
 
 Re-exports the builder package. Pure Python; no Home Assistant / storage / model
 dependency; no runtime wiring.

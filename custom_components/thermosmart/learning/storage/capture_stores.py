@@ -1,14 +1,13 @@
-"""Live-reachable, write-nothing store-access facade for LE2 raw/episode capture.
+"""Live-reachable store-access facade for Learning raw/episode capture.
 
 Constructing ``LearningCaptureStores`` performs NO storage I/O — it only holds
 a ``StoreFactory`` reference plus the canonical registries (built in
 ``capture_registry.py``) and hands back correctly-keyed store wrappers on
-demand. This is intentionally a pure wiring foundation: nothing calls
-``.save()``/``.load()`` on the returned handles from this module or from its
-construction. That is a deliberate scope boundary for this step — see the
-module-level docstring in ``capture_registry.py`` for the retention values
-that will apply once an actual capture/persist call site is built on top of
-this facade in a later step.
+demand. The returned handles ARE actively saved/loaded through the runtime
+shadow controller (``learning/runtime/ha_integration.py``'s
+``record_completed_episode_safe()``, and its episode/support-event/
+research-daily load/save methods) — see ``capture_registry.py`` for the
+retention values applied before each save.
 
 No HA imports beyond the existing ``StoreFactory`` abstraction. No control
 modification of any kind.
@@ -31,7 +30,7 @@ from .stores import (
 
 
 class LearningCaptureStores:
-    """Per-zone, lazy accessor for LE2 raw segment / episode stores.
+    """Per-zone, lazy accessor for Learning raw segment / episode stores.
 
     Holds only a ``StoreFactory`` + registries — no cached store instances,
     no open file handles, no background tasks, no writes. Every accessor call

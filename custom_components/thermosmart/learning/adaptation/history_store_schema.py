@@ -41,7 +41,7 @@ class AdaptationHistoryState:
     This is the ``data`` payload stored by a future _VersionedStore.
     The store_schema_version envelope is managed by _VersionedStore.
 
-    ``learning_zone_id`` is the opaque LE 2.0 zone id (= entry_id),
+    ``learning_zone_id`` is the opaque Learning zone id (= entry_id),
     not a zone name, entity_id, or human-readable string.
     The stored value is the authoritative identity anchor for recovery.
     """
@@ -178,7 +178,7 @@ def prune_history_entries(
     Args:
         entries: current {candidate_key: CandidateHistoryEntry} mapping.
         now_ts: ISO 8601 UTC reference timestamp (typically the current
-            OutcomeDiagnostics.last_update_ts, not datetime.now()).
+            OutcomeDiagnostics.last_update_ts, not a live wall-clock read).
         max_entries: hard cap on retained entries per zone (default 50).
         max_age_days: entries last seen before this horizon are eligible
             for removal when their seen_count is below the floor (default 180 d).

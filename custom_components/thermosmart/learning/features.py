@@ -1,4 +1,4 @@
-"""Pure-Python FeatureExtractor for LE 2.0.
+"""Pure-Python FeatureExtractor for Learning.
 
 Computes derived features at read time from raw records and episode data. It
 mutates nothing, stores nothing, holds no global state, and has no Home

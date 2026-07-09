@@ -1,6 +1,6 @@
-"""Shadow orchestration for LE 2.0 (pure Python).
+"""Shadow orchestration for Learning (pure Python).
 
-Computes LE 2.0 shadow predictions (incl. a full preheat plan), compares them to
+Computes Learning shadow predictions (incl. a full preheat plan), compares them to
 the existing ThermoSmart baseline and — once reality is observed — evaluates the
 shadow outcome and aggregates metrics. STRICTLY advisory: produces only typed
 shadow results that the coordinator can never mistake for a control command.
@@ -93,7 +93,7 @@ class ShadowComparison:
     shadow_value: Optional[float]
     difference: Optional[float]
     unit: str
-    le2_confidence: float
+    learning_confidence: float
     shadow_expected_outcome: Optional[float]
     baseline_outcome: Optional[float]
     actual_outcome: Optional[float]
@@ -258,7 +258,7 @@ class ShadowOrchestrator:
             comparison_type=ComparisonType.PREHEAT_START.value,
             baseline_source="existing_controller", baseline_value=_to_minutes(baseline_start_utc),
             shadow_value=_to_minutes(plan.recommended_start_utc), difference=diff, unit="minutes",
-            le2_confidence=round(confidence, 4),
+            learning_confidence=round(confidence, 4),
             shadow_expected_outcome=plan.expected_achievement_c, baseline_outcome=None,
             actual_outcome=None, status=ShadowStatus.OPEN.value, reason_codes=tuple(reasons),
             created_ts=snapshot.ts)
@@ -275,7 +275,7 @@ class ShadowOrchestrator:
             zone=snapshot.zone_id, decision_id=snapshot.decision_id,
             comparison_type=ctype.value, baseline_source="existing_controller",
             baseline_value=baseline, shadow_value=shadow, difference=diff, unit=unit,
-            le2_confidence=round(confidence, 4), shadow_expected_outcome=None,
+            learning_confidence=round(confidence, 4), shadow_expected_outcome=None,
             baseline_outcome=None, actual_outcome=None, status=ShadowStatus.OPEN.value,
             reason_codes=tuple(reasons), created_ts=snapshot.ts)
 
@@ -336,7 +336,7 @@ class ShadowOrchestrator:
             fallback_rate=round(len(fb) / n, 4) if n else None,
             not_evaluable_rate=round(len(not_eval) / len(outcomes), 4) if outcomes else None,
             confidence_coverage=round(
-                sum(1 for c in comparisons if c.le2_confidence >= 0.4) / n, 4) if n else None)
+                sum(1 for c in comparisons if c.learning_confidence >= 0.4) / n, 4) if n else None)
 
 
 # -- helpers ------------------------------------------------------------------

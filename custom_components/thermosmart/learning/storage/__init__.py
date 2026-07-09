@@ -1,4 +1,4 @@
-"""LE 2.0 storage shell (Phase 3 — capture foundation).
+"""Learning storage shell (Phase 3 — capture foundation).
 
 Pure submodules (``naming``, ``serialization``, ``segments``, ``recovery``,
 ``persistence``) have no Home Assistant dependency and are importable and

@@ -7,8 +7,7 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases/tag/v1.1.1"><img src="https://img.shields.io/badge/stable-v1.1.1-brightgreen.svg" alt="Stable Release"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases"><img src="https://img.shields.io/badge/beta-v1.2.0--beta.4-orange.svg" alt="Beta Release"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/stable-v1.2.0-brightgreen.svg" alt="Stable Release"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
   <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
@@ -98,7 +97,9 @@ Add **ThermoSmart System** first (Summer mode select + Vacation switch), then ad
 | `sensor.*_adjusted_target` | Configured target temperature (schedule or mode) |
 | `sensor.*_preheat_minutes` | Calculated preheat lead time in minutes |
 
-Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cycle · Weather offset · Temperature slope · Heat loss · Heating power · Solar gain · TRV observations · Window cooling rate · EMA temperature
+Additional diagnostic sensors (disabled by default): TRV setpoint · TPI duty-cycle · Weather offset · Temperature slope · Heat loss · Heating power · Outcome score · Solar gain · TRV observations · Window cooling rate · EMA temperature
+
+> **Note:** `sensor.*_confidence` and the Heat Loss, Heating Power, Outcome Score, TRV Observations, and Window Cooling Rate diagnostic sensors are backed by the Learning Engine — their values and extra attributes reflect the Learning Engine's model state.
 
 ### Global (ThermoSmart System)
 | Entity | Description |
@@ -235,14 +236,22 @@ HACS → Integrations → ThermoSmart → **Update** → Restart Home Assistant.
 **What is Observation mode?**  
 Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.
 
+**What do the Learning and Active Control switches actually do together?**  
+ThermoSmart combines two independent switches:
+
+- **Learning enabled + Active Control off** — ThermoSmart observes and learns, but does not control your devices (no service calls).
+- **Learning disabled + Active Control on** — ThermoSmart controls deterministically using TPI, without any adaptive learning adjustments.
+- **Learning enabled + Active Control on** — ThermoSmart may apply bounded adaptive adjustments on top of TPI control, once confidence and safety gates allow it.
+- **Both off** — ThermoSmart remains inactive for that zone.
+
 **How long until the learning algorithm is effective?**  
-Learning builds from active heating observations and works in both Observation mode and Active Control. Phase 1 (<5 obs): physical fallback only. Phase 2 (5–50): first patterns emerge. Phase 3 (50+): learning dominates. How quickly you reach each phase depends on how often your heating runs — results improve steadily as observations accumulate.
+Learning builds from active heating observations and works in both Observation mode and Active Control. Stage 1 (<5 obs): physical fallback only. Stage 2 (5–50): first patterns emerge. Stage 3 (50+): learning dominates. How quickly you reach each stage depends on how often your heating runs — results improve steadily as observations accumulate.
 
 **A sensor goes offline — what happens?**  
 ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors in a zone are unavailable simultaneously.
 
 **Where is the learning data stored?**  
-`/config/.storage/thermosmart_learning_data` — safe to share for debugging.
+Learning data is stored locally under Home Assistant's `/config/.storage/` directory. For debugging or support, use the **Create support export** button instead of sharing raw storage files — the export is designed to include useful diagnostics while avoiding raw Home Assistant storage data. Do not share or manually edit files under `/config/.storage` unless specifically asked by a maintainer.
 
 **Which TRVs use direct valve control?**  
 ThermoSmart auto-detects a direct-valve entity on each TRV device and writes the TPI duty-cycle (0–100%) to it when one is found. Recognised patterns:
@@ -275,10 +284,12 @@ In **Observation mode** ThermoSmart does not write setpoints, so the TRV stays i
 ThermoSmart can export an anonymized snapshot of its learning data as a JSON file — for voluntary debugging or to contribute data to future Learning Engine improvements.
 
 **How to export:**
-- Press the **Export Learning Data** button in the *ThermoSmart System* device card, **or**
+- Press the **Create Research Export** button in the *ThermoSmart System* device card, **or**
 - Call the service `thermosmart.export_learning_data` from Developer Tools → Services.
 
 The file is saved to `/config/www/` and can be opened via `/local/<filename>` appended to your Home Assistant URL.
+
+> **Note for automations:** the completion notification's `notification_id` differs by trigger — the **Create Research Export** button uses `thermosmart_research_export`, while the `thermosmart.export_learning_data` service call uses `thermosmart_export`. If you have an automation matching on the notification ID, check which trigger you use.
 
 **Privacy — what the export contains:**
 - ThermoSmart version, export timestamp, zone count

@@ -320,5 +320,15 @@
         "name": "Osservazioni TRV"
       }
     }
+  },
+  "notification": {
+    "export_created": {
+      "title": "ThermoSmart – Esportazione di ricerca creata",
+      "message": "L'esportazione di ricerca di ThermoSmart è stata creata.\n\nIl file contiene dati tecnici anonimizzati dettagliati su apprendimento, sensori, decisioni e risultati. È destinato all'analisi e al miglioramento di ThermoSmart.\n\nIl file non contiene nomi di stanza o zona, ID entità o dispositivo, indirizzi o dati di posizione esatti. Controlla il file prima di condividerlo.\n\nIl file è stato creato solo localmente; nulla è stato caricato o trasmesso. Verrà eliminato automaticamente dopo {retention_hours} ore – questo vale anche dopo un riavvio di Home Assistant.\n\n**Scarica (richiede accesso a Home Assistant):**\n[{filename}]({download_url})"
+    },
+    "support_created": {
+      "title": "ThermoSmart – Esportazione di supporto creata",
+      "message": "L'esportazione di supporto di ThermoSmart è stata creata.\n\nIl file contiene informazioni diagnostiche riassunte e rispettose della privacy.\n\nVerrà eliminato automaticamente dopo {retention_hours} ore – questo vale anche dopo un riavvio di Home Assistant.\n\n**Scarica (richiede accesso a Home Assistant):**\n[{filename}]({download_url})\n\nControlla il file prima di condividerlo. Non è stato trasmesso alcun dato."
+    }
   }
 }

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/Mikasmarthome/ThermoSmart/main/brand/logo.png" alt="ThermoSmart" width="256"/>
+  <img src="https://raw.githubusercontent.com/Mikasmarthome/ThermoSmart/main/custom_components/thermosmart/brand/logo.png" alt="ThermoSmart" width="256"/>
 </p>
 
 <h1 align="center">ThermoSmart</h1>
@@ -7,9 +7,9 @@
 
 <p align="center">
   <a href="https://hacs.xyz"><img src="https://img.shields.io/badge/HACS-Custom-orange.svg" alt="HACS Custom"/></a>
-  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases/tag/v1.2.0"><img src="https://img.shields.io/badge/stable-v1.2.0-brightgreen.svg" alt="Stable Release"/></a>
+  <a href="https://github.com/Mikasmarthome/ThermoSmart/releases/tag/v1.3.0"><img src="https://img.shields.io/badge/stable-v1.3.0-brightgreen.svg" alt="Stable Release"/></a>
   <img src="https://img.shields.io/badge/status-stable-brightgreen.svg" alt="Stable"/>
-  <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.1%2B-brightgreen.svg" alt="HA min"/></a>
+  <a href="https://www.home-assistant.io"><img src="https://img.shields.io/badge/HA-2024.12%2B-brightgreen.svg" alt="HA min"/></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"/></a>
 </p>
 
@@ -34,9 +34,16 @@ ThermoSmart observes how your building heats and cools, then uses that data — 
 
 ## Dashboard Card
 
-A dedicated Lovelace card is available: **[thermosmart-card](https://github.com/Mikasmarthome/thermosmart-card)**
+A dedicated Lovelace card — temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar — is bundled with the integration and registered automatically in Home Assistant. **No separate HACS installation is required.**
 
-Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar — install separately via HACS (Frontend).
+Add it to a dashboard like any other card:
+
+```yaml
+type: custom:thermosmart-card
+entity: climate.thermosmart_living_room
+```
+
+The card updates together with the integration — there is no separate version to track.
 
 ---
 
@@ -44,7 +51,7 @@ Temperature ring, drag-to-set, mode buttons, history sparkline, confidence bar �
 
 ![Three ThermoSmart heating zones displayed in a Lovelace dashboard — each zone shows a temperature ring with current and target temperature, active mode indicator, outdoor temperature, humidity, and mode buttons for Auto, Eco, Night, Comfort, Away and Vacation](brand/screenshots/dashboard-zones.jpeg)
 
-*Three heating zones managed by ThermoSmart. The temperature ring shows current and target temperature at a glance. Mode buttons, outdoor conditions, and a history graph (Actual / Target / Outdoor) are visible per zone. Screenshot uses the optional [thermosmart-card](https://github.com/Mikasmarthome/thermosmart-card) Lovelace frontend.*
+*Three heating zones managed by ThermoSmart. The temperature ring shows current and target temperature at a glance. Mode buttons, outdoor conditions, and a history graph (Actual / Target / Outdoor) are visible per zone. Screenshot uses the bundled ThermoSmart Card, described above.*
 
 ---
 

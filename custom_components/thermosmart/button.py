@@ -13,10 +13,10 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN, VERSION
 from .export import (
+    async_build_export_notification,
+    async_build_support_notification,
     async_export_learning_data,
     async_export_support_data,
-    build_export_notification_message,
-    build_support_notification_message,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -60,10 +60,9 @@ class ThermoSmartResearchExportButton(ButtonEntity):
     async def async_press(self) -> None:
         filepath = await async_export_learning_data(self._hass)
         filename = os.path.basename(filepath)
+        title, message = await async_build_export_notification(self._hass, filename)
         _pn_create(
-            self._hass,
-            message=build_export_notification_message(filename),
-            title="ThermoSmart – Research-Export",
+            self._hass, message=message, title=title,
             notification_id="thermosmart_research_export",
         )
         _LOGGER.info("ThermoSmart: research export button pressed → %s", filename)
@@ -85,10 +84,9 @@ class ThermoSmartSupportExportButton(ButtonEntity):
     async def async_press(self) -> None:
         filepath = await async_export_support_data(self._hass)
         filename = os.path.basename(filepath)
+        title, message = await async_build_support_notification(self._hass, filename)
         _pn_create(
-            self._hass,
-            message=build_support_notification_message(filename),
-            title="ThermoSmart – Support-Export",
+            self._hass, message=message, title=title,
             notification_id="thermosmart_support_export",
         )
         _LOGGER.info("ThermoSmart: support export button pressed → %s", filename)

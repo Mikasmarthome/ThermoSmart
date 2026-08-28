@@ -6,8 +6,9 @@
   "config_flow": true,
   "dependencies": [],
   "documentation": "https://github.com/Mikasmarthome/ThermoSmart",
-  "iot_class": "local_polling",
+  "integration_type": "helper",
+  "iot_class": "calculated",
   "issue_tracker": "https://github.com/Mikasmarthome/ThermoSmart/issues",
   "requirements": [],
-  "version": "1.2.0"
+  "version": "1.3.0"
 }

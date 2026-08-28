@@ -33,11 +33,19 @@ from .const import (
     CONF_OUTDOOR_RAIN_SENSOR,
     CONF_LEARNING_ENABLED,
     DOMAIN_GLOBAL_SUMMER,
+    CARD_FILENAME,
+    CARD_URL_PATH,
+    VERSION,
 )
 from .coordinator import ThermoSmartCoordinator
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
-from .export import async_export_learning_data, build_export_notification_message
+from .export import (
+    ThermoSmartExportDownloadView,
+    async_build_export_notification,
+    async_cleanup_expired_exports,
+    async_export_learning_data,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +71,45 @@ def _migrate_old_summer_switch(hass: HomeAssistant) -> None:
             "Alte Summer-Switch-Entity '%s' aus der Registry entfernt",
             old_entity_id,
         )
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve the bundled Lovelace card and register it as a frontend module URL.
+
+    Runs at most once per HA session (guarded by the caller via
+    hass.data[DOMAIN]["card_registered"]). Two independent, non-fatal steps:
+
+    1. Static path: custom_components/thermosmart/www/thermosmart-card.js is
+       exposed at CARD_URL_PATH via the async, non-blocking HA 2024.x static
+       path API (StaticPathConfig) — no synchronous file I/O on the event loop.
+    2. Frontend module URL: add_extra_js_url() registers the same URL so every
+       dashboard loads it automatically, in both storage-mode and YAML-mode —
+       no .storage/lovelace_resources entry is written or managed. The helper
+       stores URLs in a set, so calling it again (e.g. a second HA session)
+       never creates a duplicate <script> tag.
+
+    A `?v=<VERSION>` query string on the frontend URL only busts the browser
+    cache after a ThermoSmart update; it does not affect static-path routing
+    (aiohttp matches on path, not query string), so it is safe to combine
+    with cache_headers=True on the static route itself.
+    """
+    www_dir = os.path.join(os.path.dirname(__file__), "www")
+    card_path = os.path.join(www_dir, CARD_FILENAME)
+
+    try:
+        from homeassistant.components.http import StaticPathConfig
+        await hass.http.async_register_static_paths([
+            StaticPathConfig(CARD_URL_PATH, card_path, True)
+        ])
+    except Exception as err:  # http component missing/unavailable is non-fatal
+        _LOGGER.warning("ThermoSmart: card static path registration skipped: %s", err)
+        return
+
+    try:
+        from homeassistant.components.frontend import add_extra_js_url
+        add_extra_js_url(hass, f"{CARD_URL_PATH}?v={VERSION}")
+    except Exception as err:  # frontend component missing/unavailable is non-fatal
+        _LOGGER.warning("ThermoSmart: card frontend registration skipped: %s", err)
 
 
 def _validate_sensors(hass: HomeAssistant, cfg: dict) -> None:
@@ -113,6 +160,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["summer_switch_migrated"] = True
         _migrate_old_summer_switch(hass)
 
+    # Einmalig pro HA-Session, unabhängig von Entry-Typ und -Anzahl: die
+    # gebündelte Lovelace-Card servieren und als Frontend-Modul registrieren.
+    # Kein separates HACS-Plugin mehr nötig (Frenck-Review #9081/#9082).
+    if "card_registered" not in hass.data[DOMAIN]:
+        hass.data[DOMAIN]["card_registered"] = True
+        await _async_register_card(hass)
+
     # ── System-Entry: nur globale Schalter, kein Coordinator ────────
     if cfg.get("entry_type") == "system":
         hass.data[DOMAIN][entry.entry_id] = {"type": "system"}
@@ -122,15 +176,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             async def _handle_export(call: ServiceCall) -> None:
                 filepath = await async_export_learning_data(hass)
                 filename = os.path.basename(filepath)
+                title, message = await async_build_export_notification(hass, filename)
                 _pn_create(
-                    hass,
-                    message=build_export_notification_message(filename),
-                    title="ThermoSmart — Learning Data Export",
+                    hass, message=message, title=title,
                     notification_id="thermosmart_export",
                 )
 
             hass.services.async_register(DOMAIN, "export_learning_data", _handle_export)
             _LOGGER.debug("ThermoSmart: export_learning_data service registered")
+
+        # Einmalig pro HA-Session: Download-View registrieren und abgelaufene
+        # Export-Dateien aufräumen (restart-sicher, siehe export.py-Docstring).
+        if "export_view_registered" not in hass.data[DOMAIN]:
+            hass.data[DOMAIN]["export_view_registered"] = True
+            try:
+                hass.http.register_view(ThermoSmartExportDownloadView(hass))
+            except Exception as err:  # http component missing is non-fatal
+                _LOGGER.warning("ThermoSmart: export download view registration skipped: %s", err)
+            hass.async_create_task(async_cleanup_expired_exports(hass))
 
         _LOGGER.info("ThermoSmart System geladen (globale Schalter)")
         return True

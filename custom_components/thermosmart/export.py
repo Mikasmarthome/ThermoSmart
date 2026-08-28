@@ -107,11 +107,26 @@ Support export reserved diagnostics:
   "adaptation_history" — real passive-candidate/attribution counts, not
   reserved) are unaffected and remain as-is.
 
-24h auto-delete:
-  Export files are scheduled for deletion 24 hours after creation using
-  async_call_later.  This schedule does NOT survive a Home Assistant restart.
-  If HA is restarted before the 24-hour window expires, the file remains until
-  the user deletes it manually or the next export overwrites the timer.
+Private storage + authenticated download:
+  Export files are written to a private, non-web-served directory
+  (``<config>/thermosmart_exports/``), never under ``www/`` — so they are
+  never reachable via HA's unauthenticated ``/local/`` static file mount.
+  The only way to retrieve a file is the authenticated HTTP view registered
+  at ``/api/thermosmart/export/{filename}`` (``ThermoSmartExportDownloadView``,
+  ``requires_auth`` defaults to True on ``HomeAssistantView``), which also
+  validates the filename against the exact pattern ThermoSmart itself
+  generates before ever touching the filesystem — no path traversal, no
+  directory listing, nothing else in that directory is reachable.
+
+Restart-safe cleanup:
+  Two complementary mechanisms keep the export directory bounded:
+    1. An in-session ``async_call_later`` timer (best-effort, prompt cleanup
+       while HA keeps running — does NOT survive a restart on its own).
+    2. A startup scan (``async_cleanup_expired_exports``), run once per HA
+       session from the system config entry's setup, that removes any file
+       older than the retention window regardless of whether its in-session
+       timer ever fired. This is the primary, restart-safe strategy; the
+       timer is a supplementary optimization, not the only cleanup path.
 """
 from __future__ import annotations
 
@@ -120,11 +135,15 @@ import hashlib
 import json
 import logging
 import os
+import re
 from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any
 
+from aiohttp import web
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
+from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -145,7 +164,35 @@ _LOGGER = logging.getLogger(__name__)
 
 EXPORT_FORMAT_VERSION = 1
 _ANON_SALT = "thermosmart_le_export_v1"
-_EXPORT_CLEANUP_DELAY_S: float = 24 * 3600  # 24 hours; not restart-safe
+_EXPORT_CLEANUP_DELAY_S: float = 24 * 3600  # 24 hours
+_EXPORT_DIR_NAME = f"{DOMAIN}_exports"
+# Matches exactly the filenames generated below — anything else is rejected
+# by both the download view (404) and the startup cleanup scan (falls back
+# to mtime instead of trusting an unrecognized name).
+_EXPORT_FILENAME_RE = re.compile(
+    r"^thermosmart_(?:research|support)_(\d{8}T\d{6})_[0-9a-f]{6}\.json$"
+)
+
+# English fallback used only if the native HA translation loader can't
+# resolve a key (e.g. the "notification" category isn't cached yet). Kept in
+# code so a notification is never silently blank; strings.json/translations
+# are still the source of truth for what users actually see.
+_NOTIFICATION_FALLBACK_EN = {
+    "export_created": {
+        "title": "ThermoSmart – Research export created",
+        "message": (
+            "The ThermoSmart research export has been created.\n\n"
+            "Download (requires Home Assistant login): {download_url}"
+        ),
+    },
+    "support_created": {
+        "title": "ThermoSmart – Support export created",
+        "message": (
+            "The ThermoSmart support export has been created.\n\n"
+            "Download (requires Home Assistant login): {download_url}"
+        ),
+    },
+}
 
 # ── Learning privacy helpers ───────────────────────────────────────────────────────
 
@@ -1832,31 +1879,211 @@ def _resolve_clock(hass: HomeAssistant) -> datetime | None:
     return None
 
 
+# ── private storage helpers ────────────────────────────────────────────────────
+
+def _export_dir(hass: HomeAssistant) -> str:
+    """Private, non-web-served directory export files are written to."""
+    return hass.config.path(_EXPORT_DIR_NAME)
+
+
+async def _async_write_export_file(hass: HomeAssistant, filename: str, payload: dict) -> str:
+    """Create the export directory and write ``payload`` to ``filename`` in it.
+
+    Both the (idempotent) directory creation and the file write happen inside
+    a single executor job so neither ever blocks the event loop.
+    """
+    export_dir = _export_dir(hass)
+    filepath = os.path.join(export_dir, filename)
+
+    def _write() -> None:
+        os.makedirs(export_dir, exist_ok=True)
+        with open(filepath, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, ensure_ascii=False, default=str)
+
+    await hass.async_add_executor_job(_write)
+    return filepath
+
+
 # ── cleanup scheduler ─────────────────────────────────────────────────────────
 
-def _schedule_export_cleanup(hass: HomeAssistant, filepath: str) -> None:
-    """Schedule deletion of an export file after 24 h.
-
-    Best-effort: the timer runs in the current HA session only and does NOT
-    survive a restart.  If HA restarts before 24 h, the file remains until the
-    user deletes it or until this timer fires in a future session.
-    """
-    def _cleanup(_now: datetime) -> None:
+async def _async_remove_export_file(hass: HomeAssistant, filepath: str) -> None:
+    """Delete one export file in the executor; never raises."""
+    def _remove() -> None:
         try:
             os.remove(filepath)
-            _LOGGER.debug("ThermoSmart: auto-deleted export file after 24 h: %s", filepath)
+            _LOGGER.debug("ThermoSmart: auto-deleted export file: %s", filepath)
         except FileNotFoundError:
             pass
         except OSError as err:
             _LOGGER.warning("ThermoSmart: could not delete export file %s: %s", filepath, err)
 
+    await hass.async_add_executor_job(_remove)
+
+
+def _schedule_export_cleanup(hass: HomeAssistant, filepath: str) -> None:
+    """Schedule deletion of an export file after the retention window.
+
+    Best-effort, in-session optimization only: the timer itself does NOT
+    survive a Home Assistant restart. The restart-safe guarantee comes from
+    :func:`async_cleanup_expired_exports`, which is run once per session at
+    setup and removes any file whose age already exceeds the retention
+    window regardless of whether this timer ever fired.
+    """
+    def _cleanup(_now: datetime) -> None:
+        hass.async_create_task(_async_remove_export_file(hass, filepath))
+
     async_call_later(hass, _EXPORT_CLEANUP_DELAY_S, _cleanup)
+
+
+async def async_cleanup_expired_exports(hass: HomeAssistant) -> None:
+    """Remove export files older than the retention window (restart-safe).
+
+    Intended to run once per Home Assistant session, from the system config
+    entry's setup — this is what makes cleanup survive a restart, since the
+    per-export ``async_call_later`` timer above does not. Idempotent and
+    safe to call repeatedly: a missing export directory, an already-removed
+    file, or any per-file filesystem error is handled without raising.
+    """
+    export_dir = _export_dir(hass)
+
+    def _scan_and_remove() -> None:
+        try:
+            entries = os.listdir(export_dir)
+        except FileNotFoundError:
+            return
+        except OSError as err:
+            _LOGGER.warning(
+                "ThermoSmart: could not scan export directory %s: %s", export_dir, err
+            )
+            return
+
+        now = datetime.now(timezone.utc)
+        for name in entries:
+            filepath = os.path.join(export_dir, name)
+            match = _EXPORT_FILENAME_RE.match(name)
+            try:
+                if match:
+                    created = datetime.strptime(
+                        match.group(1), "%Y%m%dT%H%M%S"
+                    ).replace(tzinfo=timezone.utc)
+                else:
+                    # Not one of our generated filenames — fall back to mtime
+                    # so a stray file doesn't linger in this directory forever.
+                    created = datetime.fromtimestamp(
+                        os.path.getmtime(filepath), tz=timezone.utc
+                    )
+                age_s = (now - created).total_seconds()
+                if age_s >= _EXPORT_CLEANUP_DELAY_S:
+                    os.remove(filepath)
+                    _LOGGER.debug(
+                        "ThermoSmart: removed expired export file on startup scan: %s",
+                        filepath,
+                    )
+            except FileNotFoundError:
+                continue
+            except OSError as err:
+                _LOGGER.warning(
+                    "ThermoSmart: could not remove expired export file %s: %s",
+                    filepath, err,
+                )
+
+    await hass.async_add_executor_job(_scan_and_remove)
+
+
+# ── authenticated download view ───────────────────────────────────────────────
+
+class ThermoSmartExportDownloadView(HomeAssistantView):
+    """Authenticated download endpoint for ThermoSmart export files.
+
+    Files live in the private export directory (see ``_export_dir``) and are
+    only reachable through this view. ``requires_auth`` defaults to True on
+    ``HomeAssistantView``, so a valid Home Assistant session/token is
+    required — unlike the old ``/local/...`` path, this is never reachable
+    by an unauthenticated request. The filename is validated against the
+    exact pattern ThermoSmart generates before it is ever joined into a
+    filesystem path, which also rules out path traversal.
+    """
+
+    url = "/api/thermosmart/export/{filename}"
+    name = "api:thermosmart:export"
+
+    def __init__(self, hass: HomeAssistant) -> None:
+        self._hass = hass
+
+    async def get(self, request: web.Request, filename: str) -> web.StreamResponse:
+        if not _EXPORT_FILENAME_RE.match(filename):
+            raise web.HTTPNotFound()
+        filepath = os.path.join(_export_dir(self._hass), filename)
+        exists = await self._hass.async_add_executor_job(os.path.isfile, filepath)
+        if not exists:
+            raise web.HTTPNotFound()
+        return web.FileResponse(
+            filepath,
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+
+
+# ── notification messages ─────────────────────────────────────────────────────
+
+async def _async_notification_text(
+    hass: HomeAssistant, translation_key: str, **placeholders: Any,
+) -> tuple[str, str]:
+    """Return the (title, message) pair for ``translation_key`` in the user's
+    Home Assistant language, using HA's own translation loader
+    (``homeassistant.helpers.translation.async_get_translations``) — the same
+    mechanism HA core uses to resolve backend-rendered strings — rather than a
+    bespoke translation layer. Falls back to English, then to an in-code
+    constant, so a notification is never left blank.
+    """
+    language = hass.config.language or "en"
+    prefix = f"component.{DOMAIN}.notification.{translation_key}"
+
+    async def _load(lang: str) -> dict[str, str]:
+        try:
+            return await async_get_translations(hass, lang, "notification", integrations={DOMAIN})
+        except Exception:  # translation loading must never break an export
+            return {}
+
+    translations = await _load(language)
+    title = translations.get(f"{prefix}.title")
+    message = translations.get(f"{prefix}.message")
+
+    if (title is None or message is None) and language != "en":
+        en_translations = await _load("en")
+        title = title or en_translations.get(f"{prefix}.title")
+        message = message or en_translations.get(f"{prefix}.message")
+
+    fallback = _NOTIFICATION_FALLBACK_EN.get(translation_key, {})
+    title = title or fallback.get("title", "ThermoSmart")
+    message = message or fallback.get("message", "")
+    return title, message.format(**placeholders)
+
+
+async def async_build_export_notification(hass: HomeAssistant, filename: str) -> tuple[str, str]:
+    """Return (title, message) for a completed research export notification."""
+    return await _async_notification_text(
+        hass, "export_created",
+        filename=filename,
+        download_url=f"/api/thermosmart/export/{filename}",
+        retention_hours=int(_EXPORT_CLEANUP_DELAY_S // 3600),
+    )
+
+
+async def async_build_support_notification(hass: HomeAssistant, filename: str) -> tuple[str, str]:
+    """Return (title, message) for a completed support export notification."""
+    return await _async_notification_text(
+        hass, "support_created",
+        filename=filename,
+        download_url=f"/api/thermosmart/export/{filename}",
+        retention_hours=int(_EXPORT_CLEANUP_DELAY_S // 3600),
+    )
 
 
 # ── export functions ──────────────────────────────────────────────────────────
 
 async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
-    """Build anonymized research export covering all zones, write to /config/www/."""
+    """Build anonymized research export covering all zones, write to the
+    private export directory (see ``_export_dir``)."""
     le: LearningEngine | None = hass.data.get(DOMAIN, {}).get("learning_engine")
     if ts is None:
         ts = _resolve_clock(hass)
@@ -1934,17 +2161,9 @@ async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None
         "zones": zones,
     }
 
-    www_dir = hass.config.path("www")
-    os.makedirs(www_dir, exist_ok=True)
     random_suffix = os.urandom(3).hex()
     filename = f"thermosmart_research_{ts_str}_{random_suffix}.json"
-    filepath = os.path.join(www_dir, filename)
-
-    def _write() -> None:
-        with open(filepath, "w", encoding="utf-8") as fh:
-            json.dump(export, fh, indent=2, ensure_ascii=False, default=str)
-
-    await hass.async_add_executor_job(_write)
+    filepath = await _async_write_export_file(hass, filename, export)
     _schedule_export_cleanup(hass, filepath)
     _LOGGER.info("ThermoSmart: research export written → %s", filepath)
     return filepath
@@ -2174,50 +2393,9 @@ async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None 
         "zones": zones,
     }
 
-    www_dir = hass.config.path("www")
-    os.makedirs(www_dir, exist_ok=True)
     random_suffix = os.urandom(3).hex()
     filename = f"thermosmart_support_{ts_str}_{random_suffix}.json"
-    filepath = os.path.join(www_dir, filename)
-
-    def _write() -> None:
-        with open(filepath, "w", encoding="utf-8") as fh:
-            json.dump(export, fh, indent=2, ensure_ascii=False, default=str)
-
-    await hass.async_add_executor_job(_write)
+    filepath = await _async_write_export_file(hass, filename, export)
     _schedule_export_cleanup(hass, filepath)
     _LOGGER.info("ThermoSmart: support export written → %s", filepath)
     return filepath
-
-
-# ── notification messages ─────────────────────────────────────────────────────
-
-def build_export_notification_message(filename: str) -> str:
-    """Return the persistent notification message for a completed research export."""
-    return (
-        "ThermoSmart Research-Export wurde erstellt.\n\n"
-        "Die Datei enthält detailliertere anonymisierte technische Lern-, Sensor-, "
-        "Entscheidungs- und Ergebnisdaten. Sie ist zur Analyse und Weiterentwicklung "
-        "von ThermoSmart gedacht.\n\n"
-        "Die Datei enthält keine Raum- oder Zonennamen, Entity-IDs, Geräte-IDs, "
-        "Adressen oder exakten Standortdaten. Prüfe die Datei vor dem Teilen.\n\n"
-        "Die Datei wurde nur lokal erstellt, nicht hochgeladen oder übertragen. "
-        "Sie wird nach 24 Stunden automatisch gelöscht "
-        "(sofern Home Assistant bis dahin nicht neu gestartet wurde).\n\n"
-        f"**Datei:**\n`/config/www/{filename}`\n\n"
-        f"**Öffnen:**\n`/local/{filename}`"
-    )
-
-
-def build_support_notification_message(filename: str) -> str:
-    """Return the persistent notification message for a completed support export."""
-    return (
-        "ThermoSmart Support-Export wurde erstellt.\n\n"
-        "Die Datei enthält zusammengefasste datenschutzfreundliche "
-        "Diagnoseinformationen.\n\n"
-        "Sie wird nach 24 Stunden automatisch gelöscht "
-        "(sofern Home Assistant bis dahin nicht neu gestartet wurde).\n\n"
-        f"**Datei:**\n`/config/www/{filename}`\n\n"
-        f"**Öffnen:**\n`/local/{filename}`\n\n"
-        "Prüfe die Datei vor dem Teilen. Es wurden keine Daten übertragen."
-    )

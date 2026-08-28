@@ -1,7 +1,13 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.2.0"
+VERSION = "1.3.0"
+
+# Bundled Lovelace card (custom_components/thermosmart/www/thermosmart-card.js).
+# Registered once per HA session as a static path + frontend module URL —
+# see async_setup_entry(). No separate HACS plugin install needed anymore.
+CARD_FILENAME = "thermosmart-card.js"
+CARD_URL_PATH = f"/{DOMAIN}/{CARD_FILENAME}"
 
 # Config entry keys
 CONF_CLIMATE_ENTITIES = "climate_entities"

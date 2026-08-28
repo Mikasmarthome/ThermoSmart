@@ -143,7 +143,6 @@ from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_call_later
-from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -2024,34 +2023,53 @@ class ThermoSmartExportDownloadView(HomeAssistantView):
 
 
 # ── notification messages ─────────────────────────────────────────────────────
+#
+# These backend-rendered persistent-notification texts are intentionally NOT
+# stored in strings.json/translations/*.json: hassfest validates those two
+# files against a fixed allow-list of top-level keys (config, options,
+# entity, services, issues, ...) that has no slot for freeform,
+# placeholder-bearing notification text outside the config/options flow or
+# the Repairs ("issues") system — neither fits a one-off "your export is
+# ready" notice. custom_components/thermosmart/notifications/<lang>.json is
+# a ThermoSmart-owned resource hassfest never inspects, so it can carry the
+# same per-language content without tripping the schema check.
+
+_NOTIFICATIONS_DIR = os.path.join(os.path.dirname(__file__), "notifications")
+
+
+def _load_notification_catalog(lang: str) -> dict[str, dict[str, str]]:
+    path = os.path.join(_NOTIFICATIONS_DIR, f"{lang}.json")
+    try:
+        with open(path, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        return {}
+
 
 async def _async_notification_text(
     hass: HomeAssistant, translation_key: str, **placeholders: Any,
 ) -> tuple[str, str]:
     """Return the (title, message) pair for ``translation_key`` in the user's
-    Home Assistant language, using HA's own translation loader
-    (``homeassistant.helpers.translation.async_get_translations``) — the same
-    mechanism HA core uses to resolve backend-rendered strings — rather than a
-    bespoke translation layer. Falls back to English, then to an in-code
+    Home Assistant language. Falls back to English, then to an in-code
     constant, so a notification is never left blank.
     """
     language = hass.config.language or "en"
-    prefix = f"component.{DOMAIN}.notification.{translation_key}"
 
     async def _load(lang: str) -> dict[str, str]:
         try:
-            return await async_get_translations(hass, lang, "notification", integrations={DOMAIN})
+            return await hass.async_add_executor_job(_load_notification_catalog, lang)
         except Exception:  # translation loading must never break an export
             return {}
 
-    translations = await _load(language)
-    title = translations.get(f"{prefix}.title")
-    message = translations.get(f"{prefix}.message")
+    catalog = await _load(language)
+    entry = catalog.get(translation_key, {})
+    title = entry.get("title")
+    message = entry.get("message")
 
     if (title is None or message is None) and language != "en":
-        en_translations = await _load("en")
-        title = title or en_translations.get(f"{prefix}.title")
-        message = message or en_translations.get(f"{prefix}.message")
+        en_entry = (await _load("en")).get(translation_key, {})
+        title = title or en_entry.get("title")
+        message = message or en_entry.get("message")
 
     fallback = _NOTIFICATION_FALLBACK_EN.get(translation_key, {})
     title = title or fallback.get("title", "ThermoSmart")

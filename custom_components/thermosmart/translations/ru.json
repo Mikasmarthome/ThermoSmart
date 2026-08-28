@@ -6,7 +6,8 @@
         "menu_options": {
           "add_system": "Настроить глобальное управление (летний режим и отпуск)",
           "add_zone": "Добавить зону отопления"
-        }
+        },
+        "description": "Choose whether to set up the global ThermoSmart controls (Summer & Vacation mode) or add a new heating zone."
       },
       "add_system": {
         "title": "Глобальное управление",
@@ -319,16 +320,6 @@
       "trv_observations": {
         "name": "Наблюдения TRV"
       }
-    }
-  },
-  "notification": {
-    "export_created": {
-      "title": "ThermoSmart – Research export created",
-      "message": "The ThermoSmart research export has been created.\n\nThe file contains detailed anonymized technical learning, sensor, decision, and outcome data. It is intended for analyzing and improving ThermoSmart.\n\nThe file does not contain room or zone names, entity IDs, device IDs, addresses, or exact location data. Please review the file before sharing it.\n\nThe file was created locally only; nothing was uploaded or transmitted. It will be deleted automatically after {retention_hours} hours – this also applies after a Home Assistant restart.\n\n**Download (requires Home Assistant login):**\n[{filename}]({download_url})"
-    },
-    "support_created": {
-      "title": "ThermoSmart – Support export created",
-      "message": "The ThermoSmart support export has been created.\n\nThe file contains summarized, privacy-friendly diagnostic information.\n\nIt will be deleted automatically after {retention_hours} hours – this also applies after a Home Assistant restart.\n\n**Download (requires Home Assistant login):**\n[{filename}]({download_url})\n\nPlease review the file before sharing it. No data was transmitted."
     }
   }
 }

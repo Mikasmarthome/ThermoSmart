@@ -4,7 +4,7 @@
   "after_dependencies": ["weather", "climate"],
   "codeowners": ["@Mikasmarthome"],
   "config_flow": true,
-  "dependencies": [],
+  "dependencies": ["http"],
   "documentation": "https://github.com/Mikasmarthome/ThermoSmart",
   "integration_type": "helper",
   "iot_class": "calculated",

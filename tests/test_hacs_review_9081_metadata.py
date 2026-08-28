@@ -59,3 +59,18 @@ class TestManifest:
         for key in ("domain", "name", "codeowners", "config_flow", "documentation", "version"):
             assert key in manifest
         assert manifest["domain"] == "thermosmart"
+
+    def test_http_declared_as_a_dependency(self):
+        """export.py's ThermoSmartExportDownloadView subclasses
+        homeassistant.components.http.HomeAssistantView at module level (a
+        hard, non-optional import), so hassfest's dependency validator
+        requires 'http' to be declared. frontend is *not* declared here on
+        purpose — hassfest's ALLOWED_USED_COMPONENTS allow-list exempts it
+        (frontend is treated as always available), and the frontend-specific
+        registration code in __init__.py already treats it as best-effort/
+        non-fatal (try/except) rather than a hard requirement."""
+        assert "http" in self._manifest()["dependencies"]
+
+    def test_http_not_duplicated_in_after_dependencies(self):
+        manifest = self._manifest()
+        assert "http" not in manifest.get("after_dependencies", [])

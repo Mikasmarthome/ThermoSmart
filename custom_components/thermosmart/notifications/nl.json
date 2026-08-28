@@ -1,0 +1,10 @@
+{
+  "export_created": {
+    "title": "ThermoSmart – Onderzoeksexport gemaakt",
+    "message": "De ThermoSmart-onderzoeksexport is gemaakt.\n\nHet bestand bevat gedetailleerde, geanonimiseerde technische leer-, sensor-, beslissings- en resultaatgegevens. Het is bedoeld voor het analyseren en verbeteren van ThermoSmart.\n\nHet bestand bevat geen kamer- of zonenamen, entity-ID's, apparaat-ID's, adressen of exacte locatiegegevens. Controleer het bestand voordat je het deelt.\n\nHet bestand is alleen lokaal gemaakt; er is niets geüpload of verzonden. Het wordt automatisch verwijderd na {retention_hours} uur – dit geldt ook na een herstart van Home Assistant.\n\n**Downloaden (Home Assistant-login vereist):**\n[{filename}]({download_url})"
+  },
+  "support_created": {
+    "title": "ThermoSmart – Ondersteuningsexport gemaakt",
+    "message": "De ThermoSmart-ondersteuningsexport is gemaakt.\n\nHet bestand bevat samengevatte, privacyvriendelijke diagnostische informatie.\n\nHet wordt automatisch verwijderd na {retention_hours} uur – dit geldt ook na een herstart van Home Assistant.\n\n**Downloaden (Home Assistant-login vereist):**\n[{filename}]({download_url})\n\nControleer het bestand voordat je het deelt. Er zijn geen gegevens verzonden."
+  }
+}

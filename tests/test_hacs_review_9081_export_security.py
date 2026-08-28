@@ -79,28 +79,11 @@ class TestPrivateStorageLocation:
 
 
 class TestNotificationLinksAreAuthenticated:
-    async def test_notification_message_uses_authenticated_api_path(self, monkeypatch):
-        from custom_components.thermosmart.const import DOMAIN
-
+    async def test_notification_message_uses_authenticated_api_path(self):
         hass = MagicMock()
         hass.config.language = "en"
+        hass.async_add_executor_job = AsyncMock(side_effect=lambda fn, *a: fn(*a))
 
-        async def fake_get_translations(hass_, language, category, integrations=None, config_flow=None):
-            strings = json.loads(
-                (REPO_ROOT / "custom_components" / "thermosmart" / "strings.json")
-                .read_text(encoding="utf-8")
-            )
-            prefix = f"component.{DOMAIN}.notification"
-            return {
-                f"{prefix}.{k}.{field}": v[field]
-                for k, v in strings["notification"].items()
-                for field in ("title", "message")
-            }
-
-        monkeypatch.setattr(
-            "custom_components.thermosmart.export.async_get_translations",
-            fake_get_translations,
-        )
         _, message = await async_build_export_notification(hass, "thermosmart_research_20260101T000000_abcdef.json")
         assert "/api/thermosmart/export/thermosmart_research_20260101T000000_abcdef.json" in message
         assert "/local/" not in message

@@ -1,0 +1,10 @@
+{
+  "export_created": {
+    "title": "ThermoSmart – Research-Export erstellt",
+    "message": "Der ThermoSmart Research-Export wurde erstellt.\n\nDie Datei enthält detaillierte, anonymisierte technische Lern-, Sensor-, Entscheidungs- und Ergebnisdaten. Sie ist zur Analyse und Weiterentwicklung von ThermoSmart gedacht.\n\nDie Datei enthält keine Raum- oder Zonennamen, Entity-IDs, Geräte-IDs, Adressen oder exakten Standortdaten. Bitte prüfe die Datei vor dem Teilen.\n\nDie Datei wurde nur lokal erstellt, nichts wurde hochgeladen oder übertragen. Sie wird nach {retention_hours} Stunden automatisch gelöscht – das gilt auch nach einem Neustart von Home Assistant.\n\n**Herunterladen (Home-Assistant-Anmeldung erforderlich):**\n[{filename}]({download_url})"
+  },
+  "support_created": {
+    "title": "ThermoSmart – Support-Export erstellt",
+    "message": "Der ThermoSmart Support-Export wurde erstellt.\n\nDie Datei enthält zusammengefasste, datenschutzfreundliche Diagnoseinformationen.\n\nSie wird nach {retention_hours} Stunden automatisch gelöscht – das gilt auch nach einem Neustart von Home Assistant.\n\n**Herunterladen (Home-Assistant-Anmeldung erforderlich):**\n[{filename}]({download_url})\n\nBitte prüfe die Datei vor dem Teilen. Es wurden keine Daten übertragen."
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "export_created": {
+    "title": "ThermoSmart – Utworzono eksport badawczy",
+    "message": "Eksport badawczy ThermoSmart został utworzony.\n\nPlik zawiera szczegółowe, zanonimizowane dane techniczne dotyczące uczenia, czujników, decyzji i wyników. Jest przeznaczony do analizy i rozwoju ThermoSmart.\n\nPlik nie zawiera nazw pomieszczeń ani stref, identyfikatorów encji ani urządzeń, adresów ani dokładnych danych lokalizacyjnych. Sprawdź plik przed jego udostępnieniem.\n\nPlik został utworzony wyłącznie lokalnie; nic nie zostało przesłane. Zostanie automatycznie usunięty po {retention_hours} godzinach – dotyczy to również ponownego uruchomienia Home Assistant.\n\n**Pobierz (wymaga zalogowania w Home Assistant):**\n[{filename}]({download_url})"
+  },
+  "support_created": {
+    "title": "ThermoSmart – Utworzono eksport wsparcia",
+    "message": "Eksport wsparcia ThermoSmart został utworzony.\n\nPlik zawiera podsumowane, przyjazne dla prywatności informacje diagnostyczne.\n\nZostanie automatycznie usunięty po {retention_hours} godzinach – dotyczy to również ponownego uruchomienia Home Assistant.\n\n**Pobierz (wymaga zalogowania w Home Assistant):**\n[{filename}]({download_url})\n\nSprawdź plik przed jego udostępnieniem. Nie przesłano żadnych danych."
+  }
+}

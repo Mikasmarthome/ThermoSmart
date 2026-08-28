@@ -1,0 +1,10 @@
+{
+  "export_created": {
+    "title": "ThermoSmart – Exportação de pesquisa criada",
+    "message": "A exportação de pesquisa do ThermoSmart foi criada.\n\nO ficheiro contém dados técnicos anónimos detalhados de aprendizagem, sensores, decisões e resultados. Destina-se a analisar e melhorar o ThermoSmart.\n\nO ficheiro não contém nomes de divisões ou zonas, IDs de entidade ou dispositivo, moradas ou dados exatos de localização. Reveja o ficheiro antes de o partilhar.\n\nO ficheiro foi criado apenas localmente; nada foi carregado ou transmitido. Será eliminado automaticamente após {retention_hours} horas – isto aplica-se também após um reinicio do Home Assistant.\n\n**Transferir (requer sessão iniciada no Home Assistant):**\n[{filename}]({download_url})"
+  },
+  "support_created": {
+    "title": "ThermoSmart – Exportação de suporte criada",
+    "message": "A exportação de suporte do ThermoSmart foi criada.\n\nO ficheiro contém informações de diagnóstico resumidas e respeitadoras da privacidade.\n\nSerá eliminado automaticamente após {retention_hours} horas – isto aplica-se também após um reinicio do Home Assistant.\n\n**Transferir (requer sessão iniciada no Home Assistant):**\n[{filename}]({download_url})\n\nReveja o ficheiro antes de o partilhar. Não foram transmitidos dados."
+  }
+}

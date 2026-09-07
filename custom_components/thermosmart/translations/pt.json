@@ -192,14 +192,6 @@
     }
   },
   "entity": {
-    "button": {
-      "create_research_export": {
-        "name": "Exportar dados de aprendizagem"
-      },
-      "create_support_export": {
-        "name": "Create Support Export"
-      }
-    },
     "climate": {
       "zone": {
         "state_attributes": {

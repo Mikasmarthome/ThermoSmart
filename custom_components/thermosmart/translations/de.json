@@ -192,14 +192,6 @@
     }
   },
   "entity": {
-    "button": {
-      "create_research_export": {
-        "name": "Research-Export erstellen"
-      },
-      "create_support_export": {
-        "name": "Support-Export erstellen"
-      }
-    },
     "climate": {
       "zone": {
         "state_attributes": {

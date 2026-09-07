@@ -6,7 +6,7 @@
   "config_flow": true,
   "dependencies": ["http"],
   "documentation": "https://github.com/Mikasmarthome/ThermoSmart",
-  "integration_type": "helper",
+  "integration_type": "device",
   "iot_class": "calculated",
   "issue_tracker": "https://github.com/Mikasmarthome/ThermoSmart/issues",
   "requirements": [],

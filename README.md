@@ -258,7 +258,7 @@ Learning builds from active heating observations and works in both Observation m
 ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors in a zone are unavailable simultaneously.
 
 **Where is the learning data stored?**  
-Learning data is stored locally under Home Assistant's `/config/.storage/` directory. For debugging or support, use the **Create support export** button instead of sharing raw storage files — the export is designed to include useful diagnostics while avoiding raw Home Assistant storage data. Do not share or manually edit files under `/config/.storage` unless specifically asked by a maintainer.
+Learning data is stored locally under Home Assistant's `/config/.storage/` directory. For debugging or support, download ThermoSmart's diagnostics (see below) instead of sharing raw storage files. Do not share or manually edit files under `/config/.storage` unless specifically asked by a maintainer.
 
 **Which TRVs use direct valve control?**  
 ThermoSmart auto-detects a direct-valve entity on each TRV device and writes the TPI duty-cycle (0–100%) to it when one is found. Recognised patterns:
@@ -286,31 +286,28 @@ In **Observation mode** ThermoSmart does not write setpoints, so the TRV stays i
 
 ---
 
-## Export Learning Data
+## Diagnostics
 
-ThermoSmart can export an anonymized snapshot of its learning data as a JSON file — for voluntary debugging or to contribute data to future Learning Engine improvements.
+ThermoSmart uses Home Assistant's built-in diagnostics download — no separate export button or service.
 
-**How to export:**
-- Press the **Create Research Export** button in the *ThermoSmart System* device card, **or**
-- Call the service `thermosmart.export_learning_data` from Developer Tools → Services.
+**How to download:**
+- Home Assistant → **Settings** → **Devices & services** → **ThermoSmart** → select an entry (a heating zone, or the global "ThermoSmart System" entry) → **⋮** → **Download diagnostics**
 
-The file is saved to `/config/www/` and can be opened via `/local/<filename>` appended to your Home Assistant URL.
+Each heating zone's diagnostics include analytics, learning progress, episode history, storage health, and recent critical events for that zone — useful for debugging or for sharing with a maintainer. The "ThermoSmart System" entry's diagnostics are a brief overview (versions, configured zone count).
 
-> **Note for automations:** the completion notification's `notification_id` differs by trigger — the **Create Research Export** button uses `thermosmart_research_export`, while the `thermosmart.export_learning_data` service call uses `thermosmart_export`. If you have an automation matching on the notification ID, check which trigger you use.
-
-**Privacy — what the export contains:**
-- ThermoSmart version, export timestamp, zone count
+**Privacy — diagnostics contain:**
+- ThermoSmart version, zone count
 - Per-zone: TRV count, sensor counts, feature flags (booleans only)
 - Per-zone: all numeric learning data (observations, rates, confidence, boost factor, …)
 - Observation timestamps (required for longitudinal learning analysis)
 
-**Privacy — what the export does NOT contain:**
+**Privacy — diagnostics do NOT contain:**
 - Passwords or authentication tokens of any kind
 - Entity IDs, device names, or integration names
 - Person names or user identifiers
 - Street addresses or geographic coordinates
 
-**The export is strictly local.** No data is sent anywhere automatically. You can review the file before deciding whether to share it.
+**Diagnostics stay strictly local until you choose to share the downloaded file.** No data is sent anywhere automatically. Review the file before sharing it with anyone.
 
 ---
 

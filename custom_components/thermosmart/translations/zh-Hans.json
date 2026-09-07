@@ -192,14 +192,6 @@
     }
   },
   "entity": {
-    "button": {
-      "create_research_export": {
-        "name": "导出学习数据"
-      },
-      "create_support_export": {
-        "name": "Create Support Export"
-      }
-    },
     "climate": {
       "zone": {
         "state_attributes": {

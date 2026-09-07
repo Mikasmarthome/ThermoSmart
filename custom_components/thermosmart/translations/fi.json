@@ -192,14 +192,6 @@
     }
   },
   "entity": {
-    "button": {
-      "create_research_export": {
-        "name": "Vie oppimisdata"
-      },
-      "create_support_export": {
-        "name": "Create Support Export"
-      }
-    },
     "climate": {
       "zone": {
         "state_attributes": {

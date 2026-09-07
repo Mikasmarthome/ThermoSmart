@@ -19,8 +19,7 @@ import os
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant, Event, ServiceCall
-from homeassistant.components.persistent_notification import async_create as _pn_create
+from homeassistant.core import HomeAssistant, Event
 
 from .const import (
     DOMAIN,
@@ -40,17 +39,11 @@ from .const import (
 from .coordinator import ThermoSmartCoordinator
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
-from .export import (
-    ThermoSmartExportDownloadView,
-    async_build_export_notification,
-    async_cleanup_expired_exports,
-    async_export_learning_data,
-)
 
 _LOGGER = logging.getLogger(__name__)
 
 ZONE_PLATFORMS = PLATFORMS               # ["climate", "sensor", "switch", "select"]
-SYSTEM_PLATFORMS = ["button", "switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
+SYSTEM_PLATFORMS = ["switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
 
 
 def _migrate_old_summer_switch(hass: HomeAssistant) -> None:
@@ -171,29 +164,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if cfg.get("entry_type") == "system":
         hass.data[DOMAIN][entry.entry_id] = {"type": "system"}
         await hass.config_entries.async_forward_entry_setups(entry, SYSTEM_PLATFORMS)
-
-        if not hass.services.has_service(DOMAIN, "export_learning_data"):
-            async def _handle_export(call: ServiceCall) -> None:
-                filepath = await async_export_learning_data(hass)
-                filename = os.path.basename(filepath)
-                title, message = await async_build_export_notification(hass, filename)
-                _pn_create(
-                    hass, message=message, title=title,
-                    notification_id="thermosmart_export",
-                )
-
-            hass.services.async_register(DOMAIN, "export_learning_data", _handle_export)
-            _LOGGER.debug("ThermoSmart: export_learning_data service registered")
-
-        # Einmalig pro HA-Session: Download-View registrieren und abgelaufene
-        # Export-Dateien aufräumen (restart-sicher, siehe export.py-Docstring).
-        if "export_view_registered" not in hass.data[DOMAIN]:
-            hass.data[DOMAIN]["export_view_registered"] = True
-            try:
-                hass.http.register_view(ThermoSmartExportDownloadView(hass))
-            except Exception as err:  # http component missing is non-fatal
-                _LOGGER.warning("ThermoSmart: export download view registration skipped: %s", err)
-            hass.async_create_task(async_cleanup_expired_exports(hass))
 
         _LOGGER.info("ThermoSmart System geladen (globale Schalter)")
         return True

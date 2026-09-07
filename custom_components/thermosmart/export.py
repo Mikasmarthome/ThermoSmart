@@ -1,19 +1,19 @@
-"""Anonymized learning-data export for ThermoSmart.
+"""Diagnostics data-shaping helpers for ThermoSmart.
 
-Creates a JSON snapshot of per-zone learning data that can be shared voluntarily
-to support Learning development.  Nothing is sent automatically — the user decides
-whether and how to share the file.
+Pure functions that turn live coordinator/Learning state into privacy-safe,
+bounded summaries. Consumed by diagnostics.py's async_get_config_entry_
+diagnostics() (Home Assistant's standard "Download diagnostics" action under
+Settings -> Devices & services -> ThermoSmart) — nothing here writes a file,
+serves HTTP, or notifies anyone; delivery is entirely Home Assistant's job.
 
 Privacy contract
 ----------------
-Exported data contains:
-  - ThermoSmart version + export format version
-  - Export timestamp
+Diagnostics data contains:
+  - ThermoSmart version
   - Per-zone: TRV count, sensor counts, feature flags (booleans only)
   - Per-zone: all numeric learning data (observations, rates, confidence, …)
-  - Per-zone: Learning model coefficient statistics (numeric only — no IDs)
 
-Exported data does NOT contain:
+Diagnostics data does NOT contain:
   - Passwords or authentication tokens of any kind
   - Entity IDs, device names, or integration names
   - Person names or user identifiers
@@ -23,9 +23,9 @@ Exported data does NOT contain:
 Timestamps are intentionally retained:
   Observation timestamps (ts, hour, minute, weekday) are required for
   longitudinal learning analysis and are the primary reason this data is
-  valuable for Learning.  A series of heating timestamps can reveal usage
-  patterns (presence, sleep schedule, away periods).  Users should review
-  the exported file before sharing it with anyone.
+  valuable for diagnosis.  A series of heating timestamps can reveal usage
+  patterns (presence, sleep schedule, away periods).  Diagnostics downloads
+  in Home Assistant already require the downloading user to be logged in.
 
 has_forecast note:
   has_forecast is derived from whether a weather entity is configured.
@@ -39,26 +39,19 @@ making longitudinal data correlatable without being reversible.
 Historical (frozen legacy) learning snapshot:
   Per-zone "historical_learning_snapshot" block — the frozen legacy
   learning-engine data (learning_engine.freeze() in __init__.py) reshaped
-  into a structured Deep-Research view instead of an unfiltered pass-through
+  into a structured, allow-listed view instead of an unfiltered pass-through
   of LearningEngine.get_export_data(). Per-category allow-lists keep genuine
-  research value (heat rate, delta, outcome score, ts/weekday/hour/minute
+  diagnostic value (heat rate, delta, outcome score, ts/weekday/hour/minute
   time context) while only fields explicitly named in those allow-lists can
-  ever reach the export — no entity_id/device_id/unique_id/person/presence/
+  ever reach diagnostics — no entity_id/device_id/unique_id/person/presence/
   location/home name. event_count_summary reports the true (uncapped) totals;
   research_events is capped per category (see
   _HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY) with any excess reported via
   records_truncated, never silently dropped. A final scan_payload() pass
-  (the same second-barrier scanner used by the Learning runtime-models research
-  block) excludes any category that unexpectedly fails it. Never crashes the
-  export — a missing/malformed source yields available: false instead.
+  excludes any category that unexpectedly fails it. Never crashes diagnostics
+  — a missing/malformed source yields available: false instead.
 
-Learning research data:
-  Only model coefficient aggregates are included (models, cycles,
-  last_cycle_ts, model_update_counts).  Fields containing IDs of any kind
-  (decision_id, episode_id, learning_zone_id, zone_id, …) are stripped
-  recursively before inclusion.  A privacy scan is performed as a final check.
-
-Learning learning progress:
+Learning progress:
   Per-zone "learning_progress" block — the same calibrated scores/labels
   LearningShadowController.learning_progress_safe() already exposes to the
   confidence sensor (data volume/coverage/diversity/clean-episode/outcome/
@@ -76,7 +69,7 @@ Learning episode history:
   oldest/newest ages in hours, and the registry's own retention policy
   (max_records/max_age_days per type) to make boundedness visible.
 
-Learning research daily buckets:
+Research daily buckets:
   Per-zone "research_daily" block — a BOUNDED SUMMARY of
   LearningShadowController.research_daily_snapshot() (already-in-memory,
   no new store read). "summary" aggregates counters/averages/progress-
@@ -86,68 +79,35 @@ Learning research daily buckets:
   event ids, no raw events, no trajectories — every field is already one of
   ResearchDailyBucket's own fixed scalar aggregates.
 
-Learning support critical event timeline (support export only):
+Support critical event timeline:
   Per-zone "critical_events" block — reads ONLY the already-in-memory
   LearningShadowController.support_critical_events_snapshot(), no store
   read. Each event is rendered via support_event_for_export() (drops
-  event_id, bounds "details"). A separate, smaller export cap (200) applies
-  on top of the store's own 750-record cap so a single export file stays
+  event_id, bounds "details"). A separate, smaller cap (200) applies on top
+  of the store's own 750-record cap so a single diagnostics download stays
   readable; any excess is reported via records_truncated, never silently
   dropped. Coverage/retention metadata (coverage_start/end,
   persistent_store_retention_h, full_window_covered, store_warmup) describes
-  the underlying data span, independent of the export cap.
+  the underlying data span, independent of that cap.
 
-Support export reserved diagnostics:
-  Per-zone "reserved_diagnostics" block replaces the previous
-  "adaptation_application"/"orchestration_preview" pair — both were always-
-  zero placeholders for the application/orchestration layer, which is
-  foundation-only in this version (a global kill-switch keeps
-  application_enabled False; nothing ever actually applies a candidate). The
-  two live, currently-meaningful blocks ("adaptation",
-  "adaptation_history" — real passive-candidate/attribution counts, not
-  reserved) are unaffected and remain as-is.
-
-Private storage + authenticated download:
-  Export files are written to a private, non-web-served directory
-  (``<config>/thermosmart_exports/``), never under ``www/`` — so they are
-  never reachable via HA's unauthenticated ``/local/`` static file mount.
-  The only way to retrieve a file is the authenticated HTTP view registered
-  at ``/api/thermosmart/export/{filename}`` (``ThermoSmartExportDownloadView``,
-  ``requires_auth`` defaults to True on ``HomeAssistantView``), which also
-  validates the filename against the exact pattern ThermoSmart itself
-  generates before ever touching the filesystem — no path traversal, no
-  directory listing, nothing else in that directory is reachable.
-
-Restart-safe cleanup:
-  Two complementary mechanisms keep the export directory bounded:
-    1. An in-session ``async_call_later`` timer (best-effort, prompt cleanup
-       while HA keeps running — does NOT survive a restart on its own).
-    2. A startup scan (``async_cleanup_expired_exports``), run once per HA
-       session from the system config entry's setup, that removes any file
-       older than the retention window regardless of whether its in-session
-       timer ever fired. This is the primary, restart-safe strategy; the
-       timer is a supplementary optimization, not the only cleanup path.
+Delivery:
+  Home Assistant's own diagnostics download mechanism (Settings -> Devices &
+  services -> ThermoSmart -> Download diagnostics) handles authentication,
+  signing, and transport — ThermoSmart has no HTTP endpoint, no file on
+  disk, and no cleanup to manage of its own.
 """
 from __future__ import annotations
 
 import dataclasses
 import hashlib
-import json
 import logging
-import os
-import re
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Any
+from typing import Any, Optional
 
-from aiohttp import web
-from homeassistant.components.http import HomeAssistantView
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.event import async_call_later
-from homeassistant.util import dt as dt_util
 
 from .const import (
     DOMAIN,
-    VERSION,
     CONF_WEATHER_ENTITY,
     CONF_OUTDOOR_SOLAR_SENSOR,
     CONF_OUTDOOR_WIND_SENSOR,
@@ -156,53 +116,11 @@ from .const import (
     CONF_OUTDOOR_RAIN_SENSOR,
 )
 
-if TYPE_CHECKING:
-    from .learning_engine import LearningEngine
-
 _LOGGER = logging.getLogger(__name__)
 
-EXPORT_FORMAT_VERSION = 1
 _ANON_SALT = "thermosmart_le_export_v1"
-_EXPORT_CLEANUP_DELAY_S: float = 24 * 3600  # 24 hours
-_EXPORT_DIR_NAME = f"{DOMAIN}_exports"
-# Matches exactly the filenames generated below — anything else is rejected
-# by both the download view (404) and the startup cleanup scan (falls back
-# to mtime instead of trusting an unrecognized name).
-_EXPORT_FILENAME_RE = re.compile(
-    r"^thermosmart_(?:research|support)_(\d{8}T\d{6})_[0-9a-f]{6}\.json$"
-)
-
-# English fallback used only if the native HA translation loader can't
-# resolve a key (e.g. the "notification" category isn't cached yet). Kept in
-# code so a notification is never silently blank; strings.json/translations
-# are still the source of truth for what users actually see.
-_NOTIFICATION_FALLBACK_EN = {
-    "export_created": {
-        "title": "ThermoSmart – Research export created",
-        "message": (
-            "The ThermoSmart research export has been created.\n\n"
-            "Download (requires Home Assistant login): {download_url}"
-        ),
-    },
-    "support_created": {
-        "title": "ThermoSmart – Support export created",
-        "message": (
-            "The ThermoSmart support export has been created.\n\n"
-            "Download (requires Home Assistant login): {download_url}"
-        ),
-    },
-}
 
 # ── Learning privacy helpers ───────────────────────────────────────────────────────
-
-# Top-level keys safe to include from _ZoneRuntime.serialize().
-# Excluded: capture (contains zone_id + decision_id in ledger),
-#           pipeline (contains zone_id + open_decision_id),
-#           ledger (inside capture, contains decision_ids),
-#           baseline_store, pending_* (all contain decision-related IDs).
-_LEARNING_RESEARCH_SAFE_TOP_KEYS = frozenset(
-    {"models", "cycles", "last_cycle_ts", "model_update_counts"}
-)
 
 # Key substrings to strip recursively — mirrors privacy.py _FORBIDDEN_KEY_SUBSTRINGS
 # plus "zone_id" which the scanner does not catch standalone.
@@ -551,128 +469,6 @@ def _learning_runtime(coord):
         if shadow is None:
             return None
         return getattr(shadow, "runtime", None)
-    except Exception:
-        return None
-
-
-def _learning_research_data(coord, zone_id: str) -> dict | None:
-    """Return privacy-safe Learning model statistics for research export, or None.
-
-    Only includes top-level keys from _LEARNING_RESEARCH_SAFE_TOP_KEYS (models,
-    cycles, last_cycle_ts, model_update_counts).  All fields whose key contains
-    a forbidden substring (decision_id, learning_zone_id, zone_id, …) are
-    stripped recursively before inclusion.  A final privacy scan confirms no
-    violations remain; if any do, the Learning block is excluded for that zone.
-    """
-    try:
-        rt = _learning_runtime(coord)
-        if rt is None:
-            return None
-        zone_rt = rt._zones.get(zone_id)
-        if zone_rt is None:
-            return None
-        raw = zone_rt.serialize()
-        # 1. Allowlist: only safe top-level sections
-        filtered = {k: v for k, v in raw.items() if k in _LEARNING_RESEARCH_SAFE_TOP_KEYS}
-        # 2. Recursive strip of forbidden keys within allowed sections
-        safe = _learning_strip_forbidden(filtered)
-        # 3. Replace serialized outcome model with research-scoped export.
-        #    The raw serialization (serialize_state) uses internal confounder_flags and
-        #    has no truncation_info. The research export normalizes to confounder_codes
-        #    and adds truncation_info so consumers see a stable, documented format.
-        try:
-            from .learning.contracts import ExportScope
-            _om = zone_rt.orchestrator.models.get("outcome")
-            if _om is not None and isinstance(safe.get("models"), dict):
-                safe["models"]["outcome"] = dict(_om.export(ExportScope.RESEARCH))
-        except Exception:
-            pass  # non-fatal; raw outcome data remains
-        # 3b. Passive adaptation candidates (shadow-only; no control modification).
-        try:
-            from .learning.adaptation import (
-                OutcomeSignal, SituationContext, suggest_candidates, traces_for_export,
-            )
-            _om2 = zone_rt.orchestrator.models.get("outcome")
-            if _om2 is not None:
-                _od = _om2.diagnostics()
-                _fc, _pc = _od.full_partial
-                _total = _fc + _pc
-                _rejections = sum(_od.rejection_counts.values()) if _od.rejection_counts else 0
-                _signal = OutcomeSignal(
-                    sample_count=_total,
-                    timeout_rate=_od.timeout_rate,
-                    overshoot_rate=_od.overshoot_rate,
-                    reached_rate=_od.reached_rate,
-                    general_data_quality=_od.general_data_quality,
-                    aggregate_reliability=getattr(
-                        getattr(_om2, "_state", None), "aggregate_reliability", 0.0
-                    ),
-                    partial_ratio=(_pc / _total) if _total > 0 else 0.0,
-                    confounder_contamination=(_rejections > 0),
-                )
-                _sit = _adaptation_situation_context(
-                    coord, zone_rt, last_update_ts=_od.last_update_ts
-                )
-                _traces = suggest_candidates(
-                    zone_id, _signal, _sit, _od.last_update_ts or ""
-                )
-                _export_list = traces_for_export(_traces)
-                if _export_list:
-                    safe["adaptation_candidates"] = _export_list
-        except Exception:
-            pass
-        # 3c. Adaptation candidate history (in-memory; empty until first outcome cycle).
-        try:
-            shadow = getattr(coord, "_learning_shadow", None)
-            _history_tuples: list = []
-            _lifecycle_state = None
-            if shadow is not None:
-                _lifecycle_state = getattr(shadow, "_application_lifecycle_state", None)
-                _hist_snapshot = shadow.adaptation_history_snapshot()
-                if _hist_snapshot:
-                    from datetime import datetime as _dt
-                    for _entry in _hist_snapshot.values():
-                        try:
-                            _span = 0.0
-                            if _entry.first_seen_ts and _entry.last_seen_ts:
-                                _t0 = _dt.fromisoformat(
-                                    _entry.first_seen_ts.replace("Z", "+00:00"))
-                                _t1 = _dt.fromisoformat(
-                                    _entry.last_seen_ts.replace("Z", "+00:00"))
-                                _span = max(0.0, (_t1 - _t0).total_seconds() / 86400.0)
-                        except Exception:
-                            _span = 0.0
-                        _history_tuples.append(
-                            (_entry, _span, _learning_confounder_ratio(coord, zone_id))
-                        )
-            safe["adaptation_candidate_history"] = _learning_adaptation_history_for_research(
-                _history_tuples, lifecycle_state=_lifecycle_state,
-            )
-        except Exception:
-            safe["adaptation_candidate_history"] = []
-        # 3d. Application lifecycle state entries (public-safe; no timestamps).
-        try:
-            safe["adaptation_application_state"] = (
-                _learning_application_lifecycle_research_entries(coord)
-            )
-        except Exception:
-            safe["adaptation_application_state"] = []
-        # 4. Final privacy scan (belt-and-suspenders)
-        try:
-            from .learning.privacy import scan_payload
-            violations = scan_payload(safe)
-            if violations:
-                _LOGGER.warning(
-                    "ThermoSmart: Learning Engine research data for zone %s has %d residual "
-                    "privacy violation(s) after stripping — block excluded for this zone. "
-                    "Violations: %s",
-                    _zone_hash(zone_id), len(violations),
-                    [(v.path, v.kind) for v in violations[:5]],
-                )
-                return None
-        except Exception as scan_err:
-            _LOGGER.debug("ThermoSmart: learning privacy scan skipped: %s", scan_err)
-        return safe
     except Exception:
         return None
 
@@ -1469,297 +1265,6 @@ def _learning_adaptation_history_summary(coord, zone_id: str) -> dict:
         return {**_zero, "last_error": str(err)}
 
 
-def _learning_adaptation_history_for_research(
-    history_entries: list, *, lifecycle_state: Any = None,
-) -> list[dict]:
-    """Convert adaptation candidate history entries to research-safe export dicts.
-
-    Args:
-        history_entries: list of (CandidateHistoryEntry, span_days, confounder_ratio)
-            tuples. Pass [] when no runtime accumulation is available yet.
-        lifecycle_state: current ApplicationLifecycleState (or None), used to
-            attach a read-only "application_orchestration_preview" per entry.
-
-    Returns public-safe dicts (see adaptation_history_entry_for_research_export).
-    Always returns a list (empty when no entries). Never raises.
-    """
-    if not history_entries:
-        return []
-    result: list[dict] = []
-    try:
-        from .learning.adaptation import adaptation_history_entry_for_research_export
-        for entry, span_days, confounder_ratio in history_entries:
-            try:
-                d = adaptation_history_entry_for_research_export(
-                    entry,
-                    span_days=span_days,
-                    confounder_ratio=confounder_ratio,
-                )
-                d["application_orchestration_preview"] = _learning_orchestration_preview_dict(
-                    entry,
-                    lifecycle_state=lifecycle_state,
-                    span_days=span_days,
-                    confounder_ratio=confounder_ratio,
-                )
-                result.append(d)
-            except Exception:
-                pass
-    except Exception:
-        pass
-    return result
-
-
-def _learning_orchestration_preview_dict(
-    entry: Any, *, lifecycle_state: Any, span_days: float, confounder_ratio: float,
-) -> dict:
-    """Build a public-safe, timestamp-free orchestration preview for one
-    candidate history entry, for the anonymized research export.
-
-    Runtime context is intentionally always None here: the export path has no
-    safe live source for proposed_delta / current_cumulative_delta / safety
-    flags, so guessing them would be unsafe. Passing None makes the preview
-    block conservatively via "unknown_context" instead — application_enabled
-    and would_apply always report False; would_apply_if_enabled reports the
-    same conservative False in real export (an actually-live runtime context
-    is required for that field to read True, which only test/helper callers
-    of evaluate_application_orchestration() supply directly).
-
-    Never raises. Read-only — never mutates history or lifecycle state.
-    """
-    try:
-        from .learning.adaptation.orchestrator import evaluate_application_orchestration
-        result = evaluate_application_orchestration(
-            history_entry=entry,
-            lifecycle_state=lifecycle_state,
-            runtime_context=None,
-            span_days=span_days,
-            confounder_ratio=confounder_ratio,
-        )
-        return result.to_research_dict()
-    except Exception:
-        return {
-            "application_enabled": False,
-            "promotion_readiness": "blocked",
-            "would_apply": False,
-            "would_apply_if_enabled": False,
-            "blocked_by_unknown_context": False,
-            "candidate_type": None,
-            "direction": None,
-            "blocked_reasons": ["orchestration_preview_error"],
-            "safety_reasons": [],
-            "bounded_delta_min": None,
-            "current_cumulative_delta_min": None,
-            "next_cumulative_delta_min": None,
-            "monitoring_required": True,
-            "rollback_supported": True,
-            "lifecycle_existing_status": None,
-            "cooldown_active": False,
-        }
-
-
-def _learning_orchestration_preview_summary(coord: Any, zone_id: str) -> dict:
-    """Aggregate orchestration-preview counts across candidate history for
-    support export. Counts/status only — no per-entry detail, never raises.
-
-    Runtime context is intentionally None for every entry (see
-    _learning_orchestration_preview_dict) — this keeps would_apply_count always 0
-    and would_apply_if_enabled_count conservative (unknown_context blocks
-    both). lifecycle_blocked_count remains meaningful regardless, since
-    lifecycle-state gating does not depend on runtime_context.
-
-    ``status``/``active``/``reason`` mark this whole block as a preview of a
-    currently-inactive application/orchestration layer (see
-    _learning_application_lifecycle_summary's docstring) — the per-entry counts
-    stay real diagnostic previews ("what would happen if this were on"), not
-    a live feature a maintainer should expect to see actually apply anything.
-    """
-    _zero = {
-        "status": "reserved",
-        "active": False,
-        "reason": "application_layer_not_active_in_this_version",
-        "entry_count": 0,
-        "would_apply_count": 0,
-        "would_apply_if_enabled_count": 0,
-        "blocked_count": 0,
-        "lifecycle_blocked_count": 0,
-        "safety_blocked_count": 0,
-        "application_enabled": False,
-        "last_error": None,
-    }
-    try:
-        shadow = getattr(coord, "_learning_shadow", None)
-        if shadow is None:
-            return _zero
-        history = shadow.adaptation_history_snapshot()
-        if not history:
-            return {**_zero, "last_error": shadow.adaptation_last_error()}
-
-        lifecycle_state = getattr(shadow, "_application_lifecycle_state", None)
-        from .learning.adaptation.orchestrator import evaluate_application_orchestration
-        from datetime import datetime as _dt
-
-        would_apply = 0
-        would_apply_if_enabled = 0
-        blocked = 0
-        lifecycle_blocked = 0
-        safety_blocked = 0
-        for entry in history.values():
-            try:
-                span_days = 0.0
-                if entry.first_seen_ts and entry.last_seen_ts:
-                    t0 = _dt.fromisoformat(entry.first_seen_ts.replace("Z", "+00:00"))
-                    t1 = _dt.fromisoformat(entry.last_seen_ts.replace("Z", "+00:00"))
-                    span_days = max(0.0, (t1 - t0).total_seconds() / 86400.0)
-                result = evaluate_application_orchestration(
-                    history_entry=entry,
-                    lifecycle_state=lifecycle_state,
-                    runtime_context=None,
-                    span_days=span_days,
-                    confounder_ratio=_learning_confounder_ratio(coord, zone_id),
-                )
-                if result.would_apply:
-                    would_apply += 1
-                if result.would_apply_if_enabled:
-                    would_apply_if_enabled += 1
-                if result.blocked_reasons:
-                    blocked += 1
-                if any(r.startswith("lifecycle_") for r in result.blocked_reasons):
-                    lifecycle_blocked += 1
-                if result.safety_reasons:
-                    safety_blocked += 1
-            except Exception:
-                blocked += 1
-        return {
-            **_zero,
-            "entry_count": len(history),
-            "would_apply_count": would_apply,
-            "would_apply_if_enabled_count": would_apply_if_enabled,
-            "blocked_count": blocked,
-            "lifecycle_blocked_count": lifecycle_blocked,
-            "safety_blocked_count": safety_blocked,
-            "last_error": shadow.adaptation_last_error(),
-        }
-    except Exception as err:
-        return {**_zero, "last_error": str(err)}
-
-
-def _learning_application_lifecycle_summary(coord: Any, zone_id: str) -> dict:
-    """Return adaptation application lifecycle summary for support export.
-
-    Read-only, no mutation, no control effect. Never raises.
-
-    The application/orchestration layer is foundation-only in this version —
-    ``ApplicationPolicy.application_enabled`` is a global kill-switch that is
-    always False (see learning/adaptation/application.py), and nothing in the
-    live runtime ever adopts/applies a candidate. Every count below is
-    therefore always 0, not a sign of a broken feature — ``status``/``active``/
-    ``reason`` make that explicit so a maintainer reading the export does not
-    mistake this for a live, currently-inactive-by-configuration feature.
-    """
-    _zero = {
-        "status": "reserved",
-        "active": False,
-        "reason": "application_layer_not_active_in_this_version",
-        "state_entry_count": 0,
-        "active_count": 0,
-        "rollback_recommended_count": 0,
-        "adoption_ready_count": 0,
-        "adopted_count": 0,
-        "rolled_back_count": 0,
-        "expired_count": 0,
-        "last_error": None,
-    }
-    try:
-        shadow = getattr(coord, "_learning_shadow", None)
-        if shadow is None:
-            return _zero
-        snapshot = shadow.application_lifecycle_snapshot()
-        last_err = getattr(shadow, "_application_lifecycle_last_error", None)
-        if snapshot is None:
-            return {**_zero, "last_error": last_err}
-        return {
-            **_zero,
-            "state_entry_count": snapshot.get("total", 0),
-            "active_count": snapshot.get("active", 0),
-            "rollback_recommended_count": snapshot.get("rollback_recommended", 0),
-            "adoption_ready_count": snapshot.get("adoption_ready", 0),
-            "adopted_count": snapshot.get("adopted", 0),
-            "rolled_back_count": snapshot.get("rolled_back", 0),
-            "expired_count": snapshot.get("expired", 0),
-            "last_error": last_err,
-        }
-    except Exception as err:
-        return {**_zero, "last_error": str(err)}
-
-
-def _learning_reserved_diagnostics_summary(coord: Any, zone_id: str) -> dict:
-    """Collapsed placeholder for the application/orchestration layer in the
-    support export.
-
-    That layer is foundation-only in this version — ``ApplicationPolicy.
-    application_enabled`` is a global kill-switch that is always False (see
-    _learning_application_lifecycle_summary's docstring), and
-    _learning_orchestration_preview_summary's ``would_apply_count`` is always 0
-    for the same reason. Replaces the two previous always-inert blocks
-    (``adaptation_application``, ``orchestration_preview`` — every counter in
-    both was always 0) with one compact, clearly-labeled placeholder instead
-    of two blocks of always-zero counters that read as noise in a support
-    export. Any internal error from either underlying summary still surfaces
-    here via ``last_error`` (support-relevant even though the feature itself
-    is inactive). Never raises.
-    """
-    last_error = None
-    try:
-        app = _learning_application_lifecycle_summary(coord, zone_id)
-        if app.get("last_error"):
-            last_error = app["last_error"]
-    except Exception:
-        pass
-    if last_error is None:
-        try:
-            preview = _learning_orchestration_preview_summary(coord, zone_id)
-            if preview.get("last_error"):
-                last_error = preview["last_error"]
-        except Exception:
-            pass
-    return {
-        "available": False,
-        "reason": "reserved_inactive",
-        "last_error": last_error,
-    }
-
-
-def _learning_application_lifecycle_research_entries(coord: Any) -> list:
-    """Return public-safe application lifecycle state entries for research export.
-
-    No timestamps, no entity IDs, no zone names — only boolean / numeric fields.
-    Never raises; returns empty list on any error or when no state exists.
-    """
-    try:
-        shadow = getattr(coord, "_learning_shadow", None)
-        if shadow is None:
-            return []
-        state = getattr(shadow, "_application_lifecycle_state", None)
-        if state is None or not getattr(state, "entries", None):
-            return []
-        from datetime import datetime as _dt, timezone as _tz
-        now_ts = _dt.now(_tz.utc).isoformat()
-        from .learning.adaptation.application_state import (
-            application_state_entry_for_research_export,
-        )
-        result: list = []
-        for entry in state.entries.values():
-            try:
-                result.append(
-                    application_state_entry_for_research_export(entry, now_ts=now_ts)
-                )
-            except Exception:
-                pass
-        return result
-    except Exception:
-        return []
-
-
 def _adaptation_situation_context(
     coord: Any, zone_rt: Any, last_update_ts: Optional[str] = None
 ) -> Any:
@@ -1878,315 +1383,6 @@ def _resolve_clock(hass: HomeAssistant) -> datetime | None:
     return None
 
 
-# ── private storage helpers ────────────────────────────────────────────────────
-
-def _export_dir(hass: HomeAssistant) -> str:
-    """Private, non-web-served directory export files are written to."""
-    return hass.config.path(_EXPORT_DIR_NAME)
-
-
-async def _async_write_export_file(hass: HomeAssistant, filename: str, payload: dict) -> str:
-    """Create the export directory and write ``payload`` to ``filename`` in it.
-
-    Both the (idempotent) directory creation and the file write happen inside
-    a single executor job so neither ever blocks the event loop.
-    """
-    export_dir = _export_dir(hass)
-    filepath = os.path.join(export_dir, filename)
-
-    def _write() -> None:
-        os.makedirs(export_dir, exist_ok=True)
-        with open(filepath, "w", encoding="utf-8") as fh:
-            json.dump(payload, fh, indent=2, ensure_ascii=False, default=str)
-
-    await hass.async_add_executor_job(_write)
-    return filepath
-
-
-# ── cleanup scheduler ─────────────────────────────────────────────────────────
-
-async def _async_remove_export_file(hass: HomeAssistant, filepath: str) -> None:
-    """Delete one export file in the executor; never raises."""
-    def _remove() -> None:
-        try:
-            os.remove(filepath)
-            _LOGGER.debug("ThermoSmart: auto-deleted export file: %s", filepath)
-        except FileNotFoundError:
-            pass
-        except OSError as err:
-            _LOGGER.warning("ThermoSmart: could not delete export file %s: %s", filepath, err)
-
-    await hass.async_add_executor_job(_remove)
-
-
-def _schedule_export_cleanup(hass: HomeAssistant, filepath: str) -> None:
-    """Schedule deletion of an export file after the retention window.
-
-    Best-effort, in-session optimization only: the timer itself does NOT
-    survive a Home Assistant restart. The restart-safe guarantee comes from
-    :func:`async_cleanup_expired_exports`, which is run once per session at
-    setup and removes any file whose age already exceeds the retention
-    window regardless of whether this timer ever fired.
-    """
-    def _cleanup(_now: datetime) -> None:
-        hass.async_create_task(_async_remove_export_file(hass, filepath))
-
-    async_call_later(hass, _EXPORT_CLEANUP_DELAY_S, _cleanup)
-
-
-async def async_cleanup_expired_exports(hass: HomeAssistant) -> None:
-    """Remove export files older than the retention window (restart-safe).
-
-    Intended to run once per Home Assistant session, from the system config
-    entry's setup — this is what makes cleanup survive a restart, since the
-    per-export ``async_call_later`` timer above does not. Idempotent and
-    safe to call repeatedly: a missing export directory, an already-removed
-    file, or any per-file filesystem error is handled without raising.
-    """
-    export_dir = _export_dir(hass)
-
-    def _scan_and_remove() -> None:
-        try:
-            entries = os.listdir(export_dir)
-        except FileNotFoundError:
-            return
-        except OSError as err:
-            _LOGGER.warning(
-                "ThermoSmart: could not scan export directory %s: %s", export_dir, err
-            )
-            return
-
-        now = datetime.now(timezone.utc)
-        for name in entries:
-            filepath = os.path.join(export_dir, name)
-            match = _EXPORT_FILENAME_RE.match(name)
-            try:
-                if match:
-                    created = datetime.strptime(
-                        match.group(1), "%Y%m%dT%H%M%S"
-                    ).replace(tzinfo=timezone.utc)
-                else:
-                    # Not one of our generated filenames — fall back to mtime
-                    # so a stray file doesn't linger in this directory forever.
-                    created = datetime.fromtimestamp(
-                        os.path.getmtime(filepath), tz=timezone.utc
-                    )
-                age_s = (now - created).total_seconds()
-                if age_s >= _EXPORT_CLEANUP_DELAY_S:
-                    os.remove(filepath)
-                    _LOGGER.debug(
-                        "ThermoSmart: removed expired export file on startup scan: %s",
-                        filepath,
-                    )
-            except FileNotFoundError:
-                continue
-            except OSError as err:
-                _LOGGER.warning(
-                    "ThermoSmart: could not remove expired export file %s: %s",
-                    filepath, err,
-                )
-
-    await hass.async_add_executor_job(_scan_and_remove)
-
-
-# ── authenticated download view ───────────────────────────────────────────────
-
-class ThermoSmartExportDownloadView(HomeAssistantView):
-    """Authenticated download endpoint for ThermoSmart export files.
-
-    Files live in the private export directory (see ``_export_dir``) and are
-    only reachable through this view. ``requires_auth`` defaults to True on
-    ``HomeAssistantView``, so a valid Home Assistant session/token is
-    required — unlike the old ``/local/...`` path, this is never reachable
-    by an unauthenticated request. The filename is validated against the
-    exact pattern ThermoSmart generates before it is ever joined into a
-    filesystem path, which also rules out path traversal.
-    """
-
-    url = "/api/thermosmart/export/{filename}"
-    name = "api:thermosmart:export"
-
-    def __init__(self, hass: HomeAssistant) -> None:
-        self._hass = hass
-
-    async def get(self, request: web.Request, filename: str) -> web.StreamResponse:
-        if not _EXPORT_FILENAME_RE.match(filename):
-            raise web.HTTPNotFound()
-        filepath = os.path.join(_export_dir(self._hass), filename)
-        exists = await self._hass.async_add_executor_job(os.path.isfile, filepath)
-        if not exists:
-            raise web.HTTPNotFound()
-        return web.FileResponse(
-            filepath,
-            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-        )
-
-
-# ── notification messages ─────────────────────────────────────────────────────
-#
-# These backend-rendered persistent-notification texts are intentionally NOT
-# stored in strings.json/translations/*.json: hassfest validates those two
-# files against a fixed allow-list of top-level keys (config, options,
-# entity, services, issues, ...) that has no slot for freeform,
-# placeholder-bearing notification text outside the config/options flow or
-# the Repairs ("issues") system — neither fits a one-off "your export is
-# ready" notice. custom_components/thermosmart/notifications/<lang>.json is
-# a ThermoSmart-owned resource hassfest never inspects, so it can carry the
-# same per-language content without tripping the schema check.
-
-_NOTIFICATIONS_DIR = os.path.join(os.path.dirname(__file__), "notifications")
-
-
-def _load_notification_catalog(lang: str) -> dict[str, dict[str, str]]:
-    path = os.path.join(_NOTIFICATIONS_DIR, f"{lang}.json")
-    try:
-        with open(path, encoding="utf-8") as f:
-            return json.load(f)
-    except (OSError, ValueError):
-        return {}
-
-
-async def _async_notification_text(
-    hass: HomeAssistant, translation_key: str, **placeholders: Any,
-) -> tuple[str, str]:
-    """Return the (title, message) pair for ``translation_key`` in the user's
-    Home Assistant language. Falls back to English, then to an in-code
-    constant, so a notification is never left blank.
-    """
-    language = hass.config.language or "en"
-
-    async def _load(lang: str) -> dict[str, str]:
-        try:
-            return await hass.async_add_executor_job(_load_notification_catalog, lang)
-        except Exception:  # translation loading must never break an export
-            return {}
-
-    catalog = await _load(language)
-    entry = catalog.get(translation_key, {})
-    title = entry.get("title")
-    message = entry.get("message")
-
-    if (title is None or message is None) and language != "en":
-        en_entry = (await _load("en")).get(translation_key, {})
-        title = title or en_entry.get("title")
-        message = message or en_entry.get("message")
-
-    fallback = _NOTIFICATION_FALLBACK_EN.get(translation_key, {})
-    title = title or fallback.get("title", "ThermoSmart")
-    message = message or fallback.get("message", "")
-    return title, message.format(**placeholders)
-
-
-async def async_build_export_notification(hass: HomeAssistant, filename: str) -> tuple[str, str]:
-    """Return (title, message) for a completed research export notification."""
-    return await _async_notification_text(
-        hass, "export_created",
-        filename=filename,
-        download_url=f"/api/thermosmart/export/{filename}",
-        retention_hours=int(_EXPORT_CLEANUP_DELAY_S // 3600),
-    )
-
-
-async def async_build_support_notification(hass: HomeAssistant, filename: str) -> tuple[str, str]:
-    """Return (title, message) for a completed support export notification."""
-    return await _async_notification_text(
-        hass, "support_created",
-        filename=filename,
-        download_url=f"/api/thermosmart/export/{filename}",
-        retention_hours=int(_EXPORT_CLEANUP_DELAY_S // 3600),
-    )
-
-
-# ── export functions ──────────────────────────────────────────────────────────
-
-async def async_export_learning_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
-    """Build anonymized research export covering all zones, write to the
-    private export directory (see ``_export_dir``)."""
-    le: LearningEngine | None = hass.data.get(DOMAIN, {}).get("learning_engine")
-    if ts is None:
-        ts = _resolve_clock(hass)
-    if ts is None:
-        raise RuntimeError(
-            "async_export_learning_data: no coordinator clock available — "
-            "ensure at least one zone is configured before exporting."
-        )
-    ts_str = ts.strftime("%Y%m%dT%H%M%S")
-
-    zones: list[dict] = []
-
-    for entry in hass.config_entries.async_entries(DOMAIN):
-        cfg = {**entry.data, **entry.options}
-        if cfg.get("entry_type") == "system":
-            continue
-
-        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-        coord = entry_data.get("coordinator") if isinstance(entry_data, dict) else None
-
-        meta = _zone_meta(cfg)
-        # The legacy learning engine is frozen — learning_engine.freeze() in
-        # __init__.py — so this is a static historical snapshot, not
-        # live-updating data. analytics is computed from the raw learning
-        # dict (pure numeric aggregates, already export-safe); the exported
-        # historical_learning_snapshot itself is a separate, sanitized,
-        # allow-listed Deep-Research view built by
-        # _historical_learning_snapshot_for_research() below — see that
-        # function's docstring for why the raw dict is never exported as-is.
-        learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
-        analytics = _compute_analytics(learning)
-        runtime_models = _learning_research_data(coord, entry.entry_id) if coord is not None else None
-        learning_progress = (
-            _learning_progress_export(coord) if coord is not None
-            else {"available": False, "reason": "no_coordinator"}
-        )
-        episode_history = (
-            _learning_episode_history_export(coord, now=ts) if coord is not None
-            else {"available": False, "reason": "no_coordinator"}
-        )
-        research_daily = (
-            _learning_research_daily_export(coord, now=ts) if coord is not None
-            else {"available": False, "reason": "no_coordinator"}
-        )
-        # Independent of coordinator liveness — see _learning_storage_context_export()'s
-        # docstring: store-level context, never a substitute for the content-time
-        # fields already inside episode_history/research_daily/historical_learning_snapshot.
-        storage_context = await _learning_storage_context_export(hass, entry.entry_id, now=ts)
-
-        zones.append({
-            "zone_hash": _zone_hash(entry.entry_id),
-            **meta,
-            "historical_learning_snapshot": _historical_learning_snapshot_for_research(learning),
-            "analytics": analytics,
-            "runtime_models": runtime_models,
-            "learning_progress": learning_progress,
-            "episode_history": episode_history,
-            "research_daily": research_daily,
-            "storage_context": storage_context,
-        })
-
-    _tz_name = str(hass.config.time_zone) if hass.config.time_zone else None
-    export: dict = {
-        "thermosmart_version": VERSION,
-        "export_type": "research",
-        "export_format_version": EXPORT_FORMAT_VERSION,
-        "export_timestamp": ts.isoformat(),
-        "exported_at_utc": ts.isoformat(),
-        "exported_at_local": dt_util.as_local(ts).isoformat(),
-        "timezone": _tz_name,
-        "zone_count": len(zones),
-        "total_trv_count": sum(z["trv_count"] for z in zones),
-        "total_temp_sensor_count": sum(z["temp_sensor_count"] for z in zones),
-        "total_humidity_sensor_count": sum(z["humidity_sensor_count"] for z in zones),
-        "zones": zones,
-    }
-
-    random_suffix = os.urandom(3).hex()
-    filename = f"thermosmart_research_{ts_str}_{random_suffix}.json"
-    filepath = await _async_write_export_file(hass, filename, export)
-    _schedule_export_cleanup(hass, filepath)
-    _LOGGER.info("ThermoSmart: research export written → %s", filepath)
-    return filepath
-
-
 def _storage_summary_age_minutes(updated_at_utc: Any, now: datetime) -> float | None:
     """Minutes between ``updated_at_utc`` (ISO-8601, 'Z' or '+00:00' suffix)
     and ``now`` — or ``None`` on anything not a clean, parseable timestamp.
@@ -2270,38 +1466,18 @@ async def _storage_metadata_stores_for_export(
     return {"available": True, "stores": stores_out}
 
 
-async def _learning_storage_summary_export(
-    hass: HomeAssistant, learning_zone_id: str, *, now: datetime,
-) -> dict:
-    """Per-zone Storage-Metadata summary for the support export (Commit C).
-
-    Thin wrapper around ``_storage_metadata_stores_for_export()`` — see that
-    function's docstring for the full shape/privacy/fallback contract.
-    """
-    return await _storage_metadata_stores_for_export(hass, learning_zone_id, now=now)
-
-
 async def _learning_storage_context_export(
     hass: HomeAssistant, learning_zone_id: str, *, now: datetime,
 ) -> dict:
-    """Per-zone Storage-Metadata context for the research export (Commit D).
+    """Per-zone Storage-Metadata context for diagnostics.
 
-    Same underlying data as ``_learning_storage_summary_export()`` (both
-    delegate to ``_storage_metadata_stores_for_export()``), but framed for a
-    different audience: Research Export readers work with *content time*
-    (an episode's/bucket's/observation's own ``ts``/``hour``/``minute``/
-    ``weekday`` fields — when the underlying heating event happened) and
-    could otherwise easily mistake a store's ``updated_at_utc``/
-    ``age_minutes`` for another content timestamp. ``granularity``:
-    ``"store_level"`` and ``timestamp_semantics``: ``"store_write_time"`` are
-    small, constant, machine-readable markers (deliberately not a prose
-    ``note`` — this export favors compact fields) making that distinction
-    explicit and unambiguous wherever this block is read, independent of
-    whether any store data is currently available.
-
-    This block is pure additional context: it never changes, replaces, or
-    reads from the Episode/Research-Daily/Observation payloads themselves —
-    those keep their own existing content-time fields exactly as before.
+    ``granularity``: ``"store_level"`` and ``timestamp_semantics``:
+    ``"store_write_time"`` are small, constant, machine-readable markers
+    making explicit that a store's ``updated_at_utc``/``age_minutes`` is a
+    *storage write time*, not a content timestamp — episode/research-daily/
+    observation payloads elsewhere in diagnostics carry their own ``ts``/
+    ``hour``/``minute``/``weekday`` content-time fields, unrelated to this
+    block, which is pure additional context and never changes/replaces them.
     """
     result = await _storage_metadata_stores_for_export(hass, learning_zone_id, now=now)
     return {
@@ -2309,111 +1485,3 @@ async def _learning_storage_context_export(
         "timestamp_semantics": "store_write_time",
         **result,
     }
-
-
-async def async_export_support_data(hass: HomeAssistant, *, ts: datetime | None = None) -> str:
-    """Build a support-oriented export covering all zones, write to /config/www/."""
-    from homeassistant.const import __version__ as HA_VERSION  # noqa: PLC0415
-
-    if ts is None:
-        ts = _resolve_clock(hass)
-    if ts is None:
-        raise RuntimeError(
-            "async_export_support_data: no coordinator clock available — "
-            "ensure at least one zone is configured before exporting."
-        )
-    ts_str = ts.strftime("%Y%m%dT%H%M%S")
-
-    all_entries = [
-        e for e in hass.config_entries.async_entries(DOMAIN)
-        if {**e.data, **e.options}.get("entry_type") != "system"
-    ]
-
-    zones: list[dict] = []
-    for entry in all_entries:
-        cfg = {**entry.data, **entry.options}
-
-        entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
-        coord = entry_data.get("coordinator") if isinstance(entry_data, dict) else None
-
-        zone_info: dict = {
-            "zone_hash": _zone_hash(entry.entry_id),
-            "config_flags": _zone_meta(cfg),
-        }
-
-        if coord is not None:
-            zone_info["runtime_state"] = {
-                "active_control": getattr(coord, "_active_control", None),
-                "learning_enabled": getattr(coord, "_learning_enabled", None),
-                "current_mode": getattr(coord, "_current_mode", None),
-                "confidence": round(float(((coord.data or {}).get("learning_confidence") or 0.0)), 3),
-            }
-            zone_info["runtime_health"] = _learning_health_data(coord)
-            zone_info["runtime_pending"] = _learning_pending_data(coord, entry.entry_id)
-            zone_info["adaptation"] = _learning_adaptation_summary(coord, entry.entry_id)
-            zone_info["adaptation_history"] = _learning_adaptation_history_summary(
-                coord, entry.entry_id
-            )
-            zone_info["reserved_diagnostics"] = _learning_reserved_diagnostics_summary(
-                coord, entry.entry_id
-            )
-            zone_info["critical_events"] = _learning_critical_events_export(coord, now=ts)
-            zone_info["device_profile"] = _device_profile_export(coord)
-        else:
-            zone_info["runtime_state"] = None
-            zone_info["runtime_health"] = None
-            zone_info["runtime_pending"] = None
-            zone_info["adaptation"] = None
-            zone_info["adaptation_history"] = None
-            zone_info["reserved_diagnostics"] = {
-                "available": False, "reason": "no_coordinator", "last_error": None,
-            }
-            zone_info["critical_events"] = {"available": False, "reason": "no_coordinator"}
-            zone_info["device_profile"] = None
-
-        # Independent of coordinator liveness — StorageMetadataStore only
-        # needs hass + the zone's entry_id (== learning_zone_id), and a
-        # zone's stores can outlive a currently-unloaded coordinator.
-        zone_info["storage_summary"] = await _learning_storage_summary_export(
-            hass, entry.entry_id, now=ts
-        )
-
-        zones.append(zone_info)
-
-    _tz_name = str(hass.config.time_zone) if hass.config.time_zone else None
-    export: dict = {
-        "thermosmart_version": VERSION,
-        "export_type": "support",
-        "export_format_version": EXPORT_FORMAT_VERSION,
-        "export_timestamp": ts.isoformat(),
-        "exported_at_utc": ts.isoformat(),
-        "exported_at_local": dt_util.as_local(ts).isoformat(),
-        "timezone": _tz_name,
-        "system": {
-            "ha_version": HA_VERSION,
-            "zone_count": len(zones),
-        },
-        "storage_layout": {
-            "note": (
-                "ThermoSmart stores learning data per zone. The active learning "
-                "runtime store uses a hashed zone key: thermosmart_learning__<hash>. "
-                "Segmented learning stores use: "
-                "thermosmart_learning__<zone_entry_id>__<suffix>. Older "
-                "thermosmart_le2__ keys (pre-migration installs) are read once as a "
-                "fallback and then mirrored onto the keys above; they are kept as a "
-                "safety fallback and not deleted automatically. The separate, older "
-                "thermosmart_learning_data store is unrelated legacy/read-only data. "
-                "Do not manually delete any thermosmart_learning__<hash> or "
-                "thermosmart_le2__<hash> files unless you intentionally want to "
-                "reset runtime learning state for that zone."
-            ),
-        },
-        "zones": zones,
-    }
-
-    random_suffix = os.urandom(3).hex()
-    filename = f"thermosmart_support_{ts_str}_{random_suffix}.json"
-    filepath = await _async_write_export_file(hass, filename, export)
-    _schedule_export_cleanup(hass, filepath)
-    _LOGGER.info("ThermoSmart: support export written → %s", filepath)
-    return filepath

@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.3.0"
+VERSION = "1.3.1"
 
 # Bundled Lovelace card (custom_components/thermosmart/www/thermosmart-card.js).
 # Registered once per HA session as a static path + frontend module URL —

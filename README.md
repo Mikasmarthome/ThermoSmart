@@ -24,7 +24,7 @@ ThermoSmart observes how your building heats and cools, then uses that data — 
 ## Why ThermoSmart?
 
 - **Learns your building** — heating rate, heat loss and weather sensitivity derived from real observations in your home, not factory defaults
-- **Adapts to conditions** — outdoor temperature, wind, solar radiation and forecasts feed into every decision
+- **Adapts to conditions** — outdoor temperature, wind, solar radiation and forecasts feed into heating control decisions
 - **Starts passively** — Observation mode collects data without touching your existing setup
 - **Fully local** — no cloud, no subscription
 
@@ -248,11 +248,11 @@ ThermoSmart combines two independent switches:
 
 - **Learning enabled + Active Control off** — ThermoSmart observes and learns, but does not control your devices (no service calls).
 - **Learning disabled + Active Control on** — ThermoSmart controls deterministically using TPI, without any adaptive learning adjustments.
-- **Learning enabled + Active Control on** — ThermoSmart may apply bounded adaptive adjustments on top of TPI control, once confidence and safety gates allow it.
+- **Learning enabled + Active Control on** — ThermoSmart controls using TPI as usual, while Learning evaluates potential adaptive adjustments in the background (shadow-only, visible in diagnostics). This version does not yet apply those adjustments to control.
 - **Both off** — ThermoSmart remains inactive for that zone.
 
 **How long until the learning algorithm is effective?**  
-Learning builds from active heating observations and works in both Observation mode and Active Control. Stage 1 (<5 obs): physical fallback only. Stage 2 (5–50): first patterns emerge. Stage 3 (50+): learning dominates. How quickly you reach each stage depends on how often your heating runs — results improve steadily as observations accumulate.
+Learning builds from active heating observations and works in both Observation mode and Active Control. The `sensor.*_confidence` value (0–100%) is a calibrated combination of how much data has accumulated, how diverse and clean it is, and how well outcomes have been validated — not a simple observation count. Early on, built-in physical defaults carry more weight; confidence rises steadily and learning takes over more of the decision as real heating cycles accumulate. How quickly this happens depends on how often your heating runs.
 
 **A sensor goes offline — what happens?**  
 ThermoSmart averages the remaining sensors. Temperature decisions pause only if all sensors in a zone are unavailable simultaneously.

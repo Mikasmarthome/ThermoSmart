@@ -2,7 +2,8 @@
  * ThermoSmart Lovelace Card v1.1.0
  * https://github.com/Mikasmarthome/thermosmart-card
  */
-const CARD_VERSION = '1.1.0';
+
+const CARD_VERSION = '1.1.0'; //Note: also update CARD_ASSET_VERSION in custom_components/thermosmart/const.py whenever the bundled card changes
 
 // ── i18n ─────────────────────────────────────────────────────────────────────
 

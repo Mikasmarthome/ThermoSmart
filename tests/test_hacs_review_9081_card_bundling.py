@@ -12,7 +12,12 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from custom_components import thermosmart as ts_init
-from custom_components.thermosmart.const import CARD_FILENAME, CARD_URL_PATH, DOMAIN, VERSION
+from custom_components.thermosmart.const import (
+    CARD_ASSET_VERSION,
+    CARD_FILENAME,
+    CARD_URL_PATH,
+    DOMAIN,
+)
 from tests.helpers import make_mock_hass
 
 _CARD_PATH = os.path.join(
@@ -59,8 +64,20 @@ class TestCardFileStructure:
 
 
 class TestRegisterCardHelper:
+    async def test_integration_setup_registers_card_before_config_entries(self):
+        hass = make_mock_hass()
+        hass.data = {}
+        hass.http.async_register_static_paths = AsyncMock()
+
+        with patch("homeassistant.components.frontend.add_extra_js_url") as add_url:
+            assert await ts_init.async_setup(hass, {}) is True
+
+        assert hass.data[DOMAIN]["card_registered"] is True
+        add_url.assert_called_once_with(hass, f"{CARD_URL_PATH}?v={CARD_ASSET_VERSION}")
+
     async def test_registers_static_path_at_the_expected_url(self):
         hass = make_mock_hass()
+        hass.data = {}
         hass.http.async_register_static_paths = AsyncMock()
 
         with patch("homeassistant.components.frontend.add_extra_js_url") as add_url:
@@ -73,10 +90,11 @@ class TestRegisterCardHelper:
         assert cfg.url_path == CARD_URL_PATH == "/thermosmart/thermosmart-card.js"
         assert cfg.path.endswith(os.path.join("www", CARD_FILENAME))
         assert cfg.cache_headers is True
-        add_url.assert_called_once_with(hass, f"{CARD_URL_PATH}?v={VERSION}")
+        add_url.assert_called_once_with(hass, f"{CARD_URL_PATH}?v={CARD_ASSET_VERSION}")
 
     async def test_static_path_failure_is_non_fatal_and_skips_frontend_step(self):
         hass = make_mock_hass()
+        hass.data = {}
         hass.http.async_register_static_paths = AsyncMock(side_effect=RuntimeError("no http"))
 
         with patch("homeassistant.components.frontend.add_extra_js_url") as add_url:
@@ -86,6 +104,7 @@ class TestRegisterCardHelper:
 
     async def test_frontend_failure_is_non_fatal(self):
         hass = make_mock_hass()
+        hass.data = {}
         hass.http.async_register_static_paths = AsyncMock()
 
         with patch(
@@ -93,6 +112,22 @@ class TestRegisterCardHelper:
             side_effect=RuntimeError("no frontend"),
         ):
             await ts_init._async_register_card(hass)  # must not raise
+
+        assert hass.data[DOMAIN].get("card_registered") is not True
+
+    async def test_frontend_failure_can_be_retried_without_duplicate_static_route(self):
+        hass = make_mock_hass()
+        hass.data = {}
+        hass.http.async_register_static_paths = AsyncMock()
+        add_url = MagicMock(side_effect=[RuntimeError("temporary frontend failure"), None])
+
+        with patch("homeassistant.components.frontend.add_extra_js_url", add_url):
+            await ts_init._async_register_card(hass)
+            await ts_init._async_register_card(hass)
+
+        assert hass.http.async_register_static_paths.await_count == 1
+        assert add_url.call_count == 2
+        assert hass.data[DOMAIN]["card_registered"] is True
 
 
 # ── Idempotency across multiple config entries ───────────────────────────────

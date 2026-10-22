@@ -182,3 +182,52 @@ class TestCardUrlShape:
 
     def test_url_path_matches_requested_pattern(self):
         assert CARD_URL_PATH == "/thermosmart/thermosmart-card.js"
+
+
+# ── Card version / encoding consistency ───────────────────────────────────────
+
+
+class TestCardAssetVersionConsistency:
+    """CARD_ASSET_VERSION is the cache-busting query string of the card URL; it
+    must be bumped together with the card's own CARD_VERSION, otherwise
+    browsers keep serving a stale copy of a changed card."""
+
+    def test_asset_version_matches_the_version_inside_the_card(self):
+        import re
+        content = open(_CARD_PATH, encoding="utf-8").read()
+        match = re.search(r"const CARD_VERSION = '([^']+)'", content)
+        assert match, "CARD_VERSION constant not found in thermosmart-card.js"
+        assert match.group(1) == CARD_ASSET_VERSION
+
+    def test_registered_url_carries_the_asset_version(self):
+        from custom_components.thermosmart.const import CARD_URL_PATH
+        assert f"{CARD_URL_PATH}?v={CARD_ASSET_VERSION}".endswith(f"?v={CARD_ASSET_VERSION}")
+
+
+class TestCardFileEncoding:
+    """Guards the shipped card against encoding damage. UTF-8 double encoding
+    (text decoded as Latin-1/CP1252 and encoded again) leaves byte sequences
+    that start with the UTF-8 bytes of the two letters A-tilde / A-circumflex
+    and breaks the script in the browser."""
+
+    # UTF-8 encodings of U+00C3, U+00C2, and of the 3-byte mojibake lead-in
+    # that a double-encoded en/em dash or quote produces.
+    _MOJIBAKE_MARKERS = (
+        bytes([0xC3, 0x83]),
+        bytes([0xC3, 0x82]),
+        bytes([0xC3, 0xA2, 0xE2, 0x82, 0xAC]),
+    )
+
+    def test_card_is_valid_utf8(self):
+        with open(_CARD_PATH, "rb") as fh:
+            fh.read().decode("utf-8")  # raises on invalid UTF-8
+
+    def test_card_contains_no_double_encoding_markers(self):
+        with open(_CARD_PATH, "rb") as fh:
+            data = fh.read()
+        for marker in self._MOJIBAKE_MARKERS:
+            assert marker not in data, f"double-encoding marker {marker!r} found"
+
+    def test_card_has_no_byte_order_mark(self):
+        with open(_CARD_PATH, "rb") as fh:
+            assert fh.read(3) != bytes([0xEF, 0xBB, 0xBF])

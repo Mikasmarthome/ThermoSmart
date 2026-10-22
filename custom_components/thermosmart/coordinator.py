@@ -155,6 +155,11 @@ class ThermoSmartCoordinator(
         # Fenster-Tracking (genutzt von WindowMixin)
         self._window_open_at: dict[str, datetime] = {}
         self._window_close_at: dict[str, datetime] = {}
+        # Sensors whose open/close transitions this coordinator has observed live
+        # (event listener). For those, _window_open_at/_window_close_at are
+        # authoritative; HA's last_changed is only used to reconstruct an
+        # in-progress delay for sensors not yet observed (reload / HA restart).
+        self._window_seen: set[str] = set()
         self._window_open_temp: dict[str, float] = {}
         # Cancel functions for scheduled delay-expiry refreshes (one slot per sensor)
         self._window_delay_cancel: dict[str, Callable[[], None]] = {}
@@ -503,6 +508,7 @@ class ThermoSmartCoordinator(
                 now = self._now_local()
 
                 if entity_id in window_sensors:
+                    self._window_seen.add(entity_id)
                     if new.state == "on":
                         self._window_open_at[entity_id] = now
                         # Cancel any pending timer (leftover close-delay or open-delay)

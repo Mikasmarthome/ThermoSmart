@@ -56,8 +56,16 @@ class WindowMixin:
                 if now - self._window_open_at[ws_id] >= open_delay:
                     sensor_detected = True
             else:
+                # Reconstruct an in-progress close delay from HA's last_changed
+                # only for a sensor this coordinator has not observed closing
+                # itself. For observed sensors the event listener is
+                # authoritative: it deliberately starts no close delay when the
+                # window closes before the open delay elapsed (the window was
+                # never confirmed open), and reconstructing one here would
+                # activate the window override after a short airing.
                 if (
                     ws_id not in self._window_close_at
+                    and ws_id not in self._window_seen
                     and last_changed is not None
                     and now - last_changed < close_delay
                 ):

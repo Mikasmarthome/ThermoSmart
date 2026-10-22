@@ -1,7 +1,7 @@
 """Constants for the ThermoSmart integration."""
 
 DOMAIN = "thermosmart"
-VERSION = "1.3.1"
+VERSION = "1.3.2"
 CARD_ASSET_VERSION = "1.1.0" # Keep CARD_VERSION in the card's .js synchronized with this value
 
 # Bundled Lovelace card (custom_components/thermosmart/www/thermosmart-card.js).

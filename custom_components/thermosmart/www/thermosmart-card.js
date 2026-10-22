@@ -2,7 +2,8 @@
  * ThermoSmart Lovelace Card v1.1.0
  * https://github.com/Mikasmarthome/thermosmart-card
  */
-const CARD_VERSION = '1.1.0';
+
+const CARD_VERSION = '1.1.0'; //Note: also update CARD_ASSET_VERSION in custom_components/thermosmart/const.py whenever the bundled card changes
 
 // ── i18n ─────────────────────────────────────────────────────────────────────
 
@@ -1144,6 +1145,17 @@ class ThermosmartCardEditor extends HTMLElement {
 if (!customElements.get('thermosmart-card-editor'))
   customElements.define('thermosmart-card-editor', ThermosmartCardEditor);
 
+const ensureThermosmartDefinitions = () => {
+  try {
+    if (!customElements.get('thermosmart-card-editor'))
+      customElements.define('thermosmart-card-editor', ThermosmartCardEditor);
+    if (!customElements.get('thermosmart-card'))
+      customElements.define('thermosmart-card', ThermosmartCard);
+  } catch (err) {
+    // Ignore duplicate-definition races during late page/hybrid app startup.
+  }
+};
+
 // ── Main Card ─────────────────────────────────────────────────────────────────
 
 class ThermosmartCard extends HTMLElement {
@@ -2098,6 +2110,18 @@ class ThermosmartCard extends HTMLElement {
 
 if (!customElements.get('thermosmart-card'))
   customElements.define('thermosmart-card', ThermosmartCard);
+
+ensureThermosmartDefinitions();
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(ensureThermosmartDefinitions, 0);
+    setTimeout(ensureThermosmartDefinitions, 100);
+  }, { once: true });
+} else {
+  setTimeout(ensureThermosmartDefinitions, 0);
+  setTimeout(ensureThermosmartDefinitions, 100);
+}
 
 window.customCards = window.customCards || [];
 if (!window.customCards.some(c => c.type === 'thermosmart-card')) {

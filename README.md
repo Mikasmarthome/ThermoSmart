@@ -25,7 +25,7 @@ ThermoSmart observes how your building heats and cools, then uses that data — 
 
 - **Learns your building** — heating rate, heat loss and weather sensitivity derived from real observations in your home, not factory defaults
 - **Adapts to conditions** — outdoor temperature, wind, solar radiation and forecasts feed into heating control decisions
-- **Starts passively** — Observation mode collects data without touching your existing setup
+- **Starts passively** — Observation mode collects data and sends no commands to your heating devices
 - **Fully local** — no cloud, no subscription
 
 **Features:** automatic pre-heating · TPI control with learned coefficients · weather-aware setpoints · slope-based window detection · outcome scoring to improve learning quality
@@ -75,13 +75,13 @@ Restart Home Assistant, then: **Settings → Integrations → Add Integration �
 
 Add **ThermoSmart System** first (Summer mode select + Vacation switch), then add each heating zone.
 
-**Observation mode is recommended to start.** With Active Control off, ThermoSmart watches your existing TRVs and builds an initial thermal model without changing anything in your setup. Use the first day or two to verify that sensors, temperatures, and schedules are configured correctly — then enable Active Control whenever you're ready. Learning continues in both modes; Observation mode is not a prerequisite.
+**Observation mode is recommended to start.** With Active Control off, ThermoSmart watches your existing TRVs and builds an initial thermal model without sending any commands to your heating devices. Use the first day or two to verify that sensors, temperatures, and schedules are configured correctly — then enable Active Control whenever you're ready. Learning continues in both modes; Observation mode is not a prerequisite.
 
 ### Zone Configuration (4 steps)
 
 | Step | Fields |
 |---|---|
-| **1 – Devices** | Zone name · TRVs · Temperature sensors *(optional)* · Humidity sensors · Window / door sensors · Window delays · Valve maintenance · Calibration invert |
+| **1 – Devices** | Zone name · TRVs · Temperature sensors *(optional)* · Humidity sensors · Window / door sensors · Window delays *(apply to window / door sensors; without one, ThermoSmart detects open windows from the temperature drop)* · Valve maintenance · Calibration invert |
 | **2 – Temperatures** | Comfort · Night · Away · Vacation · Eco · Tolerance · Weekday/weekend schedule times |
 | **3 – Presence** | Person entities · Home zone · Learning on/off |
 | **4 – Weather** | Weather entity · Outdoor temp/humidity · Wind speed · Solar radiation · Precipitation |
@@ -140,7 +140,7 @@ These devices have a named profile with device-specific handling applied automat
 
 | Device | Protocol | Profile-specific behavior |
 |---|---|---|
-| SONOFF TRVZB | Zigbee (Z2M) | `valve_opening_degree` treated as max-opening limit (not written). Room temperature pushed to `external_temperature_input` for improved TRV-internal accuracy. Motor-protection on valve close. HVAC watchdog active. |
+| SONOFF TRVZB | Zigbee (Z2M) | `valve_opening_degree` treated as max-opening limit (not written). While Active Control is on, the room temperature is pushed to `external_temperature_input` for improved TRV-internal accuracy. Motor-protection on valve close. HVAC watchdog active. |
 | Eurotronic Spirit | Zigbee (Z2M / ZHA) | HVAC mode written to `heat` before each setpoint — required for the TRV to accept external setpoints reliably. |
 | Eurotronic SPZB0001 | Zigbee (Z2M / ZHA) | Same HVAC-first setpoint workflow as Eurotronic Spirit. |
 | Avatto ME167 | Zigbee (Z2M) | Calibration offset sign is inverted to match this device's firmware convention. |
@@ -241,12 +241,14 @@ Sets all zones to the configured vacation temperature (default 12 °C). Takes pr
 HACS → Integrations → ThermoSmart → **Update** → Restart Home Assistant. Learning data is preserved across updates.
 
 **What is Observation mode?**  
-Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — nothing in your setup changes. Switch to Active Control when you're ready.
+Active Control OFF: ThermoSmart reads what your existing controller does and learns from it — it sends no commands to your heating devices (no setpoints, no `external_temperature_input`, no `valve_opening_degree`, no calibration). Switch to Active Control when you're ready.
+
+One thing is restored, never newly changed: if you enabled *Automatically use external room temperature* and ThermoSmart itself switched a TRV's temperature source to `external` while Active Control was on, it switches that TRV back to `internal` when Active Control is turned off, in summer mode, or when the zone is unloaded. A temperature source ThermoSmart did not set itself is never touched.
 
 **What do the Learning and Active Control switches actually do together?**  
 ThermoSmart combines two independent switches:
 
-- **Learning enabled + Active Control off** — ThermoSmart observes and learns, but does not control your devices (no service calls).
+- **Learning enabled + Active Control off** — ThermoSmart observes and learns, but sends no commands to your heating devices.
 - **Learning disabled + Active Control on** — ThermoSmart controls deterministically using TPI, without any adaptive learning adjustments.
 - **Learning enabled + Active Control on** — ThermoSmart controls using TPI as usual, while Learning evaluates potential adaptive adjustments in the background (shadow-only, visible in diagnostics). This version does not yet apply those adjustments to control.
 - **Both off** — ThermoSmart remains inactive for that zone.
@@ -270,7 +272,7 @@ ThermoSmart auto-detects a direct-valve entity on each TRV device and writes the
 | `heating_demand` | Alternative name for the above |
 | `level` | Homematic IP (hahomematic, 0.0–1.0 scaled) |
 
-TRVs without a recognised pattern — including **SONOFF TRVZB** — are controlled via setpoint boost (`climate.set_temperature`). On SONOFF TRVZB, ThermoSmart additionally writes the room temperature to `external_temperature_input`, which feeds the TRV's own internal controller for better accuracy. `valve_opening_degree` is intentionally not written: on this device it configures a maximum-opening limit, not the live valve position.
+TRVs without a recognised pattern — including **SONOFF TRVZB** — are controlled via setpoint boost (`climate.set_temperature`). On SONOFF TRVZB, ThermoSmart additionally writes the room temperature to `external_temperature_input` while Active Control is on, which feeds the TRV's own internal controller for better accuracy. `valve_opening_degree` is intentionally not written: on this device it configures a maximum-opening limit, not the live valve position.
 
 **SONOFF TRVZB via Zigbee2MQTT — `heat` vs `auto` mode and internal weekly schedule**  
 Zigbee2MQTT exposes two HVAC modes on the SONOFF TRVZB:

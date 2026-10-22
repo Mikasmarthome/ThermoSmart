@@ -60,10 +60,6 @@ from .maintenance import MaintenanceMixin
 
 _LOGGER = logging.getLogger(__name__)
 
-# valve_opening_degree recovery is retried across the first N coordinator refreshes
-# to handle slow Zigbee2MQTT startup on full HA restart.
-_VALVE_RESET_MAX_ATTEMPTS = 3
-
 # Learning forecast bias application gates
 _FORECAST_BIAS_MIN_TRUST = 0.35        # minimum trust to apply the °C bias correction
 _FORECAST_BIAS_MIN_APPLY_C = 0.05     # noise floor – ignore sub-threshold corrections
@@ -205,8 +201,6 @@ class ThermoSmartCoordinator(
         self._auto_valve_map: dict[str, str] = {}
         self._auto_temp_source_map: dict[str, str] = {}
         self._trv_offline: set[str] = set()
-        self._valve_reset_done: bool = False
-        self._valve_reset_attempts: int = 0
         # Per-entity consecutive setpoint-dispatch-failure counter (Device
         # Compatibility P1) — reset to 0 on any successful dispatch for that
         # entity; drives a single, rate-limited Support Critical Event after
@@ -757,23 +751,6 @@ class ThermoSmartCoordinator(
             self._last_live_decision = None
             cfg = self.zone_cfg
 
-            # Safety-net for full HA restart: valve_opening_degree recovery is also
-            # called from async_detect_device_entities, but at startup Z2M entities
-            # may not be available yet.  Retry across up to _VALVE_RESET_MAX_ATTEMPTS
-            # refreshes; stop as soon as recovery reports success (all relevant entities
-            # were reachable) or after the attempt limit is exhausted.
-            if not self._valve_reset_done:
-                done = await self._reset_valve_opening_degree()
-                self._valve_reset_attempts += 1
-                if done or self._valve_reset_attempts >= _VALVE_RESET_MAX_ATTEMPTS:
-                    if not done:
-                        _LOGGER.warning(
-                            "ThermoSmart '%s': valve_opening_degree recovery gave up after "
-                            "%d attempts — some TRV entities were still unavailable",
-                            self.zone_name, self._valve_reset_attempts,
-                        )
-                    self._valve_reset_done = True
-
             weather_data = await self.weather_engine.async_get_data()
             self._update_summer_mode(weather_data)
 
@@ -1008,8 +985,8 @@ class ThermoSmartCoordinator(
             # no control effect. See _maybe_record_support_hold_events().
             self._maybe_record_support_hold_events(recommendation)
 
-            # External Temperature Input immer schreiben (auch im Beobachtungsmodus)
-            # – verbessert die TRV-interne Regelung unabhängig von der aktiven Steuerung
+            # External Temperature Input: nur bei Active Control (die Methode prüft das
+            # selbst) – im Beobachtungsmodus werden keine Geräte beschrieben.
             await self._async_write_external_temp(cfg, recommendation)
 
             # Temperature source select management (external/internal)

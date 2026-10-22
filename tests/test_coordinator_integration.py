@@ -25,9 +25,6 @@ class _TestableCoordinator(ThermoSmartCoordinator):
     recommendation pipeline, indoor safety bypass, etc.) runs unchanged.
     """
 
-    async def _reset_valve_opening_degree(self) -> bool:
-        return True
-
     async def _async_apply_quirks(self, cfg: dict) -> None:
         pass
 
@@ -76,7 +73,6 @@ def _make_testable(zone_cfg_overrides: dict | None = None) -> _TestableCoordinat
         coord = _TestableCoordinator(
             base.hass, base.entry, base.weather_engine, base.learning_engine
         )
-    coord._valve_reset_done = True  # skip valve reset loop
     return coord
 
 

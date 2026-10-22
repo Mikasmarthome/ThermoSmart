@@ -11,7 +11,7 @@ from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.util import dt as dt_util
 from homeassistant.util.unit_conversion import TemperatureConverter
 
-from .device_profiles import DeviceProfile, get_profile, VALVE_MAX_LIMIT, SETPOINT_HVAC_FIRST
+from .device_profiles import DeviceProfile, get_profile, SETPOINT_HVAC_FIRST
 from .temperature_units import from_internal_temperature_c, to_internal_temperature_c
 from .const import (
     AUTO_QUIRK_PATTERNS,
@@ -252,84 +252,12 @@ class TRVControlMixin:
             )
 
         self._device_profiles = profile_map
-        await self._reset_valve_opening_degree()
 
         self._auto_quirk_entities = quirks
         self._auto_calibration_map = cal_map
         self._auto_ext_temp_map = ext_temp_map
         self._auto_valve_map = valve_map
         self._auto_temp_source_map = temp_source_map
-
-    async def _reset_valve_opening_degree(self) -> bool:
-        """Reset valve_opening_degree to 100% on all managed TRV devices.
-
-        valve_opening_degree is a max-opening limit on SONOFF TRVZB (and similar
-        devices) — not a live valve position.  Previous ThermoSmart versions wrote
-        the TPI duty-cycle to it, which capped heating capacity at the duty-cycle
-        value (e.g. 0% blocked the valve entirely).  Resetting to 100% restores
-        full heating capacity on upgrade.
-
-        Called from async_detect_device_entities (fires immediately on Integration
-        Reload when Zigbee2MQTT entities are already available) and from
-        _async_update_data on the first coordinator refreshes as a safety-net for
-        full HA restart, where Z2M entities are not yet available at setup time.
-
-        Returns:
-            True  — recovery complete or nothing to do (caller should not retry).
-            False — at least one relevant entity was unavailable; caller should
-                    retry on the next refresh cycle.
-        """
-        cfg = self.zone_cfg
-        climate_entities = cfg.get("climate_entities", [])
-        if not climate_entities:
-            return True
-
-        ent_reg = er.async_get(self.hass)
-        device_to_climate: dict[str, str] = {}
-        for entity_id in climate_entities:
-            entry = ent_reg.async_get(entity_id)
-            if entry and entry.device_id:
-                device_to_climate[entry.device_id] = entity_id
-
-        retry_needed = False
-        for device_id in device_to_climate:
-            climate_id = device_to_climate[device_id]
-            _profile = getattr(self, "_device_profiles", {}).get(climate_id)
-            if _profile is not None and _profile.valve_semantics != VALVE_MAX_LIMIT:
-                continue
-            for entry in er.async_entries_for_device(ent_reg, device_id):
-                if entry.entity_id.split(".")[0] != "number":
-                    continue
-                eid_lower = entry.entity_id.lower()
-                tk = (getattr(entry, "translation_key", None) or "").lower()
-                name = (getattr(entry, "original_name", None) or "").lower()
-                if not ("valve_opening_degree" in eid_lower
-                        or "valve_opening_degree" in tk
-                        or "valve_opening_degree" in name):
-                    continue
-                state = self.hass.states.get(entry.entity_id)
-                if state is None or state.state in ("unavailable", "unknown"):
-                    retry_needed = True
-                    continue
-                try:
-                    if float(state.state) < 100.0:
-                        _LOGGER.info(
-                            "ThermoSmart '%s': Resetting %s from %s%% to 100%% "
-                            "(valve_opening_degree is a max-opening limit, not a live "
-                            "position — TPI duty-cycle is no longer written here)",
-                            self.zone_name, entry.entity_id, state.state,
-                        )
-                        self.hass.async_create_task(
-                            self.hass.services.async_call(
-                                "number", "set_value",
-                                {"entity_id": entry.entity_id, "value": 100},
-                                blocking=False,
-                            )
-                        )
-                except (TypeError, ValueError):
-                    pass
-
-        return not retry_needed
 
     # ── TRV-Offline-Tracking ─────────────────────────────────────────
 
@@ -1018,7 +946,16 @@ class TRVControlMixin:
 
         Schreibt nur wenn Wert sich um mehr als 0.5°C geändert hat.
         Klemmt auf 0–99.9°C (TRVZB-Wertebereich).
+
+        Nur bei aktiver Steuerung (Active Control): Im Beobachtungsmodus schreibt
+        ThermoSmart nichts auf die Geräte — der Wert würde sonst die interne
+        Regelung eines TRV beeinflussen, der noch von seinem eigenen Controller
+        gesteuert wird. Learning liest die konfigurierten HA-Temperatursensoren,
+        nicht diese Entity, und ist davon nicht betroffen.
         """
+        if not self._active_control:
+            return
+
         room_temp = recommendation.get("current_temp")
         if room_temp is None:
             return

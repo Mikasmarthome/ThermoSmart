@@ -20,6 +20,7 @@ import os
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, Event
+from homeassistant.helpers import config_validation as cv
 
 from .const import (
     DOMAIN,
@@ -41,6 +42,17 @@ from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
+
+# Keys in hass.data[DOMAIN] that are session-wide state, not per-config-entry
+# data. async_unload_entry() must not count them as still-loaded entries.
+_NON_ENTRY_DATA_KEYS = (
+    "learning_engine", "global_switches_created",
+    "global_summer_select_created", "summer_switch_migrated",
+    "global_vacation_override", "global_summer_override",
+    "card_registered", "card_static_registered", "card_frontend_registered",
+)
 
 ZONE_PLATFORMS = PLATFORMS               # ["climate", "sensor", "switch", "select"]
 SYSTEM_PLATFORMS = ["switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
@@ -333,9 +345,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if cfg.get("entry_type") != "system":
             remaining = [
                 k for k in hass.data[DOMAIN]
-                if k not in ("learning_engine", "global_switches_created",
-                             "global_summer_select_created", "summer_switch_migrated",
-                             "global_vacation_override", "global_summer_override")
+                if k not in _NON_ENTRY_DATA_KEYS
                 and not (isinstance(hass.data[DOMAIN].get(k), dict)
                          and hass.data[DOMAIN][k].get("type") == "system")
             ]

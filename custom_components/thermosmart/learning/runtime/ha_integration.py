@@ -2460,7 +2460,7 @@ class LearningShadowController:
                     _release_reason = s.lifecycle_release_reason
                     _hard_reasons = frozenset({
                         "window_open", "heating_failure", "mode_change",
-                        "early_cutoff", "target_reached", "manual_override",
+                        "target_reached", "manual_override",
                         "schedule_change", "timeout", "no_response", "overshoot",
                         "target_change",
                         "released_overshoot_risk", "released_afterheat_sufficient"})
@@ -2645,26 +2645,6 @@ class LearningShadowController:
             self._record_error("forecast_bias_read", err)
         return 0.0
 
-    def read_regime_safe(self) -> Optional[str]:
-        """Return the regime string from the last shadow pipeline cycle, or None.
-
-        Returns one of the ``Regime`` enum values (e.g. "active_heating",
-        "afterheat", "passive_cooling", "stable", "disturbed", "unknown") or
-        ``None`` when the shadow has not yet completed a cycle.
-
-        Used by the coordinator to gate Early Cutoff hold starts: only
-        ``"active_heating"`` allows a new hold; ``None`` / ``"unknown"`` / etc.
-        preserve the deterministic baseline and prevent an invented regime.
-        """
-        if not self._enabled:
-            return None
-        try:
-            zr = self._runtime._zone(self._zone)
-            return getattr(zr, "last_regime", None)
-        except Exception as err:
-            self._record_error("regime_read", err)
-        return None
-
     # ── Preheat / HeatRate read ──────────────────────────────────────────────
     # Minimum confidence for a HEAT_RATE prediction to contribute to preheat.
     _PREHEAT_MIN_CONFIDENCE: float = 0.35
@@ -2845,7 +2825,7 @@ class LearningShadowController:
 
             # Effective Room Heating Duration (C):
             #   net_rate = heat_rate − heat_loss  (min 0.2 C/h floor)
-            #   effective_deficit = deficit − afterheat (early-cutoff contribution reduces this)
+            #   effective_deficit = deficit − afterheat (the predicted afterheat covers part of the rise)
             #   C = effective_deficit / net_rate × 60
             net_rate = max(heat_rate_c_per_h - heat_loss_c_per_h, 0.2)
             effective_deficit = max(0.0, deficit - max(0.0, afterheat_c))

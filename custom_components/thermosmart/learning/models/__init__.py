@@ -91,7 +91,6 @@ from .boost_reliability import (
     afterheat_attribution_severity,
     class_min_reliability,
     compute_outcome_reliability,
-    early_cutoff_interaction_severity,
     evaluate_confounders,
     evaluate_multi_trv,
     evaluate_overshoot_stability,

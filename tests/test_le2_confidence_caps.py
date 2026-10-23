@@ -165,16 +165,16 @@ class TestGates:
         assert r.gate.safe_fallback_required
 
     def test_advisory_allowed_when_control_not(self):
-        r = A().aggregate(inp(ConfidencePurpose.EARLY_CUTOFF, components=[
-            component(ComponentKind.AFTERHEAT, 0.4, evidence_count=5,
+        r = A().aggregate(inp(ConfidencePurpose.PREHEAT, components=[
+            component(ComponentKind.HEAT_RATE, 0.4, evidence_count=5,
                       domains=(EvidenceDomain.THERMAL_TRAJECTORY,))]))
         assert not r.control_allowed and r.advisory_allowed
 
     def test_purpose_specific_minimum(self):
-        r = A().aggregate(inp(ConfidencePurpose.EARLY_CUTOFF, components=[
-            component(ComponentKind.AFTERHEAT, 0.9, evidence_count=50,
+        r = A().aggregate(inp(ConfidencePurpose.PREHEAT, components=[
+            component(ComponentKind.HEAT_RATE, 0.9, evidence_count=50,
                       domains=(EvidenceDomain.THERMAL_TRAJECTORY,))]))
-        assert r.gate.required_minimum == A()._params.control_gate(ConfidencePurpose.EARLY_CUTOFF)
+        assert r.gate.required_minimum == A()._params.control_gate(ConfidencePurpose.PREHEAT)
 
     def test_advisory_purpose_never_control(self):
         r = A().aggregate(inp(ConfidencePurpose.OUTCOME_QUALITY, components=[

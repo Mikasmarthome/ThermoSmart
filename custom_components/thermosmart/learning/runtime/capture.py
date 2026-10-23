@@ -165,7 +165,6 @@ class RuntimeCycleInput:
     sent_commands: tuple[SentCommand, ...] = ()
     legacy_preheat_start_utc: Optional[str] = None
     legacy_boost_offset_c: Optional[float] = None
-    legacy_early_cutoff_utc: Optional[float] = None
     boost_dispatch: Optional[BoostDispatchRecord] = None   # B2b-1 authoritative binding
 
     def __post_init__(self) -> None:

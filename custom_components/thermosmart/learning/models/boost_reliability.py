@@ -71,7 +71,6 @@ class BoostConfounder(Enum):
     DEVICE_CONFIGURATION_CHANGE = "device_configuration_change"
     TPI_AUTHORITY_CHANGE = "tpi_authority_change"
     PREHEAT_INTERACTION = "preheat_interaction"
-    EARLY_CUTOFF_INTERACTION = "early_cutoff_interaction"
     AFTERHEAT_INTERACTION = "afterheat_interaction"
     FORECAST_OR_OUTDOOR_SHIFT = "forecast_or_outdoor_shift"
     UNEXPLAINED_REHEATING = "unexplained_reheating"
@@ -103,7 +102,6 @@ _SEVERITY: Mapping[BoostConfounder, ConfounderSeverity] = {
     BoostConfounder.DEVICE_CONFIGURATION_CHANGE: ConfounderSeverity.BLOCKING,
     BoostConfounder.TPI_AUTHORITY_CHANGE: ConfounderSeverity.DEGRADING,
     BoostConfounder.PREHEAT_INTERACTION: ConfounderSeverity.INFO,
-    BoostConfounder.EARLY_CUTOFF_INTERACTION: ConfounderSeverity.DEGRADING,
     BoostConfounder.AFTERHEAT_INTERACTION: ConfounderSeverity.INFO,
     BoostConfounder.FORECAST_OR_OUTDOOR_SHIFT: ConfounderSeverity.DEGRADING,
     BoostConfounder.UNEXPLAINED_REHEATING: ConfounderSeverity.BLOCKING,
@@ -135,7 +133,6 @@ _ALIAS: Mapping[str, BoostConfounder] = {
     "device_configuration_change": BoostConfounder.DEVICE_CONFIGURATION_CHANGE,
     "tpi_authority_change": BoostConfounder.TPI_AUTHORITY_CHANGE,
     "preheat_interaction": BoostConfounder.PREHEAT_INTERACTION,
-    "early_cutoff_interaction": BoostConfounder.EARLY_CUTOFF_INTERACTION,
     "afterheat_interaction": BoostConfounder.AFTERHEAT_INTERACTION,
     "forecast_or_outdoor_shift": BoostConfounder.FORECAST_OR_OUTDOOR_SHIFT,
 }
@@ -523,10 +520,3 @@ def afterheat_attribution_severity(expected_afterheat_rise_c: Optional[float],
     return ConfounderSeverity.INFO
 
 
-def early_cutoff_interaction_severity(materially_overlapped: bool, *,
-                                      severe: bool = False) -> ConfounderSeverity:
-    """Early cutoff overlapping the boost phase must not yield a full NO_EFFECT/UNNECESSARY
-    credit against the boost (no double negative credit to both authorities)."""
-    if not materially_overlapped:
-        return ConfounderSeverity.INFO
-    return ConfounderSeverity.BLOCKING if severe else ConfounderSeverity.DEGRADING

@@ -24,7 +24,6 @@ CONTROL_POLICY_VERSION = 1
 
 class ControlFeature(Enum):
     PREHEAT_START = "preheat_start"
-    EARLY_CUTOFF = "early_cutoff"
     BOOST_OFFSET = "boost_offset"
     BOOST_DURATION = "boost_duration"
     FORECAST_ADJUSTMENT = "forecast_adjustment"
@@ -81,7 +80,7 @@ class FeatureClamp:
 @dataclass(frozen=True)
 class ControlPolicyParameters:
     enabled_features: frozenset = field(default_factory=lambda: frozenset({
-        ControlFeature.PREHEAT_START, ControlFeature.EARLY_CUTOFF,
+        ControlFeature.PREHEAT_START,
         ControlFeature.BOOST_OFFSET, ControlFeature.BOOST_DURATION}))
     min_control_confidence: float = 0.55
     reject_on_fallback: bool = True
@@ -90,7 +89,6 @@ class ControlPolicyParameters:
     min_reliability: float = 0.3
     clamps: Mapping[ControlFeature, FeatureClamp] = field(default_factory=lambda: {
         ControlFeature.PREHEAT_START: FeatureClamp(0.0, 180.0, 15.0, 90.0),       # minutes
-        ControlFeature.EARLY_CUTOFF: FeatureClamp(0.0, 60.0, 10.0, 45.0),         # minutes early
         ControlFeature.BOOST_OFFSET: FeatureClamp(0.0, 8.0, 0.5, 4.0),            # °C additive
         ControlFeature.BOOST_DURATION: FeatureClamp(300.0, 7200.0, 600.0, 3600.0),  # seconds
     })

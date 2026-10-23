@@ -30,7 +30,6 @@ class ConfidencePurpose(Enum):
     PREHEAT = "preheat"
     HEAT_LOSS = "heat_loss"
     AFTERHEAT = "afterheat"
-    EARLY_CUTOFF = "early_cutoff"
     OUTCOME_QUALITY = "outcome_quality"
     FORECAST = "forecast"
     BOOST = "boost"
@@ -330,10 +329,6 @@ def _default_policies() -> dict[ConfidencePurpose, PurposePolicy]:
             optional=(K.DATA_QUALITY, K.OUTDOOR), trv_only_cap=0.85),
         P.AFTERHEAT: PurposePolicy(
             P.AFTERHEAT, required=(K.AFTERHEAT,), optional=(K.DATA_QUALITY,)),
-        P.EARLY_CUTOFF: PurposePolicy(
-            P.EARLY_CUTOFF, required=(K.AFTERHEAT,),
-            optional=(K.HEAT_RATE, K.DATA_QUALITY, K.CURRENT_TEMPERATURE),
-            requires_current_temperature=False, control_relevant=True),
         P.PREHEAT: PurposePolicy(
             P.PREHEAT, required=(K.HEAT_RATE,),
             optional=(K.HEAT_LOSS, K.AFTERHEAT, K.FORECAST, K.OUTDOOR, K.OUTCOME,
@@ -365,7 +360,7 @@ def _default_policies() -> dict[ConfidencePurpose, PurposePolicy]:
 def _default_control_gates() -> dict[ConfidencePurpose, float]:
     P = ConfidencePurpose
     return {
-        P.EARLY_CUTOFF: 0.6, P.PREHEAT: 0.55, P.CONTROL_DECISION: 0.6,
+        P.PREHEAT: 0.55, P.CONTROL_DECISION: 0.6,
         P.BOOST: 0.55,
     }
 
@@ -413,8 +408,7 @@ class ConfidenceParameters:
 
 
 _TEMPERATURE_PURPOSES = frozenset({
-    ConfidencePurpose.CONTROL_DECISION, ConfidencePurpose.EARLY_CUTOFF,
-    ConfidencePurpose.PREHEAT,
+    ConfidencePurpose.CONTROL_DECISION, ConfidencePurpose.PREHEAT,
 })
 
 

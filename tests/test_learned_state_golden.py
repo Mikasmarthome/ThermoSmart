@@ -143,7 +143,7 @@ async def run_early_cutoff_case() -> list:
         room["temp"] += 0.4
         zone = await _cycle(coord, clock)
         rows.append((
-            round(room["temp"], 1), shadow.read_regime_safe(),
+            round(room["temp"], 1), shadow._runtime._zone(shadow._zone).last_regime,
             _rounded(zone["effective_target"]),
         ))
     return rows

@@ -37,7 +37,6 @@ class ShadowReason(Enum):
 class ComparisonType(Enum):
     PREHEAT_START = "preheat_start"
     BOOST_OFFSET = "boost_offset"
-    EARLY_CUTOFF = "early_cutoff"
     TARGET_ACHIEVEMENT = "target_achievement"
 
 
@@ -75,7 +74,6 @@ class PreheatPlan:
     expected_afterheat_rise_c: float
     active_duration_min: Optional[float]
     recommended_start_utc: Optional[str]
-    expected_early_cutoff_utc: Optional[str]
     expected_achievement_c: Optional[float]
     confidence: float
     fallback_used: bool
@@ -160,23 +158,19 @@ def compute_preheat_plan(*, comfort_time_utc: str, comfort_temperature_c: float,
             expected_heat_rate_c_per_h=heat_rate_c_per_h,
             expected_heat_loss_c_per_h=heat_loss_c_per_h,
             expected_afterheat_rise_c=afterheat_rise_c, active_duration_min=None,
-            recommended_start_utc=None, expected_early_cutoff_utc=None,
+            recommended_start_utc=None,
             expected_achievement_c=None, confidence=min(confidence, 0.3),
             fallback_used=True, reason_codes=tuple(reasons))
 
     deficit = max(0.0, comfort_temperature_c - current_temperature_c)
     net_rate = max(heat_rate_c_per_h - heat_loss_c_per_h, p.min_net_rate_c_per_h)
-    # afterheat covers part of the rise after the drive ends (early cutoff)
+    # afterheat covers part of the rise after the drive ends
     effective_deficit = max(0.0, deficit - max(0.0, afterheat_rise_c))
     active_duration_min = (effective_deficit / net_rate) * 60.0
     recommended_start = None
-    early_cutoff = None
     if comfort_dt is not None:
         start_dt = comfort_dt - timedelta(minutes=active_duration_min + p.start_margin_min)
         recommended_start = start_dt.isoformat()
-        # cutoff when the remaining rise will be supplied by afterheat
-        cutoff_lead_min = (max(0.0, afterheat_rise_c) / net_rate) * 60.0
-        early_cutoff = (comfort_dt - timedelta(minutes=cutoff_lead_min)).isoformat()
     expected_achievement = current_temperature_c + net_rate * (active_duration_min / 60.0) \
         + max(0.0, afterheat_rise_c)
     if fallback_used:
@@ -192,7 +186,7 @@ def compute_preheat_plan(*, comfort_time_utc: str, comfort_temperature_c: float,
         expected_heat_loss_c_per_h=round(heat_loss_c_per_h, 4),
         expected_afterheat_rise_c=round(max(0.0, afterheat_rise_c), 4),
         active_duration_min=round(active_duration_min, 2),
-        recommended_start_utc=recommended_start, expected_early_cutoff_utc=early_cutoff,
+        recommended_start_utc=recommended_start,
         expected_achievement_c=round(expected_achievement, 3), confidence=round(confidence, 4),
         fallback_used=fallback_used, reason_codes=tuple(reasons))
 

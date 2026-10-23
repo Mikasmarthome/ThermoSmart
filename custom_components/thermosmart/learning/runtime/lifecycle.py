@@ -496,7 +496,7 @@ class LearningRuntime:
                     bctx = zr.pending_boost_contexts.pop(ce.decision_id, None)
                     drec = zr.pending_dispatch_records.pop(ce.decision_id, None)
                     # B2b-4b: augment the episode with runtime confounders from authoritative
-                    # evidence (multi-TRV, supply-delay, early-cutoff, afterheat). The SAME
+                    # evidence (multi-TRV, afterheat). The SAME
                     # augmented episode feeds both the boost outcome and the baseline path.
                     extra_cf = self._runtime_confounders(zr, ce.episode, drec, snapshot)
                     bound_episode = self._augment_confounders(ce.episode, extra_cf)
@@ -601,7 +601,7 @@ class LearningRuntime:
 
     def _runtime_confounders(self, zr, episode, dispatch, snapshot) -> tuple:
         """B2b-4b: derive runtime confounders from authoritative episode/dispatch evidence
-        (multi-TRV per-device, early-cutoff overlap,
+        (multi-TRV per-device,
         afterheat interaction). Returned as canonical flag strings; fed to the SAME central
         evaluator for both the boost outcome and the non-boost baseline. Never raises."""
         flags: list[str] = []
@@ -633,10 +633,6 @@ class LearningRuntime:
                     mtv = evaluate_multi_trv(devices)
                     if mtv is not None:
                         flags.append(mtv.value)
-            # ── early-cutoff overlap (same decision) ──
-            ecs = getattr(snapshot, "early_cutoff_state", None) if snapshot is not None else None
-            if ecs in ("cutoff_applied", "coasting_hold"):
-                flags.append(BoostConfounder.EARLY_CUTOFF_INTERACTION.value)
             # ── afterheat interaction (high expected afterheat) ──
             try:
                 ah = (getattr(zr, "last_predictions", {}) or {}).get(

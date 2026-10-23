@@ -7,7 +7,6 @@ only through ``validated_prediction_read``, with explicit, non-implicit semantic
   multiplier — see boost.py ``values={"boost_factor": rec.boost_offset_c}``.
 * preheat is a *duration in minutes* (``preheat_start`` feature), distinct from the
   schedule comfort *time*.
-* early cutoff is expressed as the expected *residual rise* (°C), not a clock time.
 * ``FORECAST_BIAS`` carries a signed °C error bias (positive = reality warmer than forecast);
   ``FORECAST_TRUST`` is a dimensionless reliability score in [0, 1] — semantically distinct,
   never mixed.

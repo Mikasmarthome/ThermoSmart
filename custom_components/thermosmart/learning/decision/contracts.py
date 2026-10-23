@@ -78,7 +78,7 @@ class DecisionTrace:
     reason_codes: tuple[str, ...]
     schema_version: int = DECISION_SCHEMA_VERSION
     # User's configured comfort target; separate from baseline_setpoint_c which may
-    # already reflect an early-cutoff reduction (effective_target < comfort_target).
+    # differ from it (preheat, weather and forecast adjustments).
     comfort_temperature_c: Optional[float] = None
     # Preheat / HeatRate / OnsetDelay trace fields.
     # Three semantically distinct time quantities (A = B + C):

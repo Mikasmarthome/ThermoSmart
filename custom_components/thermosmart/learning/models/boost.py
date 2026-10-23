@@ -1644,7 +1644,7 @@ class BoostModel:
         """Transition lifecycle to a terminal released/failed state and start cooldown.
 
         Cooldown is reason-specific:
-        - target_reached / mode_change / schedule_change / early_cutoff → 0s
+        - target_reached / mode_change / schedule_change → 0s
           (clean termination; new episode can boost immediately)
         - no_response / overshoot / heating_failure → failure_cooldown_duration_s (900s)
           (TRV may need time to recover; prevents rapid retry-pendling)
@@ -1658,7 +1658,6 @@ class BoostModel:
             "manual_override": BoostLifecycle.RELEASED_MANUAL_OVERRIDE,
             "mode_change": BoostLifecycle.RELEASED_MODE_CHANGE,
             "schedule_change": BoostLifecycle.RELEASED_MODE_CHANGE,
-            "early_cutoff": BoostLifecycle.RELEASED_MODE_CHANGE,
             "target_change": BoostLifecycle.RELEASED_MODE_CHANGE,
             "released_tpi_sufficient": BoostLifecycle.RELEASED_TPI_SUFFICIENT,
             "released_overshoot_risk": BoostLifecycle.RELEASED_OVERSHOOT_RISK,
@@ -1672,9 +1671,9 @@ class BoostModel:
         # 0s cooldown: clean termination, new episode can boost immediately.
         # "target_reached" is NOT in _CLEAN_CONTEXT_REASONS: it sets completed binding.
         _CLEAN_CONTEXT_REASONS = frozenset({
-            "mode_change", "schedule_change", "early_cutoff", "target_change"})
+            "mode_change", "schedule_change", "target_change"})
         _NO_COOLDOWN_REASONS = frozenset({
-            "target_reached", "mode_change", "schedule_change", "early_cutoff",
+            "target_reached", "mode_change", "schedule_change",
             "target_change"})
         _FAILURE_REASONS = frozenset({"no_response", "overshoot", "heating_failure"})
         # Deescalation reasons: successful mid-episode release (boost did its job).
@@ -1700,7 +1699,7 @@ class BoostModel:
         except Exception:
             pass
         # Episode binding: track failed/completed episode IDs to block same-episode retry.
-        # Clean context changes (schedule/mode/early-cutoff) clear both bindings.
+        # Clean context changes (schedule/mode) clear both bindings.
         last_failed = self._state.last_failed_episode_id
         last_completed = self._state.last_completed_episode_id
         if reason in _FAILURE_REASONS:

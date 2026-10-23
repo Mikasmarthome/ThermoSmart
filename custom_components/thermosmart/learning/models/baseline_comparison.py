@@ -483,7 +483,7 @@ class BaselineComparisonStore:
 _BASELINE_EXCLUDE_CONFOUNDERS = frozenset({
     "window_open", "manual_override", "heating_failure", "solar_gain", "external_heat",
     "additional_radiator", "reheating", "mode_change", "schedule_change", "target_change",
-    "sensor_gap", "restart_gap", "supply_delay", "multi_trv_ambiguous"})
+    "sensor_gap", "restart_gap", "multi_trv_ambiguous"})
 
 
 class BaselineSampleRejection(Enum):

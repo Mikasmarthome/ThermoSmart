@@ -90,7 +90,6 @@ from .boost_reliability import (
     ConfounderSeverity,
     OvershootStabilityEvidence,
     OvershootStabilityParams,
-    SupplyDelayParams,
     TargetStabilityEvidence,
     TargetStabilityParams,
     adaptive_allowed,
@@ -103,7 +102,6 @@ from .boost_reliability import (
     evaluate_overshoot_stability,
     evaluate_target_stability,
     severity_of,
-    supply_delay_confounder,
 )
 from .boost_activation import (
     ACTIVATION_CONTRACT_VERSION,

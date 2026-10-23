@@ -65,7 +65,6 @@ class BoostConfounder(Enum):
     ADDITIONAL_HEAT_SOURCE = "additional_heat_source"
     ADDITIONAL_RADIATOR = "additional_radiator"
     OCCUPANCY_HEAT_GAIN = "occupancy_heat_gain"
-    SUPPLY_DELAY_ANOMALY = "supply_delay_anomaly"
     MULTI_TRV_AMBIGUOUS = "multi_trv_ambiguous"
     PARTIAL_DEVICE_EFFECT = "partial_device_effect"
     SENSOR_SOURCE_CHANGE = "sensor_source_change"
@@ -98,7 +97,6 @@ _SEVERITY: Mapping[BoostConfounder, ConfounderSeverity] = {
     BoostConfounder.ADDITIONAL_HEAT_SOURCE: ConfounderSeverity.BLOCKING,
     BoostConfounder.ADDITIONAL_RADIATOR: ConfounderSeverity.BLOCKING,
     BoostConfounder.OCCUPANCY_HEAT_GAIN: ConfounderSeverity.DEGRADING,
-    BoostConfounder.SUPPLY_DELAY_ANOMALY: ConfounderSeverity.DEGRADING,
     BoostConfounder.MULTI_TRV_AMBIGUOUS: ConfounderSeverity.BLOCKING,
     BoostConfounder.PARTIAL_DEVICE_EFFECT: ConfounderSeverity.DEGRADING,
     BoostConfounder.SENSOR_SOURCE_CHANGE: ConfounderSeverity.DEGRADING,
@@ -131,8 +129,6 @@ _ALIAS: Mapping[str, BoostConfounder] = {
     "reheating": BoostConfounder.UNEXPLAINED_REHEATING,
     "unexplained_reheating": BoostConfounder.UNEXPLAINED_REHEATING,
     "occupancy_heat_gain": BoostConfounder.OCCUPANCY_HEAT_GAIN,
-    "supply_delay": BoostConfounder.SUPPLY_DELAY_ANOMALY,
-    "supply_delay_anomaly": BoostConfounder.SUPPLY_DELAY_ANOMALY,
     "multi_trv_ambiguous": BoostConfounder.MULTI_TRV_AMBIGUOUS,
     "partial_device_effect": BoostConfounder.PARTIAL_DEVICE_EFFECT,
     "sensor_source_change": BoostConfounder.SENSOR_SOURCE_CHANGE,
@@ -182,7 +178,6 @@ class ConfounderEvaluation:
 
 
 def evaluate_confounders(raw_flags: Sequence[str], *,
-                         supply_delay_anomaly: bool = False,
                          partial_dispatch: bool = False,
                          multi_trv_ambiguous: bool = False) -> ConfounderEvaluation:
     """Canonicalise + de-duplicate raw evidence into a typed confounder evaluation.
@@ -198,8 +193,6 @@ def evaluate_confounders(raw_flags: Sequence[str], *,
             canon.add(BoostConfounder.UNKNOWN)
         else:
             canon.add(c)
-    if supply_delay_anomaly:
-        canon.add(BoostConfounder.SUPPLY_DELAY_ANOMALY)
     if partial_dispatch:
         canon.add(BoostConfounder.PARTIAL_DEVICE_EFFECT)
     if multi_trv_ambiguous:
@@ -537,32 +530,3 @@ def early_cutoff_interaction_severity(materially_overlapped: bool, *,
     if not materially_overlapped:
         return ConfounderSeverity.INFO
     return ConfounderSeverity.BLOCKING if severe else ConfounderSeverity.DEGRADING
-
-
-@dataclass(frozen=True)
-class SupplyDelayParams:
-    tolerance_min: float = 10.0            # delay within expected ± tolerance is normal
-    degrading_min: float = 20.0           # beyond this unexpected delay -> DEGRADING
-    blocking_min: float = 45.0            # extreme delay -> BLOCKING
-    no_onset_min: float = 90.0            # no onset by here -> HEATING_FAILURE / interrupted
-
-
-def supply_delay_confounder(expected_onset_min: Optional[float],
-                            actual_onset_min: Optional[float], *,
-                            params: Optional[SupplyDelayParams] = None
-                            ) -> Optional[BoostConfounder]:
-    """Classify the heating-onset delay vs. the expected onset (from the onset-delay model)."""
-    p = params or SupplyDelayParams()
-    if actual_onset_min is None:
-        return BoostConfounder.HEATING_FAILURE          # no onset observed
-    if actual_onset_min >= p.no_onset_min:
-        return BoostConfounder.HEATING_FAILURE
-    expected = expected_onset_min if expected_onset_min is not None else 0.0
-    excess = actual_onset_min - expected
-    if excess <= p.tolerance_min:
-        return None                                     # normal / known delay
-    if excess >= p.blocking_min:
-        return BoostConfounder.HEATING_FAILURE          # extreme -> interrupting
-    if excess >= p.degrading_min:
-        return BoostConfounder.SUPPLY_DELAY_ANOMALY     # moderate unexpected -> degrading
-    return None                                         # within tolerance..degrading: tolerated

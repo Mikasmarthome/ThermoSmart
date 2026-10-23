@@ -601,13 +601,13 @@ class LearningRuntime:
 
     def _runtime_confounders(self, zr, episode, dispatch, snapshot) -> tuple:
         """B2b-4b: derive runtime confounders from authoritative episode/dispatch evidence
-        (multi-TRV per-device, supply-delay vs. expected onset, early-cutoff overlap,
+        (multi-TRV per-device, early-cutoff overlap,
         afterheat interaction). Returned as canonical flag strings; fed to the SAME central
         evaluator for both the boost outcome and the non-boost baseline. Never raises."""
         flags: list[str] = []
         try:
             from ..models import (BoostDeviceDispatchEvidence, evaluate_multi_trv,
-                                  supply_delay_confounder, afterheat_attribution_severity,
+                                  afterheat_attribution_severity,
                                   ConfounderSeverity, BoostConfounder)
             from ..contracts import PredictionType
             # ── multi-TRV from authoritative per-device effective setpoints ──
@@ -633,28 +633,6 @@ class LearningRuntime:
                     mtv = evaluate_multi_trv(devices)
                     if mtv is not None:
                         flags.append(mtv.value)
-            # ── supply-delay: expected onset (frozen) vs. actual effective onset ──
-            try:
-                preds = getattr(zr, "last_predictions", {}) or {}
-                od = preds.get(PredictionType.ONSET_DELAY)
-                expected_onset = (float(od.values.get("onset_delay_minutes"))
-                                  if od is not None and not getattr(od, "fallback_used", True)
-                                  else None)
-                from ..models.baseline_comparison import _onset_and_target
-                onset_ms, _tm = _onset_and_target(
-                    episode.trajectory.points, episode.target, episode.start_temp,
-                    getattr(episode, "comfort_tolerance_at_start", 0.5))
-                actual_onset = onset_ms / 60000.0 if onset_ms is not None else None
-                # Skip supply-delay assessment when no expected onset is available (cold start /
-                # no onset-delay model yet): without a reference we cannot distinguish normal
-                # heating from a supply-delay anomaly — treating None/None as HEATING_FAILURE
-                # would confound all bootstrap outcomes.
-                if expected_onset is not None:
-                    sd = supply_delay_confounder(expected_onset, actual_onset)
-                    if sd is not None:
-                        flags.append(sd.value)
-            except Exception:
-                pass
             # ── early-cutoff overlap (same decision) ──
             ecs = getattr(snapshot, "early_cutoff_state", None) if snapshot is not None else None
             if ecs in ("cutoff_applied", "coasting_hold"):

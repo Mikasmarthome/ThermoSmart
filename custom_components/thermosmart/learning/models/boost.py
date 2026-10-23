@@ -129,7 +129,7 @@ _INTERRUPT_CONFOUNDERS = frozenset({
     "mode_change", "window_open", "heating_failure"})
 # Confounders that mean the observation exists but CAUSE is ambiguous -> confounded.
 _CONFOUND_CONFOUNDERS = frozenset({
-    "solar_gain", "reheating", "additional_radiator", "external_heat", "supply_delay",
+    "solar_gain", "reheating", "additional_radiator", "external_heat",
     "multi_trv_ambiguous"})
 
 

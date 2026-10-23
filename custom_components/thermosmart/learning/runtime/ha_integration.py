@@ -21,7 +21,7 @@ import logging
 import math
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Any, Callable, Mapping, Optional
 
 from ...const import TPI_MAX_BOOST_CELSIUS
 from ..clock import Clock
@@ -37,6 +37,9 @@ from .lifecycle import (
     LearningRuntimeConfig,
     LearningRuntimeMode,
 )
+
+if TYPE_CHECKING:
+    from ..models.boost_activation import BoostActivationReadiness
 
 _LOGGER = logging.getLogger(__name__)
 _ERROR_LOG_THROTTLE = 50  # log at most 1 of every N identical errors
@@ -2193,15 +2196,14 @@ class LearningShadowController:
 
     def _read_boost_activation_readiness_safe(
         self, recommendation: Mapping[str, Any]
-    ) -> Optional["BoostActivationReadiness"]:  # type: ignore[name-defined]
+    ) -> Optional["BoostActivationReadiness"]:
         """Read the BoostActivationReadiness from the BoostModel for the current context.
 
         Pure-on-model-state: derived entirely from persisted model state plus current
         recommendation context.  Returns None on any error (never raises).
         """
         try:
-            from ..models.boost import BoostModel, BoostPredictionContext
-            from ..models.boost_activation import BoostActivationReadiness
+            from ..models.boost import BoostPredictionContext
             model = self._boost_model()
             if model is None:
                 return None

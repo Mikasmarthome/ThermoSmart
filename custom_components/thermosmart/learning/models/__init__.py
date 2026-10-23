@@ -14,7 +14,6 @@ from .onset_delay import (
     OnsetDelaySample,
     OnsetDelayState,
     OnsetDelayUpdateContext,
-    onset_delay_model_definition,
 )
 from .heat_rate import (
     MODEL_VERSION,
@@ -29,7 +28,6 @@ from .heat_rate import (
     HeatRateSample,
     HeatRateState,
     HeatRateUpdateContext,
-    heat_rate_model_definition,
 )
 from .heat_loss import (
     HeatLossBucket,
@@ -42,7 +40,6 @@ from .heat_loss import (
     HeatLossSample,
     HeatLossState,
     HeatLossUpdateContext,
-    heat_loss_model_definition,
 )
 from .afterheat import (
     AfterheatBucket,
@@ -56,7 +53,6 @@ from .afterheat import (
     AfterheatSample,
     AfterheatState,
     AfterheatUpdateContext,
-    afterheat_model_definition,
 )
 from .boost import (
     EVALUATION_VERSION,
@@ -75,7 +71,6 @@ from .boost import (
     BoostSample,
     BoostState,
     BoostUpdateContext,
-    boost_model_definition,
     boost_offset_c_to_compat_factor,
     class_effect,
     classify_boost_outcome,
@@ -155,7 +150,6 @@ from .forecast import (
     ForecastState,
     ForecastTrustResult,
     ForecastUpdateContext,
-    forecast_model_definition,
 )
 from .outcome import (
     SCORING_VERSION,
@@ -173,29 +167,24 @@ from .outcome import (
     OutcomeScore,
     OutcomeState,
     OutcomeUpdateContext,
-    outcome_model_definition,
 )
 
 __all__ = [
     "OnsetDelayBucket", "OnsetDelayDiagnostics", "OnsetDelayModel", "OnsetDelayParameters",
     "OnsetDelayPredictionContext", "OnsetDelayRebuildItem", "OnsetDelayRejection",
     "OnsetDelaySample", "OnsetDelayState", "OnsetDelayUpdateContext",
-    "onset_delay_model_definition",
     "MODEL_VERSION", "PARAMETER_VERSION",
     "HeatRateBucket", "HeatRateDiagnostics", "HeatRateModel", "HeatRateParameters",
     "HeatRatePredictionContext", "HeatRateRebuildItem", "HeatRateRejection",
     "HeatRateSample", "HeatRateState", "HeatRateUpdateContext",
-    "heat_rate_model_definition",
     "HeatLossBucket", "HeatLossDiagnostics", "HeatLossModel", "HeatLossParameters",
     "HeatLossPredictionContext", "HeatLossRebuildItem", "HeatLossRejection",
     "HeatLossSample", "HeatLossState", "HeatLossUpdateContext",
-    "heat_loss_model_definition",
     "AfterheatBucket", "AfterheatDiagnostics", "AfterheatModel", "AfterheatParameters",
     "AfterheatPrediction", "AfterheatPredictionContext", "AfterheatRebuildItem",
     "AfterheatRejection", "AfterheatSample", "AfterheatState", "AfterheatUpdateContext",
-    "afterheat_model_definition",
     "SCORING_VERSION", "DimensionStatus", "OutcomeBucket", "OutcomeDiagnostics",
     "OutcomeDimensions", "OutcomeEvaluation", "OutcomeModel", "OutcomeParameters",
     "OutcomePredictionContext", "OutcomeRebuildItem", "OutcomeRejection", "OutcomeSample",
-    "OutcomeScore", "OutcomeState", "OutcomeUpdateContext", "outcome_model_definition",
+    "OutcomeScore", "OutcomeState", "OutcomeUpdateContext",
 ]

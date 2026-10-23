@@ -34,7 +34,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import ControllerKind, EpisodeReason, EpisodeType, OutcomeEpisode
+from ..episode_schemas import ControllerKind, EpisodeReason, OutcomeEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 from .boost_degradation import (
@@ -827,13 +827,6 @@ class BoostModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types = (EpisodeType.OUTCOME.value,)
-    required_features = ("indoor_temp", "target")
-    optional_features = ("outdoor_temp", "valve_opening", "hvac_action", "forecast")
-    supported_prediction_types = (
-        PredictionType.BOOST_FACTOR, PredictionType.BOOST_DURATION,
-        PredictionType.BOOST_OUTCOME)
-    min_tier = 0
 
     def __init__(self, learning_zone_id: str, params: Optional[BoostParameters] = None, *,
                  extractor: Optional[FeatureExtractor] = None,
@@ -2042,17 +2035,3 @@ def _sample_from(d: Mapping[str, Any]) -> BoostSample:
         reliability_components=dict(d.get("reliability_components", {}) or {}))
 
 
-def boost_model_definition():
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME, model_factory=lambda: BoostModel("__definition__"),
-        model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(EpisodeType.OUTCOME,),
-        supported_prediction_types=(
-            PredictionType.BOOST_FACTOR, PredictionType.BOOST_DURATION,
-            PredictionType.BOOST_OUTCOME),
-        required_features=("indoor_temp", "target"),
-        optional_features=("outdoor_temp", "valve_opening", "hvac_action", "forecast"),
-        required_capability_flags=(), regime_dependent=False, advisory=False,
-        control_relevant=True, rebuildable=True, can_be_not_available=True, min_trv_only=True)

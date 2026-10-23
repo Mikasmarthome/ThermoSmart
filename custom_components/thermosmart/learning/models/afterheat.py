@@ -28,7 +28,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import AfterheatEpisode, EpisodeType
+from ..episode_schemas import AfterheatEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
@@ -345,14 +345,6 @@ class AfterheatModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types = (EpisodeType.AFTERHEAT.value,)
-    required_features = ("indoor_temp", "trv_setpoint")
-    optional_features = ("valve_opening", "hvac_action", "outdoor_temp",
-                         "solar_radiation", "radiator_profile")
-    supported_prediction_types = (
-        PredictionType.EXPECTED_OVERSHOOT, PredictionType.AFTERHEAT_TIME_TO_PEAK,
-        PredictionType.AFTERHEAT_DURATION)
-    min_tier = 0
 
     def __init__(self, learning_zone_id: str, params: Optional[AfterheatParameters] = None, *,
                  device_prior: Optional[Callable[[Optional[str]], Optional[float]]] = None,
@@ -920,18 +912,3 @@ def _sample_from(d: Mapping[str, Any]) -> AfterheatSample:
         data_quality=d["data_quality"], reason_codes=tuple(d.get("reason_codes", [])))
 
 
-def afterheat_model_definition():
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME, model_factory=lambda: AfterheatModel("__definition__"),
-        model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(EpisodeType.AFTERHEAT,),
-        supported_prediction_types=(
-            PredictionType.EXPECTED_OVERSHOOT, PredictionType.AFTERHEAT_TIME_TO_PEAK,
-            PredictionType.AFTERHEAT_DURATION),
-        required_features=("indoor_temp", "trv_setpoint"),
-        optional_features=("valve_opening", "hvac_action", "outdoor_temp",
-                           "solar_radiation", "radiator_profile"),
-        required_capability_flags=(), regime_dependent=True, advisory=False,
-        control_relevant=True, rebuildable=True, can_be_not_available=False, min_trv_only=True)

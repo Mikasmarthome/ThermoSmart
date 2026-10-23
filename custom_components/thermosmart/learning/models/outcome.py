@@ -28,7 +28,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import ControllerKind, EpisodeReason, EpisodeType, OutcomeEpisode
+from ..episode_schemas import ControllerKind, EpisodeReason, OutcomeEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
@@ -372,14 +372,6 @@ class OutcomeModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types = (EpisodeType.OUTCOME.value,)
-    required_features = ("indoor_temp", "target")
-    optional_features = ("outdoor_temp", "valve_opening", "hvac_action", "forecast",
-                         "wind_speed", "solar_radiation")
-    supported_prediction_types = (
-        PredictionType.OUTCOME_QUALITY, PredictionType.COMFORT_QUALITY,
-        PredictionType.CONTROLLER_QUALITY)
-    min_tier = 0
 
     def __init__(self, learning_zone_id: str, params: Optional[OutcomeParameters] = None, *,
                  extractor: Optional[FeatureExtractor] = None) -> None:
@@ -1051,18 +1043,3 @@ def _sample_from(d: Mapping[str, Any]) -> OutcomeSample:
         confounder_flags=tuple(d.get("confounder_flags", [])))
 
 
-def outcome_model_definition():
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME, model_factory=lambda: OutcomeModel("__definition__"),
-        model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(EpisodeType.OUTCOME,),
-        supported_prediction_types=(
-            PredictionType.OUTCOME_QUALITY, PredictionType.COMFORT_QUALITY,
-            PredictionType.CONTROLLER_QUALITY),
-        required_features=("indoor_temp", "target"),
-        optional_features=("outdoor_temp", "valve_opening", "hvac_action", "forecast",
-                           "wind_speed", "solar_radiation"),
-        required_capability_flags=(), regime_dependent=False, advisory=True,
-        control_relevant=False, rebuildable=True, can_be_not_available=True, min_trv_only=True)

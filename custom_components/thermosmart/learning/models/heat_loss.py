@@ -28,7 +28,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import EpisodeType, PassiveCoolingEpisode
+from ..episode_schemas import PassiveCoolingEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
@@ -268,11 +268,6 @@ class HeatLossModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types = (EpisodeType.PASSIVE_COOLING.value,)
-    required_features = ("indoor_temp", "target")
-    optional_features = ("outdoor_temp", "wind_speed", "solar_radiation", "radiator_profile")
-    supported_prediction_types = (PredictionType.HEAT_LOSS_RATE, PredictionType.COOLING_MINUTES)
-    min_tier = 0
 
     def __init__(
         self, learning_zone_id: str, params: Optional[HeatLossParameters] = None, *,
@@ -793,16 +788,3 @@ def _sample_from(d: Mapping[str, Any]) -> HeatLossSample:
         data_quality=d["data_quality"], reason_codes=tuple(d.get("reason_codes", [])))
 
 
-def heat_loss_model_definition():
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME, model_factory=lambda: HeatLossModel("__definition__"),
-        model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(EpisodeType.PASSIVE_COOLING,),
-        supported_prediction_types=(PredictionType.HEAT_LOSS_RATE, PredictionType.COOLING_MINUTES),
-        required_features=("indoor_temp", "target"),
-        optional_features=("outdoor_temp", "wind_speed", "solar_radiation", "radiator_profile"),
-        required_capability_flags=(), regime_dependent=True, advisory=False,
-        control_relevant=True, rebuildable=True, can_be_not_available=False,
-        min_trv_only=True)

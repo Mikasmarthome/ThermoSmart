@@ -74,7 +74,6 @@ class PredictionType(Enum):
     HEAT_LOSS_RATE = "heat_loss_rate"
     COOLING_MINUTES = "cooling_minutes"
     EXPECTED_OVERSHOOT = "expected_overshoot"
-    AFTERHEAT_TIME_TO_PEAK = "afterheat_time_to_peak"
     AFTERHEAT_DURATION = "afterheat_duration"
     FORECAST_TRUST = "forecast_trust"
     FORECAST_BIAS = "forecast_bias"
@@ -388,11 +387,6 @@ class Model(Protocol):
     model_name: str
     model_version: int
     parameter_version: int
-    consumed_episode_types: tuple[str, ...]
-    required_features: tuple[str, ...]
-    optional_features: tuple[str, ...]
-    supported_prediction_types: tuple[PredictionType, ...]
-    min_tier: int
 
     def cold_start_prior(self) -> Mapping[str, Any]:
         ...

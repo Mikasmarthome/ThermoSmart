@@ -325,13 +325,6 @@ class ForecastModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types: tuple[str, ...] = ()
-    required_features = ("forecast",)
-    optional_features = ("outdoor_temp", "wind_speed", "solar_radiation")
-    supported_prediction_types = (
-        PredictionType.FORECAST_TRUST, PredictionType.FORECAST_BIAS,
-        PredictionType.CORRECTED_FORECAST)
-    min_tier = 0
 
     def __init__(self, learning_zone_id: str, params: Optional[ForecastParameters] = None) -> None:
         if not learning_zone_id:
@@ -907,17 +900,3 @@ def _sample_from(d: Mapping[str, Any]) -> ForecastSample:
         model_version=d["model_version"])
 
 
-def forecast_model_definition():
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME, model_factory=lambda: ForecastModel("__definition__"),
-        model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(),
-        supported_prediction_types=(
-            PredictionType.FORECAST_TRUST, PredictionType.FORECAST_BIAS,
-            PredictionType.CORRECTED_FORECAST),
-        required_features=("forecast",),
-        optional_features=("outdoor_temp", "wind_speed", "solar_radiation"),
-        required_capability_flags=("has_forecast",), regime_dependent=False, advisory=True,
-        control_relevant=False, rebuildable=True, can_be_not_available=True, min_trv_only=False)

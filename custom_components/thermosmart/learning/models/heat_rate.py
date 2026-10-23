@@ -32,7 +32,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import EpisodeType, HeatingEpisode
+from ..episode_schemas import HeatingEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
@@ -277,12 +277,6 @@ class HeatRateModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types = (EpisodeType.HEATING.value,)
-    required_features = ("indoor_temp", "trv_setpoint", "target")
-    optional_features = ("outdoor_temp", "wind_speed", "solar_radiation",
-                         "valve_opening", "radiator_profile")
-    supported_prediction_types = (PredictionType.HEAT_RATE, PredictionType.PREHEAT_MINUTES)
-    min_tier = 0
 
     def __init__(
         self, learning_zone_id: str,
@@ -816,18 +810,3 @@ def _sample_from(d: Mapping[str, Any]) -> HeatRateSample:
 
 # -- registry definition ------------------------------------------------------
 
-def heat_rate_model_definition():
-    """Build the registry ModelDefinition for HeatRate (no auto-registration)."""
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME, model_factory=lambda: HeatRateModel("__definition__"),
-        model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(EpisodeType.HEATING,),
-        supported_prediction_types=(PredictionType.HEAT_RATE, PredictionType.PREHEAT_MINUTES),
-        required_features=("indoor_temp", "trv_setpoint", "target"),
-        optional_features=("outdoor_temp", "wind_speed", "solar_radiation",
-                           "valve_opening", "radiator_profile"),
-        required_capability_flags=(), regime_dependent=True, advisory=False,
-        control_relevant=True, rebuildable=True, can_be_not_available=False,
-        min_trv_only=True)

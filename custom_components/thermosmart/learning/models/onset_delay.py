@@ -53,7 +53,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import EpisodeType, HeatingEpisode
+from ..episode_schemas import HeatingEpisode
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
@@ -509,11 +509,6 @@ class OnsetDelayModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_episode_types = (EpisodeType.HEATING.value,)
-    required_features = ("indoor_temp",)
-    optional_features = ("outdoor_temp", "time_bucket", "device_profile")
-    supported_prediction_types = (PredictionType.ONSET_DELAY,)
-    min_tier = 0  # works with TRV-only setups
 
     def __init__(self, learning_zone_id: str,
                  params: Optional[OnsetDelayParameters] = None) -> None:
@@ -1160,24 +1155,3 @@ def _sample_from(d: Mapping[str, Any]) -> OnsetDelaySample:
 # Registry definition
 # ---------------------------------------------------------------------------
 
-def onset_delay_model_definition():
-    """Build the registry ModelDefinition for OnsetDelay (no auto-registration)."""
-    from ..registry import ModelDefinition
-
-    return ModelDefinition(
-        model_name=MODEL_NAME,
-        model_factory=lambda: OnsetDelayModel("__definition__"),
-        model_version=MODEL_VERSION,
-        parameter_version=PARAMETER_VERSION,
-        consumed_episode_types=(EpisodeType.HEATING,),
-        supported_prediction_types=(PredictionType.ONSET_DELAY,),
-        required_features=("indoor_temp",),
-        optional_features=("outdoor_temp", "time_bucket", "device_profile"),
-        required_capability_flags=(),
-        regime_dependent=True,
-        advisory=False,
-        control_relevant=True,
-        rebuildable=True,
-        can_be_not_available=False,
-        min_trv_only=True,
-    )

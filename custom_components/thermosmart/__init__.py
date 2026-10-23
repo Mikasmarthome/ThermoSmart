@@ -21,6 +21,8 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant, Event
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import restore_state
 
 from .const import (
     DOMAIN,
@@ -135,6 +137,25 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     return True
 
 
+def _restored_learning_switch_state(hass: HomeAssistant, entry: ConfigEntry) -> bool | None:
+    """Learning switch state from the previous run, or None if there is none.
+
+    The switch entity is only created after the first coordinator refresh, so
+    its own restore would come too late for the first control cycle after a
+    start. Both read the same Home Assistant restore data, so the zone starts in
+    the state the switch is about to report.
+    """
+    entity_id = er.async_get(hass).async_get_entity_id(
+        "switch", DOMAIN, f"{entry.entry_id}_learning"
+    )
+    if entity_id is None:
+        return None
+    stored = restore_state.async_get(hass).last_states.get(entity_id)
+    if stored is None:
+        return None
+    return stored.state.state == "on"
+
+
 def _validate_sensors(hass: HomeAssistant, cfg: dict) -> None:
     """Prüft ob alle konfigurierten Sensor-Entities beim Start existieren.
 
@@ -240,6 +261,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine wiederverwendet")
 
     learning_enabled = cfg.get(CONF_LEARNING_ENABLED, True)
+    restored_switch = _restored_learning_switch_state(hass, entry)
+    if restored_switch is not None:
+        learning_enabled = learning_enabled and restored_switch
     learning_engine.set_zone_enabled(entry.entry_id, learning_enabled)
 
     # Sensor-Existenz prüfen – einmalig beim Start, damit Fehlkonfigurationen

@@ -11,8 +11,7 @@ Storage-layer shape (``serialize_episode``/``deserialize_episode``):
     A FLAT dict — ``episode_schema_version``, ``episode_type``, and every
     field of the underlying dataclass at the top level (no nested "data"
     wrapper). This is deliberate: it is exactly the entry shape
-    ``evaluate_episode_retention()`` / ``async_prune_episodes()``
-    (``retention.py`` / ``retention_service.py``) already expect —
+    ``evaluate_episode_retention()`` (``retention.py``) already expects —
     ``entry.get("episode_type")``, ``entry.get("end_ts")`` /
     ``entry.get("start_ts")`` — so this format plugs into the existing
     retention foundation with zero changes there. It also matches the

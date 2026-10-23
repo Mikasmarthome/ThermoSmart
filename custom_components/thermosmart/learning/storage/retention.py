@@ -2,9 +2,8 @@
 
 Operates only on already-loaded data structures — a :class:`SegmentIndex` plus
 a mapping of sealed segment metadata dicts, or an ``EpisodesStore`` payload
-dict. Performs no storage I/O itself; see ``retention_service.py`` for the
-small HA-store-facing layer that loads/saves via the store layer and calls
-these pure functions.
+dict. Performs no storage I/O itself; the episode persistence layer calls these
+pure functions.
 
 Conservative by design, matching the existing pruning style used for
 adaptation history (``history_store_schema.py``) and application lifecycle

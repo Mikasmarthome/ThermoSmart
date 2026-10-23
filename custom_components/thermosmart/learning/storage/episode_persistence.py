@@ -175,8 +175,7 @@ def prune_episode_entries(
     """Apply each present EpisodeType's own RetentionPolicy across ALL
     entries in an EpisodesStore payload, without appending anything new.
 
-    A standalone maintenance pass — mirrors
-    ``retention_service.async_prune_episodes()``'s per-type grouping, but
+    A standalone maintenance pass with per-type grouping,
     purely in-memory (no storage I/O). Useful for re-running retention on an
     already-loaded payload, e.g. right before a save. Never raises.
     """

@@ -1,7 +1,6 @@
 """Learning storage shell (Phase 3 — capture foundation).
 
-Pure submodules (``naming``, ``serialization``, ``segments``, ``recovery``,
-``persistence``) have no Home Assistant dependency and are importable and
+Pure submodules (``naming``, ``serialization``, ``segments``) have no Home Assistant dependency and are importable and
 testable in isolation. Only ``stores`` wraps the Home Assistant ``Store`` and
 is therefore HA-dependent.
 

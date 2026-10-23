@@ -8,14 +8,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from datetime import datetime
 from typing import Any, Optional
 
 from ..contracts import require_utc
-from ..clock import Clock
 from ..raw_schemas import RawTrackName
-from .serialization import encode_raw
 
 SEGMENT_FORMAT_VERSION = 1
 
@@ -125,119 +123,6 @@ def _enc_opt_dt(value: Optional[datetime]) -> Optional[str]:
 
 
 # -- active segment writer ----------------------------------------------------
-
-class ActiveSegment:
-    """The single writable segment for one (zone, track).
-
-    Capacity is injected (derived from the registry/retention policy by the
-    caller) — no global magic number lives here.
-    """
-
-    def __init__(
-        self,
-        *,
-        learning_zone_id: str,
-        track_name: RawTrackName,
-        schema_type: type,
-        track_schema_version: int,
-        sequence_number: int,
-        capacity: int,
-        segment_id: str,
-        clock: Clock,
-    ) -> None:
-        if capacity <= 0:
-            raise SegmentError("capacity must be > 0")
-        if sequence_number < 0:
-            raise SegmentError("sequence_number must be >= 0")
-        if not segment_id:
-            raise SegmentError("segment_id must be non-empty")
-        self._zone = learning_zone_id
-        self._track = track_name
-        self._schema_type = schema_type
-        self._schema_version = track_schema_version
-        self._sequence = sequence_number
-        self._capacity = capacity
-        self._segment_id = segment_id
-        self._clock = clock
-        self._created_utc = clock.now_utc()
-        self._records: list[Any] = []
-        self._fingerprints: set[tuple] = set()
-        self._sealed_utc: Optional[datetime] = None
-
-    # -- state -----------------------------------------------------------
-
-    @property
-    def segment_id(self) -> str:
-        return self._segment_id
-
-    @property
-    def sequence_number(self) -> int:
-        return self._sequence
-
-    @property
-    def record_count(self) -> int:
-        return len(self._records)
-
-    @property
-    def is_sealed(self) -> bool:
-        return self._sealed_utc is not None
-
-    @property
-    def is_full(self) -> bool:
-        return len(self._records) >= self._capacity
-
-    # -- mutation --------------------------------------------------------
-
-    def append(self, record: Any) -> bool:
-        """Append a typed record. Returns False if it is a duplicate."""
-        if self.is_sealed:
-            raise SegmentError("cannot append to a sealed segment")
-        if not isinstance(record, self._schema_type):
-            raise SegmentError(
-                f"record is {type(record).__name__}, expected "
-                f"{self._schema_type.__name__}"
-            )
-        if record.learning_zone_id != self._zone:
-            raise SegmentError("record belongs to a different learning zone")
-        fingerprint = _fingerprint(self._track, record)
-        if fingerprint in self._fingerprints:
-            return False
-        self._fingerprints.add(fingerprint)
-        self._records.append(record)
-        return True
-
-    def seal(self) -> SegmentMetadata:
-        """Seal the segment; idempotent. Returns the sealed metadata."""
-        if not self.is_sealed:
-            self._sealed_utc = self._clock.now_utc()
-        return self.metadata()
-
-    # -- read ------------------------------------------------------------
-
-    def _encoded(self) -> tuple[dict, ...]:
-        return tuple(encode_raw(self._track, r) for r in tuple(self._records))
-
-    def metadata(self) -> SegmentMetadata:
-        records = tuple(self._records)
-        timestamps = [r.ts for r in records]
-        content_hash = _content_hash(self._encoded()) if records else None
-        return SegmentMetadata(
-            segment_id=self._segment_id,
-            learning_zone_id=self._zone,
-            track_name=self._track,
-            track_schema_version=self._schema_version,
-            sequence_number=self._sequence,
-            created_utc=self._created_utc,
-            record_count=len(records),
-            sealed_utc=self._sealed_utc,
-            first_record_utc=min(timestamps) if timestamps else None,
-            last_record_utc=max(timestamps) if timestamps else None,
-            content_hash=content_hash,
-        )
-
-    def snapshot(self) -> SegmentSnapshot:
-        """Return an immutable copy unaffected by later appends."""
-        return SegmentSnapshot(metadata=self.metadata(), records=self._encoded())
 
 
 # -- segment index ------------------------------------------------------------

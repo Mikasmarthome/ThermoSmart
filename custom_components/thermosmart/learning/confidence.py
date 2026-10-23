@@ -13,7 +13,7 @@ if a clock were ever needed it would be injected explicitly.
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from enum import Enum
 from typing import Mapping, Optional, Sequence
 
@@ -835,39 +835,4 @@ def _dedup(items: Sequence[str]) -> list[str]:
 
 # -- diagnostics / export -----------------------------------------------------
 
-def breakdown_to_support_export(result: ConfidenceResult) -> Mapping[str, object]:
-    return {
-        "purpose": result.purpose.value, "value": result.value, "level": result.level.value,
-        "status": result.status.value,
-        "components": [
-            {"kind": c.kind.value, "required": c.is_required, "confidence": c.confidence,
-             "reliability": c.reliability, "status": c.status}
-            for c in result.breakdown.components],
-        "applied_caps": [{"cap": c.cap.value, "max_value": c.max_value, "reason": c.reason,
-                          "hard": c.hard, "priority": c.priority} for c in result.applied_caps],
-        "missing_required": list(result.missing_required),
-        "missing_optional": list(result.missing_optional),
-        "gate": {"allowed": result.gate.allowed,
-                 "required_minimum": result.gate.required_minimum,
-                 "safe_fallback_required": result.gate.safe_fallback_required},
-        "control_allowed": result.control_allowed, "advisory_allowed": result.advisory_allowed,
-        "aggregator_version": result.aggregator_version,
-        "parameter_version": result.parameter_version,
-    }
 
-
-def breakdown_to_research_export(result: ConfidenceResult) -> Mapping[str, object]:
-    cap_counts: dict[str, int] = {}
-    for c in result.applied_caps:
-        cap_counts[c.cap.value] = cap_counts.get(c.cap.value, 0) + 1
-    domain_counts: dict[str, int] = {}
-    for d in result.breakdown.evidence_domains:
-        domain_counts[d] = domain_counts.get(d, 0) + 1
-    return {
-        "purpose": result.purpose.value, "level": result.level.value, "value": result.value,
-        "component_kinds": sorted(c.kind.value for c in result.breakdown.components),
-        "evidence_domain_distribution": domain_counts, "cap_frequencies": cap_counts,
-        "effective_evidence": result.effective_evidence, "fallback_used": result.fallback_used,
-        "aggregator_version": result.aggregator_version,
-        "parameter_version": result.parameter_version,
-    }

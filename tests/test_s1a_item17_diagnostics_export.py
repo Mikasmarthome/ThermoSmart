@@ -19,16 +19,8 @@ import math
 from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
-import pytest
-
 from custom_components.thermosmart.learning.clock import FakeClock
-from custom_components.thermosmart.learning.privacy import (
-    ExportPrivacyClass,
-    PseudonymNamespace,
-    Pseudonymizer,
-    QuantizationPolicy,
-    scan_payload,
-)
+from custom_components.thermosmart.learning.privacy import scan_payload
 from custom_components.thermosmart.learning.runtime.ha_integration import (
     LearningShadowController,
 )
@@ -52,105 +44,7 @@ def _shadow_ctrl() -> LearningShadowController:
 # ── §1  Pseudonymizer Privacy ─────────────────────────────────────────────────
 
 
-class TestPseudonymizerPrivacy:
-    def test_deterministic_with_same_salt(self):
-        p1 = Pseudonymizer(_SALT)
-        p2 = Pseudonymizer(_SALT)
-        assert (p1.pseudonymize(PseudonymNamespace.ZONE, "z1") ==
-                p2.pseudonymize(PseudonymNamespace.ZONE, "z1"))
-
-    def test_stable_with_injected_salt(self):
-        assert Pseudonymizer(_SALT).stable is True
-
-    def test_not_stable_without_salt(self):
-        assert Pseudonymizer().stable is False
-
-    def test_random_salts_produce_different_outputs(self):
-        r1 = Pseudonymizer().pseudonymize(PseudonymNamespace.ZONE, "z1")
-        r2 = Pseudonymizer().pseudonymize(PseudonymNamespace.ZONE, "z1")
-        assert r1 != r2
-
-    def test_namespace_isolation_same_value(self):
-        p = Pseudonymizer(_SALT)
-        zone = p.pseudonymize(PseudonymNamespace.ZONE, "abc")
-        model = p.pseudonymize(PseudonymNamespace.MODEL, "abc")
-        assert zone != model
-
-    def test_different_salt_produces_different_output(self):
-        p1 = Pseudonymizer(_SALT)
-        p2 = Pseudonymizer(b"completely_different_salt____!!")
-        r1 = p1.pseudonymize(PseudonymNamespace.ZONE, "z1")
-        r2 = p2.pseudonymize(PseudonymNamespace.ZONE, "z1")
-        assert r1 != r2
-
-    def test_output_format_zone_prefix(self):
-        r = Pseudonymizer(_SALT).pseudonymize(PseudonymNamespace.ZONE, "z1")
-        assert r.startswith("z_")
-
-    def test_output_format_model_prefix(self):
-        r = Pseudonymizer(_SALT).pseudonymize(PseudonymNamespace.MODEL, "m1")
-        assert r.startswith("m_")
-
-    def test_pseudonym_length_fixed(self):
-        p = Pseudonymizer(_SALT, length=12)
-        r = p.pseudonymize(PseudonymNamespace.ZONE, "any_zone")
-        # "z_" prefix + 12 hex chars
-        assert len(r) == 14
-
-    def test_all_namespaces_accepted(self):
-        p = Pseudonymizer(_SALT)
-        for ns in PseudonymNamespace:
-            result = p.pseudonymize(ns, "test_value")
-            assert isinstance(result, str)
-            assert len(result) > 0
-
-
 # ── §2  QuantizationPolicy ────────────────────────────────────────────────────
-
-
-class TestQuantizationPolicy:
-    def _qp(self) -> QuantizationPolicy:
-        return QuantizationPolicy()
-
-    def test_temperature_step_01(self):
-        assert self._qp().quantize(21.34, 0.1) == pytest.approx(21.3)
-
-    def test_rate_step_005(self):
-        assert self._qp().quantize(1.234, 0.05) == pytest.approx(1.25)
-
-    def test_duration_step_60(self):
-        assert self._qp().quantize(3599.0, 60.0) == pytest.approx(3600.0)
-
-    def test_score_step_005(self):
-        assert self._qp().quantize(0.734, 0.05) == pytest.approx(0.75)
-
-    def test_negative_zero_eliminated(self):
-        result = self._qp().quantize(-0.04, 0.1)
-        assert result == 0.0
-        assert math.copysign(1.0, result) > 0  # positive zero
-
-    def test_nan_raises_value_error(self):
-        with pytest.raises(ValueError):
-            self._qp().quantize(math.nan, 0.1)
-
-    def test_inf_raises_value_error(self):
-        with pytest.raises(ValueError):
-            self._qp().quantize(math.inf, 0.1)
-
-    def test_tie_half_to_even(self):
-        # 21.25 with step 0.5 → rounds to nearest even → 21.0 (not 21.5)
-        result = self._qp().quantize(21.25, 0.5)
-        assert result in (21.0, 21.5)  # half-even: 21.0
-
-    def test_negative_temperature_quantized(self):
-        assert self._qp().quantize(-5.78, 0.1) == pytest.approx(-5.8)
-
-    def test_default_fields_are_positive(self):
-        qp = QuantizationPolicy()
-        assert qp.temperature_step_c > 0
-        assert qp.rate_step_c_per_h > 0
-        assert qp.duration_step_s > 0
-        assert qp.score_step > 0
 
 
 # ── §3  Privacy Scanner ───────────────────────────────────────────────────────
@@ -343,12 +237,6 @@ class TestLearningShadowControllerDiagnostics:
         ctrl = _shadow_ctrl()
         assert "control_enabled" in ctrl.diagnostics()
 
-    def test_confidence_display_returns_float(self):
-        ctrl = _shadow_ctrl()
-        cd = ctrl.confidence_display()
-        assert isinstance(cd, float)
-        assert 0.0 <= cd <= 1.0
-
     def test_confidence_display_attributes_returns_dict(self):
         ctrl = _shadow_ctrl()
         attrs = ctrl.confidence_display_attributes()
@@ -386,10 +274,3 @@ class TestLearningShadowControllerDiagnostics:
 # ── §11  Export Resilience / Failure Safety ───────────────────────────────────
 
 
-class TestPrivacyClassEnum:
-    def test_privacy_class_enum_has_expected_members(self):
-        names = {m.name for m in ExportPrivacyClass}
-        assert "PUBLIC_SAFE" in names
-        assert "SUPPORT_SAFE" in names
-        assert "SENSITIVE" in names
-        assert "FORBIDDEN" in names

@@ -2580,16 +2580,6 @@ class LearningShadowController:
     def last_decision_trace(self) -> Optional[dict]:
         return self._last_trace
 
-    def confidence_display(self) -> float:
-        """Combined learning confidence [0,1] from the Learning aggregator (display only)."""
-        from ..decision.confidence_adapter import combined_confidence
-        try:
-            zr = self._runtime._zone(self._zone)
-            return combined_confidence(getattr(zr, "last_confidence", {}) or {})
-        except Exception as err:
-            self._record_error("confidence_display", err)
-            return 0.0
-
     def confidence_display_attributes(self) -> dict:
         """Legacy-shaped confidence breakdown sourced purely from Learning (display only)."""
         from ..decision.confidence_adapter import confidence_breakdown

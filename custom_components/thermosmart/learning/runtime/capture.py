@@ -241,23 +241,6 @@ class CommandLedger:
         for c in commands:
             self.record(c)
 
-    def is_echo(self, trv_binding_id: str, value: float, ts_iso: str) -> bool:
-        ts = _parse(ts_iso)
-        for c in self._commands.values():
-            if c.command_type is not CommandType.SETPOINT:
-                continue
-            if c.trv_binding_id != trv_binding_id:
-                continue
-            if abs(c.value - value) > 1e-6:
-                continue
-            sent = _parse(c.sent_ts)
-            if sent is None or ts is None:
-                continue
-            delta = (ts - sent).total_seconds()
-            if 0 <= delta <= c.echo_window_s:
-                return True
-        return False
-
     def prune(self, now_iso: str, max_age_s: float = 3600.0) -> int:
         now = _parse(now_iso)
         if now is None:

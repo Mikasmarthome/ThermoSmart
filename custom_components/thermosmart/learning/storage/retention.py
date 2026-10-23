@@ -24,12 +24,11 @@ raise; malformed input is handled conservatively (keep, don't crash).
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Mapping, Optional
 
 from ..registry import RetentionPolicy
-from .segments import SegmentIndex
 
 
 def _parse_iso_utc(value: object) -> Optional[datetime]:
@@ -46,88 +45,6 @@ def _parse_iso_utc(value: object) -> Optional[datetime]:
 
 
 # ── Raw segment retention ────────────────────────────────────────────────────
-
-@dataclass(frozen=True)
-class SegmentRetentionDecision:
-    """Result of evaluating raw segment retention for one (zone, track).
-
-    Describes what would be pruned — this object never mutates storage.
-    """
-    keep_segment_ids: tuple[str, ...]
-    delete_segment_ids: tuple[str, ...]
-    updated_index: SegmentIndex
-
-
-def evaluate_segment_retention(
-    index: SegmentIndex,
-    sealed_segments: Mapping[str, Mapping[str, object]],
-    *,
-    policy: RetentionPolicy,
-    now_utc: datetime,
-) -> SegmentRetentionDecision:
-    """Decide which SEALED segments may be deleted for one (zone, track).
-
-    Pure function — no storage I/O, no mutation of inputs. Never raises.
-
-    Args:
-        index: the loaded SegmentIndex for this (zone, track).
-        sealed_segments: segment_id -> raw segment metadata dict, as found
-            under the ``"segment"`` key of a payload returned by
-            ``RawSegmentStore.load_segment()`` (keys of interest: "sealed_utc"
-            as an ISO 8601 UTC string or None, "sequence_number" as int).
-            Only ids that also appear in ``index.sealed_segment_ids`` are ever
-            considered; the active segment is always excluded even if present.
-        policy: RetentionPolicy. ``max_age_days`` gates eligibility by
-            ``sealed_utc`` age. ``max_records`` (if set) caps the number of
-            sealed segments retained, evicting the lowest ``sequence_number``
-            first among segments with known metadata.
-        now_utc: reference clock for age comparisons.
-
-    Returns:
-        SegmentRetentionDecision. Never raises.
-    """
-    eligible = [
-        sid for sid in index.sealed_segment_ids
-        if sid != index.active_segment_id
-    ]
-
-    def _is_age_candidate(sid: str) -> bool:
-        if policy.max_age_days is None:
-            return False
-        payload = sealed_segments.get(sid)
-        if not isinstance(payload, Mapping):
-            return False  # unknown metadata -> conservative keep
-        sealed_at = _parse_iso_utc(payload.get("sealed_utc"))
-        if sealed_at is None:
-            return False  # missing/malformed timestamp -> conservative keep
-        age_days = (now_utc - sealed_at).total_seconds() / 86400.0
-        return age_days > policy.max_age_days
-
-    to_delete: set[str] = {sid for sid in eligible if _is_age_candidate(sid)}
-
-    if policy.max_records is not None:
-        survivors = [sid for sid in eligible if sid not in to_delete]
-        if len(survivors) > policy.max_records:
-            known_survivors = [
-                sid for sid in survivors
-                if isinstance(sealed_segments.get(sid), Mapping)
-                and isinstance(sealed_segments[sid].get("sequence_number"), int)
-            ]
-            ordered = sorted(
-                known_survivors,
-                key=lambda sid: sealed_segments[sid]["sequence_number"],
-            )
-            overflow = min(len(survivors) - policy.max_records, len(ordered))
-            to_delete.update(ordered[:overflow])
-
-    keep = tuple(sid for sid in index.sealed_segment_ids if sid not in to_delete)
-    updated_index = replace(index, sealed_segment_ids=keep)
-
-    return SegmentRetentionDecision(
-        keep_segment_ids=keep,
-        delete_segment_ids=tuple(sorted(to_delete)),
-        updated_index=updated_index,
-    )
 
 
 # ── Episode retention ─────────────────────────────────────────────────────────

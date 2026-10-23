@@ -25,21 +25,6 @@ def _val(last_confidence: Mapping[str, Any], purpose: ConfidencePurpose) -> Opti
         return None
 
 
-def combined_confidence(last_confidence: Mapping[str, Any]) -> float:
-    """Display rollup: mean of the available Learning per-purpose confidences ([0,1]).
-
-    This is a display aggregation over the aggregator's own outputs, not a new gate
-    formula. Returns 0.0 when no confidence is available (neutral/safe).
-    """
-    if not last_confidence:
-        return 0.0
-    vals = [v for p in ConfidencePurpose
-            for v in (_val(last_confidence, p),) if v is not None]
-    if not vals:
-        return 0.0
-    return round(sum(vals) / len(vals), 4)
-
-
 def confidence_breakdown(last_confidence: Mapping[str, Any], *,
                          model_update_counts: Optional[Mapping[str, int]] = None) -> dict:
     """Legacy-compatible breakdown attribute shape, sourced from Learning confidences."""

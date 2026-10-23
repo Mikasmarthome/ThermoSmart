@@ -26,7 +26,6 @@ _EPISODE_REASON = {
     OutcomeReason.REACHED: EpisodeReason.REACHED,
     OutcomeReason.TIMEOUT: EpisodeReason.TIMEOUT,
     OutcomeReason.INTERRUPTED: EpisodeReason.INTERRUPTED,
-    OutcomeReason.MANUAL_CORRECTION: EpisodeReason.MANUAL_CORRECTION,
     OutcomeReason.SUPERSEDED: EpisodeReason.SUPERSEDED,
     OutcomeReason.MODE_CHANGE: EpisodeReason.MODE_CHANGE,
 }
@@ -67,9 +66,6 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
 
         if inp.decision_superseded:
             return self._close(OutcomeReason.SUPERSEDED, inp)
-        if inp.manual_correction:
-            self._confounders.add(ConfounderCode.MANUAL_CORRECTION)
-            return self._close(OutcomeReason.MANUAL_CORRECTION, inp)
         if inp.mode_change:
             self._confounders.add(ConfounderCode.MODE_CHANGE)
             return self._close(OutcomeReason.MODE_CHANGE, inp)

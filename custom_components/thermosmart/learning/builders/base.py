@@ -39,7 +39,6 @@ class ConfounderCode(Enum):
     SENSOR_GAP = "sensor_gap"
     IMPLAUSIBLE_JUMP = "implausible_jump"
     REHEATING = "reheating"
-    MANUAL_CORRECTION = "manual_correction"
     MODE_CHANGE = "mode_change"
     MISSING_OPTIONAL_EVIDENCE = "missing_optional_evidence"
 
@@ -74,7 +73,6 @@ class OutcomeReason(Enum):
     REACHED = "reached"
     TIMEOUT = "timeout"
     INTERRUPTED = "interrupted"
-    MANUAL_CORRECTION = "manual_correction"
     SUPERSEDED = "superseded"
     MODE_CHANGE = "mode_change"
     DISTURBED = "disturbed"
@@ -143,7 +141,6 @@ class BuilderInput:
     # outcome / decision signals
     decision_start: Optional[DecisionContext] = None
     decision_superseded: bool = False
-    manual_correction: bool = False
     mode_change: bool = False
     # drive-end evidence for afterheat builder: setpoint from the last heating step
     # (before coordinator reduced it to comfort).  Lets the builder capture

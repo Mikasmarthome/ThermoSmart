@@ -59,6 +59,16 @@ class EpisodeSerializationError(Exception):
 
 # -- trajectory codecs ---------------------------------------------------------
 
+# Close reasons that earlier versions could write and that no longer exist. A
+# stored episode carrying one is read as the closest current reason and is written
+# back with that reason on the next save.
+_RETIRED_EPISODE_REASONS = {"manual_correction": EpisodeReason.INTERRUPTED}
+
+
+def _decode_reason(value: str) -> EpisodeReason:
+    return _RETIRED_EPISODE_REASONS.get(value) or EpisodeReason(value)
+
+
 def _enc_trajectory_point(p: TrajectoryPoint) -> dict:
     return {"offset_ms": p.offset_ms, "value": p.value, "quality": p.quality.value, "gap": p.gap}
 
@@ -310,7 +320,7 @@ def _dec_outcome(d: Mapping[str, Any]) -> OutcomeEpisode:
         end_temp=d["end_temp"],
         target=d["target"],
         comfort_tolerance_at_start=d["comfort_tolerance_at_start"],
-        reason=EpisodeReason(d["reason"]),
+        reason=_decode_reason(d["reason"]),
         controller=ControllerKind(d["controller"]),
         trajectory=traj,
         time_quality=DataQuality(d.get("time_quality", "ok")),

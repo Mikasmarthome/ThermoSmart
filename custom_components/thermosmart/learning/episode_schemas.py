@@ -38,7 +38,6 @@ class EpisodeReason(Enum):
     REACHED = "reached"
     TIMEOUT = "timeout"
     INTERRUPTED = "interrupted"          # controlled controller-end / generic interruption
-    MANUAL_CORRECTION = "manual_correction"
     SUPERSEDED = "superseded"
     MODE_CHANGE = "mode_change"
     DISTURBED = "disturbed"

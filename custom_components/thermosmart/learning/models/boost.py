@@ -73,7 +73,6 @@ class BoostRejection(Enum):
     WINDOW_CONFOUNDER = "window_confounder"
     HEATING_FAILURE = "heating_failure"
     SOLAR_CONFOUNDER = "solar_confounder"
-    MANUAL_CORRECTION_CONTAMINATION = "manual_correction_contamination"
     MODE_CHANGE = "mode_change"
     SUPERSEDED = "superseded"
     ATTRIBUTION_UNAVAILABLE = "attribution_unavailable"
@@ -98,7 +97,6 @@ _TO_CONTRACT = {
     BoostRejection.WINDOW_CONFOUNDER: RejectionReason.DISTURBED_REGIME,
     BoostRejection.HEATING_FAILURE: RejectionReason.DISTURBED_REGIME,
     BoostRejection.SOLAR_CONFOUNDER: RejectionReason.DISTURBED_REGIME,
-    BoostRejection.MANUAL_CORRECTION_CONTAMINATION: RejectionReason.NOT_ELIGIBLE,
     BoostRejection.MODE_CHANGE: RejectionReason.NOT_ELIGIBLE,
     BoostRejection.SUPERSEDED: RejectionReason.NOT_ELIGIBLE,
     BoostRejection.ATTRIBUTION_UNAVAILABLE: RejectionReason.LOW_RELIABILITY,
@@ -239,7 +237,6 @@ _REJECTION_TO_CLASS: Mapping[BoostRejection, Optional[BoostOutcomeClass]] = {
     BoostRejection.DISTURBED: BoostOutcomeClass.BOOST_INTERRUPTED,
     BoostRejection.MODE_CHANGE: BoostOutcomeClass.BOOST_INTERRUPTED,
     BoostRejection.SUPERSEDED: BoostOutcomeClass.BOOST_INTERRUPTED,
-    BoostRejection.MANUAL_CORRECTION_CONTAMINATION: BoostOutcomeClass.BOOST_INTERRUPTED,
     BoostRejection.INSUFFICIENT_TEMPERATURE_DATA: BoostOutcomeClass.BOOST_INTERRUPTED,
     BoostRejection.LOW_DATA_QUALITY: BoostOutcomeClass.BOOST_INTERRUPTED,
     BoostRejection.INVALID_TRAJECTORY: BoostOutcomeClass.BOOST_INTERRUPTED,
@@ -502,7 +499,6 @@ class BoostUpdateContext:
     outcome_comfort: Optional[float] = None
     controller_kind: Optional[str] = None
     outdoor_bucket: Optional[str] = None
-    manual_correction_ref: Optional[str] = None
     context_quality: DataQuality = DataQuality.OK
     source_refs: tuple[str, ...] = ()
     source_feature_version: int = 1
@@ -558,7 +554,6 @@ class BoostUpdateContext:
             "outcome_performance": self.outcome_performance,
             "outcome_comfort": self.outcome_comfort, "controller_kind": self.controller_kind,
             "outdoor_bucket": self.outdoor_bucket,
-            "manual_correction_ref": self.manual_correction_ref,
             "context_quality": self.context_quality.value,
             "source_refs": list(self.source_refs),
             "source_feature_version": self.source_feature_version,
@@ -592,7 +587,6 @@ class BoostUpdateContext:
             outcome_performance=d.get("outcome_performance"),
             outcome_comfort=d.get("outcome_comfort"),
             controller_kind=d.get("controller_kind"), outdoor_bucket=d.get("outdoor_bucket"),
-            manual_correction_ref=d.get("manual_correction_ref"),
             context_quality=DataQuality(d.get("context_quality", DataQuality.OK.value)),
             source_refs=tuple(d.get("source_refs", [])),
             source_feature_version=d.get("source_feature_version", 1),
@@ -719,7 +713,6 @@ class BoostState:
     full_count: int = 0
     partial_count: int = 0
     overshoot_count: int = 0
-    manual_correction_count: int = 0
     reason_counts: Mapping[str, int] = field(default_factory=dict)
     rejection_counts: Mapping[str, int] = field(default_factory=dict)
     outlier_counts: Mapping[str, int] = field(default_factory=dict)
@@ -763,7 +756,6 @@ class BoostDiagnostics:
     sample_counts: Mapping[str, int]
     full_partial: tuple[int, int]
     overshoot_rate: Optional[float]
-    manual_correction_rate: Optional[float]
     confidence: float
     reason_counts: Mapping[str, int]
     rejection_counts: Mapping[str, int]
@@ -934,8 +926,6 @@ class BoostModel:
         # B2b-4a (single confounder authority — Variant B): the confounder penalty is NOT
         # applied here. It is applied EXACTLY ONCE as ``confounder_reliability`` in
         # BoostOutcomeReliability (gate) and once to the adaptive update weight in update().
-        if context.manual_correction_ref:
-            rel *= 0.5
         # B2b-1: partial dispatch is not full thermal attribution -> reduced reliability
         if context is not None and getattr(context, "outcome_reliability", None) == "partial":
             rel *= 0.5
@@ -1039,9 +1029,6 @@ class BoostModel:
             base = 0.85
         elif reason is EpisodeReason.TIMEOUT:
             base = 0.4
-        elif reason is EpisodeReason.MANUAL_CORRECTION:
-            base = 0.45
-            reasons.append("user_disagreed")
         # over-long boost vs planned -> controller inefficiency
         if context.planned_duration_s and duration_s > context.planned_duration_s * 1.5:
             base *= 0.8
@@ -1089,8 +1076,6 @@ class BoostModel:
             return self._reject(BoostRejection.HEATING_FAILURE)
         if "solar_gain" in confounders:
             return self._reject(BoostRejection.SOLAR_CONFOUNDER)
-        if episode.reason is EpisodeReason.MANUAL_CORRECTION:
-            return self._reject(BoostRejection.MANUAL_CORRECTION_CONTAMINATION)
         if episode.reason is EpisodeReason.MODE_CHANGE:
             return self._reject(BoostRejection.MODE_CHANGE)
         if episode.reason is EpisodeReason.SUPERSEDED:
@@ -1340,9 +1325,7 @@ class BoostModel:
             last_update_ts=_iso(episode.end_ts) if adaptive else self._state.last_update_ts,
             full_count=self._state.full_count + (1 if (adaptive and not ev.partial) else 0),
             partial_count=self._state.partial_count + (1 if (adaptive and ev.partial) else 0),
-            overshoot_count=self._state.overshoot_count + (1 if overshoot_flag else 0),
-            manual_correction_count=self._state.manual_correction_count
-            + (1 if episode.reason is EpisodeReason.MANUAL_CORRECTION else 0))
+            overshoot_count=self._state.overshoot_count + (1 if overshoot_flag else 0))
         return elig
 
     def _apply_rollback(self, g: BoostBucket, rollback) -> BoostBucket:
@@ -1819,7 +1802,6 @@ class BoostModel:
                            **{k: b.sample_count for k, b in s.buckets.items()}},
             full_partial=(s.full_count, s.partial_count),
             overshoot_rate=self._rate(s.overshoot_count),
-            manual_correction_rate=self._rate(s.manual_correction_count),
             confidence=self.confidence().value, reason_counts=dict(s.reason_counts),
             rejection_counts=dict(s.rejection_counts), outlier_counts=dict(s.outlier_counts),
             missing_evidence=("conditioned_buckets",) if not s.buckets else (),
@@ -1948,7 +1930,6 @@ class BoostModel:
             "diagnostic_samples": [_sample_dict(x) for x in s.diagnostic_samples],
             "last_update_ts": s.last_update_ts, "full_count": s.full_count,
             "partial_count": s.partial_count, "overshoot_count": s.overshoot_count,
-            "manual_correction_count": s.manual_correction_count,
             "reason_counts": dict(s.reason_counts), "rejection_counts": dict(s.rejection_counts),
             "outlier_counts": dict(s.outlier_counts),
             "outcome_class_counts": dict(s.outcome_class_counts),
@@ -1987,7 +1968,6 @@ class BoostModel:
             last_update_ts=state.get("last_update_ts"), full_count=state.get("full_count", 0),
             partial_count=state.get("partial_count", 0),
             overshoot_count=state.get("overshoot_count", 0),
-            manual_correction_count=state.get("manual_correction_count", 0),
             reason_counts=dict(state.get("reason_counts", {})),
             rejection_counts=dict(state.get("rejection_counts", {})),
             outlier_counts=dict(state.get("outlier_counts", {})),

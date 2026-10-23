@@ -322,7 +322,6 @@ class OutcomeState:
     reached_count: int = 0
     timeout_count: int = 0
     overshoot_count: int = 0
-    manual_correction_count: int = 0
     full_count: int = 0
     partial_count: int = 0
     dedup_count: int = 0
@@ -342,7 +341,6 @@ class OutcomeDiagnostics:
     reached_rate: Optional[float]
     timeout_rate: Optional[float]
     overshoot_rate: Optional[float]
-    manual_correction_rate: Optional[float]
     full_partial: tuple[int, int]
     confidence: float
     reason_counts: Mapping[str, int]
@@ -539,9 +537,6 @@ class OutcomeModel:
             base = 0.85
         elif reason is EpisodeReason.TIMEOUT:
             base = 0.4
-        elif reason is EpisodeReason.MANUAL_CORRECTION:
-            base = 0.45
-            reasons.append("user_disagreed")
         elif reason is EpisodeReason.INTERRUPTED:
             base = 0.6
 
@@ -726,8 +721,6 @@ class OutcomeModel:
             reached_count=self._state.reached_count + (1 if episode.reason is EpisodeReason.REACHED else 0),
             timeout_count=self._state.timeout_count + (1 if episode.reason is EpisodeReason.TIMEOUT else 0),
             overshoot_count=self._state.overshoot_count + (1 if overshoot_flag else 0),
-            manual_correction_count=self._state.manual_correction_count
-            + (1 if episode.reason is EpisodeReason.MANUAL_CORRECTION else 0),
             full_count=self._state.full_count + (0 if partial else 1),
             partial_count=self._state.partial_count + (1 if partial else 0))
         return elig
@@ -845,7 +838,6 @@ class OutcomeModel:
                            **{k: b.sample_count for k, b in s.buckets.items()}},
             reached_rate=self._rate(s.reached_count), timeout_rate=self._rate(s.timeout_count),
             overshoot_rate=self._rate(s.overshoot_count),
-            manual_correction_rate=self._rate(s.manual_correction_count),
             full_partial=(s.full_count, s.partial_count), confidence=self.confidence().value,
             reason_counts=dict(s.reason_counts), rejection_counts=dict(s.rejection_counts),
             outlier_counts=dict(s.outlier_counts),
@@ -941,7 +933,7 @@ class OutcomeModel:
             "reason_counts": dict(s.reason_counts), "rejection_counts": dict(s.rejection_counts),
             "outlier_counts": dict(s.outlier_counts), "reached_count": s.reached_count,
             "timeout_count": s.timeout_count, "overshoot_count": s.overshoot_count,
-            "manual_correction_count": s.manual_correction_count, "full_count": s.full_count,
+            "full_count": s.full_count,
             "partial_count": s.partial_count, "dedup_count": s.dedup_count,
             "recent_samples": [_sample_dict(x) for x in s.recent_samples],
         }
@@ -981,7 +973,6 @@ class OutcomeModel:
             reached_count=state.get("reached_count", 0),
             timeout_count=state.get("timeout_count", 0),
             overshoot_count=state.get("overshoot_count", 0),
-            manual_correction_count=state.get("manual_correction_count", 0),
             full_count=state.get("full_count", 0), partial_count=state.get("partial_count", 0),
             dedup_count=state.get("dedup_count", 0))
 

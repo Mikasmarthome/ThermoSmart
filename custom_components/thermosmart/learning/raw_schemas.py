@@ -105,4 +105,3 @@ class ForecastEvaluationEvent:
 
 
 # -- manual correction event --------------------------------------------------
-

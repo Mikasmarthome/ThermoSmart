@@ -1041,5 +1041,3 @@ def _sample_from(d: Mapping[str, Any]) -> OutcomeSample:
         builder_version=d["builder_version"], classifier_version=d["classifier_version"],
         reason_codes=tuple(d.get("reason_codes", [])),
         confounder_flags=tuple(d.get("confounder_flags", [])))
-
-

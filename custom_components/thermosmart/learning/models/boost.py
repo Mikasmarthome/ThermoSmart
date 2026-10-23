@@ -2032,5 +2032,3 @@ def _sample_from(d: Mapping[str, Any]) -> BoostSample:
         reliability_known=bool(d.get("reliability_known", False)),
         reliability_overall=float(d.get("reliability_overall", 0.0)),
         reliability_components=dict(d.get("reliability_components", {}) or {}))
-
-

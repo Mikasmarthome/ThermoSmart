@@ -786,5 +786,3 @@ def _sample_from(d: Mapping[str, Any]) -> HeatLossSample:
         feature_extractor_version=d["feature_extractor_version"],
         builder_version=d["builder_version"], classifier_version=d["classifier_version"],
         data_quality=d["data_quality"], reason_codes=tuple(d.get("reason_codes", [])))
-
-

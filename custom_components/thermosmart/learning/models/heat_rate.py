@@ -809,4 +809,3 @@ def _sample_from(d: Mapping[str, Any]) -> HeatRateSample:
 
 
 # -- registry definition ------------------------------------------------------
-

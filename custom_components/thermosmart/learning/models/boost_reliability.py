@@ -518,5 +518,3 @@ def afterheat_attribution_severity(expected_afterheat_rise_c: Optional[float],
     if expected_afterheat_rise_c >= high_afterheat_c:
         return ConfounderSeverity.DEGRADING
     return ConfounderSeverity.INFO
-
-

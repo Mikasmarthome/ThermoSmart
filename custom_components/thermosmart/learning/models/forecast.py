@@ -898,5 +898,3 @@ def _sample_from(d: Mapping[str, Any]) -> ForecastSample:
         horizon_bucket=d["horizon_bucket"], source_key=d.get("source_key"),
         reality_quality=d["reality_quality"], effective_weight=d["effective_weight"],
         model_version=d["model_version"])
-
-

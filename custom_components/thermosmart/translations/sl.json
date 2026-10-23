@@ -68,7 +68,13 @@
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
-          "home_zone": "Domača cona (privzeto: zone.home)"
+          "home_zone": "Domača cona (privzeto: zone.home)",
+          "presence_arrival_delay": "Zamik prihoda",
+          "presence_departure_delay": "Zamik odhoda"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Kako dolgo mora zaznana prisotnost trajati, preden ThermoSmart preklopi na doma. 0 minut se odzove takoj.",
+          "presence_departure_delay": "Kako dolgo mora popolna odsotnost trajati, preden ThermoSmart preklopi na odsoten. 0 minut se odzove takoj."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Nastavitve",
+        "description": "Tukaj lahko urejate nastavitve naprav, temperature, urnika, prisotnosti in vremena za to cono ter senzorje in nadzor ogrevanja.",
         "menu_options": {
           "devices": "Naprave in senzorji",
           "schedule": "Temperature in urnik",
@@ -167,7 +174,13 @@
         "description": "Kdo je doma? ThermoSmart samodejno preklopi v način odsotnosti, ko vsi odidejo.",
         "data": {
           "presence_persons": "Osebe za zaznavanje prisotnosti",
-          "home_zone": "Domača cona (privzeto: zone.home)"
+          "home_zone": "Domača cona (privzeto: zone.home)",
+          "presence_arrival_delay": "Zamik prihoda",
+          "presence_departure_delay": "Zamik odhoda"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Kako dolgo mora zaznana prisotnost trajati, preden ThermoSmart preklopi na doma. 0 minut se odzove takoj.",
+          "presence_departure_delay": "Kako dolgo mora popolna odsotnost trajati, preden ThermoSmart preklopi na odsoten. 0 minut se odzove takoj."
         }
       },
       "weather": {

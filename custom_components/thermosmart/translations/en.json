@@ -68,7 +68,13 @@
         "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
-          "home_zone": "Home zone (default: zone.home)"
+          "home_zone": "Home zone (default: zone.home)",
+          "presence_arrival_delay": "Arrival delay",
+          "presence_departure_delay": "Departure delay"
+        },
+        "data_description": {
+          "presence_arrival_delay": "How long detected presence must persist before ThermoSmart switches to home. 0 minutes reacts immediately.",
+          "presence_departure_delay": "How long complete absence must persist before ThermoSmart switches to away. 0 minutes reacts immediately."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Settings",
+        "description": "Here you can edit the device, temperature, schedule, presence, and weather settings for this zone, as well as sensors and heating control.",
         "menu_options": {
           "devices": "Devices & Sensors",
           "schedule": "Temperatures & Schedule",
@@ -167,7 +174,13 @@
         "description": "Who is home? ThermoSmart automatically switches to away mode when everyone leaves.\n\nLeave the person list empty to disable automatic away detection – ThermoSmart will then follow only the schedule.",
         "data": {
           "presence_persons": "Persons for presence detection",
-          "home_zone": "Home zone (default: zone.home)"
+          "home_zone": "Home zone (default: zone.home)",
+          "presence_arrival_delay": "Arrival delay",
+          "presence_departure_delay": "Departure delay"
+        },
+        "data_description": {
+          "presence_arrival_delay": "How long detected presence must persist before ThermoSmart switches to home. 0 minutes reacts immediately.",
+          "presence_departure_delay": "How long complete absence must persist before ThermoSmart switches to away. 0 minutes reacts immediately."
         }
       },
       "weather": {

@@ -68,7 +68,13 @@
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke (oletus: zone.home)"
+          "home_zone": "Kotivyöhyke (oletus: zone.home)",
+          "presence_arrival_delay": "Saapumisviive",
+          "presence_departure_delay": "Poistumisviive"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Kuinka kauan havaitun läsnäolon on kestettävä, ennen kuin ThermoSmart vaihtaa kotitilaan. 0 minuuttia reagoi välittömästi.",
+          "presence_departure_delay": "Kuinka kauan täydellisen poissaolon on kestettävä, ennen kuin ThermoSmart vaihtaa poissaolotilaan. 0 minuuttia reagoi välittömästi."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Asetukset",
+        "description": "Täällä voit muokata tämän vyöhykkeen laite-, lämpötila-, aikataulu-, läsnäolo- ja sääasetuksia sekä antureita ja lämmityksen ohjausta.",
         "menu_options": {
           "devices": "Laitteet ja anturit",
           "schedule": "Lämpötilat ja aikataulu",
@@ -167,7 +174,13 @@
         "description": "Kuka on kotona? ThermoSmart vaihtaa automaattisesti poissaolotilaan, kun kaikki lähtevät.",
         "data": {
           "presence_persons": "Henkilöt läsnäolon tunnistamiseen",
-          "home_zone": "Kotivyöhyke (oletus: zone.home)"
+          "home_zone": "Kotivyöhyke (oletus: zone.home)",
+          "presence_arrival_delay": "Saapumisviive",
+          "presence_departure_delay": "Poistumisviive"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Kuinka kauan havaitun läsnäolon on kestettävä, ennen kuin ThermoSmart vaihtaa kotitilaan. 0 minuuttia reagoi välittömästi.",
+          "presence_departure_delay": "Kuinka kauan täydellisen poissaolon on kestettävä, ennen kuin ThermoSmart vaihtaa poissaolotilaan. 0 minuuttia reagoi välittömästi."
         }
       },
       "weather": {

@@ -68,7 +68,13 @@
         "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
-          "home_zone": "Strefa domowa (domyślnie: zone.home)"
+          "home_zone": "Strefa domowa (domyślnie: zone.home)",
+          "presence_arrival_delay": "Opóźnienie przybycia",
+          "presence_departure_delay": "Opóźnienie wyjścia"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Jak długo wykryta obecność musi się utrzymywać, zanim ThermoSmart przełączy się na obecność w domu. 0 minut reaguje natychmiast.",
+          "presence_departure_delay": "Jak długo pełna nieobecność musi się utrzymywać, zanim ThermoSmart przełączy się na nieobecność. 0 minut reaguje natychmiast."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Ustawienia",
+        "description": "Tutaj możesz edytować ustawienia urządzeń, temperatury, harmonogramu, obecności i pogody dla tej strefy, a także czujniki i sterowanie ogrzewaniem.",
         "menu_options": {
           "devices": "Urządzenia i czujniki",
           "schedule": "Temperatury i harmonogram",
@@ -167,7 +174,13 @@
         "description": "Kto jest w domu? ThermoSmart automatycznie przełącza w tryb nieobecności gdy wszyscy wyjdą.",
         "data": {
           "presence_persons": "Osoby do wykrywania obecności",
-          "home_zone": "Strefa domowa (domyślnie: zone.home)"
+          "home_zone": "Strefa domowa (domyślnie: zone.home)",
+          "presence_arrival_delay": "Opóźnienie przybycia",
+          "presence_departure_delay": "Opóźnienie wyjścia"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Jak długo wykryta obecność musi się utrzymywać, zanim ThermoSmart przełączy się na obecność w domu. 0 minut reaguje natychmiast.",
+          "presence_departure_delay": "Jak długo pełna nieobecność musi się utrzymywać, zanim ThermoSmart przełączy się na nieobecność. 0 minut reaguje natychmiast."
         }
       },
       "weather": {

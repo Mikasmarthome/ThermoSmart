@@ -68,7 +68,13 @@
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
-          "home_zone": "Hemzon (standard: zone.home)"
+          "home_zone": "Hemzon (standard: zone.home)",
+          "presence_arrival_delay": "Ankomstfördröjning",
+          "presence_departure_delay": "Avgångsfördröjning"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hur länge upptäckt närvaro måste bestå innan ThermoSmart växlar till hemma. 0 minuter reagerar omedelbart.",
+          "presence_departure_delay": "Hur länge fullständig frånvaro måste bestå innan ThermoSmart växlar till borta. 0 minuter reagerar omedelbart."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Inställningar",
+        "description": "Här kan du redigera enhets-, temperatur-, schema-, närvaro- och väderinställningar för denna zon, samt sensorer och värmestyrning.",
         "menu_options": {
           "devices": "Enheter & Sensorer",
           "schedule": "Temperaturer & Schema",
@@ -167,7 +174,13 @@
         "description": "Vem är hemma? ThermoSmart växlar automatiskt till borta-läge när alla lämnar.",
         "data": {
           "presence_persons": "Personer för närvarodetektering",
-          "home_zone": "Hemzon (standard: zone.home)"
+          "home_zone": "Hemzon (standard: zone.home)",
+          "presence_arrival_delay": "Ankomstfördröjning",
+          "presence_departure_delay": "Avgångsfördröjning"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hur länge upptäckt närvaro måste bestå innan ThermoSmart växlar till hemma. 0 minuter reagerar omedelbart.",
+          "presence_departure_delay": "Hur länge fullständig frånvaro måste bestå innan ThermoSmart växlar till borta. 0 minuter reagerar omedelbart."
         }
       },
       "weather": {

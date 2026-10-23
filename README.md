@@ -83,8 +83,10 @@ Add **ThermoSmart System** first (Summer mode select + Vacation switch), then ad
 |---|---|
 | **1 – Devices** | Zone name · TRVs · Temperature sensors *(optional)* · Humidity sensors · Window / door sensors · Window delays *(apply to window / door sensors; without one, ThermoSmart detects open windows from the temperature drop)* · Valve maintenance · Calibration invert |
 | **2 – Temperatures** | Comfort · Night · Away · Vacation · Eco · Tolerance · Weekday/weekend schedule times |
-| **3 – Presence** | Person entities · Home zone · Learning on/off |
+| **3 – Presence** | Person entities · Home zone · Arrival delay · Departure delay *(minutes; 0 = react immediately)* |
 | **4 – Weather** | Weather entity · Outdoor temp/humidity · Wind speed · Solar radiation · Precipitation |
+
+> **Presence delays.** *Departure delay*: how long all selected persons must stay away before ThermoSmart switches to away mode; if someone returns earlier, nothing changes. *Arrival delay*: how long someone must stay home before ThermoSmart switches back to normal heating. Both default to 0 (immediate). The delays apply to real changes only: after a restart or reload ThermoSmart adopts the current presence right away.
 
 > **External temperature sensors are optional.** Since v1.0.3, ThermoSmart automatically uses the TRV's built-in temperature sensor as fallback when no external sensor is configured. Adding a dedicated room sensor improves accuracy, but is not required to get started.
 
@@ -227,7 +229,7 @@ Sets all zones to the configured vacation temperature (default 12 °C). Takes pr
 | `idle` | Target reached, maintaining |
 | `preheating` | Heating before scheduled comfort time |
 | `window_open` | Window detected (sensor or slope), heating paused |
-| `away` | All persons away |
+| `away` | All persons away *(for longer than the departure delay)* |
 | `vacation` | Vacation mode active |
 | `summer` | Summer mode — frost protection only |
 | `heating_failure` | Heating commanded but temperature falling 35+ min |

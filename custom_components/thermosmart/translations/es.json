@@ -68,7 +68,13 @@
         "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
-          "home_zone": "Zona de inicio (predeterminado: zone.home)"
+          "home_zone": "Zona de inicio (predeterminado: zone.home)",
+          "presence_arrival_delay": "Retardo de llegada",
+          "presence_departure_delay": "Retardo de salida"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Cuánto tiempo debe mantenerse la presencia detectada antes de que ThermoSmart cambie a en casa. 0 minutos reaccionan de inmediato.",
+          "presence_departure_delay": "Cuánto tiempo debe mantenerse la ausencia completa antes de que ThermoSmart cambie a fuera. 0 minutos reaccionan de inmediato."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Configuración",
+        "description": "Aquí puedes editar la configuración de dispositivos, temperatura, horario, presencia y clima de esta zona, así como los sensores y el control de calefacción.",
         "menu_options": {
           "devices": "Dispositivos y sensores",
           "schedule": "Temperaturas y horario",
@@ -167,7 +174,13 @@
         "description": "¿Quién está en casa? ThermoSmart cambia automáticamente al modo ausencia cuando todos se van.",
         "data": {
           "presence_persons": "Personas para detección de presencia",
-          "home_zone": "Zona de inicio (predeterminado: zone.home)"
+          "home_zone": "Zona de inicio (predeterminado: zone.home)",
+          "presence_arrival_delay": "Retardo de llegada",
+          "presence_departure_delay": "Retardo de salida"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Cuánto tiempo debe mantenerse la presencia detectada antes de que ThermoSmart cambie a en casa. 0 minutos reaccionan de inmediato.",
+          "presence_departure_delay": "Cuánto tiempo debe mantenerse la ausencia completa antes de que ThermoSmart cambie a fuera. 0 minutos reaccionan de inmediato."
         }
       },
       "weather": {

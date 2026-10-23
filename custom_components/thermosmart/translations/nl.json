@@ -68,7 +68,13 @@
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
-          "home_zone": "Thuiszone (standaard: zone.home)"
+          "home_zone": "Thuiszone (standaard: zone.home)",
+          "presence_arrival_delay": "Aankomstvertraging",
+          "presence_departure_delay": "Vertrekvertraging"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hoe lang gedetecteerde aanwezigheid moet aanhouden voordat ThermoSmart overschakelt naar thuis. 0 minuten reageert direct.",
+          "presence_departure_delay": "Hoe lang volledige afwezigheid moet aanhouden voordat ThermoSmart overschakelt naar afwezig. 0 minuten reageert direct."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Instellingen",
+        "description": "Hier kun je de apparaat-, temperatuur-, schema-, aanwezigheids- en weerinstellingen voor deze zone bewerken, evenals sensoren en verwarmingsregeling.",
         "menu_options": {
           "devices": "Apparaten & Sensoren",
           "schedule": "Temperaturen & Schema",
@@ -167,7 +174,13 @@
         "description": "Wie is er thuis? ThermoSmart schakelt automatisch naar afwezigheidsmodus als iedereen vertrekt.",
         "data": {
           "presence_persons": "Personen voor aanwezigheidsdetectie",
-          "home_zone": "Thuiszone (standaard: zone.home)"
+          "home_zone": "Thuiszone (standaard: zone.home)",
+          "presence_arrival_delay": "Aankomstvertraging",
+          "presence_departure_delay": "Vertrekvertraging"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hoe lang gedetecteerde aanwezigheid moet aanhouden voordat ThermoSmart overschakelt naar thuis. 0 minuten reageert direct.",
+          "presence_departure_delay": "Hoe lang volledige afwezigheid moet aanhouden voordat ThermoSmart overschakelt naar afwezig. 0 minuten reageert direct."
         }
       },
       "weather": {

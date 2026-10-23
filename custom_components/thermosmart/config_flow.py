@@ -20,6 +20,8 @@ from .const import (
     CONF_SCHEDULE_ENABLED,
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
+    CONF_PRESENCE_ARRIVAL_DELAY,
+    CONF_PRESENCE_DEPARTURE_DELAY,
     CONF_VACATION_TEMP,
     CONF_WINDOW_OPEN_TEMP,
     CONF_ECO_TEMP,
@@ -177,6 +179,15 @@ def _schema_presence(d: dict) -> vol.Schema:
 
         vol.Optional(CONF_HOME_ZONE, default=d.get(CONF_HOME_ZONE, "zone.home")):
             selector.EntitySelector(selector.EntitySelectorConfig(domain="zone")),
+
+        vol.Optional(CONF_PRESENCE_ARRIVAL_DELAY, default=d.get(CONF_PRESENCE_ARRIVAL_DELAY, 0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
+            )),
+        vol.Optional(CONF_PRESENCE_DEPARTURE_DELAY, default=d.get(CONF_PRESENCE_DEPARTURE_DELAY, 0)):
+            selector.NumberSelector(selector.NumberSelectorConfig(
+                min=0, max=60, step=1, unit_of_measurement="min", mode=selector.NumberSelectorMode.BOX,
+            )),
     })
 
 

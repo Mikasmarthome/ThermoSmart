@@ -68,7 +68,13 @@
         "description": "Kdo je doma? ThermoSmart automaticky přepne do režimu nepřítomnosti, když všichni odejdou.",
         "data": {
           "presence_persons": "Osoby pro detekci přítomnosti",
-          "home_zone": "Domovská zóna (výchozí: zone.home)"
+          "home_zone": "Domovská zóna (výchozí: zone.home)",
+          "presence_arrival_delay": "Zpoždění příchodu",
+          "presence_departure_delay": "Zpoždění odchodu"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Jak dlouho musí zjištěná přítomnost trvat, než ThermoSmart přepne na doma. 0 minut reaguje okamžitě.",
+          "presence_departure_delay": "Jak dlouho musí trvat úplná nepřítomnost, než ThermoSmart přepne na pryč. 0 minut reaguje okamžitě."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Nastavení",
+        "description": "Zde můžete upravit nastavení zařízení, teploty, plánu, přítomnosti a počasí pro tuto zónu, stejně jako senzory a řízení topení.",
         "menu_options": {
           "devices": "Zařízení a senzory",
           "schedule": "Teploty a plán",
@@ -167,7 +174,13 @@
         "description": "Kdo je doma? ThermoSmart automaticky přepne do režimu nepřítomnosti, když všichni odejdou.",
         "data": {
           "presence_persons": "Osoby pro detekci přítomnosti",
-          "home_zone": "Domovská zóna (výchozí: zone.home)"
+          "home_zone": "Domovská zóna (výchozí: zone.home)",
+          "presence_arrival_delay": "Zpoždění příchodu",
+          "presence_departure_delay": "Zpoždění odchodu"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Jak dlouho musí zjištěná přítomnost trvat, než ThermoSmart přepne na doma. 0 minut reaguje okamžitě.",
+          "presence_departure_delay": "Jak dlouho musí trvat úplná nepřítomnost, než ThermoSmart přepne na pryč. 0 minut reaguje okamžitě."
         }
       },
       "weather": {

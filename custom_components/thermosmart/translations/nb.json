@@ -68,7 +68,13 @@
         "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
-          "home_zone": "Hjemmesone (standard: zone.home)"
+          "home_zone": "Hjemmesone (standard: zone.home)",
+          "presence_arrival_delay": "Ankomstforsinkelse",
+          "presence_departure_delay": "Avreiseforsinkelse"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hvor lenge registrert tilstedeværelse må vedvare før ThermoSmart bytter til hjemme. 0 minutter reagerer umiddelbart.",
+          "presence_departure_delay": "Hvor lenge fullstendig fravær må vedvare før ThermoSmart bytter til borte. 0 minutter reagerer umiddelbart."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Innstillinger",
+        "description": "Her kan du redigere enhets-, temperatur-, tidsplan-, tilstedeværelses- og værinnstillinger for denne sonen, samt sensorer og varmestyring.",
         "menu_options": {
           "devices": "Enheter og sensorer",
           "schedule": "Temperaturer og tidsplan",
@@ -167,7 +174,13 @@
         "description": "Hvem er hjemme? ThermoSmart bytter automatisk til fraværsmodus når alle forlater hjemmet.",
         "data": {
           "presence_persons": "Personer for tilstedeværelsesregistrering",
-          "home_zone": "Hjemmesone (standard: zone.home)"
+          "home_zone": "Hjemmesone (standard: zone.home)",
+          "presence_arrival_delay": "Ankomstforsinkelse",
+          "presence_departure_delay": "Avreiseforsinkelse"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hvor lenge registrert tilstedeværelse må vedvare før ThermoSmart bytter til hjemme. 0 minutter reagerer umiddelbart.",
+          "presence_departure_delay": "Hvor lenge fullstendig fravær må vedvare før ThermoSmart bytter til borte. 0 minutter reagerer umiddelbart."
         }
       },
       "weather": {

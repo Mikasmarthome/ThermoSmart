@@ -68,7 +68,13 @@
         "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
-          "home_zone": "Ev bölgesi (varsayılan: zone.home)"
+          "home_zone": "Ev bölgesi (varsayılan: zone.home)",
+          "presence_arrival_delay": "Varış gecikmesi",
+          "presence_departure_delay": "Ayrılış gecikmesi"
+        },
+        "data_description": {
+          "presence_arrival_delay": "ThermoSmart'ın evde durumuna geçmeden önce algılanan varlığın ne kadar süre devam etmesi gerektiği. 0 dakika anında tepki verir.",
+          "presence_departure_delay": "ThermoSmart'ın dışarıda durumuna geçmeden önce tam yokluğun ne kadar süre devam etmesi gerektiği. 0 dakika anında tepki verir."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Ayarlar",
+        "description": "Burada bu bölge için cihaz, sıcaklık, program, varlık ve hava durumu ayarlarını, ayrıca sensörleri ve ısıtma kontrolünü düzenleyebilirsin.",
         "menu_options": {
           "devices": "Cihazlar ve sensörler",
           "schedule": "Sıcaklıklar ve program",
@@ -167,7 +174,13 @@
         "description": "Evde kim var? ThermoSmart, herkes gittiğinde otomatik olarak uzakta moduna geçer.",
         "data": {
           "presence_persons": "Varlık algılama için kişiler",
-          "home_zone": "Ev bölgesi (varsayılan: zone.home)"
+          "home_zone": "Ev bölgesi (varsayılan: zone.home)",
+          "presence_arrival_delay": "Varış gecikmesi",
+          "presence_departure_delay": "Ayrılış gecikmesi"
+        },
+        "data_description": {
+          "presence_arrival_delay": "ThermoSmart'ın evde durumuna geçmeden önce algılanan varlığın ne kadar süre devam etmesi gerektiği. 0 dakika anında tepki verir.",
+          "presence_departure_delay": "ThermoSmart'ın dışarıda durumuna geçmeden önce tam yokluğun ne kadar süre devam etmesi gerektiği. 0 dakika anında tepki verir."
         }
       },
       "weather": {

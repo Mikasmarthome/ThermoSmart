@@ -68,7 +68,13 @@
         "description": "Quem está em casa? O ThermoSmart muda automaticamente para o modo ausência quando todos saem.",
         "data": {
           "presence_persons": "Pessoas para deteção de presença",
-          "home_zone": "Zona de casa (predefinição: zone.home)"
+          "home_zone": "Zona de casa (predefinição: zone.home)",
+          "presence_arrival_delay": "Atraso de chegada",
+          "presence_departure_delay": "Atraso de saída"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Durante quanto tempo a presença detetada deve persistir antes de o ThermoSmart mudar para presente. 0 minutos reagem imediatamente.",
+          "presence_departure_delay": "Durante quanto tempo a ausência completa deve persistir antes de o ThermoSmart mudar para ausente. 0 minutos reagem imediatamente."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Configurações",
+        "description": "Aqui podes editar as definições de dispositivos, temperatura, horário, presença e meteorologia desta zona, bem como sensores e controlo de aquecimento.",
         "menu_options": {
           "devices": "Dispositivos e sensores",
           "schedule": "Temperaturas e horário",
@@ -167,7 +174,13 @@
         "description": "Quem está em casa? O ThermoSmart muda automaticamente para o modo ausência quando todos saem.",
         "data": {
           "presence_persons": "Pessoas para deteção de presença",
-          "home_zone": "Zona de casa (predefinição: zone.home)"
+          "home_zone": "Zona de casa (predefinição: zone.home)",
+          "presence_arrival_delay": "Atraso de chegada",
+          "presence_departure_delay": "Atraso de saída"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Durante quanto tempo a presença detetada deve persistir antes de o ThermoSmart mudar para presente. 0 minutos reagem imediatamente.",
+          "presence_departure_delay": "Durante quanto tempo a ausência completa deve persistir antes de o ThermoSmart mudar para ausente. 0 minutos reagem imediatamente."
         }
       },
       "weather": {

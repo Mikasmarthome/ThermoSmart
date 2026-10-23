@@ -68,7 +68,13 @@
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
-          "home_zone": "Zona de casa (per defecte: zone.home)"
+          "home_zone": "Zona de casa (per defecte: zone.home)",
+          "presence_arrival_delay": "Retard d'arribada",
+          "presence_departure_delay": "Retard de sortida"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Durada que la presència detectada ha de mantenir-se abans que ThermoSmart canviï a casa. 0 minuts reaccionen immediatament.",
+          "presence_departure_delay": "Durada que l'absència completa ha de mantenir-se abans que ThermoSmart canviï a fora. 0 minuts reaccionen immediatament."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Configuració",
+        "description": "Aquí pots editar la configuració de dispositius, temperatura, horari, presència i temps per a aquesta zona, així com els sensors i el control de calefacció.",
         "menu_options": {
           "devices": "Dispositius i sensors",
           "schedule": "Temperatures i horari",
@@ -167,7 +174,13 @@
         "description": "Qui és a casa? ThermoSmart canvia automàticament al mode absència quan tothom marxa.",
         "data": {
           "presence_persons": "Persones per a la detecció de presència",
-          "home_zone": "Zona de casa (per defecte: zone.home)"
+          "home_zone": "Zona de casa (per defecte: zone.home)",
+          "presence_arrival_delay": "Retard d'arribada",
+          "presence_departure_delay": "Retard de sortida"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Durada que la presència detectada ha de mantenir-se abans que ThermoSmart canviï a casa. 0 minuts reaccionen immediatament.",
+          "presence_departure_delay": "Durada que l'absència completa ha de mantenir-se abans que ThermoSmart canviï a fora. 0 minuts reaccionen immediatament."
         }
       },
       "weather": {

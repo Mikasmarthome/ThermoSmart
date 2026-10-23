@@ -22,6 +22,8 @@ CONF_LEARNING_ENABLED = "learning_enabled"
 CONF_SCHEDULE_ENABLED = "schedule_enabled"
 CONF_PRESENCE_PERSONS = "presence_persons"
 CONF_HOME_ZONE = "home_zone"           # Welche Zone gilt als "zuhause"?
+CONF_PRESENCE_ARRIVAL_DELAY = "presence_arrival_delay"     # Minuten, 0 = sofort
+CONF_PRESENCE_DEPARTURE_DELAY = "presence_departure_delay" # Minuten, 0 = sofort
 CONF_VACATION_BOOLEAN = "vacation_boolean"
 CONF_CALIBRATION_ENTITIES = "calibration_entities"
 CONF_QUIRK_ENTITIES = "quirk_entities"

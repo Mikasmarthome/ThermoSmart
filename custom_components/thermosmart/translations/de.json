@@ -14,7 +14,7 @@
         "description": "Richtet den globalen Sommer- und Urlaubsmodus ein. Kein Thermostat erforderlich. Die globalen Schalter steuern alle Zonen gleichzeitig."
       },
       "add_zone": {
-        "title": "Schritt 1 / 4 – Geräte & Sensoren",
+        "title": "Schritt 1 / 4 – Geräte und Sensoren",
         "description": "Wähle die TRVs und Sensoren für diese Heizzone. Kalibrierungs-Entities und Quirk-Switches erkennt ThermoSmart automatisch.",
         "data": {
           "name": "Zonenname (z. B. Wohnzimmer)",
@@ -35,7 +35,7 @@
         }
       },
       "schedule": {
-        "title": "Schritt 2 / 4 – Temperaturen & Zeitplan",
+        "title": "Schritt 2 / 4 – Temperaturen und Zeitplan",
         "description": "Tagesablauf: Nacht → Komfort → Nacht\n\nWenn alle Personen abwesend sind, schaltet ThermoSmart automatisch auf die Abwesenheitstemperatur – unabhängig vom Zeitplan.",
         "data": {
           "comfort_temp": "Komforttemperatur (wenn jemand zuhause)",
@@ -64,15 +64,21 @@
         }
       },
       "presence": {
-        "title": "Schritt 3 / 4 – Präsenz",
+        "title": "Schritt 3 / 4 – Präsenz-Einstellungen",
         "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
-          "presence_persons": "Personen für Präsenzerkennung",
-          "home_zone": "Heimzone (Standard: zone.home)"
+          "presence_persons": "Anwesenheits-Entitäten",
+          "home_zone": "Heimzone (Standard: zone.home)",
+          "presence_arrival_delay": "Anwesenheitsverzögerung",
+          "presence_departure_delay": "Abwesenheitsverzögerung"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Zeit, die eine erkannte Anwesenheit bestehen muss, bevor ThermoSmart auf anwesend wechselt. 0 Minuten reagieren sofort.",
+          "presence_departure_delay": "Zeit, die vollständige Abwesenheit bestehen muss, bevor ThermoSmart auf abwesend wechselt. 0 Minuten reagieren sofort."
         }
       },
       "weather": {
-        "title": "Schritt 4 / 4 – Wetter & Außensensoren",
+        "title": "Schritt 4 / 4 – Wetter und Außensensoren",
         "description": "Alle Felder optional – eigene Sensoren haben Vorrang vor der Wetter-Entity. Das System arbeitet auch ohne Wetterdaten.",
         "data": {
           "weather_entity": "Wetter-Entity (z. B. weather.home)",
@@ -104,16 +110,17 @@
   "options": {
     "step": {
       "init": {
-        "title": "Einstellungen",
+        "title": "ThermoSmart-Einstellungen bearbeiten",
+        "description": "Hier kannst du Geräte-, Temperatur-, Zeitplan-, Präsenz- und Wettereinstellungen dieser Zone bearbeiten sowie Sensoren und die Heizungsregelung konfigurieren.",
         "menu_options": {
-          "devices": "Geräte & Sensoren",
-          "schedule": "Temperaturen & Zeitplan",
-          "presence": "Präsenz",
-          "weather": "Wetter & Außensensoren"
+          "devices": "Geräte und Sensoren",
+          "schedule": "Temperaturen und Zeitplan",
+          "presence": "Präsenz-Einstellungen",
+          "weather": "Wetter und Außensensoren"
         }
       },
       "devices": {
-        "title": "Geräte & Sensoren",
+        "title": "Geräte und Sensoren",
         "description": "Kalibrierungs-Entities und Quirk-Switches erkennt ThermoSmart automatisch.",
         "data": {
           "name": "Zonenname",
@@ -134,7 +141,7 @@
         }
       },
       "schedule": {
-        "title": "Temperaturen & Zeitplan",
+        "title": "Temperaturen und Zeitplan",
         "description": "Tagesablauf: Nacht → Komfort → Nacht\n\nWenn alle Personen abwesend sind, schaltet ThermoSmart automatisch auf die Abwesenheitstemperatur – unabhängig vom Zeitplan.",
         "data": {
           "comfort_temp": "Komforttemperatur",
@@ -163,15 +170,21 @@
         }
       },
       "presence": {
-        "title": "Präsenz",
+        "title": "Präsenz-Einstellungen",
         "description": "Wer ist zuhause? ThermoSmart schaltet automatisch in den Abwesenheitsmodus wenn alle weg sind.\n\nPersonenliste leer lassen um die automatische Abwesenheitserkennung zu deaktivieren – ThermoSmart folgt dann ausschließlich dem Zeitplan.",
         "data": {
-          "presence_persons": "Personen für Präsenzerkennung",
-          "home_zone": "Heimzone (Standard: zone.home)"
+          "presence_persons": "Anwesenheits-Entitäten",
+          "home_zone": "Heimzone (Standard: zone.home)",
+          "presence_arrival_delay": "Anwesenheitsverzögerung",
+          "presence_departure_delay": "Abwesenheitsverzögerung"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Zeit, die eine erkannte Anwesenheit bestehen muss, bevor ThermoSmart auf anwesend wechselt. 0 Minuten reagieren sofort.",
+          "presence_departure_delay": "Zeit, die vollständige Abwesenheit bestehen muss, bevor ThermoSmart auf abwesend wechselt. 0 Minuten reagieren sofort."
         }
       },
       "weather": {
-        "title": "Wetter & Außensensoren",
+        "title": "Wetter und Außensensoren",
         "description": "Alle Felder optional. Eigene Sensoren haben Vorrang vor der Wetter-Entity.",
         "data": {
           "weather_entity": "Wetter-Entity",

@@ -68,7 +68,13 @@
         "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
         "data": {
           "presence_persons": "用于检测在家状态的人员",
-          "home_zone": "家庭区域（默认：zone.home）"
+          "home_zone": "家庭区域（默认：zone.home）",
+          "presence_arrival_delay": "到家延迟",
+          "presence_departure_delay": "离家延迟"
+        },
+        "data_description": {
+          "presence_arrival_delay": "检测到的在家状态必须持续多久，ThermoSmart 才会切换为在家。0 分钟表示立即响应。",
+          "presence_departure_delay": "完全离家状态必须持续多久，ThermoSmart 才会切换为离家。0 分钟表示立即响应。"
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "设置",
+        "description": "您可以在此编辑此区域的设备、温度、时间表、在家状态和天气设置，以及传感器和供暖控制。",
         "menu_options": {
           "devices": "设备和传感器",
           "schedule": "温度和计划",
@@ -167,7 +174,13 @@
         "description": "谁在家？当所有人离开时，ThermoSmart 会自动切换到离家模式。",
         "data": {
           "presence_persons": "用于检测在家状态的人员",
-          "home_zone": "家庭区域（默认：zone.home）"
+          "home_zone": "家庭区域（默认：zone.home）",
+          "presence_arrival_delay": "到家延迟",
+          "presence_departure_delay": "离家延迟"
+        },
+        "data_description": {
+          "presence_arrival_delay": "检测到的在家状态必须持续多久，ThermoSmart 才会切换为在家。0 分钟表示立即响应。",
+          "presence_departure_delay": "完全离家状态必须持续多久，ThermoSmart 才会切换为离家。0 分钟表示立即响应。"
         }
       },
       "weather": {

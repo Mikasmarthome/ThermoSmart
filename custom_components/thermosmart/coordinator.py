@@ -21,6 +21,8 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
+    CONF_PRESENCE_ARRIVAL_DELAY,
+    CONF_PRESENCE_DEPARTURE_DELAY,
     CONF_VACATION_BOOLEAN,
     CONF_VACATION_TEMP,
     CONF_ECO_TEMP,
@@ -59,6 +61,9 @@ from .trv_control import TRVControlMixin, _DispatchStats
 from .maintenance import MaintenanceMixin
 
 _LOGGER = logging.getLogger(__name__)
+
+# Presence arrival/departure delay: wake-up timer vs. wall-clock jitter
+_PRESENCE_DELAY_TOLERANCE = timedelta(seconds=1)
 
 # Learning forecast bias application gates
 _FORECAST_BIAS_MIN_TRUST = 0.35        # minimum trust to apply the °C bias correction
@@ -163,6 +168,14 @@ class ThermoSmartCoordinator(
         self._window_open_temp: dict[str, float] = {}
         # Cancel functions for scheduled delay-expiry refreshes (one slot per sensor)
         self._window_delay_cancel: dict[str, Callable[[], None]] = {}
+
+        # Präsenz-Tracking (Anwesenheits-/Abwesenheitsverzögerung)
+        # None = noch nicht initialisiert; erster Aufruf übernimmt den Rohzustand
+        # sofort (kein künstlicher Verzögerungs-Bootstrap nach Neustart/Reload).
+        self._presence_all_away_confirmed: bool | None = None
+        self._presence_pending_target: bool | None = None
+        self._presence_pending_since: datetime | None = None
+        self._presence_delay_cancel: Callable[[], None] | None = None
 
         self._last_written_setpoints: dict[str, float] = {}
         # Boost tracking per zone (keyed by zone_id; used by TRVControlMixin._apply_temperature).
@@ -653,6 +666,86 @@ class ThermoSmartCoordinator(
         for cancel in self._window_delay_cancel.values():
             cancel()
         self._window_delay_cancel.clear()
+        self._cancel_presence_delay_timer()
+
+    def _cancel_presence_delay_timer(self) -> None:
+        if self._presence_delay_cancel is not None:
+            self._presence_delay_cancel()
+            self._presence_delay_cancel = None
+
+    @callback
+    def _presence_delay_expired(self, _now) -> None:
+        self._presence_delay_cancel = None
+        self.hass.async_create_task(self.async_request_refresh())
+
+    def _resolve_presence_all_away(
+        self, raw_all_away: bool, *, states_known: bool = True
+    ) -> bool:
+        """Debounce the raw aggregated presence signal with arrival/departure delays.
+
+        Pure, timestamp-based evaluator re-run every coordinator cycle — mirrors
+        window.py's _check_window_open(). An entity change already triggers an
+        immediate refresh (setup_event_listeners' shared _handle_state_change),
+        which re-enters here promptly; this method additionally schedules an
+        async_call_later wake-up for the moment the delay elapses, so a
+        confirmation does not have to wait for the next periodic poll.
+
+        Bootstrap (first call after __init__, i.e. after startup/reload/
+        reconfigure): adopts the current raw state immediately, no delay,
+        but only once at least one configured person has a known state. Right
+        after a Home Assistant start the person entities may still be missing
+        or "unknown"/"unavailable", which reads as "everyone away"; adopting
+        that would make the arrival delay hold the zone in away mode after
+        every restart. Until a real state is seen the raw value is returned
+        unchanged and nothing is latched.
+        """
+        now = self._now_local()
+
+        if self._presence_all_away_confirmed is None:
+            if not states_known:
+                return raw_all_away
+            self._presence_all_away_confirmed = raw_all_away
+            self._presence_pending_target = None
+            self._presence_pending_since = None
+            return raw_all_away
+
+        if raw_all_away == self._presence_all_away_confirmed:
+            if self._presence_pending_target is not None:
+                self._cancel_presence_delay_timer()
+                self._presence_pending_target = None
+                self._presence_pending_since = None
+            return self._presence_all_away_confirmed
+
+        cfg = self.zone_cfg
+        delay_min = (
+            cfg.get(CONF_PRESENCE_DEPARTURE_DELAY, 0) if raw_all_away
+            else cfg.get(CONF_PRESENCE_ARRIVAL_DELAY, 0)
+        )
+        delay = timedelta(minutes=delay_min)
+
+        if self._presence_pending_target != raw_all_away:
+            # New transition (or reversal of an in-progress one) — (re)start pending.
+            self._cancel_presence_delay_timer()
+            self._presence_pending_target = raw_all_away
+            self._presence_pending_since = now
+            if delay > timedelta(0):
+                self._presence_delay_cancel = async_call_later(
+                    self.hass, delay.total_seconds(), self._presence_delay_expired
+                )
+
+        # The wake-up timer runs on the event-loop clock, this check on the wall
+        # clock; the tolerance keeps a wake-up that fires a hair early from
+        # postponing the confirmation to the next periodic poll.
+        if (
+            delay <= timedelta(0)
+            or now - self._presence_pending_since + _PRESENCE_DELAY_TOLERANCE >= delay
+        ):
+            self._presence_all_away_confirmed = raw_all_away
+            self._presence_pending_target = None
+            self._presence_pending_since = None
+            self._cancel_presence_delay_timer()
+
+        return self._presence_all_away_confirmed
 
     # ── Authoritative Live Decision Builder ──────────────────────────
 
@@ -1387,9 +1480,12 @@ class ThermoSmartCoordinator(
         cfg = self.zone_cfg
         home_zone = cfg.get(CONF_HOME_ZONE, "zone.home") or "zone.home"
         persons_home, persons_away = [], []
+        states_known = False
 
         for person in cfg.get(CONF_PRESENCE_PERSONS, []):
             state = self.hass.states.get(person)
+            if state and state.state not in ("unknown", "unavailable"):
+                states_known = True
             if state and self._is_person_home(state.state, home_zone):
                 persons_home.append(person)
             else:
@@ -1404,9 +1500,13 @@ class ThermoSmartCoordinator(
             if vs and vs.state == "on":
                 vacation = True
 
+        raw_all_away = len(persons_home) == 0 and bool(cfg.get(CONF_PRESENCE_PERSONS))
+
         return {
             "persons_home": persons_home,
-            "all_away": len(persons_home) == 0 and bool(cfg.get(CONF_PRESENCE_PERSONS)),
+            "all_away": self._resolve_presence_all_away(
+                raw_all_away, states_known=states_known
+            ),
             "vacation": vacation,
         }
 

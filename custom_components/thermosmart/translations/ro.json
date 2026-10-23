@@ -68,7 +68,13 @@
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
-          "home_zone": "Zona de acasă (implicit: zone.home)"
+          "home_zone": "Zona de acasă (implicit: zone.home)",
+          "presence_arrival_delay": "Întârziere sosire",
+          "presence_departure_delay": "Întârziere plecare"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Cât timp trebuie să persiste prezența detectată înainte ca ThermoSmart să comute pe acasă. 0 minute reacționează imediat.",
+          "presence_departure_delay": "Cât timp trebuie să persiste absența completă înainte ca ThermoSmart să comute pe plecat. 0 minute reacționează imediat."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Setări",
+        "description": "Aici poți edita setările de dispozitive, temperatură, program, prezență și vreme pentru această zonă, precum și senzorii și controlul încălzirii.",
         "menu_options": {
           "devices": "Dispozitive și senzori",
           "schedule": "Temperaturi și program",
@@ -167,7 +174,13 @@
         "description": "Cine este acasă? ThermoSmart trece automat în modul absență când toți pleacă.",
         "data": {
           "presence_persons": "Persoane pentru detectarea prezenței",
-          "home_zone": "Zona de acasă (implicit: zone.home)"
+          "home_zone": "Zona de acasă (implicit: zone.home)",
+          "presence_arrival_delay": "Întârziere sosire",
+          "presence_departure_delay": "Întârziere plecare"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Cât timp trebuie să persiste prezența detectată înainte ca ThermoSmart să comute pe acasă. 0 minute reacționează imediat.",
+          "presence_departure_delay": "Cât timp trebuie să persiste absența completă înainte ca ThermoSmart să comute pe plecat. 0 minute reacționează imediat."
         }
       },
       "weather": {

@@ -68,7 +68,13 @@
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
-          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)"
+          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)",
+          "presence_arrival_delay": "Érkezési késleltetés",
+          "presence_departure_delay": "Távozási késleltetés"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Meddig kell fennállnia az észlelt jelenlétnek, mielőtt a ThermoSmart otthonira vált. 0 perc esetén azonnal reagál.",
+          "presence_departure_delay": "Meddig kell fennállnia a teljes távollétnek, mielőtt a ThermoSmart távolira vált. 0 perc esetén azonnal reagál."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Beállítások",
+        "description": "Itt szerkesztheted az eszköz-, hőmérséklet-, ütemezés-, jelenlét- és időjárás-beállításokat ehhez a zónához, valamint az érzékelőket és a fűtésszabályozást.",
         "menu_options": {
           "devices": "Eszközök és érzékelők",
           "schedule": "Hőmérsékletek és ütemterv",
@@ -167,7 +174,13 @@
         "description": "Ki van otthon? A ThermoSmart automatikusan távolléti módra vált, ha mindenki elhagyja az otthont.",
         "data": {
           "presence_persons": "Személyek jelenléti észleléshez",
-          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)"
+          "home_zone": "Otthoni zóna (alapértelmezett: zone.home)",
+          "presence_arrival_delay": "Érkezési késleltetés",
+          "presence_departure_delay": "Távozási késleltetés"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Meddig kell fennállnia az észlelt jelenlétnek, mielőtt a ThermoSmart otthonira vált. 0 perc esetén azonnal reagál.",
+          "presence_departure_delay": "Meddig kell fennállnia a teljes távollétnek, mielőtt a ThermoSmart távolira vált. 0 perc esetén azonnal reagál."
         }
       },
       "weather": {

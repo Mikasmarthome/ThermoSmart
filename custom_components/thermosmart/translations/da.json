@@ -68,7 +68,13 @@
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
-          "home_zone": "Hjemzone (standard: zone.home)"
+          "home_zone": "Hjemzone (standard: zone.home)",
+          "presence_arrival_delay": "Ankomstforsinkelse",
+          "presence_departure_delay": "Afgangsforsinkelse"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hvor længe registreret tilstedeværelse skal vare, før ThermoSmart skifter til hjemme. 0 minutter reagerer med det samme.",
+          "presence_departure_delay": "Hvor længe fuldstændigt fravær skal vare, før ThermoSmart skifter til væk. 0 minutter reagerer med det samme."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Indstillinger",
+        "description": "Her kan du redigere enheds-, temperatur-, tidsplan-, tilstedeværelses- og vejrindstillinger for denne zone samt sensorer og varmestyring.",
         "menu_options": {
           "devices": "Enheder og sensorer",
           "schedule": "Temperaturer og tidsplan",
@@ -167,7 +174,13 @@
         "description": "Hvem er hjemme? ThermoSmart skifter automatisk til fraværstilstand, når alle forlader hjemmet.",
         "data": {
           "presence_persons": "Personer til tilstedeværelsesregistrering",
-          "home_zone": "Hjemzone (standard: zone.home)"
+          "home_zone": "Hjemzone (standard: zone.home)",
+          "presence_arrival_delay": "Ankomstforsinkelse",
+          "presence_departure_delay": "Afgangsforsinkelse"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Hvor længe registreret tilstedeværelse skal vare, før ThermoSmart skifter til hjemme. 0 minutter reagerer med det samme.",
+          "presence_departure_delay": "Hvor længe fuldstændigt fravær skal vare, før ThermoSmart skifter til væk. 0 minutter reagerer med det samme."
         }
       },
       "weather": {

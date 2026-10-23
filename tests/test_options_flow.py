@@ -24,6 +24,8 @@ from custom_components.thermosmart.const import (
     CONF_SCHEDULE_ENABLED,
     CONF_PRESENCE_PERSONS,
     CONF_HOME_ZONE,
+    CONF_PRESENCE_ARRIVAL_DELAY,
+    CONF_PRESENCE_DEPARTURE_DELAY,
     CONF_VACATION_TEMP,
     CONF_WINDOW_OPEN_TEMP,
     CONF_ECO_TEMP,
@@ -502,3 +504,88 @@ class TestOptionsHubOldConfigCompatibility:
         form = await _select_section(hass, hub, "presence")
         schema_keys = {str(k) for k in form["data_schema"].schema}
         assert CONF_LEARNING_ENABLED not in schema_keys
+
+
+# ── Presence Delays (Settings UX Polish) ───────────────────────────────────────
+
+
+def _schema_field(schema, key: str):
+    """Return the vol marker (vol.Optional/vol.Required) for a schema field."""
+    for k in schema.schema:
+        if str(k) == key:
+            return k
+    raise AssertionError(f"field '{key}' not found in schema")
+
+
+class TestOptionsHubPresenceDelays:
+    async def test_presence_schema_has_both_delay_fields(self, hass, enable_custom_integrations):
+        entry = _zone_entry()
+        entry.add_to_hass(hass)
+
+        hub = await _open_hub(hass, entry)
+        form = await _select_section(hass, hub, "presence")
+        schema_keys = {str(k) for k in form["data_schema"].schema}
+        assert CONF_PRESENCE_ARRIVAL_DELAY in schema_keys
+        assert CONF_PRESENCE_DEPARTURE_DELAY in schema_keys
+
+    async def test_presence_delay_fields_default_to_zero(self, hass, enable_custom_integrations):
+        """New/legacy entries without these keys must default both delays to 0."""
+        entry = _zone_entry()
+        entry.add_to_hass(hass)
+
+        hub = await _open_hub(hass, entry)
+        form = await _select_section(hass, hub, "presence")
+        schema = form["data_schema"]
+        arrival_key = _schema_field(schema, CONF_PRESENCE_ARRIVAL_DELAY)
+        departure_key = _schema_field(schema, CONF_PRESENCE_DEPARTURE_DELAY)
+        assert arrival_key.default() == 0
+        assert departure_key.default() == 0
+
+    async def test_presence_section_saves_delay_values(self, hass, enable_custom_integrations):
+        entry = _zone_entry()
+        entry.add_to_hass(hass)
+
+        hub = await _open_hub(hass, entry)
+        form = await _select_section(hass, hub, "presence")
+        result = await _save_section(hass, form, {
+            **_STEP_PRESENCE,
+            CONF_PRESENCE_ARRIVAL_DELAY: 3,
+            CONF_PRESENCE_DEPARTURE_DELAY: 15,
+        })
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_PRESENCE_ARRIVAL_DELAY] == 3
+        assert result["data"][CONF_PRESENCE_DEPARTURE_DELAY] == 15
+
+    async def test_old_entry_without_delay_keys_saves_with_zero_defaults(
+        self, hass, enable_custom_integrations
+    ):
+        """Entries created before this feature existed have no delay keys at
+        all in data/options — saving the presence section must not crash and
+        must persist 0 for both, not raise KeyError."""
+        entry = _zone_entry()  # _BASE_DATA has no CONF_PRESENCE_ARRIVAL/DEPARTURE_DELAY
+        entry.add_to_hass(hass)
+
+        hub = await _open_hub(hass, entry)
+        form = await _select_section(hass, hub, "presence")
+        result = await _save_section(hass, form, _STEP_PRESENCE)
+        assert result["type"] == FlowResultType.CREATE_ENTRY
+        assert result["data"][CONF_PRESENCE_ARRIVAL_DELAY] == 0
+        assert result["data"][CONF_PRESENCE_DEPARTURE_DELAY] == 0
+
+    async def test_presence_delay_values_prefilled_on_reopen(
+        self, hass, enable_custom_integrations
+    ):
+        """Previously saved delay values must pre-fill the form on reopen."""
+        entry = _zone_entry(**{
+            CONF_PRESENCE_ARRIVAL_DELAY: 7,
+            CONF_PRESENCE_DEPARTURE_DELAY: 20,
+        })
+        entry.add_to_hass(hass)
+
+        hub = await _open_hub(hass, entry)
+        form = await _select_section(hass, hub, "presence")
+        schema = form["data_schema"]
+        arrival_key = _schema_field(schema, CONF_PRESENCE_ARRIVAL_DELAY)
+        departure_key = _schema_field(schema, CONF_PRESENCE_DEPARTURE_DELAY)
+        assert arrival_key.default() == 7
+        assert departure_key.default() == 20

@@ -68,7 +68,13 @@
         "description": "Chi è a casa? ThermoSmart passa automaticamente alla modalità assenza quando tutti escono.",
         "data": {
           "presence_persons": "Persone per il rilevamento della presenza",
-          "home_zone": "Zona casa (predefinito: zone.home)"
+          "home_zone": "Zona casa (predefinito: zone.home)",
+          "presence_arrival_delay": "Ritardo di arrivo",
+          "presence_departure_delay": "Ritardo di uscita"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Per quanto tempo la presenza rilevata deve persistere prima che ThermoSmart passi a 'in casa'. 0 minuti reagiscono immediatamente.",
+          "presence_departure_delay": "Per quanto tempo l'assenza completa deve persistere prima che ThermoSmart passi a 'fuori casa'. 0 minuti reagiscono immediatamente."
         }
       },
       "weather": {
@@ -105,6 +111,7 @@
     "step": {
       "init": {
         "title": "Impostazioni",
+        "description": "Qui puoi modificare le impostazioni di dispositivi, temperatura, programma, presenza e meteo per questa zona, oltre a sensori e controllo del riscaldamento.",
         "menu_options": {
           "devices": "Dispositivi e sensori",
           "schedule": "Temperature e pianificazione",
@@ -167,7 +174,13 @@
         "description": "Chi è a casa? ThermoSmart passa automaticamente alla modalità assenza quando tutti escono.",
         "data": {
           "presence_persons": "Persone per il rilevamento della presenza",
-          "home_zone": "Zona casa (predefinito: zone.home)"
+          "home_zone": "Zona casa (predefinito: zone.home)",
+          "presence_arrival_delay": "Ritardo di arrivo",
+          "presence_departure_delay": "Ritardo di uscita"
+        },
+        "data_description": {
+          "presence_arrival_delay": "Per quanto tempo la presenza rilevata deve persistere prima che ThermoSmart passi a 'in casa'. 0 minuti reagiscono immediatamente.",
+          "presence_departure_delay": "Per quanto tempo l'assenza completa deve persistere prima che ThermoSmart passi a 'fuori casa'. 0 minuti reagiscono immediatamente."
         }
       },
       "weather": {

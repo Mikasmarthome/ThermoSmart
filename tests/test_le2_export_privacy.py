@@ -109,5 +109,3 @@ class TestQuantization:
 
     def test_grid(self):
         assert QuantizationPolicy().quantize(0.37, 0.1) == pytest.approx(0.4, abs=1e-9)
-
-

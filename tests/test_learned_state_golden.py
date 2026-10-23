@@ -15,11 +15,10 @@ Two facts these contracts record on purpose:
 
 * TPI coefficients move towards the learned value in bounded steps, one step per
   cycle, so the contract pins the whole transition.
-* The learned *early cutoff* is not applied in the running integration: the
-  afterheat model publishes ``EXPECTED_OVERSHOOT`` (which shortens the preheat
-  estimate), but ``RECOMMENDED_EARLY_CUTOFF`` — the prediction
-  ``read_early_cutoff_safe`` looks for — is never produced, so the cutoff read
-  returns 0 and the target is never lowered early.
+* A learned afterheat does not lower the target early. The afterheat model
+  publishes ``EXPECTED_OVERSHOOT``, which shortens the preheat estimate; nothing
+  else acts on it. (An early-cutoff mechanism used to sit on top of it but never
+  ran, because the prediction it read was never produced, and has been removed.)
 """
 from __future__ import annotations
 
@@ -134,7 +133,7 @@ async def run_preheat_case(name: str) -> dict:
     }
 
 
-# ── B3  learned afterheat / early cutoff ─────────────────────────────────────
+# ── B3  learned afterheat does not lower the target early ────────────────────
 
 async def run_early_cutoff_case() -> list:
     coord, shadow, clock, room = await _zone(
@@ -144,8 +143,8 @@ async def run_early_cutoff_case() -> list:
         room["temp"] += 0.4
         zone = await _cycle(coord, clock)
         rows.append((
-            round(room["temp"], 1), shadow.read_regime_safe(), coord._ec_state,
-            _rounded(zone["effective_target"]), _rounded(shadow.read_early_cutoff_safe()),
+            round(room["temp"], 1), shadow.read_regime_safe(),
+            _rounded(zone["effective_target"]),
         ))
     return rows
 
@@ -196,20 +195,20 @@ _EXPECTED_PREHEAT = {'learned_transition_inside_window': {'preheat_minutes': 62.
                                              'trv_setpoint': 28.0,
                                              'onset_delay_min': 5.0,
                                              'read': (145.0, 'deterministic_baseline')}}
-_EXPECTED_EARLY_CUTOFF = [(18.4, 'active_heating', 'inactive', 21.0, (0.0, 'missing')),
- (18.8, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (19.2, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (19.6, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (20.0, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (20.4, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (20.8, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (21.2, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (21.6, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (22.0, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (22.4, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (22.8, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (23.2, 'active_heating', 'eligible', 21.0, (0.0, 'missing')),
- (23.6, 'active_heating', 'eligible', 21.0, (0.0, 'missing'))]
+_EXPECTED_EARLY_CUTOFF = [(18.4, 'active_heating', 21.0),
+ (18.8, 'active_heating', 21.0),
+ (19.2, 'active_heating', 21.0),
+ (19.6, 'active_heating', 21.0),
+ (20.0, 'active_heating', 21.0),
+ (20.4, 'active_heating', 21.0),
+ (20.8, 'active_heating', 21.0),
+ (21.2, 'active_heating', 21.0),
+ (21.6, 'active_heating', 21.0),
+ (22.0, 'active_heating', 21.0),
+ (22.4, 'active_heating', 21.0),
+ (22.8, 'active_heating', 21.0),
+ (23.2, 'active_heating', 21.0),
+ (23.6, 'active_heating', 21.0)]
 
 
 @pytest.mark.parametrize("learned", [True, False])
@@ -234,3 +233,10 @@ async def test_learning_switch_off_ignores_the_learned_state():
         zone = await _cycle(coord, clock)
     assert zone["tpi_coef_source"] == "deterministic_baseline"
     assert (zone["tpi_coef_int"], zone["tpi_duty_cycle"], zone["trv_setpoint"]) == (0.6, 47.0, 24.8)
+
+
+async def test_the_zone_state_carries_no_early_cutoff_keys():
+    """The early-cutoff mechanism is gone; its keys must not reappear unnoticed."""
+    coord, _, clock, _ = await _zone(20.4, learned=True)
+    zone = await _cycle(coord, clock)
+    assert not [key for key in zone if "early_cutoff" in key]

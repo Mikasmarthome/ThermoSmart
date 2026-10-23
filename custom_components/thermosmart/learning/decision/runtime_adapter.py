@@ -27,8 +27,6 @@ _MAP: tuple[tuple[str, PredictionType, str, str, Optional[ConfidencePurpose]], .
      ConfidencePurpose.BOOST),
     ("preheat_start", PredictionType.PREHEAT_MINUTES, "preheat_minutes", "minutes",
      ConfidencePurpose.PREHEAT),
-    ("early_cutoff", PredictionType.RECOMMENDED_EARLY_CUTOFF, "expected_residual_rise",
-     "celsius", ConfidencePurpose.EARLY_CUTOFF),
     ("heat_rate", PredictionType.HEAT_RATE, "heat_rate", "C/h", ConfidencePurpose.HEAT_RATE),
     ("heat_loss", PredictionType.HEAT_LOSS_RATE, "heat_loss_rate", "C/h",
      ConfidencePurpose.HEAT_LOSS),

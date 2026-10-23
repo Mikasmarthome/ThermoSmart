@@ -1765,12 +1765,6 @@ class LearningShadowController:
             # Release on lifecycle timeout (max_boost_duration_s elapsed)
             self._check_lifecycle_timeout_safe()
             # Hard releases must run BEFORE soft deescalation so they always take priority.
-            # Hard release: early cutoff / coasting hold — Boost + EarlyCutoff must not overlap.
-            early_cutoff_state = recommendation.get("early_cutoff_state")
-            if early_cutoff_state in ("cutoff_applied", "coasting_hold"):
-                self._release_boost_lifecycle_safe("early_cutoff")
-                recommendation["_boost_rejection_reason"] = "early_cutoff"
-                return  # Hard release: no boost applied this cycle
             # Hard release: target already reached — no boost benefit remaining.
             # Coordinator key is "current_temp" (not "current_temperature")
             current_temp = recommendation.get("current_temp")
@@ -1976,7 +1970,6 @@ class LearningShadowController:
                 boost_rejected_reason=recommendation.get("_boost_rejection_reason"),
                 preheat_minutes=float(recommendation.get("preheat_minutes") or 0.0),
                 preheat_status=recommendation.get("preheat_status"),
-                early_cutoff_state=recommendation.get("early_cutoff_state"),
                 heat_rate_c_per_h=_tpi_diag.get("heat_rate_c_per_h"),
                 heat_rate_confidence=_tpi_diag.get("hr_confidence"),
                 heat_rate_source=recommendation.get("tpi_coef_source"),
@@ -2082,22 +2075,6 @@ class LearningShadowController:
             clamp_applied=0.0,
         )
 
-        ec_state = record.early_cutoff_state
-        ec_active = ec_state in ("cutoff_applied", "coasting_hold")
-        ec_contribution = recommendation.get("early_cutoff_contribution_c")
-        ec_entry = DecisionTraceEntry(
-            feature="early_cutoff",
-            baseline_value=None,
-            learning_value=ec_contribution,
-            final_value=ec_contribution if ec_active else None,
-            applied=ec_active,
-            reason=("learning_applied" if ec_active else DecisionReason.BASELINE.value),
-            fallback_reason=(FallbackReason.NONE.value if ec_active
-                             else FallbackReason.GUARD_BLOCKED.value),
-            confidence=None,
-            clamp_applied=0.0,
-        )
-
         reason_codes: list[str] = []
         if boost_applied:
             reason_codes.append(DecisionReason.LEARNING_APPLIED.value)
@@ -2121,8 +2098,8 @@ class LearningShadowController:
             decision_id=record.decision_id,
             baseline_setpoint_c=record.baseline_setpoint_c,
             final_setpoint_c=record.final_setpoint_c,
-            applied_any=boost_applied or ec_active,
-            entries=(boost_entry, preheat_entry, ec_entry),
+            applied_any=boost_applied,
+            entries=(boost_entry, preheat_entry),
             reason_codes=tuple(sorted(set(reason_codes))),
             preheat_minutes_learning=preheat_min if preheat_is_learning else None,
             preheat_status=preheat_status,
@@ -2136,8 +2113,6 @@ class LearningShadowController:
             onset_delay_status=record.onset_delay_source,
             effective_room_heating_duration_min=room_heat_dur,
             preheat_command_lead_time_min=preheat_min,
-            early_cutoff_state=ec_state,
-            early_cutoff_hold_active=ec_active,
             boost_offset_c_applied=boost_applied_c if boost_applied else None,
             boost_offset_requested_c=boost_candidate,
             boost_rejected_reason=boost_rejected,
@@ -2669,66 +2644,6 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("forecast_bias_read", err)
         return 0.0
-
-    # Minimum confidence threshold for early cutoff prediction to be acted on.
-    _EARLY_CUTOFF_MIN_CONFIDENCE: float = 0.35
-    # Absolute maximum residual rise the model may predict (mirrors AfterheatParameters cap).
-    _EARLY_CUTOFF_MAX_C: float = 3.0
-    # Allowed cutoff at minimum admissible confidence: at conf=0.35 only 0.5°C is safe
-    # (worst-case room deficit limited to 0.5°C if afterheat fails).  At conf=1.0 the
-    # full model cap (3.0°C) applies.  Linear interpolation in between.
-    _EARLY_CUTOFF_MAX_C_AT_MIN_CONF: float = 0.5
-
-    def read_early_cutoff_safe(self) -> tuple:
-        """Read Learning RECOMMENDED_EARLY_CUTOFF (expected residual rise °C) via Read Gate.
-
-        Returns ``(residual_rise_c, status)`` where:
-        - ``residual_rise_c``: 0.0 when unavailable / cold-start / low-confidence / gate-rejected;
-          non-negative float capped by a confidence-proportional limit otherwise.
-        - ``status``: one of "valid", "not_available", "cold_start", "low_confidence",
-          "missing", "stale", "superseded", "invalid".
-
-        A versionised prior (``fallback_used=True``) always returns ``(0.0, "cold_start")``.
-        Low evidence-quality (``confidence < 0.35``) always returns ``(0.0, "low_confidence")``.
-        The returned value is capped proportionally to confidence so that a marginal-confidence
-        prediction can only reduce the drive target by a small, low-risk amount.
-        """
-        if not self._enabled:
-            return 0.0, "not_available"
-        try:
-            from ..decision.runtime_adapter import validated_prediction_read, READ_OK
-            zr = self._runtime._zone(self._zone)
-            preds = getattr(zr, "last_predictions", {}) or {}
-            cutoff_pred = preds.get(PredictionType.RECOMMENDED_EARLY_CUTOFF)
-            if cutoff_pred is not None and getattr(cutoff_pred, "fallback_used", True):
-                return 0.0, "cold_start"
-            confidence = 0.0
-            if cutoff_pred is not None:
-                confidence = float(getattr(cutoff_pred, "confidence", 0.0) or 0.0)
-                if confidence < self._EARLY_CUTOFF_MIN_CONFIDENCE:
-                    return 0.0, "low_confidence"
-            value, read_status = validated_prediction_read(
-                preds,
-                "early_cutoff",
-                zone_id=self._zone,
-                prediction_zone_id=self._zone,
-                expected_unit="celsius",
-            )
-            if read_status == READ_OK and value is not None:
-                value = float(max(0.0, value))
-                # Confidence-proportional cap: limit the allowed cutoff magnitude to
-                # reduce control risk at lower confidence.  At minimum admissible
-                # confidence (0.35) only 0.5°C is permitted; at confidence=1.0 the
-                # full model cap (3.0°C) applies.  Linear interpolation in between.
-                conf_range = max(0.001, 1.0 - self._EARLY_CUTOFF_MIN_CONFIDENCE)
-                t = max(0.0, min(1.0, (confidence - self._EARLY_CUTOFF_MIN_CONFIDENCE) / conf_range))
-                conf_cap = (self._EARLY_CUTOFF_MAX_C_AT_MIN_CONF
-                            + t * (self._EARLY_CUTOFF_MAX_C - self._EARLY_CUTOFF_MAX_C_AT_MIN_CONF))
-                return min(value, conf_cap), "valid"
-            return 0.0, self._TRUST_STATUS_MAP.get(read_status, "invalid")
-        except Exception as err:
-            self._record_error("early_cutoff_read", err)
-        return 0.0, "not_available"
 
     def read_regime_safe(self) -> Optional[str]:
         """Return the regime string from the last shadow pipeline cycle, or None.

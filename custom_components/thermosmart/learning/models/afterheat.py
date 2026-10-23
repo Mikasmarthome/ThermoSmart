@@ -118,7 +118,6 @@ class AfterheatParameters:
     generic_prior_time_to_peak_s: float = 600.0
     generic_prior_duration_s: float = 1200.0
     generic_prior_decay: float = -0.01
-    early_cutoff_max_c: float = 3.0
     cold_start_confidence_cap: float = 0.4
     full_confidence_samples: float = 20.0
     parameter_version: int = PARAMETER_VERSION
@@ -353,7 +352,7 @@ class AfterheatModel:
                          "solar_radiation", "radiator_profile")
     supported_prediction_types = (
         PredictionType.EXPECTED_OVERSHOOT, PredictionType.AFTERHEAT_TIME_TO_PEAK,
-        PredictionType.AFTERHEAT_DURATION, PredictionType.RECOMMENDED_EARLY_CUTOFF)
+        PredictionType.AFTERHEAT_DURATION)
     min_tier = 0
 
     def __init__(self, learning_zone_id: str, params: Optional[AfterheatParameters] = None, *,
@@ -679,43 +678,6 @@ class AfterheatModel:
             return 0.0
         return self._state.direct_drive_end_count / total
 
-    def predict_early_cutoff(self, context: AfterheatPredictionContext) -> Prediction:
-        """Conservative, temperature-based cutoff: the residual rise (deg C) that
-        active heating can stop short of the target by. Near-zero -> 0."""
-        p = self._params
-        a = self.predict_afterheat(context)
-        residual = a.residual_rise_c
-        reasons = list(a.reason_codes)
-        if residual < p.min_residual_rise_c:
-            residual = 0.0
-            reasons.append("near_zero")
-        residual = clamp(residual, 0.0, p.early_cutoff_max_c)
-        # never exceed the remaining temperature delta, when known
-        if context.current_temp is not None and context.target is not None \
-                and is_finite(context.current_temp) and is_finite(context.target):
-            remaining = max(0.0, context.target - context.current_temp)
-            if residual > remaining:
-                residual = remaining
-                reasons.append("clamped_to_remaining_delta")
-        if a.confidence < 0.3:
-            reasons.append("low_confidence_cap")
-        if not is_finite(residual):
-            residual = 0.0
-        return Prediction(
-            prediction_type=PredictionType.RECOMMENDED_EARLY_CUTOFF,
-            values={"expected_residual_rise": float(residual)},
-            units={"expected_residual_rise": "C"},
-            confidence=a.confidence, reliability=a.reliability if not a.fallback_used else 0.3,
-            model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-            prior_contribution=1.0 if a.fallback_used else a.prior_contribution,
-            learned_contribution=0.0 if a.fallback_used else a.learned_contribution,
-            fallback_used=a.fallback_used, evidence_count=a.evidence_count, bucket=a.bucket,
-            confidence_cap=p.cold_start_confidence_cap if a.fallback_used else None,
-            cap_reasons=("cold_start",) if a.fallback_used else (),
-            missing_evidence=a.missing_evidence, reason_codes=tuple(reasons))
-
-    # -- confidence ------------------------------------------------------
-
     def _confidence_value(self, sample_count: int, fallback: bool) -> float:
         if fallback or sample_count <= 0:
             return min(0.2, self._params.cold_start_confidence_cap)
@@ -968,7 +930,7 @@ def afterheat_model_definition():
         consumed_raw_tracks=(), consumed_episode_types=(EpisodeType.AFTERHEAT,),
         supported_prediction_types=(
             PredictionType.EXPECTED_OVERSHOOT, PredictionType.AFTERHEAT_TIME_TO_PEAK,
-            PredictionType.AFTERHEAT_DURATION, PredictionType.RECOMMENDED_EARLY_CUTOFF),
+            PredictionType.AFTERHEAT_DURATION),
         required_features=("indoor_temp", "trv_setpoint"),
         optional_features=("valve_opening", "hvac_action", "outdoor_temp",
                            "solar_radiation", "radiator_profile"),

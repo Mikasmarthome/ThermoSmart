@@ -76,7 +76,6 @@ class PredictionType(Enum):
     EXPECTED_OVERSHOOT = "expected_overshoot"
     AFTERHEAT_TIME_TO_PEAK = "afterheat_time_to_peak"
     AFTERHEAT_DURATION = "afterheat_duration"
-    RECOMMENDED_EARLY_CUTOFF = "recommended_early_cutoff"
     FORECAST_TRUST = "forecast_trust"
     FORECAST_BIAS = "forecast_bias"
     CORRECTED_FORECAST = "corrected_forecast"

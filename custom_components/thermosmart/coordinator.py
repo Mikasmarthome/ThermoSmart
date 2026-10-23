@@ -81,12 +81,6 @@ _TPI_COEF_INT_MAX_STEP_DOWN: float = 0.10
 _TPI_COEF_INT_CLAMP_MIN: float = 0.15   # mirrors estimate_coefficients lower bound
 _TPI_COEF_INT_CLAMP_MAX: float = 1.2    # mirrors estimate_coefficients upper bound
 
-# Learning early cutoff application gates
-_EARLY_CUTOFF_MIN_RESIDUAL_C = 0.15   # noise floor for residual rise (below → no cutoff)
-_EARLY_CUTOFF_MAX_C = 3.0             # hard maximum (mirrors AfterheatParameters.early_cutoff_max_c)
-_EARLY_CUTOFF_HOLD_TIMEOUT_SECS: float = 1800.0  # 30-min max afterheat window before forced release
-
-
 class ControlAdaptationMode:
     """Derived control mode based on the two user-visible switches.
 
@@ -301,18 +295,6 @@ class ThermoSmartCoordinator(
         # _tpi_duty_previous: last duty cycle for trace/audit (None before first cycle).
         self._tpi_coef_int_smoothed: float = TPI_COEF_INT_DEFAULT
         self._tpi_duty_previous: float | None = None
-
-        # Learning Early Cutoff hold state (transient, never persisted; safe on HA restart)
-        # Once early cutoff is applied, the hold maintains the reduced effective_target
-        # through the coasting phase so afterheat is not disrupted by a re-heat impulse.
-        self._ec_hold_active: bool = False
-        self._ec_hold_cut_target: float = 0.0
-        self._ec_hold_comfort_temp: float = 0.0
-        self._ec_hold_period: str = ""
-        self._ec_hold_started: float = 0.0   # _clock.monotonic() when hold was started
-        self._ec_state: str = "inactive"
-        self._ec_episode_failed: bool = False  # True after temp-falling/timeout release
-        self._ec_failed_cut_target: float = 0.0  # cut_target of the failed episode
 
         # Injectable clock — replaced by FakeClock in simulation/tests.
         # All fachliche Zeitaufrufe in this coordinator must go through self._clock.
@@ -845,7 +827,6 @@ class ThermoSmartCoordinator(
                     "_boost_evaluation_status", "unknown"),
                 preheat_minutes=float(recommendation.get("preheat_minutes") or 0.0),
                 preheat_status=recommendation.get("preheat_status"),
-                early_cutoff_state=recommendation.get("early_cutoff_state"),
                 heat_rate_c_per_h=_tpi_diag.get("heat_rate_c_per_h"),
                 heat_rate_confidence=_tpi_diag.get("hr_confidence"),
                 heat_rate_source=recommendation.get("tpi_coef_source"),
@@ -2105,25 +2086,12 @@ class ThermoSmartCoordinator(
 
         override = self.get_override()
 
-        # Hard-release any active Early Cutoff hold on window open or manual override:
-        # both are structural safety events that take absolute priority.
-        if self._ec_hold_active and (window_open or override is not None):
-            self._ec_hold_active = False
-            self._ec_episode_failed = False
-            self._ec_state = (
-                "released_window_open" if window_open else "released_manual_override"
-            )
-
         biased_suppression = 1.0
         # Learning forecast state – defaults represent "no evidence" (not "full trust")
         learning_forecast_trust = 0.0
         learning_forecast_bias_c = 0.0
         learning_forecast_trust_status = "not_available"
         learning_forecast_used = False
-        # Learning early cutoff state
-        learning_early_cutoff_c = 0.0
-        learning_early_cutoff_status = "not_available"
-        learning_early_cutoff_applied = False
 
         # ── Effective target (internal) ────────────────────────────────────────
         # Incorporates weather offset + forecast suppression.
@@ -2230,138 +2198,6 @@ class ThermoSmartCoordinator(
             else:
                 effective_target = raw_target
 
-            # ── Learning Early Cutoff Lifecycle ──────────────────────────────────
-            # Applies in BOTH preheat and active comfort-window branches; never in
-            # the night/transition branch and never in non-AUTO modes.
-            # adjusted_target (user-visible schedule temp) is NEVER changed here;
-            # only effective_target (internal heating drive) is reduced.
-            #
-            # Hold semantics: once a cutoff is applied, _ec_hold_active=True maintains
-            # the reduced effective_target through the coasting phase. Without a hold,
-            # effective_target would revert to comfort_temp as soon as current_temp
-            # reached the cut threshold, causing a re-heat impulse that defeats the
-            # purpose of the cutoff and leads to overshoot.
-            #
-            # Structural safety guards (guaranteed by outer if/elif structure):
-            #   • window_open: released above; we are inside `elif not window_open:`
-            #   • override: released above; override=None guaranteed here
-            # Additional guards in _ec_eligible and the state machine below.
-            if mode == HEATING_MODE_AUTO:
-                _heating_to_target = preheat_active or base_target >= comfort_temp
-                _current_period = self._current_schedule_period()
-                # Require explicit trend evidence: slope=None (no measurement) must NOT
-                # allow a new hold — unavailable trend means unavailable evidence, not
-                # "neutral".  Flat-or-rising (>= 0.0) with a real measurement is fine.
-                _temp_rising = (self._indoor_temp_slope is not None
-                                and self._indoor_temp_slope >= 0.0)
-                _ec_eligible = (
-                    _learning_mode_on
-                    and _heating_to_target
-                    and current_temp is not None
-                    and self._learning_shadow is not None
-                )
-                # Regime gate: new hold only when the Learning regime classifier confirms
-                # active heating.  UNKNOWN / AFTERHEAT / COOLING / None → no new hold.
-                # "keine zweite parallele Regime-Heuristik": regime comes exclusively
-                # from the shadow runtime pipeline (ThermalRegimeClassifier), never from
-                # a coordinator-local heuristic.
-                # Learning OFF → regime is never used (ec_eligible is already False).
-                _ec_regime = (self._learning_shadow.read_regime_safe()
-                              if (_learning_mode_on and self._learning_shadow is not None) else None)
-
-                # Episode change: different comfort target or schedule period → reset.
-                if (self._ec_hold_active or self._ec_episode_failed) and (
-                    self._ec_hold_comfort_temp != comfort_temp
-                    or self._ec_hold_period != _current_period
-                ):
-                    self._ec_hold_active = False
-                    self._ec_episode_failed = False
-                    self._ec_failed_cut_target = 0.0
-                    self._ec_state = "inactive"
-
-                if self._ec_hold_active:
-                    # ── Validate ongoing hold ─────────────────────────────────
-                    # Hold is governed by episode binding, temperature evidence and
-                    # safety gates.  A stale/missing prediction after hold-start must
-                    # NOT trigger immediate reheat (Prediction quality is a pre-start
-                    # gate only; the applied cut threshold is frozen for the duration).
-                    _hold_age = self._clock.monotonic() - self._ec_hold_started
-                    _release = None
-
-                    if not _ec_eligible:
-                        _release = "released_ineligible"
-                    elif current_temp >= comfort_temp:
-                        _release = "released_target_reached"
-                    elif _hold_age > _EARLY_CUTOFF_HOLD_TIMEOUT_SECS:
-                        _release = "released_timeout"
-                    elif (current_temp < self._ec_hold_cut_target
-                          and self._indoor_temp_slope is not None
-                          and self._indoor_temp_slope < 0.0):
-                        # Below cut threshold AND actively falling → re-heat needed
-                        _release = "released_temperature_falling"
-                    # No prediction re-validation here: frozen threshold, real evidence.
-
-                    if _release is not None:
-                        self._ec_hold_active = False
-                        self._ec_state = _release
-                        if _release in ("released_temperature_falling", "released_timeout"):
-                            self._ec_episode_failed = True
-                            self._ec_failed_cut_target = self._ec_hold_cut_target
-                        learning_early_cutoff_applied = False
-                    else:
-                        # Hold continues: maintain frozen cut target
-                        effective_target = max(self._ec_hold_cut_target, night_temp_cfg)
-                        learning_early_cutoff_applied = True
-                        learning_early_cutoff_c = round(
-                            comfort_temp - self._ec_hold_cut_target, 1)
-                        self._ec_state = (
-                            "coasting_hold"
-                            if current_temp >= self._ec_hold_cut_target
-                            else "cutoff_applied"
-                        )
-
-                elif (_ec_eligible and not self._ec_episode_failed and _temp_rising
-                      and _ec_regime == "active_heating"):
-                    # ── Evaluate new cutoff (regime gate: active_heating only) ─
-                    learning_early_cutoff_c, learning_early_cutoff_status = (
-                        self._learning_shadow.read_early_cutoff_safe())
-                    if learning_early_cutoff_c >= _EARLY_CUTOFF_MIN_RESIDUAL_C:
-                        capped_c = min(learning_early_cutoff_c, _EARLY_CUTOFF_MAX_C)
-                        cut_target = round(effective_target - capped_c, 1)
-                        if cut_target > current_temp:
-                            effective_target = max(cut_target, night_temp_cfg)
-                            learning_early_cutoff_applied = True
-                            self._ec_hold_active = True
-                            self._ec_hold_cut_target = effective_target
-                            self._ec_hold_comfort_temp = comfort_temp
-                            self._ec_hold_period = _current_period
-                            self._ec_hold_started = self._clock.monotonic()
-                            self._ec_state = "cutoff_applied"
-                    else:
-                        self._ec_state = "eligible"
-                else:
-                    # Recovery: room dropped well below the failed cut target, is now
-                    # rising, AND the ThermalRegimeClassifier confirms "active_heating".
-                    # Passive warming (solar, neighbours, internal loads) keeps the regime
-                    # at UNKNOWN / AFTERHEAT / COOLING and must NOT reset episode_failed.
-                    if (self._ec_episode_failed
-                            and self._indoor_temp_slope is not None
-                            and self._indoor_temp_slope >= 0.0
-                            and current_temp is not None
-                            and current_temp < self._ec_failed_cut_target - 1.0
-                            and _ec_regime == "active_heating"):
-                        self._ec_episode_failed = False
-                        self._ec_failed_cut_target = 0.0
-                    self._ec_state = (
-                        "inactive" if not self._ec_episode_failed else "episode_failed"
-                    )
-            else:
-                # Non-AUTO mode: release any active hold
-                if self._ec_hold_active:
-                    self._ec_hold_active = False
-                    self._ec_state = "released_mode_change"
-                    self._ec_episode_failed = False
-
             # Display: always show the configured base temperature (no offsets)
             adjusted_target = base_target
             override_active = False
@@ -2412,11 +2248,6 @@ class ThermoSmartCoordinator(
             "forecast_bias_c": learning_forecast_bias_c,
             "forecast_used": learning_forecast_used,
             "forecast_trust_status": learning_forecast_trust_status,
-            "early_cutoff_applied": learning_early_cutoff_applied,
-            "early_cutoff_c": learning_early_cutoff_c,
-            "early_cutoff_status": learning_early_cutoff_status,
-            "early_cutoff_state": self._ec_state,
-            "early_cutoff_hold_active": self._ec_hold_active,
             "learning_confidence": learning_confidence,
             "outdoor_temp": weather_data.get("temperature"),
             "forecast_high": weather_data.get("forecast_high"),

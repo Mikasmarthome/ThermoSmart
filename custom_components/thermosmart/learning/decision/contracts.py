@@ -80,10 +80,6 @@ class DecisionTrace:
     # User's configured comfort target; separate from baseline_setpoint_c which may
     # already reflect an early-cutoff reduction (effective_target < comfort_target).
     comfort_temperature_c: Optional[float] = None
-    # Coordinator's Early Cutoff hold lifecycle state (e.g. "cutoff_applied",
-    # "coasting_hold", "released_target_reached", "inactive").
-    early_cutoff_state: Optional[str] = None
-    early_cutoff_hold_active: bool = False
     # Preheat / HeatRate / OnsetDelay trace fields.
     # Three semantically distinct time quantities (A = B + C):
     #   A = preheat_command_lead_time_min  (total, returned to coordinator)
@@ -107,7 +103,6 @@ class DecisionTrace:
     target_temperature_c: Optional[float] = None
     context_time_bucket: Optional[str] = None      # schedule period
     fallback_source: Optional[str] = None          # which fallback level was used
-    early_cutoff_contribution_c: Optional[float] = None
     preheat_fallback_used: bool = False
     # Boost diagnostics: internal truth, compat adapter, adaptive cap, lifecycle
     boost_offset_c_applied: Optional[float] = None   # internal additive °C (0.0 = neutral)
@@ -141,8 +136,6 @@ class DecisionTrace:
         return {
             "mode": self.mode,
             "comfort_temperature_c": self.comfort_temperature_c,
-            "early_cutoff_state": self.early_cutoff_state,
-            "early_cutoff_hold_active": self.early_cutoff_hold_active,
             "preheat_minutes_learning": self.preheat_minutes_learning,
             "preheat_status": self.preheat_status,
             "preheat_baseline_minutes": self.preheat_baseline_minutes,
@@ -159,7 +152,6 @@ class DecisionTrace:
             "target_temperature_c": self.target_temperature_c,
             "context_time_bucket": self.context_time_bucket,
             "fallback_source": self.fallback_source,
-            "early_cutoff_contribution_c": self.early_cutoff_contribution_c,
             "preheat_fallback_used": self.preheat_fallback_used,
             "boost_offset_c_applied": self.boost_offset_c_applied,
             "boost_factor_compat": self.boost_factor_compat,
@@ -225,9 +217,6 @@ class LiveDecisionRecord:
     # ── preheat ──────────────────────────────────────────────────────────
     preheat_minutes: float                      # command_lead_time_min (A = onset + room)
     preheat_status: Optional[str]               # "valid"|"valid_hl_prior"|"deterministic_baseline"…
-
-    # ── early cutoff ─────────────────────────────────────────────────────
-    early_cutoff_state: Optional[str]           # "cutoff_applied"|"coasting_hold"|"inactive"|None
 
     # ── thermal rates (from TPI authority chain) ─────────────────────────
     heat_rate_c_per_h: Optional[float]

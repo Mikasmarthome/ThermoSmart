@@ -284,3 +284,54 @@ def inject_eligible_boost_model(shadow, *, factor_c: float = 1.5):
         raise RuntimeError("inject_eligible_boost_model: no boost model in zone — "
                            "call async_setup() before injecting state")
     model._state = _state
+
+
+def inject_learned_thermal_state(shadow, *, heat_rate_c_per_h: float = 4.0,
+                                 heat_loss_c_per_h: float = 0.8,
+                                 afterheat_rise_c: float = 0.6,
+                                 onset_delay_min: float = 8.0,
+                                 samples: int = 25):
+    """Seed the thermal models with a learned (non-fallback, high confidence) state.
+
+    Equivalent to restoring a snapshot of a zone that has seen ``samples`` clean
+    heating cycles: the *general* bucket of the heat rate, heat loss, afterheat and
+    onset delay models carries the given values. The predictions the real
+    orchestrator derives from that state are what the control path reads — nothing
+    is patched. Call after ``shadow.async_setup()``.
+    """
+    import dataclasses
+
+    from custom_components.thermosmart.learning.models.afterheat import AfterheatBucket, _Dim
+    from custom_components.thermosmart.learning.models.heat_loss import HeatLossBucket
+    from custom_components.thermosmart.learning.models.heat_rate import HeatRateBucket
+    from custom_components.thermosmart.learning.models.onset_delay import OnsetDelayBucket
+
+    ts = shadow._utcnow_iso()
+    models = shadow._runtime._zone(shadow._zone).orchestrator.models
+    n = float(samples)
+
+    st = models["heat_rate"]._state
+    models["heat_rate"]._state = dataclasses.replace(
+        st, general=HeatRateBucket("general", heat_rate_c_per_h, n, 0.05 * heat_rate_c_per_h,
+                                   samples, ts),
+        aggregate_reliability=0.9, last_update_ts=ts)
+
+    st = models["heat_loss"]._state
+    loss = HeatLossBucket("general", heat_loss_c_per_h, n, 0.1, samples, ts)
+    models["heat_loss"]._state = dataclasses.replace(
+        st, general=loss, normalized=dataclasses.replace(loss, key="normalized"),
+        aggregate_reliability=0.9, last_update_ts=ts)
+
+    st = models["afterheat"]._state
+    models["afterheat"]._state = dataclasses.replace(
+        st, general=AfterheatBucket(
+            "general", rise=_Dim(afterheat_rise_c, n, 0.05, samples),
+            time_to_peak=_Dim(900.0, n, 60.0, samples),
+            duration=_Dim(1800.0, n, 60.0, samples),
+            decay=_Dim(0.5, n, 0.05, samples), sample_count=samples),
+        aggregate_reliability=0.9, last_update_ts=ts)
+
+    st = models["onset_delay"]._state
+    models["onset_delay"]._state = dataclasses.replace(
+        st, general=OnsetDelayBucket("general", onset_delay_min, n, 1.0, samples, ts),
+        aggregate_reliability=0.9, last_update_ts=ts)

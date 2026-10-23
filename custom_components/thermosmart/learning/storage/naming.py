@@ -3,7 +3,7 @@
 Store keys are derived solely from the opaque ``learning_zone_id`` and the
 track/segment context — never from visible zone names or entity ids. Keys are
 filesystem-safe (Home Assistant persists each store as a ``.storage`` file),
-versioned, and collision-free across zones, tracks and segments.
+versioned, and collision-free across zones.
 
 Neutral naming migration (Learning Naming / Storage-Key audit):
   The historical ``thermosmart_le2__`` prefix exposed an internal generation
@@ -18,8 +18,7 @@ Neutral naming migration (Learning Naming / Storage-Key audit):
   legacy key itself is never deleted by this, only on explicit zone removal).
   The plain ``*_key()`` functions below therefore now only describe the
   legacy half of each pair; production code builds keys through the
-  ``*_key_pair()`` functions instead. Suffixes (``container``, ``models``,
-  ``episodes``, ...) are identical between the two prefixes — only the
+  ``*_key_pair()`` functions instead. Suffixes (``episodes``, ...) are identical between the two prefixes — only the
   domain/generation prefix differs.
 """
 from __future__ import annotations
@@ -28,8 +27,6 @@ import hashlib
 import re
 from dataclasses import dataclass
 from typing import Optional
-
-from ..raw_schemas import RawTrackName
 
 # Identifies the learning-engine generation these stores belong to.
 # Distinct from the v1 store key ``thermosmart_learning_data``.
@@ -65,50 +62,13 @@ def validate_learning_zone_id(learning_zone_id: str) -> str:
     return learning_zone_id
 
 
-def _track_component(track_name: RawTrackName) -> str:
-    if not isinstance(track_name, RawTrackName):
-        raise StorageNamingError("track_name must be a RawTrackName")
-    value = track_name.value
-    if "__" in value:  # defensive: canonical track values never contain "__"
-        raise StorageNamingError(f"unsafe track component: {value!r}")
-    return value
-
-
 def _key(learning_zone_id: str, suffix: str) -> str:
     zid = validate_learning_zone_id(learning_zone_id)
     return f"{_PREFIX}__{zid}__{suffix}"
 
 
-def container_key(learning_zone_id: str) -> str:
-    return _key(learning_zone_id, "container")
-
-
-def raw_index_key(learning_zone_id: str, track_name: RawTrackName) -> str:
-    return _key(learning_zone_id, f"raw_{_track_component(track_name)}_index")
-
-
-def raw_segment_key(
-    learning_zone_id: str, track_name: RawTrackName, sequence_number: int
-) -> str:
-    if not isinstance(sequence_number, int) or sequence_number < 0:
-        raise StorageNamingError("sequence_number must be a non-negative int")
-    return _key(
-        learning_zone_id,
-        f"raw_{_track_component(track_name)}_seg_{sequence_number}",
-    )
-
-
 def episodes_key(learning_zone_id: str) -> str:
     return _key(learning_zone_id, "episodes")
-
-
-def model_state_key(learning_zone_id: str) -> str:
-    return _key(learning_zone_id, "models")
-
-
-def global_index_key() -> str:
-    """The single global index store key (a reconstructable cache)."""
-    return f"{_PREFIX}__global_index"
 
 
 def adaptation_history_key(learning_zone_id: str) -> str:
@@ -180,51 +140,10 @@ def _neutral_key(learning_zone_id: str, suffix: str) -> str:
     return f"{LEARNING_STORAGE_PREFIX}__{zid}__{suffix}"
 
 
-def container_key_pair(learning_zone_id: str) -> LearningStorageKeyPair:
-    return LearningStorageKeyPair(
-        current=_neutral_key(learning_zone_id, "container"),
-        legacy=container_key(learning_zone_id),
-    )
-
-
-def raw_index_key_pair(learning_zone_id: str, track_name: RawTrackName) -> LearningStorageKeyPair:
-    suffix = f"raw_{_track_component(track_name)}_index"
-    return LearningStorageKeyPair(
-        current=_neutral_key(learning_zone_id, suffix),
-        legacy=raw_index_key(learning_zone_id, track_name),
-    )
-
-
-def raw_segment_key_pair(
-    learning_zone_id: str, track_name: RawTrackName, sequence_number: int
-) -> LearningStorageKeyPair:
-    if not isinstance(sequence_number, int) or sequence_number < 0:
-        raise StorageNamingError("sequence_number must be a non-negative int")
-    suffix = f"raw_{_track_component(track_name)}_seg_{sequence_number}"
-    return LearningStorageKeyPair(
-        current=_neutral_key(learning_zone_id, suffix),
-        legacy=raw_segment_key(learning_zone_id, track_name, sequence_number),
-    )
-
-
 def episodes_key_pair(learning_zone_id: str) -> LearningStorageKeyPair:
     return LearningStorageKeyPair(
         current=_neutral_key(learning_zone_id, "episodes"),
         legacy=episodes_key(learning_zone_id),
-    )
-
-
-def model_state_key_pair(learning_zone_id: str) -> LearningStorageKeyPair:
-    return LearningStorageKeyPair(
-        current=_neutral_key(learning_zone_id, "models"),
-        legacy=model_state_key(learning_zone_id),
-    )
-
-
-def global_index_key_pair() -> LearningStorageKeyPair:
-    return LearningStorageKeyPair(
-        current=f"{LEARNING_STORAGE_PREFIX}__global_index",
-        legacy=global_index_key(),
     )
 
 

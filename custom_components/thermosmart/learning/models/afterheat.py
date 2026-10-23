@@ -345,7 +345,6 @@ class AfterheatModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_raw_tracks: tuple[str, ...] = ()
     consumed_episode_types = (EpisodeType.AFTERHEAT.value,)
     required_features = ("indoor_temp", "trv_setpoint")
     optional_features = ("valve_opening", "hvac_action", "outdoor_temp",
@@ -927,7 +926,7 @@ def afterheat_model_definition():
     return ModelDefinition(
         model_name=MODEL_NAME, model_factory=lambda: AfterheatModel("__definition__"),
         model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_raw_tracks=(), consumed_episode_types=(EpisodeType.AFTERHEAT,),
+        consumed_episode_types=(EpisodeType.AFTERHEAT,),
         supported_prediction_types=(
             PredictionType.EXPECTED_OVERSHOOT, PredictionType.AFTERHEAT_TIME_TO_PEAK,
             PredictionType.AFTERHEAT_DURATION),

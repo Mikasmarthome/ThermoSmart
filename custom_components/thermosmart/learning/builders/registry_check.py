@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..registry import EpisodeRegistry, RawTrackRegistry
+from ..registry import EpisodeRegistry
 from .base import BUILDER_VERSION
 
 
@@ -18,7 +18,6 @@ class BuilderRegistryError(Exception):
 def validate_builder_against_registry(
     builder: Any,
     episode_registry: EpisodeRegistry,
-    raw_registry: RawTrackRegistry | None = None,
 ) -> list[str]:
     """Return a list of error strings; empty means the builder is consistent."""
     errors: list[str] = []
@@ -39,10 +38,5 @@ def validate_builder_against_registry(
             f"{definition.max_trajectory_points}")
     if definition.materialized != builder.materialized:
         errors.append("materialized flag mismatch")
-
-    if raw_registry is not None:
-        for track in definition.consumed_raw_tracks:
-            if not raw_registry.contains(track):
-                errors.append(f"consumed raw track '{track.value}' is not registered")
 
     return errors

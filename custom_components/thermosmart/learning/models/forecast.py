@@ -30,8 +30,7 @@ from ..contracts import (
     RejectionReason,
     UpdateEligibilityResult,
 )
-from ..episode_schemas import EpisodeType
-from ..raw_schemas import ForecastDecisionEvent, ForecastEvaluationEvent, RawTrackName
+from ..raw_schemas import ForecastDecisionEvent, ForecastEvaluationEvent
 from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
 
 MODEL_VERSION = 1
@@ -326,8 +325,6 @@ class ForecastModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_raw_tracks = (RawTrackName.FORECAST_DECISION.value,
-                           RawTrackName.FORECAST_EVALUATION.value)
     consumed_episode_types: tuple[str, ...] = ()
     required_features = ("forecast",)
     optional_features = ("outdoor_temp", "wind_speed", "solar_radiation")
@@ -916,7 +913,6 @@ def forecast_model_definition():
     return ModelDefinition(
         model_name=MODEL_NAME, model_factory=lambda: ForecastModel("__definition__"),
         model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_raw_tracks=(RawTrackName.FORECAST_DECISION, RawTrackName.FORECAST_EVALUATION),
         consumed_episode_types=(),
         supported_prediction_types=(
             PredictionType.FORECAST_TRUST, PredictionType.FORECAST_BIAS,

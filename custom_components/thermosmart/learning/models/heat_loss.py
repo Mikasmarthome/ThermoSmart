@@ -268,7 +268,6 @@ class HeatLossModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_raw_tracks: tuple[str, ...] = ()
     consumed_episode_types = (EpisodeType.PASSIVE_COOLING.value,)
     required_features = ("indoor_temp", "target")
     optional_features = ("outdoor_temp", "wind_speed", "solar_radiation", "radiator_profile")
@@ -800,7 +799,7 @@ def heat_loss_model_definition():
     return ModelDefinition(
         model_name=MODEL_NAME, model_factory=lambda: HeatLossModel("__definition__"),
         model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_raw_tracks=(), consumed_episode_types=(EpisodeType.PASSIVE_COOLING,),
+        consumed_episode_types=(EpisodeType.PASSIVE_COOLING,),
         supported_prediction_types=(PredictionType.HEAT_LOSS_RATE, PredictionType.COOLING_MINUTES),
         required_features=("indoor_temp", "target"),
         optional_features=("outdoor_temp", "wind_speed", "solar_radiation", "radiator_profile"),

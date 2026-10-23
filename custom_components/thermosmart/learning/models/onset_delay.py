@@ -509,7 +509,6 @@ class OnsetDelayModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_raw_tracks: tuple[str, ...] = ()
     consumed_episode_types = (EpisodeType.HEATING.value,)
     required_features = ("indoor_temp",)
     optional_features = ("outdoor_temp", "time_bucket", "device_profile")
@@ -1170,7 +1169,6 @@ def onset_delay_model_definition():
         model_factory=lambda: OnsetDelayModel("__definition__"),
         model_version=MODEL_VERSION,
         parameter_version=PARAMETER_VERSION,
-        consumed_raw_tracks=(),
         consumed_episode_types=(EpisodeType.HEATING,),
         supported_prediction_types=(PredictionType.ONSET_DELAY,),
         required_features=("indoor_temp",),

@@ -307,10 +307,10 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: lifecycle state stays in-memory only
-        # Raw/episode capture storage — live-reachable store-access facade.
+        # Episode capture storage — store-access facade.
         # Construction itself performs zero storage I/O: it only holds a
-        # StoreFactory reference plus the canonical raw-track/episode-type
-        # registries. The returned handles ARE actively saved/loaded below
+        # StoreFactory reference plus the canonical episode-type
+        # registry. The returned handles ARE actively saved/loaded below
         # (episodes_store(), support_critical_events_store(), research_daily_store()).
         self._capture_stores = None
         try:

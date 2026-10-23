@@ -1,4 +1,4 @@
-"""Live-reachable store-access facade for Learning raw/episode capture.
+"""Store-access facade for Learning episode capture.
 
 Constructing ``LearningCaptureStores`` performs NO storage I/O — it only holds
 a ``StoreFactory`` reference plus the canonical registries (built in
@@ -16,13 +16,10 @@ from __future__ import annotations
 
 from typing import Optional
 
-from ..raw_schemas import RawTrackName
-from ..registry import EpisodeRegistry, RawTrackRegistry
-from .capture_registry import build_episode_registry, build_raw_track_registry
+from ..registry import EpisodeRegistry
+from .capture_registry import build_episode_registry
 from .stores import (
     EpisodesStore,
-    RawSegmentIndexStore,
-    RawSegmentStore,
     ResearchDailyStore,
     StoreFactory,
     SupportCriticalEventStore,
@@ -30,7 +27,7 @@ from .stores import (
 
 
 class LearningCaptureStores:
-    """Per-zone, lazy accessor for Learning raw segment / episode stores.
+    """Per-zone, lazy accessor for the Learning episode / support / research stores.
 
     Holds only a ``StoreFactory`` + registries — no cached store instances,
     no open file handles, no background tasks, no writes. Every accessor call
@@ -43,12 +40,10 @@ class LearningCaptureStores:
         factory: StoreFactory,
         learning_zone_id: str,
         *,
-        raw_registry: Optional[RawTrackRegistry] = None,
         episode_registry: Optional[EpisodeRegistry] = None,
     ) -> None:
         self._factory = factory
         self._zone = learning_zone_id
-        self._raw_registry = raw_registry if raw_registry is not None else build_raw_track_registry()
         self._episode_registry = (
             episode_registry if episode_registry is not None else build_episode_registry()
         )
@@ -58,27 +53,8 @@ class LearningCaptureStores:
         return self._zone
 
     @property
-    def raw_registry(self) -> RawTrackRegistry:
-        return self._raw_registry
-
-    @property
     def episode_registry(self) -> EpisodeRegistry:
         return self._episode_registry
-
-    def raw_segment_store(self, track_name: RawTrackName) -> RawSegmentStore:
-        """Return a RawSegmentStore for this zone's given track.
-
-        Raises UnknownDefinitionError if the track is not a declared raw
-        track — this is a programmer error to surface immediately, not a
-        runtime condition to swallow.
-        """
-        self._raw_registry.get(track_name)  # validates the track is declared
-        return RawSegmentStore(self._factory, self._zone, track_name)
-
-    def raw_segment_index_store(self, track_name: RawTrackName) -> RawSegmentIndexStore:
-        """Return a RawSegmentIndexStore for this zone's given track."""
-        self._raw_registry.get(track_name)  # validates the track is declared
-        return RawSegmentIndexStore(self._factory, self._zone, track_name)
 
     def episodes_store(self) -> EpisodesStore:
         """Return the single per-zone EpisodesStore (all episode types share it)."""

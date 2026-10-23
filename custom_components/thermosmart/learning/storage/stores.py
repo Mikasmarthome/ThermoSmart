@@ -12,16 +12,10 @@ from typing import Any, Optional, Protocol, runtime_checkable
 
 from homeassistant.helpers.storage import Store
 
-from ..raw_schemas import RawTrackName
 from . import naming
 
 # Per-store schema versions (independent of the key-layout version).
-ZONE_METADATA_STORE_VERSION = 1
-RAW_SEGMENT_STORE_VERSION = 1
-RAW_INDEX_STORE_VERSION = 1
 EPISODES_STORE_VERSION = 1
-MODEL_STATE_STORE_VERSION = 1
-GLOBAL_INDEX_STORE_VERSION = 1
 ADAPTATION_HISTORY_STORE_VERSION = 1
 APPLICATION_LIFECYCLE_STORE_VERSION = 1
 SUPPORT_CRITICAL_EVENT_STORE_VERSION = 1
@@ -170,46 +164,6 @@ class _VersionedStore:
                 await self._legacy_store.async_remove()
 
 
-class ZoneMetadataStore(_VersionedStore):
-    """Authority for ``learning_zone_id`` and store versions of a zone."""
-
-    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(factory, naming.container_key_pair(learning_zone_id),
-                         ZONE_METADATA_STORE_VERSION)
-
-
-class RawSegmentIndexStore(_VersionedStore):
-    """Reconstructable cache of a track's segment layout."""
-
-    def __init__(self, factory: StoreFactory, learning_zone_id: str,
-                 track_name: RawTrackName) -> None:
-        super().__init__(factory, naming.raw_index_key_pair(learning_zone_id, track_name),
-                         RAW_INDEX_STORE_VERSION)
-
-
-class RawSegmentStore:
-    """One store per raw segment, addressed by sequence number."""
-
-    def __init__(self, factory: StoreFactory, learning_zone_id: str,
-                 track_name: RawTrackName) -> None:
-        self._factory = factory
-        self._zone = learning_zone_id
-        self._track = track_name
-
-    def _segment(self, sequence_number: int) -> _VersionedStore:
-        key = naming.raw_segment_key_pair(self._zone, self._track, sequence_number)
-        return _VersionedStore(self._factory, key, RAW_SEGMENT_STORE_VERSION)
-
-    async def load_segment(self, sequence_number: int) -> Optional[Any]:
-        return await self._segment(sequence_number).load()
-
-    async def save_segment(self, sequence_number: int, payload: Any) -> None:
-        await self._segment(sequence_number).save(payload)
-
-    async def delete_segment(self, sequence_number: int) -> None:
-        await self._segment(sequence_number).delete()
-
-
 class EpisodesStore(_VersionedStore):
     """Generic typed container for materialised episodes (form only in Phase 3)."""
 
@@ -218,27 +172,10 @@ class EpisodesStore(_VersionedStore):
                          EPISODES_STORE_VERSION)
 
 
-class ModelStateStore(_VersionedStore):
-    """Generic versioned container for model state (form only in Phase 3)."""
-
-    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(factory, naming.model_state_key_pair(learning_zone_id),
-                         MODEL_STATE_STORE_VERSION)
-
-
-class GlobalIndexStore(_VersionedStore):
-    """Fully reconstructable global cache; never an identity authority."""
-
-    def __init__(self, factory: StoreFactory) -> None:
-        super().__init__(factory, naming.global_index_key_pair(),
-                         GLOBAL_INDEX_STORE_VERSION)
-
-
 class AdaptationHistoryStore(_VersionedStore):
     """Versioned per-zone store for passive adaptation candidate history.
 
-    Keyed by ``adaptation_history_key(learning_zone_id)``. Not part of the
-    core initialization components — reset separately by ``reset_v2_learning_state``.
+    Keyed by ``adaptation_history_key(learning_zone_id)``.
     """
 
     def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
@@ -252,8 +189,7 @@ class AdaptationHistoryStore(_VersionedStore):
 class ApplicationLifecycleStore(_VersionedStore):
     """Versioned per-zone store for adaptation application lifecycle state.
 
-    Keyed by ``application_lifecycle_key(learning_zone_id)``. Not part of the
-    core initialization components — reset separately by ``reset_v2_learning_state``.
+    Keyed by ``application_lifecycle_key(learning_zone_id)``.
     Empty on first load; non-fatal on missing or corrupt data.
     """
 

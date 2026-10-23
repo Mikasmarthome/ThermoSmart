@@ -23,18 +23,12 @@ from __future__ import annotations
 from unittest.mock import patch
 
 from custom_components.thermosmart.const import STORAGE_KEY
-from custom_components.thermosmart.learning.raw_schemas import RawTrackName
 from custom_components.thermosmart.learning.runtime import ha_store
 from custom_components.thermosmart.learning.runtime.ha_store import HomeAssistantStoreAdapter
 from custom_components.thermosmart.learning.storage import naming
 from custom_components.thermosmart.learning.storage.stores import (
     EpisodesStore,
-    GlobalIndexStore,
-    ModelStateStore,
-    RawSegmentIndexStore,
-    RawSegmentStore,
     StoreVersionError,
-    ZoneMetadataStore,
 )
 
 
@@ -46,7 +40,7 @@ class TestNeutralPrefixConstants:
 
     def test_legacy_prefix_constant_matches_current_production_prefix(self):
         assert naming.LEGACY_LEARNING_STORAGE_PREFIX == "thermosmart_le2"
-        assert naming.container_key("lz_1").startswith(
+        assert naming.episodes_key("lz_1").startswith(
             f"{naming.LEGACY_LEARNING_STORAGE_PREFIX}__"
         )
 
@@ -54,25 +48,8 @@ class TestNeutralPrefixConstants:
 class TestExistingKeyFunctionsUnchanged:
     """Production behavior must be identical to before this commit."""
 
-    def test_container_key_unchanged(self):
-        assert naming.container_key("lz_1") == "thermosmart_le2__lz_1__container"
-
     def test_episodes_key_unchanged(self):
         assert naming.episodes_key("lz_1") == "thermosmart_le2__lz_1__episodes"
-
-    def test_model_state_key_unchanged(self):
-        assert naming.model_state_key("lz_1") == "thermosmart_le2__lz_1__models"
-
-    def test_global_index_key_unchanged(self):
-        assert naming.global_index_key() == "thermosmart_le2__global_index"
-
-    def test_raw_index_key_unchanged(self):
-        assert naming.raw_index_key("lz_1", RawTrackName.ROOM) == \
-            "thermosmart_le2__lz_1__raw_room_index"
-
-    def test_raw_segment_key_unchanged(self):
-        assert naming.raw_segment_key("lz_1", RawTrackName.ROOM, 3) == \
-            "thermosmart_le2__lz_1__raw_room_seg_3"
 
     def test_adaptation_history_key_unchanged(self):
         assert naming.adaptation_history_key("lz_1") == \
@@ -95,30 +72,10 @@ class TestKeyPairsComputable:
     """Every store type must have a computable (current, legacy) pair —
     current always neutral, legacy always the existing production key."""
 
-    def test_container_key_pair(self):
-        pair = naming.container_key_pair("lz_1")
-        assert pair.current == "thermosmart_learning__lz_1__container"
-        assert pair.legacy == "thermosmart_le2__lz_1__container"
-
     def test_episodes_key_pair(self):
         pair = naming.episodes_key_pair("lz_1")
         assert pair.current == "thermosmart_learning__lz_1__episodes"
         assert pair.legacy == naming.episodes_key("lz_1")
-
-    def test_model_state_key_pair(self):
-        pair = naming.model_state_key_pair("lz_1")
-        assert pair.current == "thermosmart_learning__lz_1__models"
-        assert pair.legacy == naming.model_state_key("lz_1")
-
-    def test_raw_index_key_pair(self):
-        pair = naming.raw_index_key_pair("lz_1", RawTrackName.TRV)
-        assert pair.current == "thermosmart_learning__lz_1__raw_trv_index"
-        assert pair.legacy == naming.raw_index_key("lz_1", RawTrackName.TRV)
-
-    def test_raw_segment_key_pair(self):
-        pair = naming.raw_segment_key_pair("lz_1", RawTrackName.TRV, 7)
-        assert pair.current == "thermosmart_learning__lz_1__raw_trv_seg_7"
-        assert pair.legacy == naming.raw_segment_key("lz_1", RawTrackName.TRV, 7)
 
     def test_adaptation_history_key_pair(self):
         pair = naming.adaptation_history_key_pair("lz_1")
@@ -140,21 +97,13 @@ class TestKeyPairsComputable:
         assert pair.current == "thermosmart_learning__lz_1__research_daily"
         assert pair.legacy == naming.research_daily_key("lz_1")
 
-    def test_global_index_key_pair(self):
-        pair = naming.global_index_key_pair()
-        assert pair.current == "thermosmart_learning__global_index"
-        assert pair.legacy == "thermosmart_le2__global_index"
-
     def test_no_current_key_contains_legacy_codename(self):
         pairs = [
-            naming.container_key_pair("lz_1"),
             naming.episodes_key_pair("lz_1"),
-            naming.model_state_key_pair("lz_1"),
             naming.adaptation_history_key_pair("lz_1"),
             naming.application_lifecycle_key_pair("lz_1"),
             naming.support_critical_events_key_pair("lz_1"),
             naming.research_daily_key_pair("lz_1"),
-            naming.global_index_key_pair(),
         ]
         for pair in pairs:
             assert "le2" not in pair.current
@@ -171,12 +120,6 @@ class TestLegacyStoreDataKeyUntouched:
     def test_storage_key_has_no_generation_codename(self):
         for token in ("le1", "le2", "v1", "v2", "legacy"):
             assert token not in STORAGE_KEY
-
-    def test_global_index_key_pair_is_distinct_from_legacy_v1_store(self):
-        pair = naming.global_index_key_pair()
-        assert pair.current != STORAGE_KEY
-        assert pair.legacy != STORAGE_KEY
-
 
 class TestRuntimeSnapshotKeyPair:
     """ha_store.py's runtime-snapshot key (hashed zone segment), mirrored via
@@ -260,14 +203,14 @@ class FakeFactory:
 
 class TestVersionedStoreMigration:
     """learning/storage/stores.py's _VersionedStore, exercised through
-    ZoneMetadataStore (any *_key_pair()-based subclass behaves identically)."""
+    EpisodesStore (any *_key_pair()-based subclass behaves identically)."""
 
     async def test_new_key_present_loads_new_without_touching_legacy(self):
         factory = FakeFactory()
-        pair = naming.container_key_pair("lz_1")
+        pair = naming.episodes_key_pair("lz_1")
         factory.stores[pair.current] = FakeStore()
         factory.stores[pair.current].data = {"store_schema_version": 1, "data": {"v": "new"}}
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
 
         result = await store.load()
 
@@ -276,10 +219,10 @@ class TestVersionedStoreMigration:
 
     async def test_new_key_missing_legacy_present_loads_legacy_and_writes_new(self):
         factory = FakeFactory()
-        pair = naming.container_key_pair("lz_1")
+        pair = naming.episodes_key_pair("lz_1")
         factory.stores[pair.legacy] = FakeStore()
         factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"v": "old"}}
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
 
         result = await store.load()
 
@@ -289,10 +232,10 @@ class TestVersionedStoreMigration:
 
     async def test_migration_is_idempotent(self):
         factory = FakeFactory()
-        pair = naming.container_key_pair("lz_1")
+        pair = naming.episodes_key_pair("lz_1")
         factory.stores[pair.legacy] = FakeStore()
         factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"v": "old"}}
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
 
         first = await store.load()
         saves_after_first = factory.stores[pair.current].saves
@@ -303,13 +246,13 @@ class TestVersionedStoreMigration:
 
     async def test_both_keys_absent_returns_none(self):
         factory = FakeFactory()
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
         assert await store.load() is None
 
     async def test_new_writes_use_new_key_only(self):
         factory = FakeFactory()
-        pair = naming.container_key_pair("lz_1")
-        store = ZoneMetadataStore(factory, "lz_1")
+        pair = naming.episodes_key_pair("lz_1")
+        store = EpisodesStore(factory, "lz_1")
 
         await store.save({"v": "fresh"})
 
@@ -321,12 +264,12 @@ class TestVersionedStoreMigration:
         """A version mismatch on the new key must raise, not be swallowed by
         quietly returning legacy data instead — conservative-by-design."""
         factory = FakeFactory()
-        pair = naming.container_key_pair("lz_1")
+        pair = naming.episodes_key_pair("lz_1")
         factory.stores[pair.current] = FakeStore()
         factory.stores[pair.current].data = {"store_schema_version": 999, "data": {}}
         factory.stores[pair.legacy] = FakeStore()
         factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"v": "old"}}
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
 
         import pytest
         with pytest.raises(StoreVersionError):
@@ -334,8 +277,8 @@ class TestVersionedStoreMigration:
 
     async def test_delete_removes_both_new_and_legacy(self):
         factory = FakeFactory()
-        pair = naming.container_key_pair("lz_1")
-        store = ZoneMetadataStore(factory, "lz_1")
+        pair = naming.episodes_key_pair("lz_1")
+        store = EpisodesStore(factory, "lz_1")
         await store.save({"v": 1})
 
         await store.delete()
@@ -346,13 +289,13 @@ class TestVersionedStoreMigration:
     async def test_multi_zone_migration_does_not_cross_contaminate(self):
         """Migrating zone A's legacy data must never populate zone B's keys."""
         factory = FakeFactory()
-        pair_a = naming.container_key_pair("lz_a")
-        pair_b = naming.container_key_pair("lz_b")
+        pair_a = naming.episodes_key_pair("lz_a")
+        pair_b = naming.episodes_key_pair("lz_b")
         factory.stores[pair_a.legacy] = FakeStore()
         factory.stores[pair_a.legacy].data = {"store_schema_version": 1, "data": {"zone": "a"}}
 
-        store_a = ZoneMetadataStore(factory, "lz_a")
-        store_b = ZoneMetadataStore(factory, "lz_b")
+        store_a = EpisodesStore(factory, "lz_a")
+        store_b = EpisodesStore(factory, "lz_b")
 
         result_a = await store_a.load()
         result_b = await store_b.load()
@@ -374,43 +317,6 @@ class TestEachStoreTypeMigrates:
         store = EpisodesStore(factory, "lz_1")
         assert await store.load() == {"e": 1}
         assert factory.stores[pair.current].data["data"] == {"e": 1}
-
-    async def test_models_old_to_new(self):
-        factory = FakeFactory()
-        pair = naming.model_state_key_pair("lz_1")
-        factory.stores[pair.legacy] = FakeStore()
-        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"m": 1}}
-        store = ModelStateStore(factory, "lz_1")
-        assert await store.load() == {"m": 1}
-        assert factory.stores[pair.current].data["data"] == {"m": 1}
-
-    async def test_global_index_old_to_new(self):
-        factory = FakeFactory()
-        pair = naming.global_index_key_pair()
-        factory.stores[pair.legacy] = FakeStore()
-        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"g": 1}}
-        store = GlobalIndexStore(factory)
-        assert await store.load() == {"g": 1}
-        assert factory.stores[pair.current].data["data"] == {"g": 1}
-
-    async def test_raw_index_old_to_new(self):
-        factory = FakeFactory()
-        pair = naming.raw_index_key_pair("lz_1", RawTrackName.ROOM)
-        factory.stores[pair.legacy] = FakeStore()
-        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"i": 1}}
-        store = RawSegmentIndexStore(factory, "lz_1", RawTrackName.ROOM)
-        assert await store.load() == {"i": 1}
-        assert factory.stores[pair.current].data["data"] == {"i": 1}
-
-    async def test_raw_segment_old_to_new(self):
-        factory = FakeFactory()
-        pair = naming.raw_segment_key_pair("lz_1", RawTrackName.ROOM, 0)
-        factory.stores[pair.legacy] = FakeStore()
-        factory.stores[pair.legacy].data = {"store_schema_version": 1, "data": {"s": 1}}
-        store = RawSegmentStore(factory, "lz_1", RawTrackName.ROOM)
-        assert await store.load_segment(0) == {"s": 1}
-        assert factory.stores[pair.current].data["data"] == {"s": 1}
-
 
 class TestRuntimeSnapshotAdapterMigration:
     """HomeAssistantStoreAdapter — the runtime-snapshot store (hashed zone

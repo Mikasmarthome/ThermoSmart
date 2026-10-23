@@ -1,18 +1,15 @@
-"""Pure retention-enforcement decisions for Learning raw segments and episodes.
+"""Pure retention-enforcement decisions for Learning episodes.
 
-Operates only on already-loaded data structures — a :class:`SegmentIndex` plus
-a mapping of sealed segment metadata dicts, or an ``EpisodesStore`` payload
-dict. Performs no storage I/O itself; the episode persistence layer calls these
+Operates only on an already-loaded ``EpisodesStore`` payload dict. Performs no
+storage I/O itself; the episode persistence layer calls these
 pure functions.
 
 Conservative by design, matching the existing pruning style used for
 adaptation history (``history_store_schema.py``) and application lifecycle
 state (``application_state.py``):
 
-  - A segment/episode with a missing or malformed timestamp is always kept —
+  - An episode with a missing or malformed timestamp is always kept —
     it can never be safely aged out.
-  - The active (unsealed) raw segment is never a deletion candidate, even if
-    it is accidentally present in the supplied metadata mapping.
   - When ``RetentionPolicy.max_records`` triggers a hard cap, only entries
     with a known, parseable timestamp/sequence are eligible for eviction —
     unknown entries are excluded from eviction, not assumed oldest.
@@ -42,9 +39,6 @@ def _parse_iso_utc(value: object) -> Optional[datetime]:
         return dt
     except (ValueError, AttributeError):
         return None
-
-
-# ── Raw segment retention ────────────────────────────────────────────────────
 
 
 # ── Episode retention ─────────────────────────────────────────────────────────

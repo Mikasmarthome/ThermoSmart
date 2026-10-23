@@ -13,18 +13,6 @@ from datetime import datetime, timezone
 import pytest
 
 from custom_components.thermosmart.learning import reset
-from custom_components.thermosmart.learning.clock import FakeClock
-from custom_components.thermosmart.learning.contracts import ExportScope
-from custom_components.thermosmart.learning.init_state import ResetReason
-from custom_components.thermosmart.learning.raw_schemas import RawTrackName, RoomObservation
-from custom_components.thermosmart.learning.registry import (
-    EpisodeRegistry,
-    ModelRegistry,
-    PrivacyClass,
-    RawTrackDefinition,
-    RawTrackRegistry,
-    RetentionPolicy,
-)
 from custom_components.thermosmart.learning.storage import naming
 from custom_components.thermosmart.learning.storage.stores import (
     AdaptationHistoryStore,
@@ -36,7 +24,6 @@ from custom_components.thermosmart.learning.storage.stores import (
     StorageWriteReason,
     StoreVersionError,
     SupportCriticalEventStore,
-    ZoneMetadataStore,
 )
 
 _T0 = datetime(2026, 7, 7, 5, 0, 0, tzinfo=timezone.utc)
@@ -235,7 +222,7 @@ class TestMultiZoneIsolation:
 class TestVersionedStoreEnvelopeStamp:
     async def test_no_now_utc_leaves_envelope_unchanged(self):
         factory = FakeFactory()
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
         await store.save({"x": 1})
         raw = factory.stores[store.key].data
         assert "created_at_utc" not in raw
@@ -244,7 +231,7 @@ class TestVersionedStoreEnvelopeStamp:
 
     async def test_now_utc_stamps_created_and_updated(self):
         factory = FakeFactory()
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
         await store.save({"x": 1}, now_utc=_T0)
         raw = factory.stores[store.key].data
         assert raw["created_at_utc"] == "2026-07-07T05:00:00Z"
@@ -253,7 +240,7 @@ class TestVersionedStoreEnvelopeStamp:
 
     async def test_created_at_utc_stable_across_stamped_saves(self):
         factory = FakeFactory()
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
         await store.save({"x": 1}, now_utc=_T0)
         await store.save({"x": 2}, now_utc=_T1)
         raw = factory.stores[store.key].data
@@ -262,7 +249,7 @@ class TestVersionedStoreEnvelopeStamp:
 
     async def test_old_payload_without_timestamps_still_loads(self):
         factory = FakeFactory()
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
         factory.stores[store.key].data = {"store_schema_version": 1, "data": {"legacy": True}}
         assert await store.load() == {"legacy": True}
 
@@ -271,7 +258,7 @@ class TestVersionedStoreEnvelopeStamp:
         corrupt the envelope — an unstamped save simply omits the fields
         going forward; it must not raise trying to read a prior stamp."""
         factory = FakeFactory()
-        store = ZoneMetadataStore(factory, "lz_1")
+        store = EpisodesStore(factory, "lz_1")
         await store.save({"x": 1}, now_utc=_T0)
         await store.save({"x": 2})  # no now_utc this time
         raw = factory.stores[store.key].data
@@ -279,103 +266,48 @@ class TestVersionedStoreEnvelopeStamp:
         assert "created_at_utc" not in raw  # this save didn't opt in
 
 
-# ── Commit B: reset.py wiring (init/reset/purge mark the metadata index) ────
-
-def _raw_registry() -> RawTrackRegistry:
-    reg = RawTrackRegistry()
-    reg.register(RawTrackDefinition(
-        track_name=RawTrackName.ROOM, schema_type=RoomObservation, track_schema_version=1,
-        privacy_class=PrivacyClass.LOW, allowed_export_scopes=(ExportScope.SUPPORT,),
-        retention=RetentionPolicy(), segmented=True, immutable_events=False))
-    return reg
-
-
-def _registries() -> dict:
-    return {
-        "raw_registry": _raw_registry(),
-        "episode_registry": EpisodeRegistry(),
-        "model_registry": ModelRegistry(),
-    }
-
-
-class TestResetWiringMarksWritten:
-    async def test_ensure_v2_initialized_marks_container_models_episodes_raw_index(self):
-        factory = FakeFactory()
-        clock = FakeClock(_T0)
-        result = await reset.ensure_v2_initialized(
-            factory, "lz_1", clock=clock, **_registries())
-        assert result.status.value == "initialized"
-
-        meta = StorageMetadataStore(factory, "lz_1")
-        summary = await meta.get_store_summary()
-        stores = summary["stores"]
-        for name in ("container", "models", "episodes", "raw_index:room"):
-            assert stores[name]["exists"] is True
-            assert stores[name]["last_write_reason"] == "reset"
-            assert stores[name]["created_at_utc"] == "2026-07-07T05:00:00Z"
-
-
-class TestResetAsymmetryWiring:
-    async def test_reset_marks_deleted_stores_missing_but_leaves_support_research_untouched(self):
-        factory = FakeFactory()
-        clock = FakeClock(_T0)
-        await reset.ensure_v2_initialized(factory, "lz_1", clock=clock, **_registries())
-
-        # Simulate Support/Research having been written by production runtime —
-        # reset_v2_learning_state must not touch these (pre-existing asymmetry).
-        meta = StorageMetadataStore(factory, "lz_1")
-        await meta.mark_store_written(
-            "support_critical_events", StorageWriteReason.SUPPORT_EVENT_APPEND, _T0)
-        await meta.mark_store_written(
-            "research_daily", StorageWriteReason.RESEARCH_DAILY_UPDATE, _T0)
-
-        clock.set_utc(_T1)
-        await reset.reset_v2_learning_state(
-            factory, "lz_1", ResetReason.TEST, clock=clock, reinitialize=False,
-            **_registries())
-
-        summary = await meta.get_store_summary()
-        stores = summary["stores"]
-        for name in ("container", "models", "episodes", "raw_index:room"):
-            assert stores[name]["exists"] is False
-        # Untouched by this reset path — still reflects the earlier writes.
-        assert stores["support_critical_events"]["exists"] is True
-        assert stores["research_daily"]["exists"] is True
-
-
-class TestResetMetadataResilience:
-    async def test_corrupt_metadata_index_does_not_break_init(self):
-        """A pre-corrupted Storage-Metadata envelope must never block real
-        component creation during ensure_v2_initialized (mirrors
-        TestHaIntegrationSaveWiring.test_metadata_failure_does_not_break_real_save,
-        for the reset.py/init wiring path instead of ha_integration.py)."""
-        factory = FakeFactory()
-        pair = naming.storage_metadata_key_pair("lz_1")
-        factory.stores[pair.current] = FakeStore()
-        factory.stores[pair.current].data = {"store_schema_version": 999, "data": {}}
-
-        clock = FakeClock(_T0)
-        result = await reset.ensure_v2_initialized(
-            factory, "lz_1", clock=clock, **_registries())
-
-        assert result.status.value == "initialized"
-        episodes = EpisodesStore(factory, "lz_1")
-        assert await episodes.load() == {"episodes": {}}
-
-
 class TestPurgeWiringDeletesMetadataIndex:
     async def test_async_purge_zone_storage_deletes_storage_metadata_store(self):
         factory = FakeFactory()
-        clock = FakeClock(_T0)
-        await reset.ensure_v2_initialized(factory, "lz_1", clock=clock, **_registries())
+        meta = StorageMetadataStore(factory, "lz_1")
+        await meta.mark_store_written("episodes", StorageWriteReason.RESET, _T0)
 
         pair = naming.storage_metadata_key_pair("lz_1")
-        assert pair.current in factory.stores  # created by the init above
+        assert pair.current in factory.stores  # created by the write above
 
-        await reset.async_purge_zone_storage(factory, "lz_1", raw_registry=_raw_registry())
+        await reset.async_purge_zone_storage(factory, "lz_1")
 
         assert factory.stores[pair.current].removed is True
         assert factory.stores[pair.legacy].removed is True
+
+    async def test_purge_removes_every_store_the_integration_writes(self):
+        factory = FakeFactory()
+        stores = (
+            AdaptationHistoryStore(factory, "lz_1"),
+            ApplicationLifecycleStore(factory, "lz_1"),
+            EpisodesStore(factory, "lz_1"),
+            SupportCriticalEventStore(factory, "lz_1"),
+            ResearchDailyStore(factory, "lz_1"),
+        )
+        for store in stores:
+            await store.save({"x": 1})
+
+        result = await reset.async_purge_zone_storage(factory, "lz_1")
+
+        assert result.errors == ()
+        for store in stores:
+            assert await store.load() is None
+
+    async def test_purge_leaves_other_zones_alone(self):
+        factory = FakeFactory()
+        mine = EpisodesStore(factory, "lz_1")
+        other = EpisodesStore(factory, "lz_2")
+        await mine.save({"x": 1})
+        await other.save({"x": 2})
+
+        await reset.async_purge_zone_storage(factory, "lz_1")
+
+        assert await other.load() == {"x": 2}
 
 
 # ── Commit B: ha_integration.py save-path wiring ─────────────────────────────

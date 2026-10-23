@@ -1411,14 +1411,13 @@ async def _storage_metadata_stores_for_export(
     values ``StorageMetadataStore`` itself already restricts to (see
     stores.py's ``StorageMetadataStore`` docstring).
 
-    ``runtime_snapshot``/``raw_segments``/``global_index`` are intentionally
-    never shown here (neither ``exists: true`` nor ``exists: false``): none
-    of them is wired into ``StorageMetadataStore`` as of Commit B — showing
-    them at all would wrongly imply a tracking attempt that never happens
-    for these three. Every store name that actually appears below is exactly
-    whatever the zone's own index currently contains — no fixed/guessed
-    store-name list, so newly tracked raw tracks etc. show up without an
-    export.py change.
+    ``runtime_snapshot`` is intentionally never shown here (neither
+    ``exists: true`` nor ``exists: false``): it is not wired into
+    ``StorageMetadataStore`` — showing it would wrongly imply a tracking
+    attempt that never happens. Every store name that actually appears below is
+    exactly whatever the zone's own index currently contains — no fixed/guessed
+    store-name list, so newly tracked stores show up without an export.py
+    change.
 
     Never raises and never breaks the export it's used from: a missing or
     corrupt ``StorageMetadataStore`` (construction failure, ``StoreVersionError``

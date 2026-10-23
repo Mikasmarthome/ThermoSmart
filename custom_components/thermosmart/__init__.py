@@ -400,13 +400,10 @@ async def _async_purge_learning_zone_storage(
     from .const import STORAGE_KEY, STORAGE_VERSION
     from .learning.reset import async_purge_zone_storage
     from .learning.runtime.ha_store import HomeAssistantStoreAdapter
-    from .learning.storage.capture_registry import build_raw_track_registry
-    from .learning.storage.stores import GlobalIndexStore, HomeAssistantStoreFactory
+    from .learning.storage.stores import HomeAssistantStoreFactory
 
     factory = HomeAssistantStoreFactory(hass)
-    result = await async_purge_zone_storage(
-        factory, entry_id, raw_registry=build_raw_track_registry(),
-    )
+    result = await async_purge_zone_storage(factory, entry_id)
     if result.errors:
         _LOGGER.warning(
             "ThermoSmart: Lern-Storage-Bereinigung für Zone %s teilweise fehlgeschlagen: %s",
@@ -424,7 +421,6 @@ async def _async_purge_learning_zone_storage(
 
     if last_zone:
         await _HAStore(hass, STORAGE_VERSION, STORAGE_KEY).async_remove()
-        await GlobalIndexStore(factory).delete()
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:

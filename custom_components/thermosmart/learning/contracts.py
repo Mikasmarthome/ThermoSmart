@@ -388,7 +388,6 @@ class Model(Protocol):
     model_name: str
     model_version: int
     parameter_version: int
-    consumed_raw_tracks: tuple[str, ...]
     consumed_episode_types: tuple[str, ...]
     required_features: tuple[str, ...]
     optional_features: tuple[str, ...]

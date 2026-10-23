@@ -1,9 +1,8 @@
 """Registry foundations for Learning (pure Python, no Home Assistant).
 
-Three explicit, instantiable registries hold *declarations* (not active
+Two explicit, instantiable registries hold *declarations* (not active
 services):
 
-* ``RawTrackRegistry`` — raw record track definitions,
 * ``EpisodeRegistry``  — materialised episode definitions,
 * ``ModelRegistry``    — model definitions (factories + declared capabilities).
 
@@ -26,7 +25,6 @@ from typing import Any, Callable, Mapping, Optional
 
 from .contracts import (
     CapabilitySet,
-    ExportScope,
     Model,
     PredictionType,
 )
@@ -38,29 +36,9 @@ from .episode_schemas import (
     PassiveCoolingEpisode,
     WindowCoolingEpisode,
 )
-from .raw_schemas import (
-    ForecastDecisionEvent,
-    ForecastEvaluationEvent,
-    HeatingDriveEndEvent,
-    ManualCorrectionEvent,
-    RawTrackName,
-    RoomObservation,
-    TrvObservation,
-)
 
 
 # -- canonical schema pairings (authoritative name <-> schema type) -----------
-
-# Raw tracks that actually carry a raw record schema. Window cooling, afterheat
-# and outcome are EPISODES, not raw tracks, and therefore do not appear here.
-_CANONICAL_RAW_SCHEMA: dict[RawTrackName, type] = {
-    RawTrackName.ROOM: RoomObservation,
-    RawTrackName.TRV: TrvObservation,
-    RawTrackName.HEATING_DRIVE_END: HeatingDriveEndEvent,
-    RawTrackName.FORECAST_DECISION: ForecastDecisionEvent,
-    RawTrackName.FORECAST_EVALUATION: ForecastEvaluationEvent,
-    RawTrackName.MANUAL_CORRECTION: ManualCorrectionEvent,
-}
 
 _CANONICAL_EPISODE_SCHEMA: dict[EpisodeType, type] = {
     EpisodeType.HEATING: HeatingEpisode,
@@ -106,12 +84,6 @@ class InvalidCrossReferenceError(RegistryError):
 
 # -- privacy + retention ------------------------------------------------------
 
-class PrivacyClass(Enum):
-    """Coarse privacy classification used for export gating."""
-
-    LOW = "low"            # pure physics / numeric, not behaviour-revealing
-    BEHAVIORAL = "behavioral"  # may reveal occupancy / routine, never identifying
-
 
 @dataclass(frozen=True)
 class RetentionPolicy:
@@ -134,56 +106,6 @@ class RetentionPolicy:
             raise InvalidDefinitionError("max_age_days must be > 0 when set")
 
 
-# -- raw track definition -----------------------------------------------------
-
-@dataclass(frozen=True)
-class RawTrackDefinition:
-    """Declaration of one raw record track."""
-
-    track_name: RawTrackName
-    schema_type: type
-    track_schema_version: int
-    privacy_class: PrivacyClass
-    allowed_export_scopes: tuple[ExportScope, ...]
-    retention: RetentionPolicy
-    segmented: bool
-    immutable_events: bool
-    validator: Optional[Callable[[Any], list[str]]] = None
-
-    def __post_init__(self) -> None:
-        if not isinstance(self.track_name, RawTrackName):
-            raise InvalidDefinitionError("track_name must be a RawTrackName")
-        if not isinstance(self.schema_type, type):
-            raise InvalidDefinitionError("schema_type must be a class")
-        if self.track_schema_version <= 0:
-            raise InvalidDefinitionError("track_schema_version must be > 0")
-        canonical = _CANONICAL_RAW_SCHEMA.get(self.track_name)
-        if canonical is None:
-            raise InvalidDefinitionError(
-                f"'{self.track_name.value}' is not a raw track "
-                f"(it is an episode type, not a raw record schema)"
-            )
-        if self.schema_type is not canonical:
-            raise InvalidDefinitionError(
-                f"schema_type {self.schema_type.__name__} does not match the "
-                f"canonical schema {canonical.__name__} for track "
-                f"'{self.track_name.value}'"
-            )
-
-    def validate_record(self, record: Any) -> list[str]:
-        """Return a list of error strings; empty means the record is valid."""
-        errors: list[str] = []
-        if not isinstance(record, self.schema_type):
-            errors.append(
-                f"record is {type(record).__name__}, expected "
-                f"{self.schema_type.__name__}"
-            )
-            return errors  # type mismatch: do not run the extra validator
-        if self.validator is not None:
-            errors.extend(self.validator(record))
-        return errors
-
-
 # -- episode definition -------------------------------------------------------
 
 @dataclass(frozen=True)
@@ -198,7 +120,6 @@ class EpisodeDefinition:
     schema_type: type
     episode_schema_version: int
     builder_version: int
-    consumed_raw_tracks: tuple[RawTrackName, ...]
     max_trajectory_points: int
     max_duration_seconds: int
     retention: RetentionPolicy
@@ -227,11 +148,6 @@ class EpisodeDefinition:
                 f"schema_type does not match the canonical schema for episode "
                 f"'{self.episode_type.value}'"
             )
-        for track in self.consumed_raw_tracks:
-            if not isinstance(track, RawTrackName):
-                raise InvalidDefinitionError(
-                    "consumed_raw_tracks must contain RawTrackName values"
-                )
 
 
 # -- model definition ---------------------------------------------------------
@@ -249,7 +165,6 @@ class ModelDefinition:
     model_factory: Callable[[], Model]
     model_version: int
     parameter_version: int
-    consumed_raw_tracks: tuple[RawTrackName, ...]
     consumed_episode_types: tuple[EpisodeType, ...]
     supported_prediction_types: tuple[PredictionType, ...]
     required_features: tuple[str, ...]
@@ -309,44 +224,6 @@ class ModelDefinition:
 
 # -- registries ---------------------------------------------------------------
 
-class RawTrackRegistry:
-    """Holds raw track definitions, keyed by ``RawTrackName``."""
-
-    def __init__(self) -> None:
-        self._defs: dict[RawTrackName, RawTrackDefinition] = {}
-
-    def register(self, definition: RawTrackDefinition) -> None:
-        if not isinstance(definition, RawTrackDefinition):
-            raise InvalidDefinitionError("expected a RawTrackDefinition")
-        if definition.track_name in self._defs:
-            raise DuplicateRegistrationError(
-                f"raw track '{definition.track_name.value}' already registered"
-            )
-        self._defs[definition.track_name] = definition
-
-    def get(self, track_name: RawTrackName) -> RawTrackDefinition:
-        try:
-            return self._defs[track_name]
-        except KeyError:
-            raise UnknownDefinitionError(
-                f"unknown raw track '{getattr(track_name, 'value', track_name)}'"
-            ) from None
-
-    def contains(self, track_name: RawTrackName) -> bool:
-        return track_name in self._defs
-
-    def definitions(self) -> tuple[RawTrackDefinition, ...]:
-        return tuple(self._defs.values())
-
-    def names(self) -> tuple[RawTrackName, ...]:
-        return tuple(self._defs.keys())
-
-    def validate_record(self, track_name: RawTrackName, record: Any) -> list[str]:
-        return self.get(track_name).validate_record(record)
-
-    def __len__(self) -> int:
-        return len(self._defs)
-
 
 class EpisodeRegistry:
     """Holds episode definitions, keyed by ``EpisodeType``."""
@@ -379,17 +256,6 @@ class EpisodeRegistry:
 
     def names(self) -> tuple[EpisodeType, ...]:
         return tuple(self._defs.keys())
-
-    def unknown_consumed_tracks(
-        self, raw_registry: "RawTrackRegistry"
-    ) -> tuple[tuple[EpisodeType, RawTrackName], ...]:
-        """Return (episode_type, track) pairs whose track is not registered."""
-        missing: list[tuple[EpisodeType, RawTrackName]] = []
-        for definition in self._defs.values():
-            for track in definition.consumed_raw_tracks:
-                if not raw_registry.contains(track):
-                    missing.append((definition.episode_type, track))
-        return tuple(missing)
 
     def __len__(self) -> int:
         return len(self._defs)
@@ -446,8 +312,6 @@ class ModelRegistry:
 # -- cross-registry validation ------------------------------------------------
 
 class ValidationCode(Enum):
-    EPISODE_UNKNOWN_TRACK = "episode_unknown_track"
-    MODEL_UNKNOWN_TRACK = "model_unknown_track"
     MODEL_UNKNOWN_EPISODE = "model_unknown_episode"
     SCHEMA_MISMATCH = "schema_mismatch"
     INVALID_VERSION = "invalid_version"
@@ -464,7 +328,6 @@ class ValidationIssue:
 
 
 def validate_registry_graph(
-    raw_registry: RawTrackRegistry,
     episode_registry: EpisodeRegistry,
     model_registry: ModelRegistry,
 ) -> list[ValidationIssue]:
@@ -477,7 +340,7 @@ def validate_registry_graph(
     """
     issues: list[ValidationIssue] = []
 
-    # Episodes -> raw tracks.
+    # Episodes.
     for definition in episode_registry.definitions():
         canonical = _CANONICAL_EPISODE_SCHEMA.get(definition.episode_type)
         if canonical is not None and definition.schema_type is not canonical:
@@ -486,26 +349,9 @@ def validate_registry_graph(
                 f"episode '{definition.episode_type.value}' has a mismatched schema",
                 {"episode_type": definition.episode_type.value},
             ))
-        for track in definition.consumed_raw_tracks:
-            if not raw_registry.contains(track):
-                issues.append(ValidationIssue(
-                    ValidationCode.EPISODE_UNKNOWN_TRACK,
-                    f"episode '{definition.episode_type.value}' consumes "
-                    f"unregistered raw track '{track.value}'",
-                    {"episode_type": definition.episode_type.value,
-                     "track": track.value},
-                ))
 
-    # Models -> raw tracks and episode types, plus defensive single-def checks.
+    # Models -> episode types, plus defensive single-def checks.
     for definition in model_registry.definitions():
-        for track in definition.consumed_raw_tracks:
-            if not raw_registry.contains(track):
-                issues.append(ValidationIssue(
-                    ValidationCode.MODEL_UNKNOWN_TRACK,
-                    f"model '{definition.model_name}' consumes unregistered raw "
-                    f"track '{track.value}'",
-                    {"model": definition.model_name, "track": track.value},
-                ))
         for episode_type in definition.consumed_episode_types:
             if not episode_registry.contains(episode_type):
                 issues.append(ValidationIssue(

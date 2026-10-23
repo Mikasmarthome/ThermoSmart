@@ -827,7 +827,6 @@ class BoostModel:
     model_name = MODEL_NAME
     model_version = MODEL_VERSION
     parameter_version = PARAMETER_VERSION
-    consumed_raw_tracks: tuple[str, ...] = ()
     consumed_episode_types = (EpisodeType.OUTCOME.value,)
     required_features = ("indoor_temp", "target")
     optional_features = ("outdoor_temp", "valve_opening", "hvac_action", "forecast")
@@ -2049,7 +2048,7 @@ def boost_model_definition():
     return ModelDefinition(
         model_name=MODEL_NAME, model_factory=lambda: BoostModel("__definition__"),
         model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
-        consumed_raw_tracks=(), consumed_episode_types=(EpisodeType.OUTCOME,),
+        consumed_episode_types=(EpisodeType.OUTCOME,),
         supported_prediction_types=(
             PredictionType.BOOST_FACTOR, PredictionType.BOOST_DURATION,
             PredictionType.BOOST_OUTCOME),

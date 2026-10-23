@@ -267,7 +267,7 @@ def prune_research_daily_buckets(
     Age (``policy.max_age_days``) is evaluated first, using each entry's own
     ``bucket_date`` — an entry with a missing/malformed ``bucket_date`` is
     always kept (mirrors ``retention.py``'s conservative "unknown timestamp
-    -> keep" contract for episodes/raw segments: it can never be safely aged
+    -> keep" contract for episodes: it can never be safely aged
     out). If ``policy.max_records`` still caps the survivors, eviction is
     oldest-``bucket_date``-first among entries with a KNOWN date — unknown-
     date entries are excluded from eviction, never assumed oldest (same

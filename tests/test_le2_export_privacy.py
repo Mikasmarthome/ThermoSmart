@@ -34,5 +34,3 @@ class TestScanner:
 
     def test_clean_payload_no_violations(self):
         assert scan_payload({"value": 0.5, "level": "high", "count": 3}) == []
-
-

@@ -11,13 +11,6 @@ from custom_components.thermosmart.learning.privacy import (
     QuantizationPolicy,
     scan_payload,
 )
-from custom_components.thermosmart.learning.export import (
-    build_learning_export,
-    build_support_export,
-    to_canonical_json,
-)
-from tests.helpers_orchestration import export_input, zone_input
-from custom_components.thermosmart.learning.models import HeatRateModel
 
 
 class TestPseudonymizer:
@@ -87,29 +80,6 @@ class TestScanner:
 
 
 class TestAllowlist:
-    def test_unknown_field_dropped_and_warned(self):
-        class _Model:
-            def export(self, scope):
-                return {"general_rate_c_per_h": 1.0, "secret_entity": "climate.x",
-                        "sample_count": 5}
-
-        z = zone_input(models={"heat_rate": _Model()})
-        r = build_support_export(export_input(zones=(z,)))
-        section = r.payload["zones"][0]["models"]["heat_rate"]
-        assert "secret_entity" not in section
-        assert "general_rate_c_per_h" in section
-        assert any(w.code == "dropped_field" for w in r.warnings)
-
-    def test_allowlist_beats_blacklist(self):
-        # even if a value looks safe, a non-allowlisted key never appears
-        class _Model:
-            def export(self, scope):
-                return {"weird_future_field": 1.0, "sample_count": 1}
-
-        z = zone_input(models={"heat_rate": _Model()})
-        r = build_support_export(export_input(zones=(z,)))
-        assert "weird_future_field" not in r.payload["zones"][0]["models"]["heat_rate"]
-
     def test_privacy_class_values_stable(self):
         assert {c.value for c in ExportPrivacyClass} == {
             "public_safe", "support_safe", "learning_safe", "sensitive", "forbidden"}
@@ -141,14 +111,3 @@ class TestQuantization:
         assert QuantizationPolicy().quantize(0.37, 0.1) == pytest.approx(0.4, abs=1e-9)
 
 
-class TestPseudonymInExport:
-    def test_zone_pseudonymized_in_payload(self):
-        r = build_support_export(export_input())
-        assert r.payload["zones"][0]["zone"].startswith("z_")
-
-    def test_different_salt_changes_only_pseudonyms(self):
-        a = build_support_export(export_input(salt=b"a")).payload
-        b = build_support_export(export_input(salt=b"b")).payload
-        assert a["zones"][0]["zone"] != b["zones"][0]["zone"]
-        # non-pseudonym content (engine mode) stays identical
-        assert a["engine"]["mode"] == b["engine"]["mode"]

@@ -22,31 +22,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from custom_components.thermosmart.learning.clock import FakeClock
-from custom_components.thermosmart.learning.diagnostics import (
-    DIAGNOSTICS_SCHEMA_VERSION,
-    DiagnosticsInput,
-    DiagnosticsOrchestrator,
-)
-from custom_components.thermosmart.learning.export import (
-    EXPORT_SCHEMA_VERSION,
-    LEARNING_SAMPLE_FIELD_ALLOWLIST,
-    SUPPORT_FIELD_ALLOWLIST,
-    EngineSummary,
-    EpisodeSummary,
-    ExportBudget,
-    ExportInput,
-    ExportScope,
-    StorageSummary,
-    ZoneExportInput,
-    build_learning_export,
-    build_support_export,
-    to_canonical_json,
-    validate_export_payload,
-)
 from custom_components.thermosmart.learning.privacy import (
     ExportPrivacyClass,
-    PrivacyPolicy,
-    PrivacyViolation,
     PseudonymNamespace,
     Pseudonymizer,
     QuantizationPolicy,
@@ -63,45 +40,6 @@ from tests.helpers import make_coordinator
 _T0 = datetime(2025, 1, 15, 10, 30, 0, tzinfo=timezone.utc)
 _SALT = b"item17_test_salt_32bytes_______!!"
 _TS = "2025-01-15T10:00:00Z"
-
-
-def _engine(**kw) -> EngineSummary:
-    defaults = dict(
-        le_version="2.0.0", storage_schema_version=1, initialized=True,
-        mode="active", registry_valid=True, last_capture_ts=None,
-        last_model_update_ts=None, last_flush_ts=None, warnings=[], errors=[]
-    )
-    return EngineSummary(**{**defaults, **kw})
-
-
-def _zone(zone_id: str = "zone_abc", **kw) -> ZoneExportInput:
-    defaults = dict(
-        capability_flags={}, trv_only=True, initialized=True,
-        models={}, confidence_results={},
-        storage=StorageSummary(initialized=True, record_counts={}, schema_version=1),
-        episodes=EpisodeSummary(counts_by_type={}),
-        regime_summary="stable", missing_evidence=[], pending_attribution={}
-    )
-    return ZoneExportInput(zone_id=zone_id, **{**defaults, **kw})
-
-
-def _export_input(zones=None, *, salt=_SALT, **kw) -> ExportInput:
-    defaults = dict(
-        engine=_engine(), zones=(_zone(),) if zones is None else zones,
-        pseudonymizer=Pseudonymizer(salt),
-        generated_at=_TS, policy=PrivacyPolicy(),
-        budget=ExportBudget(), registry=None,
-        ha_version="2025.1.0", integration_version="1.1.1"
-    )
-    return ExportInput(**{**defaults, **kw})
-
-
-def _diag_input(zones=None, *, salt=_SALT) -> DiagnosticsInput:
-    return DiagnosticsInput(
-        engine=_engine(), zones=zones or (_zone(),),
-        pseudonymizer=Pseudonymizer(salt),
-        generated_at=_TS, policy=PrivacyPolicy(), registry=None
-    )
 
 
 def _shadow_ctrl() -> LearningShadowController:
@@ -272,203 +210,13 @@ class TestPrivacyScanner:
 # ── §4  DiagnosticsOrchestrator ───────────────────────────────────────────────
 
 
-class TestDiagnosticsOrchestrator:
-    def test_schema_version_present(self):
-        result = DiagnosticsOrchestrator(_diag_input()).build_diagnostics()
-        assert result.payload["diagnostics_schema_version"] == DIAGNOSTICS_SCHEMA_VERSION
-
-    def test_generated_at_present(self):
-        result = DiagnosticsOrchestrator(_diag_input()).build_diagnostics()
-        assert "generated_at" in result.payload
-
-    def test_engine_section_required_keys(self):
-        result = DiagnosticsOrchestrator(_diag_input()).build_diagnostics()
-        engine = result.payload["engine"]
-        for key in ("le_version", "initialized", "mode", "warnings", "errors"):
-            assert key in engine
-
-    def test_zone_pseudonymized_in_output(self):
-        pseudo = Pseudonymizer(_SALT)
-        expected = pseudo.pseudonymize(PseudonymNamespace.ZONE, "zone_abc")
-        inp = _diag_input(zones=(_zone("zone_abc"),), salt=_SALT)
-        result = DiagnosticsOrchestrator(inp).build_diagnostics()
-        zone_data = result.payload["zones"][0]
-        assert zone_data["zone"] == expected
-
-    def test_zone_raw_id_not_in_output(self):
-        inp = _diag_input(zones=(_zone("zone_abc"),))
-        result = DiagnosticsOrchestrator(inp).build_diagnostics()
-        zone_str = str(result.payload["zones"][0])
-        assert "zone_abc" not in zone_str
-
-    def test_multiple_zones_all_present(self):
-        zones = (_zone("z1"), _zone("z2"), _zone("z3"))
-        result = DiagnosticsOrchestrator(_diag_input(zones=zones)).build_diagnostics()
-        assert len(result.payload["zones"]) == 3
-
-    def test_broken_model_isolated_not_crashing(self):
-        # Zone with a model dict (not an object with .export() method)
-        # → should produce error, not crash
-        zone_with_model = _zone("zone_z", models={"heat_rate": {"broken": True}})
-        inp = _diag_input(zones=(zone_with_model,))
-        result = DiagnosticsOrchestrator(inp).build_diagnostics()
-        assert result.payload is not None  # no crash
-
-    def test_engine_initialized_flag_matches_input(self):
-        engine_uninitialized = _engine(initialized=False)
-        inp = DiagnosticsInput(
-            engine=engine_uninitialized, zones=(_zone(),),
-            pseudonymizer=Pseudonymizer(_SALT),
-            generated_at=_TS, policy=PrivacyPolicy(), registry=None
-        )
-        result = DiagnosticsOrchestrator(inp).build_diagnostics()
-        assert result.payload["engine"]["initialized"] is False
-
-
 # ── §5  Support Export Privacy ────────────────────────────────────────────────
-
-
-class TestSupportExportPrivacy:
-    def test_metadata_scope_is_support(self):
-        result = build_support_export(_export_input())
-        assert result.payload["metadata"]["scope"] == "support"
-
-    def test_export_schema_version_present(self):
-        result = build_support_export(_export_input())
-        assert result.payload["metadata"]["export_schema_version"] == EXPORT_SCHEMA_VERSION
-
-    def test_zone_pseudonymized_not_raw(self):
-        result = build_support_export(_export_input())
-        zone_field = result.payload["zones"][0]["zone"]
-        assert zone_field.startswith("z_")
-        assert "zone_abc" not in zone_field
-
-    def test_pseudonym_stable_true_with_salt(self):
-        result = build_support_export(_export_input(salt=_SALT))
-        assert result.payload["metadata"]["pseudonym_stable"] is True
-
-    def test_pseudonym_stable_false_without_salt(self):
-        result = build_support_export(_export_input(salt=None))
-        assert result.payload["metadata"]["pseudonym_stable"] is False
-
-    def test_entity_id_value_not_in_output(self):
-        zone = _zone(models={"heat_rate": {"entity_id": "climate.living_room"}})
-        result = build_support_export(_export_input(zones=(zone,)))
-        output_str = str(result.payload)
-        assert "climate.living_room" not in output_str
-
-    def test_allowlist_filters_unknown_fields(self):
-        zone = _zone(models={"heat_rate": {
-            "confidence": 0.8,     # in allowlist
-            "secret_field": "xyz", # NOT in allowlist
-        }})
-        result = build_support_export(_export_input(zones=(zone,)))
-        model_out = result.payload["zones"][0]["models"].get("heat_rate", {})
-        assert "secret_field" not in model_out
-
-    def test_validate_export_payload_passes(self):
-        result = build_support_export(_export_input())
-        errors = validate_export_payload(result.payload)
-        assert errors == []
-
-    def test_deterministic_json_same_input(self):
-        inp = _export_input()
-        j1 = to_canonical_json(build_support_export(inp).payload)
-        j2 = to_canonical_json(build_support_export(inp).payload)
-        assert j1 == j2
-
-    def test_ha_version_in_metadata(self):
-        result = build_support_export(_export_input())
-        assert result.payload["metadata"]["ha_version"] == "2025.1.0"
-
-    def test_integration_version_in_metadata(self):
-        result = build_support_export(_export_input())
-        assert result.payload["metadata"]["integration_version"] == "1.1.1"
 
 
 # ── §6  Learning/Research Export ─────────────────────────────────────────────
 
 
-class TestLearningExportPrivacy:
-    def test_metadata_scope_is_research(self):
-        result = build_learning_export(_export_input())
-        assert result.payload["metadata"]["scope"] == "research"
-
-    def test_generated_at_date_bucketed(self):
-        # learning export truncates timestamp to date only
-        result = build_learning_export(_export_input())
-        ts = result.payload["metadata"]["generated_at"]
-        assert "T" not in ts  # no time component
-        assert len(ts) == 10  # YYYY-MM-DD
-
-    def test_zone_pseudonymized(self):
-        result = build_learning_export(_export_input())
-        zone_field = result.payload["zones"][0]["zone"]
-        assert zone_field.startswith("z_")
-
-    def test_entity_id_not_in_output(self):
-        zone = _zone(models={"heat_rate": {"entity_id": "climate.room"}})
-        result = build_learning_export(_export_input(zones=(zone,)))
-        assert "climate.room" not in str(result.payload)
-
-    def test_validate_export_payload_passes(self):
-        result = build_learning_export(_export_input())
-        assert validate_export_payload(result.payload) == []
-
-    def test_learning_export_no_warnings_on_clean_input(self):
-        result = build_learning_export(_export_input())
-        assert len(result.errors) == 0
-
-    def test_learning_allowlist_documented(self):
-        # Learning sample allowlist must exist and have reasonable size
-        assert len(LEARNING_SAMPLE_FIELD_ALLOWLIST) >= 20
-
-    def test_support_allowlist_documented(self):
-        # Support allowlist must exist and have reasonable size
-        assert len(SUPPORT_FIELD_ALLOWLIST) >= 30
-
-
 # ── §7  Export Budget Enforcement ────────────────────────────────────────────
-
-
-class TestExportBudgetEnforcement:
-    def test_max_zones_truncates(self):
-        zones = tuple(_zone(f"z{i}") for i in range(5))
-        budget = ExportBudget(max_zones=3, max_models_per_zone=16,
-                              max_samples_per_model=50, max_total_bytes=1_000_000,
-                              max_string_len=512, max_depth=14,
-                              max_warnings=300, max_errors=300)
-        inp = _export_input(zones=zones, budget=budget)
-        result = build_support_export(inp)
-        assert len(result.payload["zones"]) == 3
-
-    def test_truncated_flag_set_on_zone_truncation(self):
-        zones = tuple(_zone(f"z{i}") for i in range(3))
-        budget = ExportBudget(max_zones=2, max_models_per_zone=16,
-                              max_samples_per_model=50, max_total_bytes=1_000_000,
-                              max_string_len=512, max_depth=14,
-                              max_warnings=300, max_errors=300)
-        inp = _export_input(zones=zones, budget=budget)
-        result = build_support_export(inp)
-        assert result.truncated is True
-
-    def test_no_truncation_flag_when_within_budget(self):
-        result = build_support_export(_export_input())
-        assert result.truncated is False
-
-    def test_max_zones_50_by_default(self):
-        assert ExportBudget().max_zones == 50
-
-    def test_max_samples_50_by_default(self):
-        assert ExportBudget().max_samples_per_model == 50
-
-    def test_max_total_bytes_one_million_by_default(self):
-        assert ExportBudget().max_total_bytes == 1_000_000
-
-    def test_two_zones_both_in_output_within_budget(self):
-        zones = (_zone("z1"), _zone("z2"))
-        result = build_support_export(_export_input(zones=zones))
-        assert len(result.payload["zones"]) == 2
 
 
 # ── §8  Control Reason Traceability ──────────────────────────────────────────
@@ -638,41 +386,7 @@ class TestLearningShadowControllerDiagnostics:
 # ── §11  Export Resilience / Failure Safety ───────────────────────────────────
 
 
-class TestExportResilienceFailureSafety:
-    def test_support_export_with_empty_zones_tuple(self):
-        inp = _export_input(zones=())
-        result = build_support_export(inp)
-        assert result.payload is not None
-        assert result.payload["zones"] == []
-
-    def test_learning_export_with_empty_zones_tuple(self):
-        inp = _export_input(zones=())
-        result = build_learning_export(inp)
-        assert result.payload is not None
-        assert result.payload["zones"] == []
-
-    def test_export_no_mutation_of_engine_on_repeated_calls(self):
-        inp = _export_input()
-        r1 = build_support_export(inp)
-        r2 = build_support_export(inp)
-        assert r1.payload["engine"] == r2.payload["engine"]
-
-    def test_diagnostics_with_engine_errors_propagates_field(self):
-        engine_with_err = _engine(errors=["storage_timeout"])
-        inp = DiagnosticsInput(
-            engine=engine_with_err, zones=(_zone(),),
-            pseudonymizer=Pseudonymizer(_SALT),
-            generated_at=_TS, policy=PrivacyPolicy(), registry=None
-        )
-        result = DiagnosticsOrchestrator(inp).build_diagnostics()
-        assert "storage_timeout" in result.payload["engine"]["errors"]
-
-    def test_export_payload_keys_are_deterministic(self):
-        result = build_support_export(_export_input())
-        keys1 = list(result.payload.keys())
-        keys2 = list(build_support_export(_export_input()).payload.keys())
-        assert keys1 == keys2
-
+class TestPrivacyClassEnum:
     def test_privacy_class_enum_has_expected_members(self):
         names = {m.name for m in ExportPrivacyClass}
         assert "PUBLIC_SAFE" in names

@@ -30,8 +30,6 @@ from ..confidence import ConfidencePurpose
 from ..contracts import PredictionType
 from .capture import ControllerDecisionInput, DecisionType, RuntimeCycleInput, ScheduleTarget
 from .control import ControlContext, ControlFeature
-from ..decision import DecisionMode, DecisionPipeline, FinalResolver
-from ..decision.runtime_adapter import build_learning_prediction_set
 from .ha_store import HomeAssistantStoreAdapter
 from .lifecycle import (
     CoordinatorBridge,
@@ -279,10 +277,6 @@ class LearningShadowController:
             # invoked later during observe_safe(), by which point every
             # attribute it touches (_episode_history etc.) already exists.
             episode_sink=self.record_completed_episode_safe)
-        # The new decision pipeline runs read-only every cycle (no sink => it can never
-        # dispatch). The existing coordinator remains the single real dispatch path.
-        self._pipeline = DecisionPipeline(
-            resolver=FinalResolver(boost_runtime_limit=TPI_MAX_BOOST_CELSIUS))
         self._last_trace: Optional[dict] = None
         # Adaptation candidate history — in-memory with persistent backing store.
         self._adaptation_history: dict = {}
@@ -2402,33 +2396,15 @@ class LearningShadowController:
                                     live_record: Optional[Any] = None) -> None:
         """Produce a DecisionTrace for this coordinator cycle.
 
-        When ``live_record`` (a ``LiveDecisionRecord``) is provided, the trace is
-        derived directly from the authoritative live path without re-running the
-        resolver.  When omitted, the full pipeline is re-run for backward
-        compatibility (test-only path). Never raises into the heating cycle.
+        The trace is derived from the authoritative ``LiveDecisionRecord`` the
+        coordinator builds every cycle; without a live record there is nothing to
+        trace. Never raises into the heating cycle.
         """
-        if not self._enabled:
+        if not self._enabled or live_record is None:
             return
         try:
-            if live_record is not None:
-                trace = self._build_trace_from_live_record(
-                    live_record, recommendation, ts=ts or self._utcnow_iso())
-            else:
-                # LEGACY / TEST-ONLY: backward-compat path for unit tests that call
-                # compute_decision_trace_safe() without a live_record.  The production
-                # coordinator always provides live_record; this branch must never run
-                # in a live coordinator cycle (enforced by test_production_live_record_always_provided).
-                zr = self._runtime._zone(self._zone)
-                preds = build_learning_prediction_set(
-                    self._zone, getattr(zr, "last_predictions", {}) or {},
-                    getattr(zr, "last_confidence", {}) or {},
-                    decision_id=getattr(zr, "last_decision_id", None))
-                mode = (DecisionMode.CONTROL if self._runtime.control_enabled
-                        else DecisionMode.SHADOW)
-                trace, _ = self._pipeline.run(
-                    self._zone, ts or self._utcnow_iso(), recommendation, preds, mode=mode,
-                    active_control=active_control,
-                    decision_id=getattr(zr, "last_decision_id", None))
+            trace = self._build_trace_from_live_record(
+                live_record, recommendation, ts=ts or self._utcnow_iso())
             trace_dict = trace.support_dict()
             # Enrich trace with TPI authority chain fields (for audit/debug)
             # These allow verification that Learning setpoint and TPI baseline are not mixed.

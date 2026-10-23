@@ -1,21 +1,15 @@
-"""Typed core contracts for the Learning decision architecture (Phase 19A, pure Python).
+"""Typed contracts for the live decision record and the decision trace (pure Python).
 
-These replace free-form recommendation dictionaries as the *internal* architecture
-boundary. Existing HA-facing dicts are adapted at the edges (see baseline.py); the
-public Home Assistant surface (entities/config/services) is unchanged.
-
-Data flow:
-    ZoneRuntimeInput -> ControllerBaselineDecision + LearningPredictionSet
-    -> FinalResolver -> ResolvedControlDecision -> GuardLayer (ControlGuardResult)
-    -> DeviceAdapter -> DeviceControlCommand -> Dispatcher -> DispatchResult
-with a DecisionTrace recorded throughout. No HA imports; no dispatch here.
+The coordinator builds one ``LiveDecisionRecord`` per cycle (pre-dispatch, completed
+after dispatch); the trace is derived from it for diagnostics. The public Home
+Assistant surface (entities/config/services) is unchanged. No HA imports; no
+dispatch here.
 """
 from __future__ import annotations
 
-import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping, Optional
+from typing import Optional
 
 DECISION_SCHEMA_VERSION = 1
 
@@ -56,152 +50,6 @@ class BoostEvaluationStatus(Enum):
     EVALUATED_NOT_APPLIED = "evaluated_not_applied"  # evaluated, authoritatively no boost
     APPLIED = "applied"                        # a boost offset was authoritatively applied
     UNKNOWN = "unknown"                        # legacy / unset
-
-
-@dataclass(frozen=True)
-class ZoneRuntimeInput:
-    """Normalised, typed snapshot of the values a zone decision needs."""
-    zone_id: str
-    ts: str
-    target_c: Optional[float] = None
-    trv_setpoint_c: Optional[float] = None
-    indoor_temp_c: Optional[float] = None
-    indoor_temp_valid: bool = False
-    comfort_time_utc: Optional[str] = None
-    comfort_temperature_c: Optional[float] = None
-    mode: Optional[str] = None
-    controller_demand: Optional[bool] = None
-    window_open: bool = False
-    summer: bool = False
-    frost_protection: bool = False
-    absence: bool = False
-    heating_failure: bool = False
-    decision_id: Optional[str] = None
-    decision_type: Optional[str] = None
-    outdoor_temp_c: Optional[float] = None
-    forecast_high_c: Optional[float] = None
-    early_cutoff_state: Optional[str] = None
-    # Preheat / HeatRate / OnsetDelay context (passed through for DecisionTrace)
-    preheat_minutes_learning: Optional[float] = None
-    preheat_status: Optional[str] = None
-    deterministic_baseline_preheat_min: Optional[float] = None
-    heat_rate_c_per_h: Optional[float] = None
-    heat_rate_confidence: Optional[float] = None
-    onset_delay_min: Optional[float] = None
-    onset_delay_status: Optional[str] = None
-    temperature_gap_c: Optional[float] = None        # comfort_temp - current_temp
-    target_temperature_c: Optional[float] = None
-    context_time_bucket: Optional[str] = None        # schedule period for onset-delay matching
-    # Boost eligibility context (set by runtime; None = unknown → conservative fallback)
-    boost_eligible: Optional[bool] = None            # explicit eligibility override from coordinator
-    has_effective_onset: Optional[bool] = None       # whether heating onset has been detected
-    boost_deficit_threshold_c: float = 0.5          # below this gap → no boost needed
-    # TPI topology: True → direct valve TRV (duty % is control, °C offset does not apply)
-    tpi_valve_direct: bool = False
-
-    def __post_init__(self) -> None:
-        if not self.zone_id:
-            raise ValueError("zone_id required")
-
-
-@dataclass(frozen=True)
-class ControllerBaselineDecision:
-    """The existing deterministic controller's result, side-effect free."""
-    zone_id: str
-    target_c: Optional[float]
-    trv_setpoint_c: Optional[float]
-    preheat_minutes: float = 0.0
-    boost_offset_c: float = 0.0
-    duty_cycle: float = 0.0
-    control_reason: str = "schedule"
-    summer: bool = False
-    window_open: bool = False
-    active_control: bool = False
-
-    @property
-    def safety_locked(self) -> bool:
-        return self.summer or self.window_open
-
-
-@dataclass(frozen=True)
-class LearningPrediction:
-    feature: str
-    value: Optional[float]
-    unit: str
-    confidence: float
-    confidence_purpose: Optional[str]
-    fallback_used: bool = True
-
-    def __post_init__(self) -> None:
-        if self.value is not None and not math.isfinite(self.value):
-            raise ValueError(f"{self.feature}: value must be finite or None")
-
-
-@dataclass(frozen=True)
-class LearningPredictionSet:
-    """All technically-ready Learning predictions for one decision."""
-    zone_id: str
-    decision_id: Optional[str]
-    predictions: Mapping[str, LearningPrediction] = field(default_factory=dict)
-    confidence_results: Mapping[str, Any] = field(default_factory=dict)
-
-    def get(self, feature: str) -> Optional[LearningPrediction]:
-        return self.predictions.get(feature)
-
-
-@dataclass(frozen=True)
-class ControlGuardResult:
-    allowed: bool
-    final_value: Optional[float]
-    clamp_applied: float
-    reasons: tuple[str, ...]
-    safe: bool = True
-
-
-@dataclass(frozen=True)
-class ResolvedControlDecision:
-    zone_id: str
-    feature: str
-    baseline_value: Optional[float]
-    learning_value: Optional[float]
-    final_value: Optional[float]
-    unit: str
-    applied: bool
-    mode: str
-    reason: str
-    fallback_reason: str
-    confidence: Optional[float]
-    clamp_applied: float
-    reason_codes: tuple[str, ...] = ()
-
-    def __post_init__(self) -> None:
-        if self.final_value is not None and not math.isfinite(self.final_value):
-            raise ValueError("final_value must be finite or None")
-
-
-@dataclass(frozen=True)
-class DeviceControlCommand:
-    """The single typed command the dispatcher may send (no HA call here)."""
-    zone_id: str
-    trv_setpoint_c: Optional[float]
-    duty_cycle: Optional[float]
-    hvac_mode: Optional[str] = None
-    source_reason: str = "baseline"
-    shadow_only: bool = True
-
-    def __post_init__(self) -> None:
-        for v in (self.trv_setpoint_c, self.duty_cycle):
-            if v is not None and not math.isfinite(v):
-                raise ValueError("command values must be finite")
-
-
-@dataclass(frozen=True)
-class DispatchResult:
-    zone_id: str
-    dispatched: bool
-    command: Optional[DeviceControlCommand]
-    shadow_only: bool
-    reason: str
 
 
 @dataclass(frozen=True)

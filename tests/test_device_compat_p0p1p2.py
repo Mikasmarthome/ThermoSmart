@@ -24,8 +24,8 @@ import pytest
 from homeassistant.const import UnitOfTemperature
 
 from custom_components.thermosmart.const import DISPATCH_FAILURE_SUPPORT_EVENT_THRESHOLD
-from custom_components.thermosmart.learning.decision.baseline import (
-    zone_input_from_recommendation,
+from custom_components.thermosmart.learning.runtime.ha_integration import (
+    build_runtime_cycle_input,
 )
 from custom_components.thermosmart.learning.support_event_schemas import (
     SupportEventType,
@@ -45,6 +45,7 @@ _CFG = {
     "temp_tolerance": 0.5,
     "window_open_temp": 5.0,
 }
+_TS = "2025-01-01T00:00:00+00:00"
 _REC = {"adjusted_target": 21.0, "trv_setpoint": 23.5, "window_open": False}
 
 
@@ -480,18 +481,14 @@ class TestDualSetpointDetection:
 # ── Heating-Failure-Confounder verification ─────────────────────────────────
 
 class TestHeatingFailureConfounderReachesBuilders:
-    def test_heating_failure_true_propagates_into_zone_runtime_input(self):
-        rec = {**_REC, "heating_failure": True}
-        zin = zone_input_from_recommendation("zone1", "2025-01-01T00:00:00+00:00", rec)
-        assert zin.heating_failure is True
+    def test_heating_failure_true_propagates_into_the_runtime_cycle_input(self):
+        cycle = build_runtime_cycle_input("zone1", _REC, ts_iso=_TS, heating_failure=True)
+        assert cycle.heating_failure is True
 
-    def test_heating_failure_false_propagates_into_zone_runtime_input(self):
-        rec = {**_REC, "heating_failure": False}
-        zin = zone_input_from_recommendation("zone1", "2025-01-01T00:00:00+00:00", rec)
-        assert zin.heating_failure is False
+    def test_heating_failure_false_propagates_into_the_runtime_cycle_input(self):
+        cycle = build_runtime_cycle_input("zone1", _REC, ts_iso=_TS, heating_failure=False)
+        assert cycle.heating_failure is False
 
-    def test_missing_heating_failure_key_defaults_false_no_crash(self):
-        rec = {**_REC}
-        rec.pop("heating_failure", None)
-        zin = zone_input_from_recommendation("zone1", "2025-01-01T00:00:00+00:00", rec)
-        assert zin.heating_failure is False
+    def test_default_is_false_and_does_not_crash(self):
+        cycle = build_runtime_cycle_input("zone1", _REC, ts_iso=_TS)
+        assert cycle.heating_failure is False

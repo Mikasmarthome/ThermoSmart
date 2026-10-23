@@ -1,8 +1,7 @@
-"""Production adapter: real Learning runtime predictions -> typed LearningPredictionSet.
+"""Production adapter: validated read of the runtime's previous-cycle predictions.
 
-Maps the runtime's stored ``Prediction`` objects (keyed by ``PredictionType``) and
-``ConfidenceResult`` objects (keyed by purpose) into the typed decision contract,
-with explicit, non-implicit semantics:
+The coordinator reads the stored ``Prediction`` objects (keyed by ``PredictionType``)
+only through ``validated_prediction_read``, with explicit, non-implicit semantics:
 
 * ``BOOST_FACTOR`` carries an *additive* °C offset (``celsius_offset``), NOT a
   multiplier — see boost.py ``values={"boost_factor": rec.boost_offset_c}``.
@@ -21,7 +20,6 @@ from typing import Any, Mapping, Optional
 
 from ..confidence import ConfidencePurpose
 from ..contracts import PredictionType
-from .contracts import LearningPrediction, LearningPredictionSet
 
 # feature key -> (PredictionType, value-key inside Prediction.values, unit, confidence purpose)
 _MAP: tuple[tuple[str, PredictionType, str, str, Optional[ConfidencePurpose]], ...] = (
@@ -111,50 +109,3 @@ def validated_prediction_read(last_predictions: Mapping[Any, Any], feature: str,
     if not _math.isfinite(value):
         return None, READ_NONFINITE
     return value, READ_OK
-
-
-def _confidence_value(conf_results: Mapping[str, Any], purpose: Optional[ConfidencePurpose],
-                      prediction: Any) -> float:
-    if purpose is not None:
-        cr = conf_results.get(purpose.value)
-        if cr is not None and getattr(cr, "value", None) is not None:
-            try:
-                return float(cr.value)
-            except (TypeError, ValueError):
-                pass
-    learned = getattr(prediction, "learned_contribution", None)
-    if learned is not None:
-        try:
-            return float(learned)
-        except (TypeError, ValueError):
-            pass
-    return 0.0
-
-
-def build_learning_prediction_set(zone_id: str,
-                                  last_predictions: Mapping[Any, Any],
-                                  last_confidence: Mapping[str, Any],
-                                  *, decision_id: Optional[str] = None) -> LearningPredictionSet:
-    """Build the typed prediction set from the runtime's real prediction state."""
-    predictions: dict[str, LearningPrediction] = {}
-    for feature, ptype, value_key, unit, purpose in _MAP:
-        pred = last_predictions.get(ptype)
-        if pred is None:
-            continue
-        values = getattr(pred, "values", None) or {}
-        if value_key not in values:
-            continue
-        raw = values.get(value_key)
-        try:
-            value = None if raw is None else float(raw)
-        except (TypeError, ValueError):
-            continue
-        predictions[feature] = LearningPrediction(
-            feature=feature, value=value, unit=unit,
-            confidence=_confidence_value(last_confidence, purpose, pred),
-            confidence_purpose=purpose.value if purpose else None,
-            fallback_used=bool(getattr(pred, "fallback_used", True)))
-    # carry the confidence results through (string-keyed by purpose) for the resolver
-    conf = {k: v for k, v in (last_confidence or {}).items()}
-    return LearningPredictionSet(zone_id, decision_id, predictions=predictions,
-                                 confidence_results=conf)

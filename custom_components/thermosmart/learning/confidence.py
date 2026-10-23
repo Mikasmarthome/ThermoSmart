@@ -34,7 +34,6 @@ class ConfidencePurpose(Enum):
     OUTCOME_QUALITY = "outcome_quality"
     FORECAST = "forecast"
     BOOST = "boost"
-    MANUAL_CORRECTION = "manual_correction"
     CONTROL_DECISION = "control_decision"
     ADVISORY = "advisory"
     ONSET_DELAY = "onset_delay"       # TRV command → measurable room temperature response
@@ -48,7 +47,6 @@ class ComponentKind(Enum):
     OUTCOME = "outcome"
     FORECAST = "forecast"
     BOOST = "boost"
-    MANUAL_CORRECTION = "manual_correction"
     CURRENT_TEMPERATURE = "current_temperature"
     OUTDOOR = "outdoor"
     DATA_QUALITY = "data_quality"
@@ -353,8 +351,6 @@ def _default_policies() -> dict[ConfidencePurpose, PurposePolicy]:
         P.BOOST: PurposePolicy(
             P.BOOST, required=(K.HEAT_RATE,), optional=(K.OUTCOME, K.DATA_QUALITY),
             control_relevant=True),
-        P.MANUAL_CORRECTION: PurposePolicy(
-            P.MANUAL_CORRECTION, required=(K.MANUAL_CORRECTION,), optional=(K.OUTCOME,)),
         P.CONTROL_DECISION: PurposePolicy(
             P.CONTROL_DECISION, required=(K.HEAT_RATE,),
             optional=(K.HEAT_LOSS, K.AFTERHEAT, K.OUTCOME, K.FORECAST,

@@ -38,8 +38,6 @@ _MAP: tuple[tuple[str, PredictionType, str, str, Optional[ConfidencePurpose]], .
      ConfidencePurpose.FORECAST),
     ("forecast_trust", PredictionType.FORECAST_TRUST, "forecast_trust", "score",
      ConfidencePurpose.FORECAST),
-    ("manual_preference_bias", PredictionType.MANUAL_PREFERENCE_BIAS, "preference_bias",
-     "celsius", ConfidencePurpose.MANUAL_CORRECTION),
 )
 
 

@@ -32,8 +32,6 @@ from ..models import (
     HeatLossPredictionContext,
     HeatRateModel,
     HeatRatePredictionContext,
-    ManualCorrectionModel,
-    ManualCorrectionPredictionContext,
     OnsetDelayModel,
     OnsetDelayPredictionContext,
     OutcomeModel,
@@ -51,7 +49,6 @@ def build_zone_models(zone_id: str) -> dict[str, Any]:
         "outcome": OutcomeModel(zone_id),
         "forecast": ForecastModel(zone_id),
         "boost": BoostModel(zone_id),
-        "manual_correction": ManualCorrectionModel(zone_id),
     }
 
 
@@ -63,7 +60,6 @@ _PREDICT_CONTEXT = {
     "outcome": OutcomePredictionContext,
     "forecast": ForecastPredictionContext,
     "boost": BoostPredictionContext,
-    "manual_correction": ManualCorrectionPredictionContext,
 }
 
 _COMPONENT_KIND = {
@@ -74,7 +70,6 @@ _COMPONENT_KIND = {
     "outcome": ComponentKind.OUTCOME,
     "forecast": ComponentKind.FORECAST,
     "boost": ComponentKind.BOOST,
-    "manual_correction": ComponentKind.MANUAL_CORRECTION,
 }
 
 _COMPONENT_DOMAINS = {
@@ -85,7 +80,6 @@ _COMPONENT_DOMAINS = {
     "outcome": (EvidenceDomain.OUTCOME_HISTORY,),
     "forecast": (EvidenceDomain.FORECAST, EvidenceDomain.WEATHER),
     "boost": (EvidenceDomain.THERMAL_TRAJECTORY, EvidenceDomain.CONTROLLER_EVENTS),
-    "manual_correction": (EvidenceDomain.USER_CORRECTION, EvidenceDomain.CONTROLLER_EVENTS),
 }
 
 
@@ -192,7 +186,6 @@ class ModelOrchestrator:
                 ConfidencePurpose.OUTCOME_QUALITY: ("outcome",),
                 ConfidencePurpose.FORECAST: ("forecast",),
                 ConfidencePurpose.BOOST: ("boost", "outcome"),
-                ConfidencePurpose.MANUAL_CORRECTION: ("manual_correction",),
             }
         confidence = self.aggregate(purposes, now=now)
         return OrchestrationResult(predictions=predictions, confidence_results=confidence,

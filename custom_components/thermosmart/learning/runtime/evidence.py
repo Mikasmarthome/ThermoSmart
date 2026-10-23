@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional
 
 from ..contracts import DataQuality
-from ..models import BoostUpdateContext, ManualCorrectionUpdateContext
+from ..models import BoostUpdateContext
 from .capture import CapturedSnapshot, DecisionType
 
 
@@ -28,7 +28,6 @@ class MaterializedEvidence:
     zone_id: str
     decision_id: str
     ts: str
-    manual_correction_contexts: tuple[ManualCorrectionUpdateContext, ...] = ()
     boost_context: Optional[BoostUpdateContext] = None
     items: tuple[EvidenceItem, ...] = ()
     notes: tuple[str, ...] = ()
@@ -40,20 +39,6 @@ class EvidenceMaterializer:
     def materialize(self, snapshot: CapturedSnapshot) -> MaterializedEvidence:
         notes: list[str] = []
 
-        mc_contexts: list[ManualCorrectionUpdateContext] = []
-        for mc in snapshot.accepted_manual_corrections:
-            mc_contexts.append(ManualCorrectionUpdateContext(
-                correction_event_id=mc.event_id, learning_zone_id=None,
-                decision_id=snapshot.decision_id,
-                previous_thermosmart_target_c=mc.prior_target_c,
-                target_temperature_c=snapshot.target_c,
-                current_temperature_c=snapshot.indoor_temp.value
-                if snapshot.indoor_temp is not None else None,
-                decision_type=snapshot.decision_type.value,
-                in_boost=snapshot.boost_active, in_preheat=snapshot.preheat_active,
-                source_class_hint=None, context_quality=1.0))
-        if snapshot.rejected_echo_corrections:
-            notes.append(f"echo_filtered:{len(snapshot.rejected_echo_corrections)}")
 
         # B2b-1: the authoritative boost context comes from the bound LiveDecisionRecord
         # dispatch result, NOT the setpoint-target heuristic. Dispatch status gates whether
@@ -105,5 +90,5 @@ class EvidenceMaterializer:
 
         return MaterializedEvidence(
             zone_id=snapshot.zone_id, decision_id=snapshot.decision_id, ts=snapshot.ts,
-            manual_correction_contexts=tuple(mc_contexts), boost_context=boost_ctx,
+            boost_context=boost_ctx,
             notes=tuple(notes))

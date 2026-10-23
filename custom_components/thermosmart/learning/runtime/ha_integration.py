@@ -108,7 +108,7 @@ def _is_celsius_unit(unit: str) -> bool:
 
     Accepts only forms actually produced by Learning model contracts:
       "C"       — AfterheatModel, HeatRate, HeatLoss (short form)
-      "celsius" — ForecastModel, ManualCorrection, BoostOutcome (long form)
+      "celsius" — ForecastModel, BoostOutcome (long form)
 
     Rejects "K", "%", "min", empty string, or any unknown unit.
     Never performs Kelvin conversion; missing unit → conservative False.

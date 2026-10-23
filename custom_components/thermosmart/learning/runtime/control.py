@@ -28,7 +28,6 @@ class ControlFeature(Enum):
     BOOST_OFFSET = "boost_offset"
     BOOST_DURATION = "boost_duration"
     FORECAST_ADJUSTMENT = "forecast_adjustment"
-    MANUAL_PREFERENCE_BIAS = "manual_preference_bias"
 
 
 class ControlDecisionStatus(Enum):
@@ -68,8 +67,7 @@ class ControlRejection(Enum):
     POLICY_ERROR = "policy_error"
 
 
-_ADVISORY_ONLY = frozenset({
-    ControlFeature.FORECAST_ADJUSTMENT, ControlFeature.MANUAL_PREFERENCE_BIAS})
+_ADVISORY_ONLY = frozenset({ControlFeature.FORECAST_ADJUSTMENT})
 
 
 @dataclass(frozen=True)

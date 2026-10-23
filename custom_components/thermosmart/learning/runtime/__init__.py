@@ -19,7 +19,6 @@ from .capture import (
     CommandType,
     ControllerDecisionInput,
     DecisionType,
-    ManualCorrectionObservation,
     RuntimeCycleInput,
     ScheduleTarget,
     SentCommand,
@@ -64,7 +63,7 @@ from .lifecycle import (
 __all__ = [
     "CaptureCoordinator", "CapturedDecision", "CapturedSnapshot", "CommandLedger",
     "CommandStatus", "CommandType", "ControllerDecisionInput", "DecisionType",
-    "ManualCorrectionObservation", "RuntimeCycleInput", "ScheduleTarget", "SentCommand",
+    "RuntimeCycleInput", "ScheduleTarget", "SentCommand",
     "make_decision_id",
     "EvidenceItem", "EvidenceMaterializer", "MaterializedEvidence",
     "CompletedEpisode", "PipelineCycleResult", "RuntimePipeline",

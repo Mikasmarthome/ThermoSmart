@@ -70,17 +70,6 @@ class SentCommand:
 
 
 @dataclass(frozen=True)
-class ManualCorrectionObservation:
-    event_id: str
-    prior_target_c: float
-    new_target_c: float
-    source: str                    # raw CorrectionSource value
-    action_type: str               # raw CorrectionActionType value
-    ts: str
-    trv_binding_id: Optional[str] = None
-
-
-@dataclass(frozen=True)
 class BoostDispatchRecord:
     """Authoritative boost dispatch result for one decision, sourced from the live
     ``LiveDecisionRecord`` (B2b-1). The single source of truth for what boost was
@@ -174,7 +163,6 @@ class RuntimeCycleInput:
     forecast_high: Optional[float] = None
     heating_failure: bool = False
     sent_commands: tuple[SentCommand, ...] = ()
-    manual_corrections: tuple[ManualCorrectionObservation, ...] = ()
     legacy_preheat_start_utc: Optional[str] = None
     legacy_boost_offset_c: Optional[float] = None
     legacy_early_cutoff_utc: Optional[float] = None
@@ -225,8 +213,6 @@ class CapturedSnapshot:
     valve_opening: Optional[Measurement]
     hvac_action: Optional[str]
     forecast_high: Optional[float]
-    accepted_manual_corrections: tuple[ManualCorrectionObservation, ...]
-    rejected_echo_corrections: tuple[str, ...]   # event ids excluded as command echoes
     boost_dispatch: Optional[BoostDispatchRecord] = None   # B2b-1 authoritative binding
     device_states: Mapping[str, str] = field(default_factory=dict)   # B2b-4e live availability
 
@@ -374,16 +360,6 @@ class CaptureCoordinator:
                 boost_offset_c=d.boost_offset_c, superseded=False)
         decision_id = self._open.decision_id
 
-        # echo filtering of manual corrections
-        accepted = []
-        rejected = []
-        for mc in inp.manual_corrections:
-            binding = mc.trv_binding_id or "_zone"
-            if self._ledger.is_echo(binding, mc.new_target_c, mc.ts):
-                rejected.append(mc.event_id)
-            else:
-                accepted.append(mc)
-
         quality = inp.indoor_temp.quality if inp.indoor_temp is not None else DataQuality.UNAVAILABLE
         return CapturedSnapshot(
             zone_id=self._zone, ts=inp.ts, decision_id=decision_id, target_c=inp.target_c,
@@ -398,8 +374,6 @@ class CaptureCoordinator:
             if inp.schedule else None,
             outdoor_temp=inp.outdoor_temp, valve_opening=inp.valve_opening,
             hvac_action=inp.hvac_action, forecast_high=inp.forecast_high,
-            accepted_manual_corrections=tuple(accepted),
-            rejected_echo_corrections=tuple(rejected),
             boost_dispatch=inp.boost_dispatch,
             device_states=dict(inp.device_states or {}))
 

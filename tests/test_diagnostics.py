@@ -149,8 +149,8 @@ class TestZoneEntryDiagnostics:
 
         coord = MagicMock()
         coord._active_control = True
-        coord._learning_enabled = True
-        coord._current_mode = "auto"
+        coord._learning_mode_enabled.return_value = True
+        coord._mode = "auto"
         coord.data = {"learning_confidence": 0.73}
         coord._learning_shadow = None  # simplest valid state — every helper falls back safely
         hass.data = {DOMAIN: {"zone_1": {"coordinator": coord}}}

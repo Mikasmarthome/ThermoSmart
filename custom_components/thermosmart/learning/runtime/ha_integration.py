@@ -1954,7 +1954,7 @@ class LearningShadowController:
                     _od_conf = float(getattr(_od_pred, "confidence", 0.0) or 0.0)
                     if not _od_fb and _od_conf >= self._PREHEAT_MIN_CONFIDENCE:
                         onset_delay_min = float(
-                            _od_pred.values.get("onset_delay_minutes", 0.0) or 0.0)
+                            _od_pred.values.get("onset_delay", 0.0) or 0.0)
                         onset_delay_source = "valid"
                     else:
                         onset_delay_min = self._ONSET_DELAY_PRIOR_MIN
@@ -2021,7 +2021,7 @@ class LearningShadowController:
                     _od_conf = float(getattr(_od_pred, "confidence", 0.0) or 0.0)
                     if not _od_fb and _od_conf >= self._PREHEAT_MIN_CONFIDENCE:
                         onset_delay_min = float(
-                            _od_pred.values.get("onset_delay_minutes", 0.0) or 0.0)
+                            _od_pred.values.get("onset_delay", 0.0) or 0.0)
                         onset_delay_source = "valid"
                     else:
                         onset_delay_min = self._ONSET_DELAY_PRIOR_MIN
@@ -2297,8 +2297,9 @@ class LearningShadowController:
             # Gate 0: Restore initialization barrier.
             # Active Control RestoreEntity must have completed at least one restore/set
             # call.  Until then boost is blocked so no partial-restore cycle can
-            # accidentally activate boost.  Learning mode comes from config (not a
-            # RestoreEntity) and is therefore not in the barrier.
+            # accidentally activate boost.  Learning mode is not part of the barrier:
+            # it defaults to ON and the Learning switch applies its restored state
+            # to the engine as soon as the entity is added.
             if restore_pending:
                 return _blocked(BoostBlockReason.RESTORE_PENDING)
 

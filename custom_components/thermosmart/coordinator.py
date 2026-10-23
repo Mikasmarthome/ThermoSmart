@@ -346,6 +346,20 @@ class ThermoSmartCoordinator(
     def zone_cfg(self) -> dict:
         return {**self.entry.data, **self.entry.options}
 
+    def _learning_mode_enabled(self, cfg: dict) -> bool:
+        """True when Learning may influence control and observe.
+
+        Learning is on unless the zone config flag turns it off or the zone's
+        Learning switch is off. The switch is the user-facing control (its state
+        is restored by the switch entity into the learning engine), so it must
+        be honoured here; reading only the config flag left the switch without
+        effect on control.
+        """
+        if not cfg.get("learning_enabled", True):
+            return False
+        engine = self.learning_engine
+        return bool(engine.is_zone_enabled(self.zone_id)) if engine is not None else True
+
     # ── Setter ──────────────────────────────────────────────────────
 
     def set_active_control(self, active: bool) -> None:
@@ -906,7 +920,7 @@ class ThermoSmartCoordinator(
             # Derive adaptation mode once per cycle from the two user-visible switches.
             # All Learning adaptive reads below are gated on _learning_mode_on so that
             # Learning OFF → only deterministic defaults influence real control.
-            _learning_mode_on = bool(cfg.get("learning_enabled", True))
+            _learning_mode_on = self._learning_mode_enabled(cfg)
             _active_control_on = self._active_control
             _adaptation_mode = ControlAdaptationMode.derive(_learning_mode_on, _active_control_on)
             recommendation["adaptation_mode"] = _adaptation_mode
@@ -1987,7 +2001,7 @@ class ThermoSmartCoordinator(
     # ── Berechnung ───────────────────────────────────────────────────
 
     async def _compute_recommendation(self, cfg: dict, weather_data: dict, mode: str) -> dict:
-        _learning_mode_on = bool(cfg.get("learning_enabled", True))
+        _learning_mode_on = self._learning_mode_enabled(cfg)
         _primary_room_temp = self._read_avg_sensor(cfg.get("temp_sensors", []), is_temperature=True)
         current_temp = _primary_room_temp
         if current_temp is None:

@@ -109,8 +109,8 @@ async def _zone_diagnostics(
     if coord is not None:
         runtime_state = {
             "active_control": getattr(coord, "_active_control", None),
-            "learning_enabled": getattr(coord, "_learning_enabled", None),
-            "current_mode": getattr(coord, "_current_mode", None),
+            "learning_enabled": coord._learning_mode_enabled(coord.zone_cfg),
+            "current_mode": getattr(coord, "_mode", None),
             "confidence": round(
                 float(((coord.data or {}).get("learning_confidence") or 0.0)), 3
             ),

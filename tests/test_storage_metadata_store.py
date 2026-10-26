@@ -15,7 +15,6 @@ import pytest
 from custom_components.thermosmart.learning import reset
 from custom_components.thermosmart.learning.storage import naming
 from custom_components.thermosmart.learning.storage.stores import (
-    AdaptationHistoryStore,
     EpisodesStore,
     ResearchDailyStore,
     StorageKeyState,
@@ -282,7 +281,6 @@ class TestPurgeWiringDeletesMetadataIndex:
     async def test_purge_removes_every_store_the_integration_writes(self):
         factory = FakeFactory()
         stores = (
-            AdaptationHistoryStore(factory, "lz_1"),
             EpisodesStore(factory, "lz_1"),
             SupportCriticalEventStore(factory, "lz_1"),
             ResearchDailyStore(factory, "lz_1"),
@@ -320,7 +318,6 @@ class TestHaIntegrationSaveWiring:
         coord = make_recording_coordinator()
         shadow = attach_shadow(coord)
         factory = FakeFactory()
-        shadow._adaptation_store = AdaptationHistoryStore(factory, shadow._zone)
         shadow._storage_metadata_store = StorageMetadataStore(factory, shadow._zone)
 
         class _FakeCaptureStores:
@@ -338,14 +335,6 @@ class TestHaIntegrationSaveWiring:
 
     async def _summary(self, shadow):
         return await shadow._storage_metadata_store.get_store_summary()
-
-    async def test_adaptation_history_save_marks_written(self):
-        shadow, _ = self._make_shadow()
-        shadow._adaptation_save_needed = True
-        await shadow._async_save_adaptation_history_safe()
-        stores = (await self._summary(shadow))["stores"]
-        assert stores["adaptation_history"]["exists"] is True
-        assert stores["adaptation_history"]["last_write_reason"] == "adaptation_history_update"
 
     async def test_episode_history_save_marks_written(self):
         shadow, _ = self._make_shadow()

@@ -281,19 +281,6 @@ class LearningShadowController:
             # attribute it touches (_episode_history etc.) already exists.
             episode_sink=self.record_completed_episode_safe)
         self._last_trace: Optional[dict] = None
-        # Adaptation candidate history — in-memory with persistent backing store.
-        self._adaptation_history: dict = {}
-        self._last_outcome_ts: Optional[str] = None
-        self._adaptation_last_error: Optional[str] = None
-        self._adaptation_save_needed: bool = False
-        self._adaptation_store = None
-        try:
-            from ..storage.stores import AdaptationHistoryStore, HomeAssistantStoreFactory
-            self._adaptation_store = AdaptationHistoryStore(
-                HomeAssistantStoreFactory(hass), zone_id,
-            )
-        except Exception:
-            pass  # non-fatal: history stays in-memory only
         # Episode capture storage — store-access facade.
         # Construction itself performs zero storage I/O: it only holds a
         # StoreFactory reference plus the canonical episode-type
@@ -397,8 +384,6 @@ class LearningShadowController:
             self._record_error("setup", err)
             self._enabled = False
             return False
-        # Load persisted adaptation history (non-fatal; errors in _adaptation_last_error)
-        await self._async_load_adaptation_history_safe()
         # Load persisted episode history (non-fatal; no runtime writer yet)
         await self._async_load_episode_history_safe()
         # Load persisted support critical events (non-fatal; no runtime writer yet)
@@ -434,191 +419,6 @@ class LearningShadowController:
             self._last_result = CoordinatorBridge(self._runtime).process(inp)
         except Exception as err:
             self._record_error("cycle", err)
-        # Passive adaptation history — post-cycle, never raises, never affects heating.
-        try:
-            self._update_adaptation_history_safe(recommendation, weather)
-        except Exception as err:
-            try:
-                self._adaptation_last_error = str(err)
-            except Exception:
-                pass
-
-    def _update_adaptation_history_safe(
-        self,
-        recommendation: Any,
-        weather: Optional[Any],
-    ) -> None:
-        """Update in-memory adaptation history from current outcome model state.
-
-        Skips if outcome model has not advanced since last call (deduplication via
-        last_update_ts). Never mutates control state. Never raises — all errors are
-        captured in _adaptation_last_error.
-        """
-        try:
-            zr = self._runtime._zone(self._zone)
-            _om = zr.orchestrator.models.get("outcome")
-            if _om is None:
-                return
-            diag = _om.diagnostics()
-            new_ts = diag.last_update_ts
-            if not new_ts or new_ts == self._last_outcome_ts:
-                return
-
-            # Build OutcomeSignal from diagnostics
-            from ..adaptation.contracts import OutcomeSignal, SituationContext
-            full_count, partial_count = diag.full_partial
-            total_accepted = full_count + partial_count
-            partial_ratio = (
-                (partial_count / total_accepted) if total_accepted > 0 else 0.0
-            )
-            rej_counts = dict(diag.rejection_counts)
-            total_rej = sum(rej_counts.values())
-            signal = OutcomeSignal(
-                sample_count=diag.sample_counts.get("general", 0),
-                timeout_rate=diag.timeout_rate,
-                overshoot_rate=diag.overshoot_rate,
-                reached_rate=diag.reached_rate,
-                general_data_quality=diag.general_data_quality,
-                aggregate_reliability=getattr(diag, "confidence", 0.0),
-                partial_ratio=partial_ratio,
-                confounder_contamination=total_rej > 0,
-            )
-
-            # Build SituationContext — similar to export._adaptation_situation_context
-            # but without coordinator/coord; reads from recommendation and weather args.
-            _OUTDOOR_EDGES = (-10.0, -5.0, 0.0, 5.0, 10.0, 15.0)
-            outdoor_bucket: Optional[str] = None
-            if weather:
-                try:
-                    ot_raw = weather.get("temperature") if hasattr(weather, "get") else None
-                    if ot_raw is not None:
-                        ot = float(ot_raw)
-                        idx = sum(1 for edge in _OUTDOOR_EDGES if ot >= edge)
-                        outdoor_bucket = f"b{idx}"
-                except Exception:
-                    pass
-
-            mode_context: Optional[str] = None
-            preheat_was_active: Optional[bool] = None
-            if recommendation:
-                try:
-                    mode_context = recommendation.get("mode") or None
-                except Exception:
-                    pass
-                try:
-                    pa = recommendation.get("preheat_active")
-                    preheat_was_active = bool(pa) if pa is not None else None
-                except Exception:
-                    pass
-
-            controller_kind: Optional[str] = None
-            try:
-                _state = getattr(_om, "_state", None)
-                _samples = getattr(_state, "recent_samples", ()) or ()
-                if _samples:
-                    controller_kind = getattr(_samples[-1], "controller_kind", None)
-            except Exception:
-                pass
-
-            time_of_day_bucket: Optional[int] = None
-            weekday: Optional[int] = None
-            is_weekend: Optional[bool] = None
-            context_time_source = "unavailable"
-            try:
-                from datetime import datetime
-                _ts = datetime.fromisoformat(new_ts.replace("Z", "+00:00"))
-                time_of_day_bucket = _ts.hour
-                weekday = _ts.weekday()
-                is_weekend = weekday >= 5
-                context_time_source = "model_last_update"
-            except Exception:
-                pass
-
-            situation = SituationContext(
-                controller_kind=controller_kind,
-                outdoor_bucket=outdoor_bucket,
-                mode_context=mode_context,
-                time_of_day_bucket=time_of_day_bucket,
-                weekday=weekday,
-                is_weekend=is_weekend,
-                preheat_was_active=preheat_was_active,
-                boost_was_active=None,
-                target_delta_c=None,
-                heat_loss_c_per_h=None,
-                preheat_minutes_used=None,
-                active_control=None,
-                learning_enabled=None,
-                context_time_source=context_time_source,
-            )
-
-            from ..adaptation.history import update_adaptation_history
-            self._adaptation_history = update_adaptation_history(
-                self._adaptation_history,
-                self._zone,
-                signal,
-                situation,
-                new_ts,
-            )
-            self._last_outcome_ts = new_ts
-            self._adaptation_last_error = None
-            self._adaptation_save_needed = True
-        except Exception as err:
-            self._adaptation_last_error = str(err)
-
-    def adaptation_history_snapshot(self) -> dict:
-        """Return a shallow copy of the current in-memory adaptation history.
-
-        Keys are candidate_key strings; values are CandidateHistoryEntry instances.
-        Empty on first call (reset on HA restart). Never raises.
-        """
-        try:
-            return dict(self._adaptation_history)
-        except Exception:
-            return {}
-
-    def adaptation_last_error(self) -> Optional[str]:
-        """Return the last error message from adaptation history accumulation, or None."""
-        return self._adaptation_last_error
-
-    async def _async_load_adaptation_history_safe(self) -> None:
-        """Load persisted adaptation history. Non-fatal on missing or corrupt store."""
-        if self._adaptation_store is None:
-            return
-        try:
-            raw = await self._adaptation_store.load()
-            if raw is None:
-                return
-            from ..adaptation.history_store_schema import deserialize_history_state
-            state = deserialize_history_state(raw, self._zone)
-            if state.entries:
-                self._adaptation_history = dict(state.entries)
-        except Exception as err:
-            self._adaptation_last_error = str(err)
-
-    async def _async_save_adaptation_history_safe(self) -> None:
-        """Persist adaptation history best-effort. Non-fatal on error."""
-        if self._adaptation_store is None or not self._adaptation_save_needed:
-            return
-        try:
-            from datetime import datetime
-            from ..adaptation.history_store_schema import (
-                AdaptationHistoryState, prune_history_entries, serialize_history_state,
-            )
-            from ..storage.stores import StorageWriteReason
-            now_ts = self._utcnow_iso()
-            now_utc = datetime.fromisoformat(now_ts)
-            entries = prune_history_entries(self._adaptation_history, now_ts=now_ts)
-            state = AdaptationHistoryState(
-                learning_zone_id=self._zone,
-                updated_at=now_ts,
-                entries=entries,
-            )
-            await self._adaptation_store.save(serialize_history_state(state), now_utc=now_utc)
-            self._adaptation_save_needed = False
-            await self._async_mark_storage_written_safe(
-                "adaptation_history", StorageWriteReason.ADAPTATION_HISTORY_UPDATE)
-        except Exception as err:
-            self._adaptation_last_error = str(err)
 
     async def _async_load_episode_history_safe(self) -> None:
         """Load persisted episode history via LearningCaptureStores.episodes_store().
@@ -3025,7 +2825,6 @@ class LearningShadowController:
             await self._runtime.async_save_if_due()
         except Exception as err:
             self._record_error("save", err)
-        await self._async_save_adaptation_history_safe()
         await self._async_save_episode_history_safe()
         await self._async_save_support_critical_events_safe()
         await self._async_save_research_daily_safe()
@@ -3042,8 +2841,6 @@ class LearningShadowController:
             await self._runtime.async_unload()
         except Exception as err:
             self._record_error("unload", err)
-        # Flush adaptation history (best-effort; saves if dirty)
-        await self._async_save_adaptation_history_safe()
         # Flush episode history (best-effort; saves if dirty)
         await self._async_save_episode_history_safe()
         # Flush support critical events (best-effort; saves if dirty).

@@ -40,8 +40,6 @@ from .export import (
     _compute_analytics,
     _device_profile_export,
     _historical_learning_snapshot_for_research,
-    _learning_adaptation_history_summary,
-    _learning_adaptation_summary,
     _learning_critical_events_export,
     _learning_episode_history_export,
     _learning_health_data,
@@ -131,8 +129,6 @@ async def _zone_diagnostics(
         "episode_history": _learning_episode_history_export(coord, now=now),
         "research_daily": _learning_research_daily_export(coord, now=now),
         "critical_events": _learning_critical_events_export(coord, now=now),
-        "adaptation": _learning_adaptation_summary(coord, entry.entry_id),
-        "adaptation_history": _learning_adaptation_history_summary(coord, entry.entry_id),
         "device_profile": _device_profile_export(coord),
         "storage_context": await _learning_storage_context_export(
             hass, entry.entry_id, now=now,

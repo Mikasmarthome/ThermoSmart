@@ -126,13 +126,12 @@ class TestZoneEntryDiagnostics:
             "analytics", "historical_learning_snapshot", "runtime_state",
             "runtime_health", "runtime_pending", "learning_progress",
             "episode_history", "research_daily", "critical_events",
-            "adaptation", "adaptation_history", "device_profile", "storage_context",
+            "device_profile", "storage_context",
         ):
             assert key in result, f"missing diagnostics key: {key}"
 
         assert result["runtime_state"] is None
         assert result["runtime_health"] is None
-        assert result["adaptation"] is None
         assert result["device_profile"] is None
         # Coordinator-less blocks degrade to an explicit unavailable marker,
         # never a raise and never a silently-omitted key.
@@ -140,7 +139,6 @@ class TestZoneEntryDiagnostics:
         assert result["episode_history"]["available"] is False
         assert result["research_daily"]["available"] is False
         assert result["critical_events"]["available"] is False
-        assert result["adaptation_history"]["application_layer_status"] == "reserved"
 
     async def test_with_coordinator_populates_runtime_state(self, monkeypatch):
         zone = _entry("zone_1")
@@ -181,6 +179,10 @@ class TestZoneEntryDiagnostics:
         assert "reserved_diagnostics" not in result
         assert "adaptation_application" not in result
         assert "orchestration_preview" not in result
+        # The passive adaptation stack was removed entirely — neither the
+        # candidate summary nor its history block appears in diagnostics anymore.
+        assert "adaptation" not in result
+        assert "adaptation_history" not in result
 
     async def test_runtime_models_raw_coefficients_not_surfaced(self, monkeypatch):
         """The raw Learning model-coefficient dump (formerly "runtime_models",

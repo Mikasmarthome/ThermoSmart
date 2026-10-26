@@ -10,8 +10,8 @@ from dataclasses import dataclass
 
 from .storage import naming
 from .storage.stores import (
+    ADAPTATION_HISTORY_STORE_VERSION,
     APPLICATION_LIFECYCLE_STORE_VERSION,
-    AdaptationHistoryStore,
     EpisodesStore,
     ResearchDailyStore,
     StorageMetadataStore,
@@ -53,11 +53,19 @@ async def async_purge_zone_storage(factory: StoreFactory, entry_id: str) -> Zone
         except Exception as err:
             errors.append(f"{key}: {type(err).__name__}")
 
-    await _delete(AdaptationHistoryStore(factory, lz), naming.adaptation_history_key(lz))
-    # The removed adaptation application-lifecycle layer left inert stored data on
-    # existing installs. Its store class is gone, so purge both the neutral and
-    # legacy keys through the generic versioned-store delete (current + legacy),
-    # keyed straight off naming.py — no adaptation-package dependency.
+    # The adaptation candidate-history and application-lifecycle layers were
+    # removed. Their store classes are gone, but existing installs may still
+    # hold inert data under both the neutral and legacy keys, so purge each pair
+    # through the generic versioned-store delete (current + legacy), keyed
+    # straight off naming.py — no adaptation-package dependency.
+    await _delete(
+        _VersionedStore(
+            factory,
+            naming.adaptation_history_key_pair(lz),
+            ADAPTATION_HISTORY_STORE_VERSION,
+        ),
+        naming.adaptation_history_key(lz),
+    )
     await _delete(
         _VersionedStore(
             factory,

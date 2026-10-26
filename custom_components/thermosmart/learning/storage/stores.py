@@ -16,10 +16,11 @@ from . import naming
 
 # Per-store schema versions (independent of the key-layout version).
 EPISODES_STORE_VERSION = 1
+# The adaptation candidate-history and application-lifecycle layers were removed;
+# these two envelope versions are retained only so zone removal can still purge
+# inert legacy stored data (see learning/reset.py). No store class writes under
+# them anymore.
 ADAPTATION_HISTORY_STORE_VERSION = 1
-# The adaptation application-lifecycle layer was removed; this envelope version
-# is retained only so zone removal can still purge inert legacy stored data
-# (see learning/reset.py). No store class writes under it anymore.
 APPLICATION_LIFECYCLE_STORE_VERSION = 1
 SUPPORT_CRITICAL_EVENT_STORE_VERSION = 1
 RESEARCH_DAILY_STORE_VERSION = 1
@@ -175,20 +176,6 @@ class EpisodesStore(_VersionedStore):
                          EPISODES_STORE_VERSION)
 
 
-class AdaptationHistoryStore(_VersionedStore):
-    """Versioned per-zone store for passive adaptation candidate history.
-
-    Keyed by ``adaptation_history_key(learning_zone_id)``.
-    """
-
-    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(
-            factory,
-            naming.adaptation_history_key_pair(learning_zone_id),
-            ADAPTATION_HISTORY_STORE_VERSION,
-        )
-
-
 class SupportCriticalEventStore(_VersionedStore):
     """Versioned per-zone store for the bounded Support Critical Event history.
 
@@ -252,7 +239,6 @@ class StorageWriteReason(Enum):
     RAW_SAMPLE_APPEND = "raw_sample_append"
     RESEARCH_DAILY_UPDATE = "research_daily_update"
     SUPPORT_EVENT_APPEND = "support_event_append"
-    ADAPTATION_HISTORY_UPDATE = "adaptation_history_update"
     MIGRATION = "migration"
     RESET = "reset"
     UNSPECIFIED = "unspecified"

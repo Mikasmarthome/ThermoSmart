@@ -294,19 +294,6 @@ class LearningShadowController:
             )
         except Exception:
             pass  # non-fatal: history stays in-memory only
-        # Application lifecycle state — in-memory with persistent backing store.
-        # No real application in this layer; entries are added by a future Application Layer.
-        self._application_lifecycle_state = None  # ApplicationLifecycleState | None
-        self._application_lifecycle_save_needed: bool = False
-        self._application_lifecycle_last_error: Optional[str] = None
-        self._application_lifecycle_store = None
-        try:
-            from ..storage.stores import ApplicationLifecycleStore, HomeAssistantStoreFactory
-            self._application_lifecycle_store = ApplicationLifecycleStore(
-                HomeAssistantStoreFactory(hass), zone_id,
-            )
-        except Exception:
-            pass  # non-fatal: lifecycle state stays in-memory only
         # Episode capture storage — store-access facade.
         # Construction itself performs zero storage I/O: it only holds a
         # StoreFactory reference plus the canonical episode-type
@@ -412,8 +399,6 @@ class LearningShadowController:
             return False
         # Load persisted adaptation history (non-fatal; errors in _adaptation_last_error)
         await self._async_load_adaptation_history_safe()
-        # Load persisted application lifecycle state (non-fatal; no real entries yet)
-        await self._async_load_application_lifecycle_safe()
         # Load persisted episode history (non-fatal; no runtime writer yet)
         await self._async_load_episode_history_safe()
         # Load persisted support critical events (non-fatal; no runtime writer yet)
@@ -634,69 +619,6 @@ class LearningShadowController:
                 "adaptation_history", StorageWriteReason.ADAPTATION_HISTORY_UPDATE)
         except Exception as err:
             self._adaptation_last_error = str(err)
-
-    async def _async_load_application_lifecycle_safe(self) -> None:
-        """Load persisted application lifecycle state. Non-fatal on missing or corrupt store."""
-        if self._application_lifecycle_store is None:
-            return
-        try:
-            from ..adaptation.application_state import (
-                ApplicationLifecycleState, deserialize_application_lifecycle_state,
-            )
-            raw = await self._application_lifecycle_store.load()
-            if raw is None:
-                # No persisted data yet — initialize empty state so the Application Layer
-                # can add entries without having to guard against None first.
-                self._application_lifecycle_state = ApplicationLifecycleState(
-                    learning_zone_id=self._zone, updated_at="", entries={},
-                )
-                return
-            state = deserialize_application_lifecycle_state(raw, self._zone)
-            self._application_lifecycle_state = state
-        except Exception as err:
-            self._application_lifecycle_last_error = str(err)
-
-    async def _async_save_application_lifecycle_safe(self) -> None:
-        """Persist application lifecycle state best-effort. Non-fatal on error.
-
-        Dirty flag remains True when save fails, ensuring the next opportunity retries.
-        """
-        if (self._application_lifecycle_store is None
-                or not self._application_lifecycle_save_needed):
-            return
-        try:
-            if self._application_lifecycle_state is None:
-                return
-            from datetime import datetime
-            from ..adaptation.application_state import serialize_application_lifecycle_state
-            from ..storage.stores import StorageWriteReason
-            now_utc = datetime.fromisoformat(self._utcnow_iso())
-            await self._application_lifecycle_store.save(
-                serialize_application_lifecycle_state(self._application_lifecycle_state),
-                now_utc=now_utc,
-            )
-            self._application_lifecycle_save_needed = False
-            await self._async_mark_storage_written_safe(
-                "application_lifecycle", StorageWriteReason.LIFECYCLE_UPDATE)
-        except Exception as err:
-            self._application_lifecycle_last_error = str(err)
-            # dirty flag remains — will retry on next save opportunity
-
-    def application_lifecycle_snapshot(self) -> Optional[dict]:
-        """Return a summary dict of the current application lifecycle state, or None.
-
-        Returns None when no state has been loaded yet (e.g. first run, no entries).
-        Never raises. Read-only — does not modify state.
-        """
-        try:
-            if self._application_lifecycle_state is None:
-                return None
-            from ..adaptation.application_state import summarize_application_lifecycle_state
-            return summarize_application_lifecycle_state(
-                self._application_lifecycle_state
-            ).to_dict()
-        except Exception:
-            return None
 
     async def _async_load_episode_history_safe(self) -> None:
         """Load persisted episode history via LearningCaptureStores.episodes_store().
@@ -3104,7 +3026,6 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("save", err)
         await self._async_save_adaptation_history_safe()
-        await self._async_save_application_lifecycle_safe()
         await self._async_save_episode_history_safe()
         await self._async_save_support_critical_events_safe()
         await self._async_save_research_daily_safe()
@@ -3123,8 +3044,6 @@ class LearningShadowController:
             self._record_error("unload", err)
         # Flush adaptation history (best-effort; saves if dirty)
         await self._async_save_adaptation_history_safe()
-        # Flush application lifecycle state (best-effort; saves if dirty)
-        await self._async_save_application_lifecycle_safe()
         # Flush episode history (best-effort; saves if dirty)
         await self._async_save_episode_history_safe()
         # Flush support critical events (best-effort; saves if dirty).

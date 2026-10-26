@@ -17,6 +17,9 @@ from . import naming
 # Per-store schema versions (independent of the key-layout version).
 EPISODES_STORE_VERSION = 1
 ADAPTATION_HISTORY_STORE_VERSION = 1
+# The adaptation application-lifecycle layer was removed; this envelope version
+# is retained only so zone removal can still purge inert legacy stored data
+# (see learning/reset.py). No store class writes under it anymore.
 APPLICATION_LIFECYCLE_STORE_VERSION = 1
 SUPPORT_CRITICAL_EVENT_STORE_VERSION = 1
 RESEARCH_DAILY_STORE_VERSION = 1
@@ -186,21 +189,6 @@ class AdaptationHistoryStore(_VersionedStore):
         )
 
 
-class ApplicationLifecycleStore(_VersionedStore):
-    """Versioned per-zone store for adaptation application lifecycle state.
-
-    Keyed by ``application_lifecycle_key(learning_zone_id)``.
-    Empty on first load; non-fatal on missing or corrupt data.
-    """
-
-    def __init__(self, factory: StoreFactory, learning_zone_id: str) -> None:
-        super().__init__(
-            factory,
-            naming.application_lifecycle_key_pair(learning_zone_id),
-            APPLICATION_LIFECYCLE_STORE_VERSION,
-        )
-
-
 class SupportCriticalEventStore(_VersionedStore):
     """Versioned per-zone store for the bounded Support Critical Event history.
 
@@ -265,7 +253,6 @@ class StorageWriteReason(Enum):
     RESEARCH_DAILY_UPDATE = "research_daily_update"
     SUPPORT_EVENT_APPEND = "support_event_append"
     ADAPTATION_HISTORY_UPDATE = "adaptation_history_update"
-    LIFECYCLE_UPDATE = "lifecycle_update"
     MIGRATION = "migration"
     RESET = "reset"
     UNSPECIFIED = "unspecified"

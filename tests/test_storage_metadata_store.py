@@ -16,7 +16,6 @@ from custom_components.thermosmart.learning import reset
 from custom_components.thermosmart.learning.storage import naming
 from custom_components.thermosmart.learning.storage.stores import (
     AdaptationHistoryStore,
-    ApplicationLifecycleStore,
     EpisodesStore,
     ResearchDailyStore,
     StorageKeyState,
@@ -284,7 +283,6 @@ class TestPurgeWiringDeletesMetadataIndex:
         factory = FakeFactory()
         stores = (
             AdaptationHistoryStore(factory, "lz_1"),
-            ApplicationLifecycleStore(factory, "lz_1"),
             EpisodesStore(factory, "lz_1"),
             SupportCriticalEventStore(factory, "lz_1"),
             ResearchDailyStore(factory, "lz_1"),
@@ -323,7 +321,6 @@ class TestHaIntegrationSaveWiring:
         shadow = attach_shadow(coord)
         factory = FakeFactory()
         shadow._adaptation_store = AdaptationHistoryStore(factory, shadow._zone)
-        shadow._application_lifecycle_store = ApplicationLifecycleStore(factory, shadow._zone)
         shadow._storage_metadata_store = StorageMetadataStore(factory, shadow._zone)
 
         class _FakeCaptureStores:
@@ -349,19 +346,6 @@ class TestHaIntegrationSaveWiring:
         stores = (await self._summary(shadow))["stores"]
         assert stores["adaptation_history"]["exists"] is True
         assert stores["adaptation_history"]["last_write_reason"] == "adaptation_history_update"
-
-    async def test_application_lifecycle_save_marks_written(self):
-        from custom_components.thermosmart.learning.adaptation.application_state import (
-            ApplicationLifecycleState,
-        )
-        shadow, _ = self._make_shadow()
-        shadow._application_lifecycle_state = ApplicationLifecycleState(
-            learning_zone_id=shadow._zone, updated_at="", entries={})
-        shadow._application_lifecycle_save_needed = True
-        await shadow._async_save_application_lifecycle_safe()
-        stores = (await self._summary(shadow))["stores"]
-        assert stores["application_lifecycle"]["exists"] is True
-        assert stores["application_lifecycle"]["last_write_reason"] == "lifecycle_update"
 
     async def test_episode_history_save_marks_written(self):
         shadow, _ = self._make_shadow()

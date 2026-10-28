@@ -964,28 +964,24 @@ class LearningEngine:
         eco_temp: float = TEMP_ECO,
         schedule_cfg: dict | None = None,
     ) -> float:
-        """Empfohlene Zieltemperatur – Zeitplan oder Modus-Temperatur."""
-        mode_temps = {
-            "comfort": comfort_temp,
-            "night": night_temp,
-            "away": away_temp,
-            "vacation": vacation_temp,
-            "eco": eco_temp,
-        }
-        if mode != HEATING_MODE_AUTO:
-            return mode_temps.get(mode, night_temp)
+        """Empfohlene Zieltemperatur – Zeitplan oder Modus-Temperatur.
 
-        if (schedule_cfg or {}).get(CONF_SCHEDULE_ENABLED, True):
-            schedule_temp = self._schedule_target(
-                zone_id, comfort_temp, night_temp, away_temp, schedule_cfg
-            )
-        else:
-            schedule_temp = comfort_temp
-
-        # The learning engine always returns exactly the configured schedule temperature.
-        # Learning is used for heating rates, preheat timing, and TPI coefficients –
-        # NOT for overriding the user's explicitly configured target temperature.
-        return schedule_temp
+        Delegates to the pure ``schedule.resolve_base_target`` (the single
+        source of truth); the engine only supplies its own clock. Learning is
+        used for heating rates, preheat timing and TPI coefficients – NOT for
+        overriding the user's explicitly configured target temperature.
+        """
+        from . import schedule as _schedule
+        return _schedule.resolve_base_target(
+            self._now_local(),
+            mode,
+            comfort_temp=comfort_temp,
+            night_temp=night_temp,
+            away_temp=away_temp,
+            vacation_temp=vacation_temp,
+            eco_temp=eco_temp,
+            cfg=schedule_cfg,
+        )
 
     async def async_get_preheat_minutes(
         self,
@@ -1198,41 +1194,6 @@ class LearningEngine:
         }
 
     # ── Interne Helfer ───────────────────────────────────────────────────
-
-    def _schedule_target(
-        self,
-        zone_id: str,
-        comfort_temp: float = 21.0,
-        night_temp: float = 18.0,
-        away_temp: float = 17.0,
-        schedule_cfg: dict | None = None,
-    ) -> float:
-        """Konfigurierbarer Zeitplan: Werktag 4 Blöcke, Wochenende 2 Blöcke."""
-        now = self._now_local()
-        is_weekend = now.weekday() >= 5
-        cur = now.hour * 60 + now.minute
-
-        def t(key: str, fallback: str) -> int:
-            raw = (schedule_cfg or {}).get(key, fallback)
-            try:
-                parts = str(raw).split(":")
-                return int(parts[0]) * 60 + int(parts[1])
-            except (ValueError, AttributeError, IndexError):
-                h2, m2 = fallback.split(":")
-                return int(h2) * 60 + int(m2)
-
-        # Werktag und Wochenende: gleiches Schema (Nacht → Komfort → Nacht)
-        # Abwesenheit wird automatisch via Präsenzerkennung → away_temp gehandelt
-        if not is_weekend:
-            morning = t(CONF_SCHED_WD_MORNING, "06:00")
-            night   = t(CONF_SCHED_WD_NIGHT,   "22:00")
-        else:
-            morning = t(CONF_SCHED_WE_MORNING, "08:00")
-            night   = t(CONF_SCHED_WE_NIGHT,   "23:00")
-
-        if cur < morning or cur >= night:
-            return night_temp
-        return comfort_temp
 
     def _weighted_targets_for_hour(
         self, zone_id: str, now: datetime

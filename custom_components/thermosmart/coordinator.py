@@ -53,6 +53,7 @@ from .const import (
 )
 from .device_profiles import DeviceProfile
 from .learning.clock import Clock, SystemClock
+from . import schedule
 from .weather_engine import WeatherEngine
 from .learning_engine import LearningEngine
 from .window import WindowMixin
@@ -438,59 +439,11 @@ class ThermoSmartCoordinator(
     # ── Zeitplan-Helfer ──────────────────────────────────────────────
 
     def _current_schedule_period(self) -> str:
-        now = self._now_local()
-        cfg = self.zone_cfg
-        is_weekend = now.weekday() >= 5
-        cur = now.hour * 60 + now.minute
-
-        def t(key: str, fallback: str) -> int:
-            raw = cfg.get(key, fallback)
-            try:
-                parts = str(raw).split(":")
-                return int(parts[0]) * 60 + int(parts[1])
-            except (ValueError, AttributeError, IndexError):
-                h2, m2 = fallback.split(":")
-                return int(h2) * 60 + int(m2)
-
-        if is_weekend:
-            morning = t("sched_we_morning", "08:00")
-            night   = t("sched_we_night",   "23:00")
-        else:
-            morning = t("sched_wd_morning", "06:00")
-            night   = t("sched_wd_night",   "22:00")
-
-        day_type = "we" if is_weekend else "wd"
-        if cur < morning or cur >= night:
-            return f"{day_type}_night"
-        return f"{day_type}_comfort"
+        return schedule.current_schedule_period(self._now_local(), self.zone_cfg)
 
     def _minutes_until_next_comfort(self, cfg: dict) -> int | None:
         """Minuten bis zur nächsten Komfortphase – None wenn bereits aktiv."""
-        now = self._now_local()
-        is_weekend = now.weekday() >= 5
-        cur = now.hour * 60 + now.minute
-
-        def t(key: str, fallback: str) -> int:
-            raw = cfg.get(key, fallback)
-            try:
-                parts = str(raw).split(":")
-                return int(parts[0]) * 60 + int(parts[1])
-            except (ValueError, AttributeError, IndexError):
-                h2, m2 = fallback.split(":")
-                return int(h2) * 60 + int(m2)
-
-        if is_weekend:
-            morning = t("sched_we_morning", "08:00")
-            night   = t("sched_we_night",   "23:00")
-        else:
-            morning = t("sched_wd_morning", "06:00")
-            night   = t("sched_wd_night",   "22:00")
-
-        if morning <= cur < night:
-            return None
-        if cur < morning:
-            return morning - cur
-        return (24 * 60 - cur) + morning
+        return schedule.minutes_until_next_comfort(self._now_local(), cfg)
 
     # ── Event-Listener ───────────────────────────────────────────────
 

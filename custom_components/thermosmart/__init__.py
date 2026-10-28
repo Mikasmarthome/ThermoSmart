@@ -33,7 +33,6 @@ from .const import (
     CONF_OUTDOOR_WIND_SENSOR,
     CONF_OUTDOOR_SOLAR_SENSOR,
     CONF_OUTDOOR_RAIN_SENSOR,
-    CONF_LEARNING_ENABLED,
     DOMAIN_GLOBAL_SUMMER,
     CARD_FILENAME,
     CARD_URL_PATH,
@@ -260,11 +259,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         learning_engine = hass.data[DOMAIN]["learning_engine"]
         _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine wiederverwendet")
 
-    learning_enabled = cfg.get(CONF_LEARNING_ENABLED, True)
+    # Learning switch state restored from the last run. Applied to the
+    # coordinator (the single runtime owner) BEFORE the first refresh, so the
+    # first control cycle already sees the correct effective-learning state —
+    # the switch entity itself is created only after setup. The config flag is
+    # combined with this switch inside coordinator._learning_mode_enabled().
     restored_switch = _restored_learning_switch_state(hass, entry)
-    if restored_switch is not None:
-        learning_enabled = learning_enabled and restored_switch
-    learning_engine.set_zone_enabled(entry.entry_id, learning_enabled)
 
     # Sensor-Existenz prüfen – einmalig beim Start, damit Fehlkonfigurationen
     # sofort im Log sichtbar sind statt erst nach 5 Minuten stillem None
@@ -275,6 +275,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         weather_engine=weather_engine,
         learning_engine=learning_engine,
     )
+    if restored_switch is not None:
+        coordinator.set_learning_switch(restored_switch)
     await coordinator.async_config_entry_first_refresh()
 
     # Apply global overrides that were already restored by the system entry

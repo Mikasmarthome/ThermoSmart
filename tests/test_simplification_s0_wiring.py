@@ -26,17 +26,17 @@ from tests.helpers_ha_runtime import (
 class TestLearningSwitchControlsLearning:
     def test_switch_off_turns_learning_mode_off(self):
         coord = make_coordinator()
-        coord.learning_engine.is_zone_enabled.return_value = False
+        coord.set_learning_switch(False)
         assert coord._learning_mode_enabled(coord.zone_cfg) is False
 
     def test_switch_on_keeps_learning_mode_on(self):
         coord = make_coordinator()
-        coord.learning_engine.is_zone_enabled.return_value = True
+        coord.set_learning_switch(True)
         assert coord._learning_mode_enabled(coord.zone_cfg) is True
 
     def test_config_flag_off_still_wins(self):
         coord = make_coordinator({"learning_enabled": False})
-        coord.learning_engine.is_zone_enabled.return_value = True
+        coord.set_learning_switch(True)
         assert coord._learning_mode_enabled(coord.zone_cfg) is False
 
     async def test_switch_state_selects_adaptive_or_deterministic_control(self):
@@ -46,18 +46,18 @@ class TestLearningSwitchControlsLearning:
         shadow = attach_shadow(coord, mode=LearningRuntimeMode.CONTROL, store=FakeStore())
         await shadow.async_setup()
 
-        coord.learning_engine.is_zone_enabled.return_value = True
+        coord.set_learning_switch(True)
         on = (await coord._async_update_data())["zone"]
         assert on["adaptation_mode"] == "adaptive"
         assert on["applied_boost_offset_c"] == 0.5
 
-        coord.learning_engine.is_zone_enabled.return_value = False
+        coord.set_learning_switch(False)
         off = (await coord._async_update_data())["zone"]
         assert off["adaptation_mode"] == "deterministic"
         assert off["tpi_coef_source"] == "deterministic_baseline"
         assert off["applied_boost_offset_c"] == 0.0
 
-        coord.learning_engine.is_zone_enabled.return_value = True
+        coord.set_learning_switch(True)
         back = (await coord._async_update_data())["zone"]
         assert back["adaptation_mode"] == "adaptive"
 
@@ -67,7 +67,7 @@ class TestDiagnosticsRuntimeStateReadsRealAttributes:
         coord = make_coordinator()
         coord._active_control = False
         coord._mode = "eco"
-        coord.learning_engine.is_zone_enabled.return_value = False
+        coord.set_learning_switch(False)
         coord.data = {"learning_confidence": 0.5}
         coord._learning_shadow = None
 

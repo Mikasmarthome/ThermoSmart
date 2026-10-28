@@ -227,7 +227,7 @@ async def test_learned_afterheat_does_not_lower_the_target_early():
 
 async def test_learning_switch_off_ignores_the_learned_state():
     coord, _, clock, _ = await _zone(20.4, learned=True)
-    coord.learning_engine.is_zone_enabled.return_value = False
+    coord.set_learning_switch(False)
     zone = {}
     for _ in range(4):
         zone = await _cycle(coord, clock)

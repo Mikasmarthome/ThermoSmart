@@ -234,8 +234,10 @@ class ThermoSmartStatusSensor(_Base):
     def native_value(self) -> str:
         z = self._zone
         active = self.coordinator._active_control
-        le = self.coordinator.learning_engine
-        learning = le.is_zone_enabled(self.coordinator.zone_id) if le else True
+        # Effective learning state (config flag AND the Learning switch),
+        # from the coordinator — never a raw legacy engine flag, so the status
+        # reflects what control actually does.
+        learning = self.coordinator._learning_mode_enabled(self.coordinator.zone_cfg)
 
         if not active and not learning:
             return "disabled"
@@ -270,8 +272,7 @@ class ThermoSmartStatusSensor(_Base):
         z = self._zone
         data = self.coordinator.data or {}
         presence = data.get("presence", {})
-        le = self.coordinator.learning_engine
-        learning_enabled = le.is_zone_enabled(self.coordinator.zone_id) if le else True
+        learning_enabled = self.coordinator._learning_mode_enabled(self.coordinator.zone_cfg)
 
         # Device compatibility — the first configured TRV's matched profile
         # (device_profiles.get_profile(), already computed at device-detection

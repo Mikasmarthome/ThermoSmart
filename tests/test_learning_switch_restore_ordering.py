@@ -19,16 +19,11 @@ _ENTRY_ID = "zone_1"
 
 
 class _Engine:
-    """The part of LearningEngine the switch state lives in."""
+    """A stand-in for the (still-present) LearningEngine object setup reuses.
 
-    def __init__(self):
-        self.enabled: dict[str, bool] = {}
-
-    def set_zone_enabled(self, zone_id, enabled):
-        self.enabled[zone_id] = enabled
-
-    def is_zone_enabled(self, zone_id):
-        return self.enabled.get(zone_id, True)
+    The toggle state no longer lives here — the coordinator owns it as of S7.2 —
+    so this fake needs no behaviour; it just occupies hass.data so setup takes
+    the reuse branch instead of building a real engine."""
 
 
 class _FirstRefreshReached(Exception):
@@ -64,11 +59,19 @@ async def _state_seen_by_the_first_refresh(entry, *, stored_state):
     seen = {}
 
     class _Coordinator:
-        def __init__(self, *a, **kw):
-            pass
+        """Captures the effective-learning state the first refresh would see:
+        the config flag AND the switch the coordinator was given before it."""
+
+        def __init__(self, hass, entry, **kw):
+            self._entry = entry
+            self._switch_on = True  # default for a fresh install
+
+        def set_learning_switch(self, on):
+            self._switch_on = bool(on)
 
         async def async_config_entry_first_refresh(self):
-            seen["enabled"] = engine.is_zone_enabled(_ENTRY_ID)
+            cfg = {**self._entry.data, **self._entry.options}
+            seen["enabled"] = cfg.get("learning_enabled", True) and self._switch_on
             raise _FirstRefreshReached
 
     registry, restore = _restore_data(stored_state=stored_state)

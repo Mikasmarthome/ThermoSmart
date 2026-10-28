@@ -119,9 +119,7 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
         last = await self.async_get_last_state()
         if last is not None:
             self._is_on = last.state == "on"
-        engine = self._get_engine()
-        if engine is not None:
-            engine.set_zone_enabled(self._entry.entry_id, self._is_on)
+        self._coordinator.set_learning_switch(self._is_on)
 
     @property
     def is_on(self) -> bool:
@@ -130,21 +128,14 @@ class ThermoSmartLearningSwitch(SwitchEntity, RestoreEntity):
     async def async_turn_on(self, **kwargs) -> None:
         self._is_on = True
         self.async_write_ha_state()
-        engine = self._get_engine()
-        if engine:
-            engine.set_zone_enabled(self._entry.entry_id, True)
+        self._coordinator.set_learning_switch(True)
         await self._coordinator.async_request_refresh()
 
     async def async_turn_off(self, **kwargs) -> None:
         self._is_on = False
         self.async_write_ha_state()
-        engine = self._get_engine()
-        if engine:
-            engine.set_zone_enabled(self._entry.entry_id, False)
+        self._coordinator.set_learning_switch(False)
         await self._coordinator.async_request_refresh()
-
-    def _get_engine(self):
-        return self.hass.data.get(DOMAIN, {}).get("learning_engine")
 
 
 # ── Globale Schalter (domain-weit, steuern alle Zonen) ───────────────────────

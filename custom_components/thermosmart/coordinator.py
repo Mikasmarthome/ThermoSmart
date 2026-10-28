@@ -143,6 +143,11 @@ class ThermoSmartCoordinator(
 
         # Steuerungszustand
         self._active_control: bool = False
+        # Effective-learning switch state. The coordinator is the single runtime
+        # owner: the Learning switch entity, integration setup (restore before
+        # the first refresh) and the status sensor all read/write it here, not a
+        # legacy engine flag. Defaults ON for a fresh install with no stored state.
+        self._learning_switch_on: bool = True
         self._mode: str = HEATING_MODE_AUTO
         self._override: float | None = None
         self._override_schedule_period: str | None = None
@@ -332,16 +337,20 @@ class ThermoSmartCoordinator(
     def _learning_mode_enabled(self, cfg: dict) -> bool:
         """True when Learning may influence control and observe.
 
-        Learning is on unless the zone config flag turns it off or the zone's
-        Learning switch is off. The switch is the user-facing control (its state
-        is restored by the switch entity into the learning engine), so it must
-        be honoured here; reading only the config flag left the switch without
-        effect on control.
+        Effective learning = the zone config flag AND the user's Learning
+        switch. The coordinator owns the switch state (``_learning_switch_on``);
+        the switch entity and integration setup write it here, so a single
+        source drives control, the status sensor and diagnostics alike.
         """
         if not cfg.get("learning_enabled", True):
             return False
-        engine = self.learning_engine
-        return bool(engine.is_zone_enabled(self.zone_id)) if engine is not None else True
+        return self._learning_switch_on
+
+    def set_learning_switch(self, on: bool) -> None:
+        """Set the user-facing Learning switch state (the effective-learning
+        owner). Called on restore (before the first refresh) and on every
+        user toggle; combined with the config flag in _learning_mode_enabled()."""
+        self._learning_switch_on = bool(on)
 
     # ── Setter ──────────────────────────────────────────────────────
 

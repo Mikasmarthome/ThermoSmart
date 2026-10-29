@@ -127,18 +127,3 @@ def make_mock_hass() -> MagicMock:
     hass.services = MagicMock()
     hass.config.units.temperature_unit = UnitOfTemperature.CELSIUS
     return hass
-
-
-def make_learning_engine(*, clock=None):
-    """Create a LearningEngine with a mocked hass for pure-logic unit tests.
-
-    Suitable for Welle 4a characterization tests: methods that only read or
-    compute derived values, or mutate in-memory dicts.  The underlying Store is
-    never written to in these tests — persistence is covered separately in a
-    later wave.
-
-    Pass ``clock`` to inject a FakeClock for deterministic time-dependent tests.
-    """
-    from custom_components.thermosmart.learning_engine import LearningEngine
-
-    return LearningEngine(make_mock_hass(), clock=clock)

@@ -30,8 +30,9 @@ from custom_components.thermosmart.const import (
     HEATING_MODE_NIGHT,
     HEATING_MODE_VACATION,
 )
+from custom_components.thermosmart import schedule
 from custom_components.thermosmart.learning.clock import FakeClock
-from tests.helpers import make_coordinator, make_learning_engine, make_zone_config
+from tests.helpers import make_coordinator, make_zone_config
 
 # 2025-06-16 Monday (weekday 0); 2025-06-21 Saturday (weekday 5);
 # 2025-06-20 Friday (weekday 4); 2025-06-22 Sunday (weekday 6).
@@ -110,48 +111,49 @@ class TestMinutesUntilNextComfort:
         assert self._m(c) == 60
 
 
-# ── learning_engine.async_get_base_target: mode mapping ─────────────────────
+# ── schedule.resolve_base_target: mode mapping ──────────────────────────────
 
 class TestBaseTargetModeMapping:
-    async def _target(self, when, mode, **cfg):
-        eng = make_learning_engine(clock=FakeClock(start=when))
+    def _target(self, when, mode, **cfg):
+        # In the test environment HA's as_local() is identity for UTC, so the
+        # coordinator's now_local equals this UTC-aware `when`.
         z = make_zone_config(**cfg)
-        return await eng.async_get_base_target(
-            "z", mode=mode,
+        return schedule.resolve_base_target(
+            when, mode,
             comfort_temp=21.0, night_temp=18.0, away_temp=17.0,
-            vacation_temp=12.0, eco_temp=19.0, schedule_cfg=z,
+            vacation_temp=12.0, eco_temp=19.0, cfg=z,
         )
 
-    async def test_comfort_mode(self):
-        assert await self._target(MON.replace(hour=3), HEATING_MODE_COMFORT) == 21.0
+    def test_comfort_mode(self):
+        assert self._target(MON.replace(hour=3), HEATING_MODE_COMFORT) == 21.0
 
-    async def test_night_mode(self):
-        assert await self._target(MON.replace(hour=12), HEATING_MODE_NIGHT) == 18.0
+    def test_night_mode(self):
+        assert self._target(MON.replace(hour=12), HEATING_MODE_NIGHT) == 18.0
 
-    async def test_away_mode(self):
-        assert await self._target(MON.replace(hour=12), HEATING_MODE_AWAY) == 17.0
+    def test_away_mode(self):
+        assert self._target(MON.replace(hour=12), HEATING_MODE_AWAY) == 17.0
 
-    async def test_vacation_mode(self):
-        assert await self._target(MON.replace(hour=12), HEATING_MODE_VACATION) == 12.0
+    def test_vacation_mode(self):
+        assert self._target(MON.replace(hour=12), HEATING_MODE_VACATION) == 12.0
 
-    async def test_eco_mode(self):
-        assert await self._target(MON.replace(hour=12), HEATING_MODE_ECO) == 19.0
+    def test_eco_mode(self):
+        assert self._target(MON.replace(hour=12), HEATING_MODE_ECO) == 19.0
 
-    async def test_unknown_non_auto_mode_falls_back_to_night(self):
-        assert await self._target(MON.replace(hour=12), "frobnicate") == 18.0
+    def test_unknown_non_auto_mode_falls_back_to_night(self):
+        assert self._target(MON.replace(hour=12), "frobnicate") == 18.0
 
-    async def test_auto_comfort_window_returns_comfort(self):
-        assert await self._target(MON.replace(hour=12), HEATING_MODE_AUTO) == 21.0
+    def test_auto_comfort_window_returns_comfort(self):
+        assert self._target(MON.replace(hour=12), HEATING_MODE_AUTO) == 21.0
 
-    async def test_auto_night_window_returns_night(self):
-        assert await self._target(MON.replace(hour=5), HEATING_MODE_AUTO) == 18.0
+    def test_auto_night_window_returns_night(self):
+        assert self._target(MON.replace(hour=5), HEATING_MODE_AUTO) == 18.0
 
-    async def test_auto_weekend_morning_is_later(self):
+    def test_auto_weekend_morning_is_later(self):
         # weekend morning default 08:00 → 07:00 is still night
-        assert await self._target(SAT.replace(hour=7), HEATING_MODE_AUTO) == 18.0
+        assert self._target(SAT.replace(hour=7), HEATING_MODE_AUTO) == 18.0
 
-    async def test_auto_schedule_disabled_returns_comfort(self):
+    def test_auto_schedule_disabled_returns_comfort(self):
         # schedule_enabled=False → base target is always comfort in AUTO
-        assert await self._target(
+        assert self._target(
             MON.replace(hour=5), HEATING_MODE_AUTO, schedule_enabled=False
         ) == 21.0

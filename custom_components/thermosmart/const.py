@@ -128,16 +128,7 @@ WEATHER_REDUCE_OFFSET = -1.0    # °C subtracted when mild
 WIND_THRESHOLD_MS = 10.0        # m/s
 WIND_CHILL_BOOST = 0.5          # °C extra when cold AND windy
 
-# Learning algorithm settings
-LEARNING_MIN_SAMPLES = 5        # Mindest-Beobachtungen bevor Lernen aktiv wird
-PREHEAT_MAX_MINUTES = 180       # maximale Vorheizzeit
-PREHEAT_MIN_DELTA = 2.0         # °C Differenz ab der Vorheizung ausgelöst wird
-
 # Prognose-Feedback-Loop
-FORECAST_EVAL_HOURS = 5          # Stunden bis Prognose-Entscheidung ausgewertet wird
-FORECAST_BIAS_MIN = 0.3          # Mindest-Vertrauen in Prognose (nie komplett ignorieren)
-FORECAST_BIAS_MAX = 1.0          # Vollständiges Vertrauen (Standard / Cold-Start)
-FORECAST_BIAS_LEARNING_RATE = 0.06  # Anpassungsrate pro Auswertung
 FORECAST_DELTA_FULL_HEAT = 3.0   # °C unter Ziel → vollständig heizen, Prognose ignorieren
 FORECAST_DELTA_BLEND = 1.5       # °C unter Ziel → Übergang beginnt
 

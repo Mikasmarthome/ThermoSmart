@@ -51,37 +51,66 @@ def _hhmm_to_minutes(raw: object, fallback: str) -> int:
         return int(h) * 60 + int(m)
 
 
-def _slots(now_local: datetime, cfg: Optional[dict]) -> tuple[bool, int, int, int]:
-    """Return ``(is_weekend, cur_minutes, morning_minutes, night_minutes)``."""
-    cfg = cfg or {}
-    is_weekend = now_local.weekday() >= 5
-    cur = now_local.hour * 60 + now_local.minute
+def _day_slots(is_weekend: bool, cfg: dict) -> tuple[int, int]:
+    """Return ``(morning_minutes, night_minutes)`` for a weekday or weekend day."""
     if is_weekend:
         morning = _hhmm_to_minutes(cfg.get(CONF_SCHED_WE_MORNING, _WE_MORNING_DEFAULT), _WE_MORNING_DEFAULT)
         night = _hhmm_to_minutes(cfg.get(CONF_SCHED_WE_NIGHT, _WE_NIGHT_DEFAULT), _WE_NIGHT_DEFAULT)
     else:
         morning = _hhmm_to_minutes(cfg.get(CONF_SCHED_WD_MORNING, _WD_MORNING_DEFAULT), _WD_MORNING_DEFAULT)
         night = _hhmm_to_minutes(cfg.get(CONF_SCHED_WD_NIGHT, _WD_NIGHT_DEFAULT), _WD_NIGHT_DEFAULT)
+    return morning, night
+
+
+def _slots(now_local: datetime, cfg: Optional[dict]) -> tuple[bool, int, int, int]:
+    """Return ``(is_weekend, cur_minutes, morning_minutes, night_minutes)``."""
+    cfg = cfg or {}
+    is_weekend = now_local.weekday() >= 5
+    cur = now_local.hour * 60 + now_local.minute
+    morning, night = _day_slots(is_weekend, cfg)
     return is_weekend, cur, morning, night
 
 
 def current_schedule_period(now_local: datetime, cfg: Optional[dict]) -> str:
-    """Return the active slot label: ``wd_night``/``wd_comfort``/``we_night``/``we_comfort``."""
+    """Return the active slot label: ``wd_night``/``wd_comfort``/``we_night``/``we_comfort``.
+
+    When the schedule is disabled the zone is always in comfort. The night that
+    runs past midnight keeps the day-type of the evening it started on, so a
+    manual override set in the evening does not expire at midnight purely
+    because the calendar day flips (it ends at the next morning, as intended).
+    """
+    cfg = cfg or {}
     is_weekend, cur, morning, night = _slots(now_local, cfg)
-    day_type = "we" if is_weekend else "wd"
-    if cur < morning or cur >= night:
-        return f"{day_type}_night"
-    return f"{day_type}_comfort"
+    today = "we" if is_weekend else "wd"
+    if not cfg.get(CONF_SCHEDULE_ENABLED, True):
+        return f"{today}_comfort"
+    if morning <= cur < night:
+        return f"{today}_comfort"
+    if cur >= night:
+        return f"{today}_night"
+    # cur < morning: the early-morning night is the continuation of the previous
+    # calendar day's evening night — label it with that day's type.
+    yesterday_weekend = ((now_local.weekday() - 1) % 7) >= 5
+    return f"{'we' if yesterday_weekend else 'wd'}_night"
 
 
 def minutes_until_next_comfort(now_local: datetime, cfg: Optional[dict]) -> Optional[int]:
-    """Minutes until the next comfort window opens, or ``None`` if already inside it."""
+    """Minutes until the next comfort window opens, or ``None`` if already inside it
+    (or if the schedule is disabled — comfort is then always active, so there is
+    no upcoming transition to pre-heat toward)."""
+    cfg = cfg or {}
+    if not cfg.get(CONF_SCHEDULE_ENABLED, True):
+        return None
     _is_weekend, cur, morning, night = _slots(now_local, cfg)
     if morning <= cur < night:
         return None
     if cur < morning:
         return morning - cur
-    return (24 * 60 - cur) + morning
+    # cur >= night: the next comfort window is the NEXT calendar day's morning,
+    # which may be a different day-type (weekday vs weekend) than today.
+    tomorrow_weekend = ((now_local.weekday() + 1) % 7) >= 5
+    tomorrow_morning, _night = _day_slots(tomorrow_weekend, cfg)
+    return (24 * 60 - cur) + tomorrow_morning
 
 
 def schedule_slot_target(

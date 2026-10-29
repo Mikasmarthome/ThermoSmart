@@ -26,6 +26,7 @@ from .const import (
     CONF_VACATION_BOOLEAN,
     CONF_VACATION_TEMP,
     CONF_ECO_TEMP,
+    CONF_SCHEDULE_ENABLED,
     NOISE_FILTER_SPIKE_THRESHOLD,
     NOISE_FILTER_EMA_ALPHA,
     TEMP_NIGHT,
@@ -1522,7 +1523,7 @@ class ThermoSmartCoordinator(
         if mode in (HEATING_MODE_COMFORT, HEATING_MODE_NIGHT, HEATING_MODE_ECO, HEATING_MODE_AWAY):
             return mode
         # AUTO mode: derive from the active schedule slot
-        if not cfg.get("schedule_enabled", True):
+        if not cfg.get(CONF_SCHEDULE_ENABLED, True):
             return "comfort"
         raw = self._current_schedule_period()
         return raw.split("_", 1)[1] if "_" in raw else "comfort"

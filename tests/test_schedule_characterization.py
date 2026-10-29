@@ -1,20 +1,17 @@
-"""Characterization of the current schedule semantics (S7.0).
+"""Schedule semantics across the three call sites.
 
-Pins the behaviour of the three schedule call sites exactly as they are today,
-BEFORE the schedule component is extracted (S7.1) and BEFORE the known bugs are
-fixed (S7.8):
+Originally the S7.0 characterization of current behaviour; the schedule-off,
+midnight-wrap and midnight-continuity assertions (marked S7.8 A/B/C) now assert
+the *fixed* behaviour from the S7.8 schedule behaviour-fix commit, while the
+rest still pin the long-standing semantics that the S7.1 extraction preserved:
 
   * coordinator._current_schedule_period()     – wd/we comfort-vs-night label
   * coordinator._minutes_until_next_comfort()  – minutes to next comfort window
-  * learning_engine.async_get_base_target()    – mode mapping + schedule target
+  * schedule.resolve_base_target()             – mode mapping + schedule target
 
-Weekday/weekend slot defaults: wd 06:00/22:00, we 08:00/23:00.
-
-Some assertions below deliberately pin *current, buggy* behaviour (marked
-"BUG(S7.8)"); they are the regression anchor the bit-identical extraction must
-keep green and are updated — with explicit new tests — only in the S7.8 fix
-commit. In the test environment HA's as_local() returns UTC, so a UTC-aware
-FakeClock time maps directly to the local weekday/hour the schedule reads.
+Weekday/weekend slot defaults: wd 06:00/22:00, we 08:00/23:00. In the test
+environment HA's as_local() returns UTC, so a UTC-aware FakeClock time maps
+directly to the local weekday/hour the schedule reads.
 """
 from __future__ import annotations
 
@@ -52,17 +49,20 @@ class TestCurrentSchedulePeriod:
     def test_weekday_morning_is_comfort(self):
         assert _coord_at(MON.replace(hour=9))._current_schedule_period() == "wd_comfort"
 
-    def test_weekday_night_is_night(self):
+    def test_weekday_evening_night_is_night(self):
         assert _coord_at(MON.replace(hour=23))._current_schedule_period() == "wd_night"
 
-    def test_weekday_before_morning_is_night(self):
-        assert _coord_at(MON.replace(hour=5))._current_schedule_period() == "wd_night"
+    def test_weekday_early_morning_night_inherits_previous_day(self):
+        # S7.8(C): Monday 05:00 is the tail of Sunday's (weekend) night → we_night,
+        # not a fresh wd_night that would wrongly expire an evening override.
+        assert _coord_at(MON.replace(hour=5))._current_schedule_period() == "we_night"
 
     def test_weekend_morning_is_comfort(self):
         assert _coord_at(SAT.replace(hour=9))._current_schedule_period() == "we_comfort"
 
-    def test_weekend_night_is_night(self):
-        assert _coord_at(SAT.replace(hour=7))._current_schedule_period() == "we_night"
+    def test_weekend_early_morning_night_inherits_previous_day(self):
+        # S7.8(C): Saturday 07:00 is the tail of Friday's (weekday) night → wd_night.
+        assert _coord_at(SAT.replace(hour=7))._current_schedule_period() == "wd_night"
 
     def test_exact_morning_boundary_weekday_is_comfort(self):
         # cur == morning (06:00): not < morning → comfort
@@ -72,10 +72,16 @@ class TestCurrentSchedulePeriod:
         # cur == night (22:00): cur >= night → night
         assert _coord_at(MON.replace(hour=22, minute=0))._current_schedule_period() == "wd_night"
 
-    def test_schedule_enabled_false_still_computes_period(self):
-        # BUG(S7.8): _current_schedule_period ignores schedule_enabled today.
+    def test_schedule_disabled_is_always_comfort(self):
+        # S7.8(A): with the schedule off the zone is always in comfort.
         c = _coord_at(MON.replace(hour=5), schedule_enabled=False)
-        assert c._current_schedule_period() == "wd_night"
+        assert c._current_schedule_period() == "wd_comfort"
+
+    def test_night_label_is_stable_across_midnight(self):
+        # S7.8(C): the night Fri 22:00 → Sat 08:00 keeps one label across midnight,
+        # so an evening override does not expire at 00:00.
+        assert _coord_at(FRI.replace(hour=23))._current_schedule_period() == "wd_night"
+        assert _coord_at(SAT.replace(hour=0, minute=30))._current_schedule_period() == "wd_night"
 
 
 # ── _minutes_until_next_comfort ─────────────────────────────────────────────
@@ -88,27 +94,27 @@ class TestMinutesUntilNextComfort:
         assert self._m(_coord_at(MON.replace(hour=12))) is None
 
     def test_before_morning_returns_delta(self):
-        # 05:00 → 06:00 morning = 60 min
+        # 05:00 → 06:00 morning = 60 min (today's morning, same day-type)
         assert self._m(_coord_at(MON.replace(hour=5, minute=0))) == 60
 
-    def test_after_night_wraps_to_same_daytype_morning(self):
-        # 23:00 weekday → (1440-1380)+360 = 420 min to the SAME day-type morning
+    def test_after_night_wraps_to_next_weekday_morning(self):
+        # Monday 23:00 → Tuesday (weekday) 06:00 = (1440-1380)+360 = 420
         assert self._m(_coord_at(MON.replace(hour=23, minute=0))) == 420
 
-    def test_sunday_night_uses_weekend_morning_today_bug(self):
-        # BUG(S7.8): Sunday 23:30 wraps with weekend morning (08:00) not Monday's
-        # weekday morning (06:00). 1410 → (1440-1410)+480 = 510.
-        assert self._m(_coord_at(SUN.replace(hour=23, minute=30))) == 510
+    def test_sunday_night_wraps_to_monday_weekday_morning(self):
+        # S7.8(B): Sunday 23:30 wraps to MONDAY's weekday morning (06:00), not the
+        # weekend morning. 1410 → (1440-1410)+360 = 390.
+        assert self._m(_coord_at(SUN.replace(hour=23, minute=30))) == 390
 
-    def test_friday_night_uses_weekday_morning_today_bug(self):
-        # BUG(S7.8): Friday 22:30 wraps with weekday morning (06:00) not
-        # Saturday's weekend morning (08:00). 1350 → (1440-1350)+360 = 450.
-        assert self._m(_coord_at(FRI.replace(hour=22, minute=30))) == 450
+    def test_friday_night_wraps_to_saturday_weekend_morning(self):
+        # S7.8(B): Friday 22:30 wraps to SATURDAY's weekend morning (08:00), not the
+        # weekday morning. 1350 → (1440-1350)+480 = 570.
+        assert self._m(_coord_at(FRI.replace(hour=22, minute=30))) == 570
 
-    def test_schedule_enabled_false_still_returns_fake_minutes_bug(self):
-        # BUG(S7.8): ignores schedule_enabled → still produces a next-comfort time.
+    def test_schedule_disabled_returns_none(self):
+        # S7.8(A): schedule off → comfort always active → no upcoming transition.
         c = _coord_at(MON.replace(hour=5, minute=0), schedule_enabled=False)
-        assert self._m(c) == 60
+        assert self._m(c) is None
 
 
 # ── schedule.resolve_base_target: mode mapping ──────────────────────────────

@@ -62,10 +62,10 @@ class _Rig:
         }, clock=self.clock)
         with patch("homeassistant.helpers.frame.report_usage"):
             self.coord = _E2ECoordinator(
-                base.hass, base.entry, base.weather_engine, base.learning_engine,
+                base.hass, base.entry, base.weather_engine,
                 clock=self.clock,
             )
-        self.coord.learning_engine.async_get_base_target = AsyncMock(return_value=normal)
+        self.coord._resolve_base_target = MagicMock(return_value=normal)
         self.coord._active_control = True
         self.contact = ("off", _T0 - timedelta(days=1))
         self.temp = 21.0

@@ -42,21 +42,8 @@ def make_coordinator(zone_cfg_overrides: dict | None = None, *, clock=None):
     weather_engine.compute_forecast_suppression.return_value = 1.0
     weather_engine.async_get_data = AsyncMock(return_value={"temperature": 10.0})
 
-    learning_engine = MagicMock()
-    learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
-    learning_engine.async_get_preheat_minutes = AsyncMock(return_value=0)
-    learning_engine.get_forecast_bias.return_value = 1.0
-    learning_engine.get_confidence.return_value = 0.5
-    learning_engine.get_tpi_coefficients.return_value = (0.6, 0.01)
-    learning_engine.get_boost_factor.return_value = 1.0
-    learning_engine.async_observe = AsyncMock()
-    learning_engine.evaluate_forecast_decisions = MagicMock()
-    learning_engine.update_heating_session = MagicMock()
-    learning_engine.record_forecast_decision = MagicMock()
-
     with _patch("homeassistant.helpers.frame.report_usage"):
-        return ThermoSmartCoordinator(hass, entry, weather_engine, learning_engine,
-                                      clock=clock)
+        return ThermoSmartCoordinator(hass, entry, weather_engine, clock=clock)
 
 
 def make_zone_config(**overrides) -> dict:

@@ -55,7 +55,6 @@ from .device_profiles import DeviceProfile
 from .learning.clock import Clock, SystemClock
 from . import schedule
 from .weather_engine import WeatherEngine
-from .learning_engine import LearningEngine
 from .window import WindowMixin
 from .season import SeasonMixin
 from .trv_control import TRVControlMixin, _DispatchStats
@@ -128,7 +127,6 @@ class ThermoSmartCoordinator(
         hass: HomeAssistant,
         entry: ConfigEntry,
         weather_engine: WeatherEngine,
-        learning_engine: LearningEngine,
         *,
         clock: "Clock | None" = None,
     ) -> None:
@@ -139,7 +137,6 @@ class ThermoSmartCoordinator(
         )
         self.entry = entry
         self.weather_engine = weather_engine
-        self.learning_engine = learning_engine
 
         # Steuerungszustand
         self._active_control: bool = False
@@ -447,6 +444,19 @@ class ThermoSmartCoordinator(
 
     # ── Zeitplan-Helfer ──────────────────────────────────────────────
 
+    def _resolve_base_target(self, mode: str, cfg: dict) -> float:
+        """Base target temperature for the current mode/time — a thin binding of
+        this zone's clock and config to the pure schedule component."""
+        return schedule.resolve_base_target(
+            self._now_local(), mode,
+            comfort_temp=cfg.get("comfort_temp", 21.0),
+            night_temp=cfg.get("night_temp", TEMP_NIGHT),
+            away_temp=cfg.get("away_temp", 17.0),
+            vacation_temp=cfg.get(CONF_VACATION_TEMP, 12.0),
+            eco_temp=cfg.get(CONF_ECO_TEMP, TEMP_ECO),
+            cfg=cfg,
+        )
+
     def _current_schedule_period(self) -> str:
         return schedule.current_schedule_period(self._now_local(), self.zone_cfg)
 
@@ -530,9 +540,8 @@ class ThermoSmartCoordinator(
                                     self.hass, close_delay_secs, _close_delay_expired
                                 )
 
-                            # LE v1 window-cooling observation removed (frozen no-op —
-                            # LearningEngine.freeze() in __init__.py). LE v1 now only
-                            # serves the schedule lookup via async_get_base_target().
+                            # LE v1 window-cooling observation was removed; the base
+                            # target now comes from the pure schedule component.
                             self._window_open_temp.pop(entity_id, None)
                         self._window_open_at.pop(entity_id, None)
 
@@ -883,8 +892,8 @@ class ThermoSmartCoordinator(
             current_temp = recommendation.get("current_temp")
             if target is not None:
                 # TPI-Koeffizienten: Learning authoritative (Phase 19D).
-                # LE v1 path (learning_engine.get_tpi_coefficients) is kept only as
-                # emergency fallback when the Learning shadow is not yet attached.
+                # When the Learning shadow is not attached, deterministic TPI
+                # defaults are used — never any legacy engine coefficients.
                 if _learning_mode_on and self._learning_shadow is not None:
                     # Learning is authoritative for TPI coefficients (Phase 19D).
                     # read_tpi_coefficients_safe() returns the blended *candidate* coef_int.
@@ -1031,9 +1040,8 @@ class ThermoSmartCoordinator(
 
             await self._async_observe_trv_setpoints(cfg, recommendation, weather_data)
 
-            # LE v1 outcome-scoring/observation removed (frozen no-op —
-            # LearningEngine.freeze() in __init__.py). LE v1 now only serves
-            # the schedule lookup via async_get_base_target().
+            # LE v1 outcome-scoring/observation was removed; the base target now
+            # comes from the pure schedule component.
             indoor_humidity = self._read_avg_sensor(cfg.get("humidity_sensors", []))
 
             # Learning Support Critical Events: record window/summer/manual hold
@@ -1974,15 +1982,7 @@ class ThermoSmartCoordinator(
 
         comfort_temp = cfg.get("comfort_temp", 21.0)
         night_temp_cfg = cfg.get("night_temp", TEMP_NIGHT)
-        base_target = await self.learning_engine.async_get_base_target(
-            self.zone_id, mode,
-            comfort_temp=comfort_temp,
-            night_temp=night_temp_cfg,
-            away_temp=cfg.get("away_temp", 17.0),
-            vacation_temp=cfg.get(CONF_VACATION_TEMP, 12.0),
-            eco_temp=cfg.get(CONF_ECO_TEMP, TEMP_ECO),
-            schedule_cfg=cfg,
-        )
+        base_target = self._resolve_base_target(mode, cfg)
 
         weather_offset = 0.0
         if mode == HEATING_MODE_AUTO:
@@ -2437,10 +2437,8 @@ class ThermoSmartCoordinator(
     async def _async_observe_trv_setpoints(
         self, cfg: dict, recommendation: dict, weather_data: dict
     ) -> None:
-        """No-op: existed solely to feed LE v1's setpoint-efficiency learning.
-
-        LE v1 is frozen (LearningEngine.freeze() in __init__.py) and now only
-        serves the schedule lookup via async_get_base_target(); the
-        setpoint-efficiency observation this method fed was never applied.
+        """No-op: existed solely to feed the removed LE v1 setpoint-efficiency
+        learning, whose observations were never applied to control. Retained as
+        an empty hook because the cycle and several tests still call it.
         """
         return

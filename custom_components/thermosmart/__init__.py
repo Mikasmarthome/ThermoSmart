@@ -18,8 +18,7 @@ import logging
 import os
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import EVENT_HOMEASSISTANT_STOP
-from homeassistant.core import HomeAssistant, Event
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import restore_state
@@ -40,20 +39,10 @@ from .const import (
 )
 from .coordinator import ThermoSmartCoordinator
 from .weather_engine import WeatherEngine
-from .learning_engine import LearningEngine
 
 _LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
-
-# Keys in hass.data[DOMAIN] that are session-wide state, not per-config-entry
-# data. async_unload_entry() must not count them as still-loaded entries.
-_NON_ENTRY_DATA_KEYS = (
-    "learning_engine", "global_switches_created",
-    "global_summer_select_created", "summer_switch_migrated",
-    "global_vacation_override", "global_summer_override",
-    "card_registered", "card_static_registered", "card_frontend_registered",
-)
 
 ZONE_PLATFORMS = PLATFORMS               # ["climate", "sensor", "switch", "select"]
 SYSTEM_PLATFORMS = ["switch", "select"]  # System-Entry: globale Schalter + Sommer-Select
@@ -228,37 +217,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         outdoor_rain_sensor=_sensor(CONF_OUTDOOR_RAIN_SENSOR),
     )
 
-    if "learning_engine" not in hass.data[DOMAIN]:
-        learning_engine = LearningEngine(hass)
-        await learning_engine.async_load()
-        # Phase 19A-B: Learning is the single active learning engine. The legacy engine
-        # is frozen immediately after load — read-only, no further state mutation and no
-        # store write (store is never deleted or migrated). Its loaded values may still
-        # be READ by not-yet-transferred truths until each read is transferred to Learning.
-        learning_engine.freeze()
-
-        # Veraltete Zonen bereinigen (nicht mehr in Config-Entries vorhanden)
-        active_zone_ids = {
-            e.entry_id
-            for e in hass.config_entries.async_entries(DOMAIN)
-            if e.data.get("entry_type") != "system"
-        }
-        learning_engine.prune_orphaned_zones(active_zone_ids)
-
-        hass.data[DOMAIN]["learning_engine"] = learning_engine
-        _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine erstellt")
-
-        async def _save_on_stop(event: Event) -> None:
-            """Lerndaten vor HA-Shutdown sicher auf Disk schreiben."""
-            if le := hass.data.get(DOMAIN, {}).get("learning_engine"):
-                await le.async_save()
-                _LOGGER.info("ThermoSmart: Lerndaten vor Shutdown gespeichert")
-
-        hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _save_on_stop)
-    else:
-        learning_engine = hass.data[DOMAIN]["learning_engine"]
-        _LOGGER.debug("ThermoSmart: Gemeinsame LearningEngine wiederverwendet")
-
     # Learning switch state restored from the last run. Applied to the
     # coordinator (the single runtime owner) BEFORE the first refresh, so the
     # first control cycle already sees the correct effective-learning state —
@@ -273,7 +231,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     coordinator = ThermoSmartCoordinator(
         hass, entry,
         weather_engine=weather_engine,
-        learning_engine=learning_engine,
     )
     if restored_switch is not None:
         coordinator.set_learning_switch(restored_switch)
@@ -368,20 +325,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, platforms):
         hass.data[DOMAIN].pop(entry.entry_id, {})
-        if cfg.get("entry_type") != "system":
-            remaining = [
-                k for k in hass.data[DOMAIN]
-                if k not in _NON_ENTRY_DATA_KEYS
-                and not (isinstance(hass.data[DOMAIN].get(k), dict)
-                         and hass.data[DOMAIN][k].get("type") == "system")
-            ]
-            if not remaining:
-                if le := hass.data[DOMAIN].pop("learning_engine", None):
-                    await le.async_save()
-                    _LOGGER.debug("ThermoSmart: LearningEngine gespeichert und entfernt")
-            else:
-                if le := hass.data[DOMAIN].get("learning_engine"):
-                    await le.async_save()
     return unload_ok
 
 
@@ -443,9 +386,6 @@ async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
         for e in hass.config_entries.async_entries(DOMAIN)
         if e.data.get("entry_type") != "system"
     }
-
-    if le := hass.data.get(DOMAIN, {}).get("learning_engine"):
-        le.prune_orphaned_zones(active_zone_ids)
 
     try:
         await _async_purge_learning_zone_storage(

@@ -71,7 +71,7 @@ def _make_testable(zone_cfg_overrides: dict | None = None) -> _TestableCoordinat
     base = make_coordinator(zone_cfg_overrides)
     with _patch("homeassistant.helpers.frame.report_usage"):
         coord = _TestableCoordinator(
-            base.hass, base.entry, base.weather_engine, base.learning_engine
+            base.hass, base.entry, base.weather_engine
         )
     return coord
 

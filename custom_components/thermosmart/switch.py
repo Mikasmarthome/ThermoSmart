@@ -150,7 +150,7 @@ def _global_device_info() -> DeviceInfo:
     )
 
 def _all_coordinators(hass: HomeAssistant):
-    skip = {"learning_engine", "global_switches_created"}
+    skip = {"global_switches_created"}
     for key, data in hass.data.get(DOMAIN, {}).items():
         if key not in skip and isinstance(data, dict) and data.get("type") != "system":
             if coord := data.get("coordinator"):

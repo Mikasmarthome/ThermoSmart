@@ -1,10 +1,9 @@
-"""Session-wide state in hass.data[DOMAIN] must not count as a loaded entry.
+"""Unloading a zone must drop only that entry's data, not session-wide state.
 
-async_unload_entry() decides whether the shared LearningEngine can be released
-by checking whether any config entry is still loaded. Keys that hold
-session-wide flags (e.g. the bundled-card registration state) are not config
-entries; counting them kept the LearningEngine in memory after the last zone
-was unloaded.
+async_unload_entry() pops the per-entry data for the zone being unloaded and
+leaves session-wide flags (e.g. the bundled-card registration state) in place.
+(The legacy LearningEngine release logic that used to live here is gone — LE v1
+was removed; the integration no longer keeps an engine in hass.data.)
 """
 from __future__ import annotations
 
@@ -27,11 +26,8 @@ def _zone_entry(entry_id: str) -> MagicMock:
 
 def _hass(*, loaded_entry_ids, extra=None):
     hass = make_mock_hass()
-    le = MagicMock()
-    le.async_save = AsyncMock()
     hass.data = {
         DOMAIN: {
-            "learning_engine": le,
             "card_registered": True,
             "card_static_registered": True,
             "card_frontend_registered": True,
@@ -40,20 +36,19 @@ def _hass(*, loaded_entry_ids, extra=None):
         }
     }
     hass.config_entries.async_unload_platforms = AsyncMock(return_value=True)
-    return hass, le
+    return hass
 
 
 class TestUnloadSessionState:
-    async def test_last_zone_unload_releases_the_learning_engine(self):
-        hass, le = _hass(loaded_entry_ids=["zone_1"])
+    async def test_entry_data_is_dropped_on_unload(self):
+        hass = _hass(loaded_entry_ids=["zone_1"])
 
         assert await ts_init.async_unload_entry(hass, _zone_entry("zone_1")) is True
 
-        le.async_save.assert_awaited_once()
-        assert "learning_engine" not in hass.data[DOMAIN]
+        assert "zone_1" not in hass.data[DOMAIN]
 
     async def test_card_registration_state_survives_the_unload(self):
-        hass, _ = _hass(loaded_entry_ids=["zone_1"])
+        hass = _hass(loaded_entry_ids=["zone_1"])
 
         await ts_init.async_unload_entry(hass, _zone_entry("zone_1"))
 
@@ -61,24 +56,6 @@ class TestUnloadSessionState:
         assert hass.data[DOMAIN]["card_registered"] is True
         assert hass.data[DOMAIN]["card_static_registered"] is True
         assert hass.data[DOMAIN]["card_frontend_registered"] is True
-
-    async def test_learning_engine_is_kept_while_another_zone_is_loaded(self):
-        hass, le = _hass(loaded_entry_ids=["zone_1", "zone_2"])
-
-        await ts_init.async_unload_entry(hass, _zone_entry("zone_1"))
-
-        assert hass.data[DOMAIN]["learning_engine"] is le
-        le.async_save.assert_awaited_once()          # saved, but not released
-
-    async def test_system_entry_alone_does_not_keep_the_learning_engine(self):
-        hass, le = _hass(
-            loaded_entry_ids=["zone_1"],
-            extra={"sys_1": {"type": "system"}},
-        )
-
-        await ts_init.async_unload_entry(hass, _zone_entry("zone_1"))
-
-        assert "learning_engine" not in hass.data[DOMAIN]
 
 
 class TestConfigSchema:

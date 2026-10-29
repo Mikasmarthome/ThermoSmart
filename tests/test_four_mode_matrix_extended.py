@@ -120,38 +120,6 @@ class TestLE1FrozenSemantics:
         await le.async_save()  # must not raise
 
     @pytest.mark.asyncio
-    async def test_coordinator_does_not_call_frozen_le1_observe_paths(self):
-        """P2-1: frozen LE1 observe/update paths are no longer called, in ANY mode.
-
-        LE v1 is frozen (learning_engine.freeze() in __init__.py) — its
-        async_observe/update_heating_session/async_observe_trv_setpoint calls
-        were dead no-ops (the frozen check always short-circuited them) and
-        have since been removed from the coordinator's real cycle. LE v1
-        continues to serve exactly one live purpose: the schedule lookup via
-        async_get_base_target(), which must still be called every cycle in
-        all four modes — this removal does not gate or disable any Learning path.
-
-        async_observe_window_cooling() is not exercised here: it is only
-        reached from the window-sensor state-change listener wired by
-        setup_event_listeners(), which this cycle-level harness does not
-        register — its removal is verified statically (no remaining call
-        site in coordinator.py), not via a live event simulation here.
-        """
-        for lm, ac in [(False, False), (True, False), (False, True), (True, True)]:
-            coord = _base_coord(lm, ac)
-            await _cycle(coord)
-            assert not coord.learning_engine.async_observe.called, (
-                f"le1.async_observe unexpectedly called in mode ({lm},{ac})")
-            assert not coord.learning_engine.update_heating_session.called, (
-                f"le1.update_heating_session unexpectedly called in mode ({lm},{ac})")
-            assert not coord.learning_engine.async_observe_trv_setpoint.called, (
-                f"le1.async_observe_trv_setpoint unexpectedly called in mode ({lm},{ac})")
-            assert coord.learning_engine.async_get_base_target.called, (
-                f"le1.async_get_base_target (schedule lookup) must still be "
-                f"called in mode ({lm},{ac})")
-            coord.learning_engine.reset_mock()
-
-    @pytest.mark.asyncio
     async def test_le1_not_enabled_blocks_observe_independently_of_frozen(self):
         """_is_enabled(zone_id) = False (zone disabled) also blocks observe."""
         le = self._make_real_le1()

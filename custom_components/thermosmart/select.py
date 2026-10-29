@@ -44,7 +44,7 @@ _LEGACY_SUMMER_MAP: dict[str, str] = {
 
 def _all_coordinators(hass: HomeAssistant):
     """Alle Zone-Coordinatoren liefern (globale Keys und System-Entries überspringen)."""
-    skip = {"learning_engine", "global_switches_created", "global_summer_select_created"}
+    skip = {"global_switches_created", "global_summer_select_created"}
     for key, data in hass.data.get(DOMAIN, {}).items():
         if key not in skip and isinstance(data, dict) and data.get("type") != "system":
             if coord := data.get("coordinator"):

@@ -9,7 +9,7 @@ executes all async test functions automatically.
 """
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.thermosmart.const import (
     HEATING_MODE_AUTO,
@@ -104,33 +104,33 @@ class TestRecommendationStructure:
 class TestRecommendationModes:
     async def test_comfort_mode_adjusted_target_is_comfort_temp(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
+        coord._resolve_base_target = MagicMock(return_value=21.0)
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_COMFORT)
         assert result["adjusted_target"] == 21.0
         assert result["override_active"] is False
 
     async def test_night_mode_adjusted_target_is_night_temp(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.0)
+        coord._resolve_base_target = MagicMock(return_value=18.0)
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_NIGHT)
         assert result["adjusted_target"] == 18.0
 
     async def test_away_mode_adjusted_target_is_away_temp(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=17.0)
+        coord._resolve_base_target = MagicMock(return_value=17.0)
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_AWAY)
         assert result["adjusted_target"] == 17.0
 
     async def test_vacation_mode_adjusted_target_is_vacation_temp(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=12.0)
+        coord._resolve_base_target = MagicMock(return_value=12.0)
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_VACATION)
         assert result["adjusted_target"] == 12.0
 
     async def test_non_auto_mode_weather_offset_always_zero(self):
         """Weather offset is only applied in AUTO mode."""
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.0)
+        coord._resolve_base_target = MagicMock(return_value=18.0)
         coord.weather_engine.compute_temperature_offset.return_value = -2.0
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_NIGHT)
         assert result["weather_offset"] == 0.0
@@ -138,7 +138,7 @@ class TestRecommendationModes:
 
     async def test_eco_mode_adjusted_target_matches_base_target(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=19.0)
+        coord._resolve_base_target = MagicMock(return_value=19.0)
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_ECO)
         assert result["adjusted_target"] == 19.0
 
@@ -230,7 +230,7 @@ class TestRecommendationWindowOpen:
 class TestRecommendationWeatherOffset:
     async def test_positive_offset_applied_in_auto_mode(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
+        coord._resolve_base_target = MagicMock(return_value=21.0)
         coord.weather_engine.compute_temperature_offset.return_value = 1.5
         # Sensor not below base_target – positive offset applies unconditionally
         set_hass_states(coord, {"sensor.test_temp": make_state("22.0")})
@@ -241,7 +241,7 @@ class TestRecommendationWeatherOffset:
     async def test_negative_offset_suppressed_while_below_comfort(self):
         """v1.1.0 fix: negative offset zeroed when current_temp < base_target in AUTO mode."""
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
+        coord._resolve_base_target = MagicMock(return_value=21.0)
         coord.weather_engine.compute_temperature_offset.return_value = -1.0
         # Indoor below comfort target → guard activates
         set_hass_states(coord, {"sensor.test_temp": make_state("19.0")})
@@ -251,7 +251,7 @@ class TestRecommendationWeatherOffset:
     async def test_negative_offset_applied_when_above_comfort(self):
         """Negative offset is NOT suppressed once current_temp >= base_target."""
         coord = make_coordinator()
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
+        coord._resolve_base_target = MagicMock(return_value=21.0)
         coord.weather_engine.compute_temperature_offset.return_value = -1.0
         # Indoor at or above target → guard does NOT activate
         set_hass_states(coord, {"sensor.test_temp": make_state("21.5")})
@@ -262,7 +262,7 @@ class TestRecommendationWeatherOffset:
         """Without current_temp the guard condition is False → offset NOT suppressed."""
         coord = make_coordinator()
         cfg = {**_CFG, "temp_sensors": [], "climate_entities": []}
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=21.0)
+        coord._resolve_base_target = MagicMock(return_value=21.0)
         coord.weather_engine.compute_temperature_offset.return_value = -1.0
         result = await coord._compute_recommendation(cfg, _WEATHER, HEATING_MODE_AUTO)
         # current_temp is None → guard condition False → offset is applied
@@ -275,8 +275,7 @@ class TestRecommendationWeatherOffset:
 class TestRecommendationPreheat:
     async def test_zero_preheat_minutes_no_preheat(self):
         coord = make_coordinator()
-        coord.learning_engine.async_get_preheat_minutes = AsyncMock(return_value=0)
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.0)
+        coord._resolve_base_target = MagicMock(return_value=18.0)
         result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_AUTO)
         assert result["preheat_active"] is False
 
@@ -285,7 +284,7 @@ class TestRecommendationPreheat:
         coord = make_coordinator()
         # Provide indoor temp so deterministic baseline can compute (deficit=3.0°C → baseline>0)
         set_hass_states(coord, {"sensor.test_temp": make_state("18.0")})
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=18.0)
+        coord._resolve_base_target = MagicMock(return_value=18.0)
         with patch.object(coord, "_minutes_until_next_comfort", return_value=30):
             result = await coord._compute_recommendation(_CFG, _WEATHER, HEATING_MODE_AUTO)
         assert result["preheat_active"] is True

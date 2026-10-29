@@ -56,7 +56,7 @@ async def _zone(indoor: float, *, learned: bool, hvac_action=None, base_target=N
     if learned:
         inject_learned_thermal_state(shadow, **learned_kw)
     if base_target is not None:
-        coord.learning_engine.async_get_base_target = AsyncMock(return_value=base_target)
+        coord._resolve_base_target = MagicMock(return_value=base_target)
     if minutes_until_comfort is not None:
         coord._minutes_until_next_comfort = lambda cfg: minutes_until_comfort
 

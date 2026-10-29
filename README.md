@@ -252,7 +252,7 @@ ThermoSmart combines two independent switches:
 
 - **Learning enabled + Active Control off** — ThermoSmart observes and learns, but sends no commands to your heating devices.
 - **Learning disabled + Active Control on** — ThermoSmart controls deterministically using TPI, without any adaptive learning adjustments.
-- **Learning enabled + Active Control on** — ThermoSmart controls using TPI as usual, while Learning evaluates potential adaptive adjustments in the background (shadow-only, visible in diagnostics). This version does not yet apply those adjustments to control.
+- **Learning enabled + Active Control on** — ThermoSmart controls adaptively: the Learning runtime supplies the TPI coefficients, preheat timing and boost it has learned for the zone, falling back to deterministic defaults until there is enough evidence.
 - **Both off** — ThermoSmart remains inactive for that zone.
 
 **How long until the learning algorithm is effective?**  
@@ -297,13 +297,12 @@ ThermoSmart uses Home Assistant's built-in diagnostics download — no separate 
 **How to download:**
 - Home Assistant → **Settings** → **Devices & services** → **ThermoSmart** → select an entry (a heating zone, or the global "ThermoSmart System" entry) → **⋮** → **Download diagnostics**
 
-Each heating zone's diagnostics include analytics, learning progress, episode history, storage health, and recent critical events for that zone — useful for debugging or for sharing with a maintainer. The "ThermoSmart System" entry's diagnostics are a brief overview (versions, configured zone count).
+Each heating zone's diagnostics include learning progress, episode history, research-daily buckets, storage health, and recent critical events for that zone — useful for debugging or for sharing with a maintainer. The "ThermoSmart System" entry's diagnostics are a brief overview (versions, configured zone count).
 
 **Privacy — diagnostics contain:**
 - ThermoSmart version, zone count
 - Per-zone: TRV count, sensor counts, feature flags (booleans only)
-- Per-zone: all numeric learning data (observations, rates, confidence, boost factor, …)
-- Observation timestamps (required for longitudinal learning analysis)
+- Per-zone: aggregate learning diagnostics (confidence, learning progress, episode counts and relative ages, …)
 
 **Privacy — diagnostics do NOT contain:**
 - Passwords or authentication tokens of any kind

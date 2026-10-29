@@ -123,7 +123,7 @@ class TestZoneEntryDiagnostics:
 
         for key in (
             "schema_version", "thermosmart_version", "zone_hash", "config_flags",
-            "analytics", "historical_learning_snapshot", "runtime_state",
+            "runtime_state",
             "runtime_health", "runtime_pending", "learning_progress",
             "episode_history", "research_daily", "critical_events",
             "device_profile", "storage_context",
@@ -219,7 +219,7 @@ class TestZoneEntryDiagnostics:
         assert result["storage_context"]["available"] is False
         assert result["storage_context"]["granularity"] == "store_level"
         # the rest of the diagnostics still completed
-        assert result["historical_learning_snapshot"]["available"] is True
+        assert "learning_progress" in result
 
     async def test_result_is_a_plain_json_serializable_dict(self, monkeypatch):
         """HA's diagnostics contract is "return a dict" — nothing more. No

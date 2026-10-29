@@ -37,9 +37,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN, VERSION
 from .export import (
-    _compute_analytics,
     _device_profile_export,
-    _historical_learning_snapshot_for_research,
     _learning_critical_events_export,
     _learning_episode_history_export,
     _learning_health_data,
@@ -100,9 +98,6 @@ async def _zone_diagnostics(
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     coord = entry_data.get("coordinator") if isinstance(entry_data, dict) else None
 
-    le = hass.data.get(DOMAIN, {}).get("learning_engine")
-    learning: dict = le.get_export_data(entry.entry_id) if le is not None else {}
-
     runtime_state = None
     if coord is not None:
         runtime_state = {
@@ -120,8 +115,6 @@ async def _zone_diagnostics(
         "generated_at_utc": now.isoformat(),
         "zone_hash": _zone_hash(entry.entry_id),
         "config_flags": _zone_meta(cfg),
-        "analytics": _compute_analytics(learning),
-        "historical_learning_snapshot": _historical_learning_snapshot_for_research(learning),
         "runtime_state": runtime_state,
         "runtime_health": _learning_health_data(coord),
         "runtime_pending": _learning_pending_data(coord, entry.entry_id),

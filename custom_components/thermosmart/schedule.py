@@ -3,19 +3,18 @@ comfort schedule.
 
 Pure functions only: an explicit ``now_local`` is passed in (no clock read), no
 Home Assistant dependency, no learning dependency, no hidden mutable state. The
-three former copies of this logic (the coordinator's ``_current_schedule_period``
-and ``_minutes_until_next_comfort`` and the learning engine's ``_schedule_target``
-via ``async_get_base_target``) all delegate here.
+coordinator's ``_current_schedule_period``, ``_minutes_until_next_comfort`` and
+base-target resolution all delegate here.
 
-Schedule model (unchanged from the previous copies): a weekday and a weekend
+Schedule model: a weekday and a weekend
 pair of morning/night boundaries. Outside ``[morning, night)`` the zone is in
 the night block; inside it, the comfort block. Defaults: weekday 06:00/22:00,
 weekend 08:00/23:00.
 
-NOTE: this module intentionally preserves the *current* behaviour exactly,
-including the known schedule quirks (``schedule_enabled`` only affects the base
-target, and the midnight/weekend wrap uses the current day's day-type). Those
-are addressed separately in the S7.8 behaviour-fix commit.
+Period labels are only used to detect a change of schedule slot (a manual
+override ends with the slot it was set in) and as observation context. With the
+schedule disabled there are no slots, so the label is the constant
+``always_comfort``.
 """
 from __future__ import annotations
 
@@ -74,16 +73,18 @@ def _slots(now_local: datetime, cfg: Optional[dict]) -> tuple[bool, int, int, in
 def current_schedule_period(now_local: datetime, cfg: Optional[dict]) -> str:
     """Return the active slot label: ``wd_night``/``wd_comfort``/``we_night``/``we_comfort``.
 
-    When the schedule is disabled the zone is always in comfort. The night that
+    When the schedule is disabled there are no slots and the zone is always in
+    comfort: the label is the constant ``always_comfort``, independent of the
+    day, so no slot change (and no override expiry) can happen. The night that
     runs past midnight keeps the day-type of the evening it started on, so a
     manual override set in the evening does not expire at midnight purely
     because the calendar day flips (it ends at the next morning, as intended).
     """
     cfg = cfg or {}
+    if not cfg.get(CONF_SCHEDULE_ENABLED, True):
+        return "always_comfort"
     is_weekend, cur, morning, night = _slots(now_local, cfg)
     today = "we" if is_weekend else "wd"
-    if not cfg.get(CONF_SCHEDULE_ENABLED, True):
-        return f"{today}_comfort"
     if morning <= cur < night:
         return f"{today}_comfort"
     if cur >= night:

@@ -10,7 +10,9 @@ Modulstruktur:
   maintenance.py  – Wöchentliche Ventilübung
   season.py       – Sommer-Erkennung, Frostschutz
   window.py       – Fenstererkennung
-  weather_engine.py / learning_engine.py – eigenständige Engines
+  weather_engine.py – Wetterdaten und Außentemperatur-Korrektur
+  learning/       – Lern-Runtime (Modelle, Speicher, Shadow-Controller)
+  schedule.py     – reine Zeitplan-Auflösung
 """
 from __future__ import annotations
 
@@ -333,9 +335,10 @@ async def _async_purge_learning_zone_storage(
 ) -> None:
     """Delete all Learning storage for one removed zone.
 
-    On the last remaining zone, also clears the shared legacy learning-engine
-    store and the Learning global index — both are zone-independent, so they
-    are only ever removed once no ThermoSmart zone remains at all. Only ever
+    On the last remaining zone, also removes the shared store left behind by
+    earlier versions (``thermosmart_learning_data``, written by the learning
+    engine that no longer exists). It is zone-independent, so it is only ever
+    removed once no ThermoSmart zone remains at all. Only ever
     called from ``async_remove_entry`` (real removal) — never from
     ``async_unload_entry`` (reload/restart/unload must never lose data).
     Best-effort: a failure here is logged but never raised further up.

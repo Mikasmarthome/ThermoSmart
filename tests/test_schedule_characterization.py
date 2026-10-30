@@ -75,7 +75,7 @@ class TestCurrentSchedulePeriod:
     def test_schedule_disabled_is_always_comfort(self):
         # S7.8(A): with the schedule off the zone is always in comfort.
         c = _coord_at(MON.replace(hour=5), schedule_enabled=False)
-        assert c._current_schedule_period() == "wd_comfort"
+        assert c._current_schedule_period() == "always_comfort"
 
     def test_night_label_is_stable_across_midnight(self):
         # S7.8(C): the night Fri 22:00 → Sat 08:00 keeps one label across midnight,

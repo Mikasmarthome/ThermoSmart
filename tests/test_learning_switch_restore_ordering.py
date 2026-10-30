@@ -13,17 +13,12 @@ import pytest
 
 from custom_components import thermosmart as ts_init
 from custom_components.thermosmart.const import DOMAIN
+from custom_components.thermosmart.coordinator import ThermoSmartCoordinator
+from custom_components.thermosmart.sensor import ThermoSmartStatusSensor
+from custom_components.thermosmart.switch import ThermoSmartLearningSwitch
 from tests.helpers import make_mock_hass
 
 _ENTRY_ID = "zone_1"
-
-
-class _Engine:
-    """A stand-in for the (still-present) LearningEngine object setup reuses.
-
-    The toggle state no longer lives here — the coordinator owns it as of S7.2 —
-    so this fake needs no behaviour; it just occupies hass.data so setup takes
-    the reuse branch instead of building a real engine."""
 
 
 class _FirstRefreshReached(Exception):
@@ -52,52 +47,127 @@ def _restore_data(*, stored_state):
     return registry, SimpleNamespace(last_states=last_states)
 
 
-async def _state_seen_by_the_first_refresh(entry, *, stored_state):
-    engine = _Engine()
+async def _coordinator_at_first_refresh(entry, *, stored_state):
+    """Run the real zone setup up to the coordinator's first refresh.
+
+    The coordinator is the real class — real ``__init__``, real
+    ``set_learning_switch`` and real ``_learning_mode_enabled`` — and only the
+    refresh itself is replaced by a probe that records what the first control
+    cycle would see and stops setup there.
+    """
     hass = make_mock_hass()
-    hass.data = {DOMAIN: {"learning_engine": engine}}
-    seen = {}
+    hass.data = {DOMAIN: {}}
+    seen: dict = {}
 
-    class _Coordinator:
-        """Captures the effective-learning state the first refresh would see:
-        the config flag AND the switch the coordinator was given before it."""
-
-        def __init__(self, hass, entry, **kw):
-            self._entry = entry
-            self._switch_on = True  # default for a fresh install
-
-        def set_learning_switch(self, on):
-            self._switch_on = bool(on)
-
+    class _Probe(ThermoSmartCoordinator):
         async def async_config_entry_first_refresh(self):
-            cfg = {**self._entry.data, **self._entry.options}
-            seen["enabled"] = cfg.get("learning_enabled", True) and self._switch_on
+            seen["effective"] = self._learning_mode_enabled(self.zone_cfg)
+            seen["switch"] = self._learning_switch_on
+            seen["active_control_initialized"] = self._active_control_initialized
             raise _FirstRefreshReached
 
+    def _factory(*args, **kwargs):
+        with patch("homeassistant.helpers.frame.report_usage"):
+            return _Probe(*args, **kwargs)
+
     registry, restore = _restore_data(stored_state=stored_state)
-    with patch.object(ts_init, "_async_register_card", AsyncMock()), \
-         patch.object(ts_init, "WeatherEngine", MagicMock()), \
-         patch.object(ts_init, "ThermoSmartCoordinator", _Coordinator), \
-         patch.object(ts_init.er, "async_get", return_value=registry), \
-         patch.object(ts_init.restore_state, "async_get", return_value=restore):
+    with patch.object(ts_init, "_async_register_card", AsyncMock()),          patch.object(ts_init, "WeatherEngine", MagicMock()),          patch.object(ts_init, "ThermoSmartCoordinator", _factory),          patch.object(ts_init.er, "async_get", return_value=registry),          patch.object(ts_init.restore_state, "async_get", return_value=restore):
         with pytest.raises(_FirstRefreshReached):
             await ts_init.async_setup_entry(hass, entry)
-    return seen["enabled"]
+    return seen
 
 
 class TestFirstCycleAfterRestart:
-    async def test_switch_that_was_off_is_off_for_the_first_refresh(self):
-        assert await _state_seen_by_the_first_refresh(_entry(), stored_state="off") is False
-
-    async def test_switch_that_was_on_is_on_for_the_first_refresh(self):
-        assert await _state_seen_by_the_first_refresh(_entry(), stored_state="on") is True
+    @pytest.mark.parametrize(
+        ("config_flag", "stored", "expected"),
+        [
+            (True, "on", True),
+            (True, "off", False),
+            (False, "on", False),
+            (False, "off", False),
+        ],
+    )
+    async def test_effective_learning_is_config_and_switch(self, config_flag, stored, expected):
+        seen = await _coordinator_at_first_refresh(
+            _entry(learning_enabled=config_flag), stored_state=stored)
+        assert seen["effective"] is expected
+        assert seen["switch"] is (stored == "on")
 
     async def test_fresh_install_without_stored_state_defaults_to_on(self):
-        assert await _state_seen_by_the_first_refresh(_entry(), stored_state=None) is True
+        seen = await _coordinator_at_first_refresh(_entry(), stored_state=None)
+        assert seen["effective"] is True and seen["switch"] is True
 
-    async def test_config_flag_off_still_wins_over_a_stored_on(self):
-        entry = _entry(learning_enabled=False)
-        assert await _state_seen_by_the_first_refresh(entry, stored_state="on") is False
+    async def test_active_control_is_not_restored_yet_when_learning_already_is(self):
+        """Learning is restored before the first refresh; Active Control is restored
+        later by its own switch entity, and until then its restore barrier holds."""
+        seen = await _coordinator_at_first_refresh(_entry(), stored_state="off")
+        assert seen["switch"] is False
+        assert seen["active_control_initialized"] is False
+
+
+def _real_coordinator(**cfg):
+    from tests.helpers import make_coordinator
+    return make_coordinator(cfg)
+
+
+class TestEveryLearningStateTheCoordinatorCanBeIn:
+    @pytest.mark.parametrize("config_flag", [True, False])
+    @pytest.mark.parametrize("switch_on", [True, False])
+    def test_matrix_on_the_real_coordinator(self, config_flag, switch_on):
+        coord = _real_coordinator(learning_enabled=config_flag)
+        coord.set_learning_switch(switch_on)
+        assert coord._learning_mode_enabled(coord.zone_cfg) is (config_flag and switch_on)
+
+    def test_restoring_the_switch_does_not_touch_active_control(self):
+        coord = _real_coordinator()
+        coord.set_learning_switch(False)
+        assert coord._active_control_initialized is False
+        coord.set_active_control(True)
+        assert coord._learning_mode_enabled(coord.zone_cfg) is False
+        assert coord._active_control_initialized is True
+
+
+class TestSwitchEntityAndStatusSensorFollowTheCoordinator:
+    async def test_toggling_the_entity_changes_the_coordinators_effective_state(self):
+        coord = _real_coordinator()
+        coord.async_request_refresh = AsyncMock()
+        switch = ThermoSmartLearningSwitch(coord, _entry())
+        switch.async_write_ha_state = MagicMock()
+
+        await switch.async_turn_off()
+        assert coord._learning_mode_enabled(coord.zone_cfg) is False
+        await switch.async_turn_on()
+        assert coord._learning_mode_enabled(coord.zone_cfg) is True
+
+    @pytest.mark.parametrize(
+        ("active", "learning", "expected"),
+        [
+            (False, False, "disabled"),
+            (False, True, "observation_mode"),
+            (True, False, "controlling_no_learning"),
+        ],
+    )
+    def test_status_reports_the_effective_state(self, active, learning, expected):
+        coord = _real_coordinator()
+        coord._active_control = active
+        coord.set_learning_switch(learning)
+        coord.data = {"zone": {}}
+        assert ThermoSmartStatusSensor(coord, _entry()).native_value == expected
+
+    def test_status_with_config_flag_off_ignores_a_switch_that_is_on(self):
+        coord = _real_coordinator(learning_enabled=False)
+        coord._active_control = True
+        coord.set_learning_switch(True)
+        coord.data = {"zone": {}}
+        assert ThermoSmartStatusSensor(coord, _entry()).native_value == "controlling_no_learning"
+
+    def test_status_with_learning_and_active_control_on_is_none_of_the_learning_off_states(self):
+        coord = _real_coordinator()
+        coord._active_control = True
+        coord.set_learning_switch(True)
+        coord.data = {"zone": {}}
+        assert ThermoSmartStatusSensor(coord, _entry()).native_value not in {
+            "disabled", "observation_mode", "controlling_no_learning"}
 
 
 class TestRestoredStateHelper:

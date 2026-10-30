@@ -36,21 +36,6 @@ Zone identity: each zone_id (HA entry_id UUID) is replaced with a deterministic
 12-char hex digest.  Exports from the same installation share the same digests,
 making longitudinal data correlatable without being reversible.
 
-Historical (frozen legacy) learning snapshot:
-  Per-zone "historical_learning_snapshot" block — the frozen legacy
-  learning-engine data (learning_engine.freeze() in __init__.py) reshaped
-  into a structured, allow-listed view instead of an unfiltered pass-through
-  of LearningEngine.get_export_data(). Per-category allow-lists keep genuine
-  diagnostic value (heat rate, delta, outcome score, ts/weekday/hour/minute
-  time context) while only fields explicitly named in those allow-lists can
-  ever reach diagnostics — no entity_id/device_id/unique_id/person/presence/
-  location/home name. event_count_summary reports the true (uncapped) totals;
-  research_events is capped per category (see
-  _HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY) with any excess reported via
-  records_truncated, never silently dropped. A final scan_payload() pass
-  excludes any category that unexpectedly fails it. Never crashes diagnostics
-  — a missing/malformed source yields available: false instead.
-
 Learning progress:
   Per-zone "learning_progress" block — the same calibrated scores/labels
   LearningShadowController.learning_progress_safe() already exposes to the
@@ -102,7 +87,7 @@ import dataclasses
 import hashlib
 import logging
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any
 
 from homeassistant.core import HomeAssistant
 
@@ -144,104 +129,6 @@ def _learning_strip_forbidden(obj: Any) -> Any:
     if isinstance(obj, list):
         return [_learning_strip_forbidden(i) for i in obj]
     return obj
-
-
-# ── Historical (frozen legacy) learning snapshot — Deep Research reshaping ──
-#
-# The legacy learning engine (frozen — LearningEngine.freeze() in __init__.py)
-# accumulated raw per-event dicts before Learning existed. These carry genuine
-# research value (heat rate, delta, outcome score, time-of-day context) and
-# are intentionally NOT reduced to counts/averages — only entity/person/
-# location identifiers are stripped. Unlike every other research-export
-# block, this snapshot used to be an unfiltered pass-through of
-# learning_engine.get_export_data() with no scan_payload() pass; the
-# functions below are the fix.
-#
-# Per-category ALLOW-lists (not a blacklist over the legacy free-form dicts)
-# are the primary defense: only fields explicitly named here can ever reach
-# the export, so an unexpected legacy key can only be silently excluded,
-# never silently leaked. scan_payload() (the same second-barrier scanner used
-# by the Learning runtime-models research block, _learning_research_data) still runs as
-# a final check.
-
-_HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY = 200
-
-_HIST_OBS_ALLOWED_FIELDS = (
-    "target", "indoor_temp", "delta", "active_control", "window_open",
-    "control_reason", "preheat_active", "heating_failure", "vacation",
-    "summer_mode", "outdoor_temp", "outdoor_humidity", "wind_speed",
-    "solar_radiation", "indoor_humidity", "heat_rate", "norm_heat_rate",
-    "cool_rate", "schedule_period", "forecast_high",
-)
-_HIST_TRV_OBS_ALLOWED_FIELDS = (
-    "trv_setpoint", "indoor_temp", "target", "delta", "setpoint_excess",
-    "heat_rate", "efficiency", "outdoor_temp", "wind_speed", "solar_radiation",
-)
-_HIST_WINDOW_COOLING_ALLOWED_FIELDS = (
-    "duration_min", "temp_drop", "cooling_rate_per_min", "indoor_start_temp",
-    "outdoor_temp", "wind_speed",
-)
-_HIST_OUTCOME_ALLOWED_FIELDS = (
-    "start_temp", "target", "peak_temp", "end_temp", "minutes_taken",
-    "expected_minutes", "controller", "reason", "outcome_score",
-    "outdoor_temp", "outdoor_humidity", "wind_speed", "solar_radiation", "rain",
-)
-
-
-def _hist_event_view(raw: Any, allowed_fields: tuple, *, source: str) -> dict | None:
-    """Build one allow-listed research event from a raw legacy learning-engine
-    dict. Only technical/numeric fields explicitly named in ``allowed_fields``
-    survive, plus a research time context (``ts``/``weekday``/``hour``/
-    ``minute``, derived from ``ts`` so all four categories get the same
-    context shape even though only "observations" stored hour/minute/weekday
-    directly) and a fixed ``source`` marker. Returns None for a malformed
-    (non-dict) entry — never raises — so one corrupt legacy row cannot break
-    the whole export.
-    """
-    if not isinstance(raw, dict):
-        return None
-    ts_raw = raw.get("ts")
-    view: dict = {}
-    if isinstance(ts_raw, str):
-        view["ts"] = ts_raw
-        try:
-            ts_text = ts_raw[:-1] + "+00:00" if ts_raw.endswith("Z") else ts_raw
-            parsed = datetime.fromisoformat(ts_text)
-            view["weekday"] = parsed.weekday()
-            view["hour"] = parsed.hour
-            view["minute"] = parsed.minute
-        except Exception:
-            pass
-    for key in allowed_fields:
-        val = raw.get(key)
-        if val is None:
-            continue
-        if isinstance(val, (str, int, float, bool)):
-            view[key] = val
-        # else: unexpected type for a technical field — dropped, not guessed at.
-    view["source"] = source
-    return view
-
-
-def _hist_category(
-    raw_list: Any, allowed_fields: tuple, *, source: str,
-) -> tuple[list, int]:
-    """Cap a raw legacy event list to the most recent
-    ``_HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY`` entries (already
-    chronological in the source), then allow-list each kept entry. Returns
-    ``(kept_views, records_truncated)`` — never raises; a missing/malformed
-    source list yields an empty category rather than failing the export.
-    """
-    if not isinstance(raw_list, list):
-        return [], 0
-    total = len(raw_list)
-    capped_raw = raw_list[-_HISTORICAL_RESEARCH_EVENTS_MAX_PER_CATEGORY:]
-    views = [
-        v for v in (_hist_event_view(r, allowed_fields, source=source) for r in capped_raw)
-        if v is not None
-    ]
-    truncated = max(0, total - len(capped_raw))
-    return views, truncated
 
 
 # ── zone helpers ─────────────────────────────────────────────────────────────

@@ -3022,20 +3022,39 @@ class LearningShadowController:
         except Exception:
             return None
 
+    def _zone_ro(self):
+        """Non-creating zone lookup for diagnostics.
+
+        Returns the existing per-zone runtime or None — unlike the runtime's
+        own ``_zone()``, it never materialises a zone, so a diagnostics read
+        before the first control cycle cannot create runtime state (no
+        read-triggered mutation)."""
+        try:
+            return self._runtime._zones.get(self._zone)
+        except Exception:
+            return None
+
     def learning_model_detail_safe(self) -> dict:
         """Per-model learning detail for diagnostics. Read-only — never mutates
-        model state (only reads diagnostics()/confidence(), which are pure).
+        model state (only reads diagnostics()/confidence(), which are pure) and
+        never creates a zone runtime.
 
         Per model (heat_rate/heat_loss/afterheat/outcome/onset_delay):
-        accepted_updates, rejected_updates (completed episode the model declined),
-        sample_counts, rejection_counts, outlier_counts, populated_buckets,
-        confidence, last_update_age_s. Limitations: counts for accepted/rejected
-        are session-scoped (reset on restart); rejection_counts are the model's
-        own cumulative tallies from its persisted state."""
+        ``accepted_updates`` — cumulative accepted episode-driven updates, PERSISTED
+        (survives restart); ``rejected_updates`` — completed episodes the model
+        declined, SESSION-ONLY (reset on restart). Because the two have different
+        scopes they are NOT a comparable ratio; a per-field ``counter_scopes``
+        legend states this. ``sample_counts``/``rejection_counts``/``outlier_counts``
+        are the model's own cumulative tallies from its persisted state;
+        ``populated_buckets``/``confidence``/``last_update_age_s`` are derived
+        reads. Returns ``available: False`` with ``reason`` when learning is
+        disabled or the zone is not yet initialized."""
         try:
             if not self._enabled:
                 return {"available": False, "reason": "learning_disabled", "models": {}}
-            zr = self._runtime._zone(self._zone)
+            zr = self._zone_ro()
+            if zr is None:
+                return {"available": False, "reason": "zone_not_initialized", "models": {}}
             counts = dict(zr.model_update_counts)
             rejects = dict(getattr(zr, "model_reject_counts", {}) or {})
             now_iso = self._utcnow_iso()
@@ -3063,39 +3082,67 @@ class LearningShadowController:
                 except Exception:
                     pass  # one model's diagnostics failure must not block the rest
                 models[name] = entry
-            return {"available": True, "models": models}
+            return {
+                "available": True,
+                "models": models,
+                "counter_scopes": {
+                    "accepted_updates": "persisted_cumulative",
+                    "rejected_updates": "session_since_restart",
+                    "rejection_counts": "model_state_cumulative",
+                },
+            }
         except Exception as err:
             self._record_error("model_detail", err)
             return {"available": False, "models": {}}
 
     def builder_lifecycle_safe(self) -> dict:
-        """Per-builder episode lifecycle tallies (opened/completed/interrupted/
-        rejected) from the pipeline. Read-only. Session-scoped counts that
-        reset on restart; they distinguish 'no episodes produced' from
-        'episodes produced but discarded/aborted' — complementary to the
-        per-model accepted/rejected counts."""
+        """Per-builder episode lifecycle tallies from the pipeline. Read-only;
+        never creates a zone. All counts are SESSION-ONLY (reset on restart).
+
+        Meaning of each tally (builder stage, NOT model acceptance):
+        ``opened`` — an episode began; ``completed`` — an episode CLOSED as a
+        valid episode (handed to the model, which may still reject it — see the
+        per-model ``rejected_updates``, a separate stage); ``interrupted`` — an
+        open episode was aborted by a disturbance (window/failure/reheat);
+        ``rejected`` — an episode ended but was discarded as not valid enough to
+        emit. So ``completed`` is builder-level production, not learning uptake."""
         try:
             if not self._enabled:
                 return {"available": False, "reason": "learning_disabled", "builders": {}}
-            zr = self._runtime._zone(self._zone)
-            return {"available": True, "builders": zr.pipeline.builder_lifecycle_summary()}
+            zr = self._zone_ro()
+            if zr is None:
+                return {"available": False, "reason": "zone_not_initialized", "builders": {}}
+            return {"available": True, "builders": zr.pipeline.builder_lifecycle_summary(),
+                    "counter_scope": "session_since_restart"}
         except Exception as err:
             self._record_error("builder_lifecycle", err)
             return {"available": False, "builders": {}}
 
     def boost_effectiveness_safe(self) -> dict:
-        """Boost learning/application diagnostics. Read-only.
+        """Boost learning/application diagnostics. Read-only; never creates a zone.
 
-        bootstrap_credits / bootstrap_credits_remaining / general_samples track
-        cold-start graduation; pending_observer counts the deferred post-reach
-        observer lifecycle (active/opened/finalized/interrupted); proposed_attempts
-        and applied/fallback/rejection_counts come from the control ledger
-        (boost is the only ledgered feature). prior_configured is added by the
-        export layer (config, not visible to the runtime)."""
+        ``bootstrap_credits``/``bootstrap_credits_remaining``/``general_samples``
+        track cold-start graduation (from the boost model's persisted sample
+        state). ``pending_observer`` counts the deferred post-reach observer
+        lifecycle: ``opened`` when a REACHED episode starts observation,
+        ``finalized`` EVERY time an observer resolves — whether by deadline OR by
+        interruption — so ``finalized`` is NOT the count of successful learning
+        updates, and ``interrupted`` is the subset that ended on a disturbance
+        (window/failure/target change/supersede). ``proposed_attempts`` is the
+        cumulative number of boost control decisions (applied + fallback), derived
+        from the ledger's cumulative counters so it is NOT capped by the ledger's
+        300-entry recent buffer. ``applied_count`` is how often the ControlPolicy
+        APPLIED a learned/bootstrap offset to the setpoint — not a guarantee the
+        boost measurably changed heating. All ledger-derived and pending_observer
+        counts are SESSION-ONLY (reset on restart); the boost model's
+        sample/rejection counts are persisted. ``prior_configured`` is added by
+        the export layer (config, not visible to the runtime)."""
         try:
             if not self._enabled:
                 return {"available": False, "reason": "learning_disabled"}
-            zr = self._runtime._zone(self._zone)
+            zr = self._zone_ro()
+            if zr is None:
+                return {"available": False, "reason": "zone_not_initialized"}
             now_iso = self._utcnow_iso()
             sample_counts: dict = {}
             rejection_counts: dict = {}
@@ -3117,8 +3164,12 @@ class LearningShadowController:
             remaining = (max(0, bootstrap_credits - general_samples)
                          if bootstrap_credits is not None else None)
             ledger = zr.control_ledger.summary()
-            # the ledger only ever records BOOST_OFFSET, so its totals are boost totals
+            # The ledger only ever records BOOST_OFFSET, so its totals are boost
+            # totals. applied_counts/fallback_count are cumulative counters (NOT
+            # the capped recent-entries buffer), so proposed = applied + fallback
+            # is the true cumulative attempt count, uncapped by the 300 buffer.
             applied = sum(ledger.get("applied_counts", {}).values())
+            fallback = int(ledger.get("fallback_count", 0))
             return {
                 "available": True,
                 "bootstrap_credits": bootstrap_credits,
@@ -3127,9 +3178,9 @@ class LearningShadowController:
                 "sample_counts": sample_counts,
                 "rejection_counts": rejection_counts,
                 "last_update_age_s": last_update_age_s,
-                "proposed_attempts": int(ledger.get("size", 0)),
+                "proposed_attempts": int(applied) + fallback,
                 "applied_count": int(applied),
-                "fallback_count": int(ledger.get("fallback_count", 0)),
+                "fallback_count": fallback,
                 "control_rejection_counts": {str(k): int(v)
                                              for k, v in ledger.get("rejection_counts", {}).items()},
                 "pending_observer": {
@@ -3137,6 +3188,13 @@ class LearningShadowController:
                     "opened": int(getattr(zr, "pending_boost_opened", 0)),
                     "finalized": int(getattr(zr, "pending_boost_finalized", 0)),
                     "interrupted": int(getattr(zr, "pending_boost_interrupted", 0)),
+                },
+                "counter_scopes": {
+                    "proposed_attempts": "session_cumulative_uncapped",
+                    "applied_count": "session_cumulative",
+                    "fallback_count": "session_cumulative",
+                    "pending_observer": "session_since_restart",
+                    "sample_counts": "model_state_cumulative",
                 },
             }
         except Exception as err:
@@ -3154,7 +3212,9 @@ class LearningShadowController:
         try:
             if not self._enabled:
                 return {"available": False, "reason": "learning_disabled"}
-            zr = self._runtime._zone(self._zone)
+            zr = self._zone_ro()
+            if zr is None:
+                return {"available": False, "reason": "zone_not_initialized"}
             now_iso = self._utcnow_iso()
             comps = list(getattr(zr, "open_comparisons", []) or [])
             buckets = {"lt_1h": 0, "1h_6h": 0, "6h_24h": 0, "gt_24h": 0, "unknown_age": 0}

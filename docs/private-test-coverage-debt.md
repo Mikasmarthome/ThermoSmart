@@ -34,6 +34,16 @@ The measured picture, per file with `-p no:homeassistant`:
 | Result identical S3 → S7 | 214 | — |
 | Result changed S3 → S7 | 73 | — |
 
+**Two counting methods.** The table above counts from each file's pytest
+summary line and therefore excludes the files that crash the Windows
+interpreter (no summary line is produced for them). The later section
+"Verified regression delta triage" counts per test ID, so its totals differ
+(S3: 3517 passed against 3457 here; S7: 2102 here against 2093 for the unshimmed
+per-ID run). The extra S3 passes come from simulation files that finish when
+run one at a time; the small S7 difference (9 tests) comes from the two runs
+being separate executions and was not analysed further. Neither set of numbers
+was changed. For the S3 → S7 comparison the per-ID figures are the reference.
+
 The 214 identical files include 127 that were already not green at S3. They
 predate S7 (older API drift: unknown constructor keywords on
 `BoostUpdateContext` / `RuntimeCycleInput` (≈34 files), missing modules or names

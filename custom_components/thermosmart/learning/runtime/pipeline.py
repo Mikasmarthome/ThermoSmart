@@ -73,6 +73,15 @@ class RuntimePipeline:
             "afterheat": AfterheatEpisodeBuilder(zone_id),
             "outcome": OutcomeEpisodeBuilder(zone_id),
         }
+        # Diagnostics-only per-builder lifecycle tallies (session-scoped; NOT
+        # serialized, so they reset on restart/reload). Counts the builder
+        # actions already produced each cycle — opened/completed/interrupted
+        # (ABORTED by a disturbance)/rejected (DISCARDED: ended but not valid).
+        # Pure accounting: never influences classification or model updates.
+        self._builder_lifecycle: dict[str, dict[str, int]] = {
+            k: {"opened": 0, "completed": 0, "interrupted": 0, "rejected": 0}
+            for k in self._builders
+        }
         self._cap = max_trajectory_points
         self._traj: list[tuple[int, Optional[float]]] = []
         self._t0_iso: Optional[str] = None
@@ -202,6 +211,22 @@ class RuntimePipeline:
             except Exception:
                 pass
 
+        # Diagnostics-only: tally this step's builder actions. Reads the results
+        # just produced; never alters them.
+        for _bkey, _res in builder_results.items():
+            _lc = self._builder_lifecycle.get(_bkey)
+            if _lc is None or _res is None:
+                continue
+            _act = getattr(_res, "action", None)
+            if _act is BuilderAction.OPENED:
+                _lc["opened"] += 1
+            elif _act is BuilderAction.CLOSED:
+                _lc["completed"] += 1
+            elif _act is BuilderAction.ABORTED:
+                _lc["interrupted"] += 1
+            elif _act is BuilderAction.DISCARDED:
+                _lc["rejected"] += 1
+
         completed: list[CompletedEpisode] = []
         for model_name, builder_key in _BUILDER_MODEL:
             res = builder_results.get(builder_key)
@@ -219,6 +244,14 @@ class RuntimePipeline:
             regime=regime.regime.value, previous_regime=prev, completed=tuple(completed),
             feature_valid_points=valid, deduplicated=False,
             disturbed=regime.regime is _R.DISTURBED)
+
+    def builder_lifecycle_summary(self) -> dict:
+        """Read-only copy of the per-builder lifecycle tallies (diagnostics).
+
+        Session-scoped counts; they are NOT persisted and reset on restart.
+        Keys: opened/completed/interrupted/rejected per builder
+        (heating/cooling/afterheat/outcome)."""
+        return {k: dict(v) for k, v in self._builder_lifecycle.items()}
 
     # -- state ----------------------------------------------------------
 

@@ -38,6 +38,7 @@ from homeassistant.core import HomeAssistant
 from .const import DOMAIN, VERSION
 from .export import (
     _device_profile_export,
+    _learning_effectiveness_export,
     _learning_critical_events_export,
     _learning_episode_history_export,
     _learning_health_data,
@@ -119,6 +120,7 @@ async def _zone_diagnostics(
         "runtime_health": _learning_health_data(coord),
         "runtime_pending": _learning_pending_data(coord, entry.entry_id),
         "learning_progress": _learning_progress_export(coord),
+        "learning_effectiveness": _learning_effectiveness_export(coord),
         "episode_history": _learning_episode_history_export(coord, now=now),
         "research_daily": _learning_research_daily_export(coord, now=now),
         "critical_events": _learning_critical_events_export(coord, now=now),

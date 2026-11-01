@@ -3007,6 +3007,222 @@ class LearningShadowController:
             from .learning_progress import cold_learning_progress_result
             return 0.0, cold_learning_progress_result("calculation_error")
 
+    @staticmethod
+    def _iso_age_s(ts_iso: Optional[str], now_iso: str) -> Optional[float]:
+        """Seconds between ``ts_iso`` and ``now_iso``, or None if unparseable.
+
+        Read-only; relative age only (no absolute timestamp is surfaced)."""
+        if not ts_iso:
+            return None
+        try:
+            from datetime import datetime
+            t = datetime.fromisoformat(str(ts_iso).replace("Z", "+00:00"))
+            n = datetime.fromisoformat(str(now_iso).replace("Z", "+00:00"))
+            return max(0.0, round((n - t).total_seconds(), 1))
+        except Exception:
+            return None
+
+    def learning_model_detail_safe(self) -> dict:
+        """Per-model learning detail for diagnostics. Read-only — never mutates
+        model state (only reads diagnostics()/confidence(), which are pure).
+
+        Per model (heat_rate/heat_loss/afterheat/outcome/onset_delay):
+        accepted_updates, rejected_updates (completed episode the model declined),
+        sample_counts, rejection_counts, outlier_counts, populated_buckets,
+        confidence, last_update_age_s. Limitations: counts for accepted/rejected
+        are session-scoped (reset on restart); rejection_counts are the model's
+        own cumulative tallies from its persisted state."""
+        try:
+            if not self._enabled:
+                return {"available": False, "reason": "learning_disabled", "models": {}}
+            zr = self._runtime._zone(self._zone)
+            counts = dict(zr.model_update_counts)
+            rejects = dict(getattr(zr, "model_reject_counts", {}) or {})
+            now_iso = self._utcnow_iso()
+            models: dict = {}
+            for name in ("heat_rate", "heat_loss", "afterheat", "outcome", "onset_delay"):
+                entry = {
+                    "accepted_updates": int(counts.get(name, 0)),
+                    "rejected_updates": int(rejects.get(name, 0)),
+                    "sample_counts": {}, "rejection_counts": {}, "outlier_counts": {},
+                    "populated_buckets": 0, "confidence": None, "last_update_age_s": None,
+                }
+                try:
+                    model = zr.orchestrator.models.get(name)
+                    if model is not None:
+                        diag = model.diagnostics()
+                        sc = dict(getattr(diag, "sample_counts", None) or {})
+                        entry["sample_counts"] = sc
+                        entry["rejection_counts"] = dict(getattr(diag, "rejection_counts", None) or {})
+                        entry["outlier_counts"] = dict(getattr(diag, "outlier_counts", None) or {})
+                        entry["populated_buckets"] = sum(
+                            1 for v in sc.values() if isinstance(v, (int, float)) and v > 0)
+                        entry["last_update_age_s"] = self._iso_age_s(
+                            getattr(diag, "last_update_ts", None), now_iso)
+                        entry["confidence"] = round(float(model.confidence(now=now_iso).value), 4)
+                except Exception:
+                    pass  # one model's diagnostics failure must not block the rest
+                models[name] = entry
+            return {"available": True, "models": models}
+        except Exception as err:
+            self._record_error("model_detail", err)
+            return {"available": False, "models": {}}
+
+    def builder_lifecycle_safe(self) -> dict:
+        """Per-builder episode lifecycle tallies (opened/completed/interrupted/
+        rejected) from the pipeline. Read-only. Session-scoped counts that
+        reset on restart; they distinguish 'no episodes produced' from
+        'episodes produced but discarded/aborted' — complementary to the
+        per-model accepted/rejected counts."""
+        try:
+            if not self._enabled:
+                return {"available": False, "reason": "learning_disabled", "builders": {}}
+            zr = self._runtime._zone(self._zone)
+            return {"available": True, "builders": zr.pipeline.builder_lifecycle_summary()}
+        except Exception as err:
+            self._record_error("builder_lifecycle", err)
+            return {"available": False, "builders": {}}
+
+    def boost_effectiveness_safe(self) -> dict:
+        """Boost learning/application diagnostics. Read-only.
+
+        bootstrap_credits / bootstrap_credits_remaining / general_samples track
+        cold-start graduation; pending_observer counts the deferred post-reach
+        observer lifecycle (active/opened/finalized/interrupted); proposed_attempts
+        and applied/fallback/rejection_counts come from the control ledger
+        (boost is the only ledgered feature). prior_configured is added by the
+        export layer (config, not visible to the runtime)."""
+        try:
+            if not self._enabled:
+                return {"available": False, "reason": "learning_disabled"}
+            zr = self._runtime._zone(self._zone)
+            now_iso = self._utcnow_iso()
+            sample_counts: dict = {}
+            rejection_counts: dict = {}
+            last_update_age_s = None
+            bootstrap_credits = None
+            general_samples = 0
+            try:
+                model = zr.orchestrator.models.get("boost")
+                if model is not None:
+                    diag = model.diagnostics()
+                    sample_counts = dict(getattr(diag, "sample_counts", None) or {})
+                    rejection_counts = dict(getattr(diag, "rejection_counts", None) or {})
+                    last_update_age_s = self._iso_age_s(getattr(diag, "last_update_ts", None), now_iso)
+                    general_samples = int(sample_counts.get("general", 0) or 0)
+                    params = getattr(model, "_params", None)
+                    bootstrap_credits = int(getattr(params, "bootstrap_credits", 0) or 0)
+            except Exception:
+                pass
+            remaining = (max(0, bootstrap_credits - general_samples)
+                         if bootstrap_credits is not None else None)
+            ledger = zr.control_ledger.summary()
+            # the ledger only ever records BOOST_OFFSET, so its totals are boost totals
+            applied = sum(ledger.get("applied_counts", {}).values())
+            return {
+                "available": True,
+                "bootstrap_credits": bootstrap_credits,
+                "bootstrap_credits_remaining": remaining,
+                "general_samples": general_samples,
+                "sample_counts": sample_counts,
+                "rejection_counts": rejection_counts,
+                "last_update_age_s": last_update_age_s,
+                "proposed_attempts": int(ledger.get("size", 0)),
+                "applied_count": int(applied),
+                "fallback_count": int(ledger.get("fallback_count", 0)),
+                "control_rejection_counts": {str(k): int(v)
+                                             for k, v in ledger.get("rejection_counts", {}).items()},
+                "pending_observer": {
+                    "active": zr.pending_boost_outcome is not None,
+                    "opened": int(getattr(zr, "pending_boost_opened", 0)),
+                    "finalized": int(getattr(zr, "pending_boost_finalized", 0)),
+                    "interrupted": int(getattr(zr, "pending_boost_interrupted", 0)),
+                },
+            }
+        except Exception as err:
+            self._record_error("boost_effectiveness", err)
+            return {"available": False}
+
+    def preheat_comparison_stats_safe(self) -> dict:
+        """Open preheat shadow-comparison counts + age distribution. Read-only.
+
+        These comparisons are predicted-vs-legacy snapshots that accumulate in a
+        bounded buffer and are NOT resolved against the realised outcome here, so
+        'resolved' reflects only whether an actual_outcome has been attached
+        (currently never, by design) — exposed to make the never-completing
+        backlog measurable without implementing resolution."""
+        try:
+            if not self._enabled:
+                return {"available": False, "reason": "learning_disabled"}
+            zr = self._runtime._zone(self._zone)
+            now_iso = self._utcnow_iso()
+            comps = list(getattr(zr, "open_comparisons", []) or [])
+            buckets = {"lt_1h": 0, "1h_6h": 0, "6h_24h": 0, "gt_24h": 0, "unknown_age": 0}
+            oldest = None
+            resolved = 0
+            by_type: dict = {}
+            for c in comps:
+                ctype = str(getattr(c, "comparison_type", "unknown"))
+                by_type[ctype] = by_type.get(ctype, 0) + 1
+                if getattr(c, "actual_outcome", None) is not None:
+                    resolved += 1
+                age = self._iso_age_s(getattr(c, "created_ts", None), now_iso)
+                if age is None:
+                    buckets["unknown_age"] += 1
+                    continue
+                oldest = age if oldest is None else max(oldest, age)
+                if age < 3600:
+                    buckets["lt_1h"] += 1
+                elif age < 6 * 3600:
+                    buckets["1h_6h"] += 1
+                elif age < 24 * 3600:
+                    buckets["6h_24h"] += 1
+                else:
+                    buckets["gt_24h"] += 1
+            return {
+                "available": True,
+                "open_count": len(comps),
+                "resolved_count": resolved,
+                "by_type": by_type,
+                "age_buckets_s": buckets,
+                "oldest_age_s": oldest,
+            }
+        except Exception as err:
+            self._record_error("preheat_comparison_stats", err)
+            return {"available": False}
+
+    def persistence_detail_safe(self) -> dict:
+        """Persistence diagnostics from existing state: save_count, dirty + its
+        age, last-save age, failed saves, warnings count. Read-only; never
+        triggers a save."""
+        try:
+            p = getattr(self._runtime, "_persistence", None)
+            if p is None:
+                return {"available": False, "reason": "no_persistence"}
+            now_iso = self._utcnow_iso()
+            h = {}
+            try:
+                h = p.health() or {}
+            except Exception:
+                pass
+            state = getattr(p, "_s", None)
+            dirty = bool(h.get("dirty", getattr(p, "dirty", False)))
+            dirty_age_s = (self._iso_age_s(getattr(state, "first_dirty_iso", None), now_iso)
+                           if dirty else None)
+            warnings = getattr(p, "warnings", ())
+            return {
+                "available": True,
+                "dirty": dirty,
+                "dirty_age_s": dirty_age_s,
+                "save_count": int(h.get("save_count", 0) or 0),
+                "failed_saves": int(h.get("failed_saves", 0) or 0),
+                "last_save_age_s": self._iso_age_s(h.get("last_save"), now_iso),
+                "warnings_count": len(warnings) if warnings is not None else 0,
+            }
+        except Exception as err:
+            self._record_error("persistence_detail", err)
+            return {"available": False}
+
     def _maybe_record_research_daily_progress_sample_safe(self, progress_pct: Any, attrs: Any) -> None:
         """Aggregate ONE learning-progress/confidence sample into the
         current day's Research Daily Bucket.

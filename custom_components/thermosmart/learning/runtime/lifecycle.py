@@ -138,6 +138,17 @@ class _ZoneRuntime:
         self.open_comparisons: list = []
         self.outcomes: list = []
         self.model_update_counts: dict[str, int] = {}
+        # Diagnostics-only session counters (NOT serialized; reset on restart).
+        # model_reject_counts: episode-driven updates that completed but the model
+        # declined to accept (apply_update returned False) — separate from the
+        # builder-level DISCARDED/ABORTED tallies in the pipeline.
+        self.model_reject_counts: dict[str, int] = {}
+        # Post-reach boost observer lifecycle: opened at thermal REACHED, finalized
+        # whenever it resolves (deadline or interruption), interrupted when the
+        # terminal state was INTERRUPTED (continuity/window/failure/target change/supersede).
+        self.pending_boost_opened: int = 0
+        self.pending_boost_finalized: int = 0
+        self.pending_boost_interrupted: int = 0
         self.cycles = 0
         self.last_cycle_ts: Optional[str] = None
         self.last_predictions: Mapping[Any, Any] = {}
@@ -481,6 +492,10 @@ class LearningRuntime:
                     authoritative_change = True
                     zr.model_update_counts[ce.model_name] = \
                         zr.model_update_counts.get(ce.model_name, 0) + 1
+                elif ok is False:
+                    # Diagnostics-only: a completed episode the model declined.
+                    zr.model_reject_counts[ce.model_name] = \
+                        zr.model_reject_counts.get(ce.model_name, 0) + 1
                 # Episode-history hand-off (memory-only; see _emit_completed_episode()).
                 # Independent of `ok` — episode completion is a different fact than
                 # model acceptance, and persisting the history should not depend on
@@ -704,6 +719,7 @@ class LearningRuntime:
             p.seed_devices(end_ts.isoformat(), self._device_states(snapshot),
                            self._control_type(snapshot))
             zr.pending_boost_outcome = p
+            zr.pending_boost_opened += 1   # diagnostics-only
         except Exception as err:
             self._record_runtime_error("open_pending_boost", err)
 
@@ -772,6 +788,10 @@ class LearningRuntime:
             self._record_runtime_error("finalize_pending_boost", err)
         finally:
             zr.pending_boost_outcome = None     # clear; model dedup prevents any double update
+        # diagnostics-only: every finalization counts; flag the interrupted ones.
+        zr.pending_boost_finalized += 1
+        if getattr(p, "state", None) == _LS.INTERRUPTED.value:
+            zr.pending_boost_interrupted += 1
         return updated
 
     def _inject_baseline(self, zr: "_ZoneRuntime", bctx, episode, snapshot, dispatch=None):

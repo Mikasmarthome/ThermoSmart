@@ -185,6 +185,44 @@ def _learning_health_data(coord) -> dict | None:
         return None
 
 
+def _learning_effectiveness_export(coord) -> dict:
+    """Read-only learning-effectiveness diagnostics for one zone.
+
+    Assembles the per-model detail, per-builder episode lifecycle, boost
+    effectiveness, open preheat-comparison stats and persistence detail that the
+    shadow controller exposes (all pure reads — collection never mutates model
+    state). ``boost.prior_configured`` is added here from the zone config, which
+    the runtime cannot see.
+
+    Counters are session-scoped unless noted (model/builder tallies reset on
+    restart; the models' own rejection_counts come from persisted model state).
+    Returns ``{"available": False}`` when no learning shadow is attached. No
+    entity/device/person ids, no absolute timestamps — counts, enum reasons,
+    confidences and relative ages only.
+    """
+    shadow = getattr(coord, "_learning_shadow", None)
+    if shadow is None:
+        return {"available": False, "reason": "learning_engine_unavailable"}
+    try:
+        boost = shadow.boost_effectiveness_safe()
+        try:
+            cfg = getattr(coord, "zone_cfg", {}) or {}
+            prior = cfg.get("boost_bootstrap_prior_c")
+            boost["prior_configured"] = bool(prior is not None and float(prior) > 0.0)
+        except Exception:
+            boost["prior_configured"] = None
+        return {
+            "available": True,
+            "models": shadow.learning_model_detail_safe(),
+            "builders": shadow.builder_lifecycle_safe(),
+            "boost": boost,
+            "preheat_comparisons": shadow.preheat_comparison_stats_safe(),
+            "persistence": shadow.persistence_detail_safe(),
+        }
+    except Exception:
+        return {"available": False}
+
+
 # Fields taken as-is from the real compute_learning_progress() attrs dict
 # (learning/runtime/learning_progress.py) — numeric scores/labels only, no
 # IDs, no timestamps, no raw episode data. Nothing here is invented; anything

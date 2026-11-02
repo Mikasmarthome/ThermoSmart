@@ -24,6 +24,7 @@ from custom_components.thermosmart.export import _learning_effectiveness_export
 from custom_components.thermosmart.learning.models import BoostOutcomeLifecycleState
 from custom_components.thermosmart.learning.privacy import scan_payload
 from custom_components.thermosmart.learning.runtime import LearningRuntimeConfig, LearningRuntimeMode
+from custom_components.thermosmart.learning.builders.base import BuilderAction
 from custom_components.thermosmart.learning.runtime.control import ControlFeature
 from custom_components.thermosmart.learning.runtime.lifecycle import _ZoneRuntime
 from tests.helpers import make_coordinator
@@ -195,6 +196,64 @@ class TestRealIncrements:
         rt._finalize_pending_boost(zr, p2, reason="window_open")
         assert zr.pending_boost_finalized == 2
         assert zr.pending_boost_interrupted == 1
+
+
+# ── builder ABORTED (interrupted) and DISCARDED (rejected) real events ───────
+
+def _capture_heating_actions(rt, zone="lz"):
+    """Wrap the real heating builder's process() to record the BuilderActions it
+    actually emits — the builder's behaviour is unchanged (results pass through)."""
+    zr = rt._zone(zone)
+    builder = zr.pipeline._builders["heating"]
+    orig = builder.process
+    actions: list = []
+
+    def _record(inp):
+        res = orig(inp)
+        actions.append(res.action)
+        return res
+
+    builder.process = _record
+    return zr, actions
+
+
+class TestBuilderAbortedAndDiscarded:
+    def test_aborted_increments_interrupted_exactly_once(self):
+        rt = scenario_runtime()
+        zr, actions = _capture_heating_actions(rt)
+        # Open a heating episode on a rising ramp, then a window-open step while
+        # it is still active -> the builder aborts (real disturbance path).
+        seq = [(18.0, True, None), (18.6, True, None), (19.2, True, None),
+               (19.8, True, True)]
+        for i, (temp, heating, wo) in enumerate(seq):
+            step(rt, i, temp, heating=heating, zone="lz", window_open=wo)
+        emitted = [a.value for a in actions]
+        assert BuilderAction.ABORTED in actions, emitted
+        assert sum(1 for a in actions if a is BuilderAction.ABORTED) == 1, emitted
+        summary = zr.pipeline.builder_lifecycle_summary()["heating"]
+        assert summary["interrupted"] == 1, summary
+        # no accidental cross-tally
+        assert summary["completed"] == 0, summary
+        assert summary["rejected"] == 0, summary
+
+    def test_discarded_increments_rejected_exactly_once(self):
+        rt = scenario_runtime()
+        zr, actions = _capture_heating_actions(rt)
+        # Open a heating episode on a short rise, then drop the temperature with
+        # heating off so the regime transitions to passive cooling and the
+        # builder closes it — 1-minute steps keep it under the 180 s
+        # min_duration, so the close discards (real too-short/sparse path).
+        seq = [(18.0, True, None), (18.3, True, None),
+               (18.1, False, None), (17.9, False, None)]
+        for i, (temp, heating, wo) in enumerate(seq):
+            step(rt, i, temp, heating=heating, zone="lz", window_open=wo, step_min=1)
+        emitted = [a.value for a in actions]
+        assert BuilderAction.DISCARDED in actions, emitted
+        assert sum(1 for a in actions if a is BuilderAction.DISCARDED) == 1, emitted
+        summary = zr.pipeline.builder_lifecycle_summary()["heating"]
+        assert summary["rejected"] == 1, summary
+        assert summary["completed"] == 0, summary
+        assert summary["interrupted"] == 0, summary
 
 
 # ── proposed_attempts not capped by the 300-entry ledger buffer ──────────────

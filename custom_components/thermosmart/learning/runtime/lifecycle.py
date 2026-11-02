@@ -123,6 +123,14 @@ class RuntimeHealth:
     control_fallback: int = 0
     control_rejections: Mapping[str, int] = field(default_factory=dict)
     reversion_count: int = 0
+    # D6: restore-error observability. Session-scoped (set once at load): a
+    # non-zero count or a schema mismatch means some persisted learned state
+    # could not be restored and was reinitialised empty — so an empty model is
+    # NOT silently presented as healthy. Reasons are "segment:op:ExceptionType"
+    # / "schema_version_mismatch" strings only (no stored data).
+    restore_errors: int = 0
+    restore_schema_mismatch: bool = False
+    restore_error_reasons: tuple = ()
 
 
 class _ZoneRuntime:
@@ -340,6 +348,9 @@ class LearningRuntime:
         self._last_cycle_ts: Optional[str] = None
         self._mode = self._config.mode
         self._reversion_count = 0
+        # D6: restore-error observability (session-scoped, set once at load).
+        self._restore_errors: list[str] = []
+        self._restore_schema_mismatch: bool = False
         self._policy = ControlPolicy(
             self._config.control_policy,
             runtime_is_control=self._mode is LearningRuntimeMode.CONTROL)
@@ -877,10 +888,18 @@ class LearningRuntime:
         return True
 
     def _restore_payload(self, data: Mapping[str, Any]) -> None:
+        # D6: record restore problems for observability WITHOUT changing the
+        # restore/isolation semantics — a schema mismatch still discards the
+        # payload, and per-segment restore still isolates/reinitialises.
         if data.get("runtime_schema_version") != RUNTIME_SCHEMA_VERSION:
+            self._restore_schema_mismatch = True
+            self._restore_errors.append("schema_version_mismatch")
             return
         for zid, zdata in data.get("zones", {}).items():
-            self._zone(zid).restore(zdata)
+            errs = self._zone(zid).restore(zdata)
+            if errs:
+                # Only privacy-safe "segment:op:ExceptionType" strings are added.
+                self._restore_errors.extend(errs)
 
     def _build_payload(self) -> dict:
         return {
@@ -937,7 +956,10 @@ class LearningRuntime:
             control_fallback=sum(z.control_ledger.summary()["fallback_count"]
                                  for z in self._zones.values()),
             control_rejections=self._aggregate_control_rejections(),
-            reversion_count=self._reversion_count)
+            reversion_count=self._reversion_count,
+            restore_errors=len(self._restore_errors),
+            restore_schema_mismatch=self._restore_schema_mismatch,
+            restore_error_reasons=tuple(self._restore_errors))
 
     def pending_attribution_summary(self, zone_id: str) -> dict:
         """Return a compact, privacy-safe summary of pending attribution for one zone.

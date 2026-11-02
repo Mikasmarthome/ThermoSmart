@@ -421,10 +421,19 @@ class ThermoSmartTpiSensor(_Base):
         coef_int = z.get("tpi_coef_int")
         coef_ext = z.get("tpi_coef_ext")
         valve_direct = z.get("tpi_valve_direct", False)
+        # D7: use the coordinator's authoritative TPI coefficient source rather
+        # than guessing from whether the coefficients equal the static defaults
+        # (which both false-positives a learned coef that happens to equal 0.6/
+        # 0.01 and false-negatives a deterministic coef that differs). The
+        # backward-compatible two-value attribute is preserved (learned vs
+        # default), with the raw gate string added as coef_source_detail.
+        _src = z.get("tpi_coef_source")
+        coef_source = "learned" if _src == "valid_learning" else "default"
         return {
             "coef_int": coef_int,
             "coef_ext": coef_ext,
-            "coef_source": "default" if coef_int is None or coef_int == 0.6 and coef_ext == 0.01 else "learned",
+            "coef_source": coef_source,
+            "coef_source_detail": _src,
             "valve_direct": valve_direct,
             "mode": "direct_valve" if valve_direct else "setpoint_boost",
         }

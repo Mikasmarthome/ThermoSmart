@@ -223,6 +223,144 @@ def _learning_effectiveness_export(coord) -> dict:
         return {"available": False}
 
 
+def _learning_application_export(coord) -> dict:
+    """Read-only per-room learned-value APPLICATION diagnostics (Phase A).
+
+    Sourced entirely from already-computed state — the recommendation (zone
+    data) and the authoritative, id-free ``LiveDecisionRecord``
+    (``coord._last_live_decision``). Pure reads: never computes control, never
+    writes a setpoint, never creates runtime state. Each sub-block is
+    independently ``available``.
+
+    Preheat — distinguishes learned vs deterministic selection, the candidate /
+    baseline / selected minutes, the exact fallback reason, and a *calculated*
+    duration (``calculated``) from an *active* preheat window (``active_window``).
+    TPI — exposes the authoritative ``coef_source`` (never inferred from the
+    coefficients differing from defaults), candidate vs selected (post blend /
+    step-limit) coefficients, the fallback gate, and marks that these are the
+    coefficient SELECTION, not actuator dispatch. Boost — proposed /
+    policy-approved / lifecycle-approved, requested setpoint, dispatch status +
+    confirmed service-call result, a NEW write vs a setpoint already within
+    tolerance, and the exact block reason; physical heating effectiveness is
+    never inferred from a successful service call.
+
+    Privacy: counts, enums, temperatures/offsets and booleans only — the
+    ``LiveDecisionRecord`` carries no entity/device ids by construction.
+    """
+    try:
+        zone = {}
+        try:
+            zone = (getattr(coord, "data", None) or {}).get("zone", {}) or {}
+        except Exception:
+            zone = {}
+        ldr = getattr(coord, "_last_live_decision", None)
+
+        def _g(name, default=None):
+            return getattr(ldr, name, default) if ldr is not None else default
+
+        # ── Preheat ──────────────────────────────────────────────────────────
+        # Sourced from the recommendation (zone data), with the LiveDecisionRecord
+        # as a fallback for status. The deterministic baseline is RECOMPUTED with
+        # the pure classmethod for comparison (no side effects, no state change).
+        _ph_status = zone.get("preheat_status") or _g("preheat_status")
+        _ph_selected = zone.get("preheat_minutes")
+        if _ph_selected is None:
+            _ph_selected = _g("preheat_minutes")
+        _learned = _ph_status in ("valid", "valid_hl_prior")
+        _baseline_min = None
+        try:
+            from .learning.runtime.ha_integration import LearningShadowController as _LSC
+            _cur = zone.get("current_temp")
+            _comfort = (getattr(coord, "zone_cfg", {}) or {}).get("comfort_temp", 21.0)
+            if _cur is not None:
+                _baseline_min, _ = _LSC.compute_deterministic_preheat_baseline(_cur, _comfort)
+        except Exception:
+            _baseline_min = None
+        preheat = {
+            "available": True,
+            "source": "learned" if _learned else (_ph_status or "unknown"),
+            "selected_minutes": _ph_selected,
+            "baseline_minutes": _baseline_min,
+            # The learned candidate equals the selected value only when a learned
+            # value was actually chosen; otherwise a baseline/fallback was used.
+            "learned_candidate_minutes": _ph_selected if _learned else None,
+            "fallback_reason": _ph_status,
+            # A duration was COMPUTED this cycle (> 0) — not necessarily heating now.
+            "calculated": bool(_ph_selected or 0),
+            # The zone is ACTUALLY in a preheat window right now (coordinator state).
+            "active_window": bool(zone.get("preheat_active", False)),
+        }
+
+        # ── TPI ──────────────────────────────────────────────────────────────
+        _diag = zone.get("tpi_coef_diag") or {}
+        tpi = {
+            "available": True,
+            "coef_source": zone.get("tpi_coef_source"),      # authoritative source of truth
+            "coef_int_selected": zone.get("tpi_coef_int"),   # after blend + step-limit
+            "coef_ext_selected": zone.get("tpi_coef_ext"),
+            "coef_int_candidate": _diag.get("coef_int_candidate"),
+            "coef_int_previous": _diag.get("coef_int_previous"),
+            "coef_int_default": _diag.get("coef_int_default"),
+            "blend_weight": _diag.get("blend_weight"),
+            "transition_applied": _diag.get("transition_applied"),
+            "transition_reason": _diag.get("transition_reason"),
+            "relative_only": _diag.get("relative_only"),
+            "duty_percent": zone.get("tpi_duty_cycle"),
+            # The coefficients/duty are the SELECTION; the actual setpoint/valve
+            # write is reported in the boost block's dispatch fields.
+            "is_selection_only": True,
+        }
+
+        # ── Boost ────────────────────────────────────────────────────────────
+        if ldr is None:
+            boost = {"available": False, "reason": "no_decision_record"}
+        else:
+            _boost_applied = bool(_g("boost_applied"))     # authoritative applied-this-cycle flag
+            _block = _g("boost_rejected_reason")
+            _targets_total = int(_g("dispatch_targets_total", 0) or 0)
+            boost = {
+                "available": True,
+                "proposed_offset_c": _g("boost_candidate_c"),   # raw pre-guard proposal
+                # Derived from existing state: boost_applied means the policy AND
+                # lifecycle approved it; "lifecycle_blocked" means the policy
+                # approved but the lifecycle rejected it.
+                "policy_approved": bool(_boost_applied or _block == "lifecycle_blocked"),
+                "lifecycle_approved": _boost_applied,
+                "applied_offset_c": _g("boost_applied_c"),       # offset actually applied (None = not applied)
+                "requested_setpoint_c": _g("final_setpoint_c"),
+                "baseline_setpoint_c": _g("baseline_setpoint_c"),
+                "block_reason": _block,
+                "dispatch_status": _g("dispatch_status", "not_attempted"),
+                "dispatch_targets_total": _targets_total,
+                "dispatch_targets_failed": int(_g("dispatch_targets_failed", 0) or 0),
+                "service_call_succeeded": bool(_g("dispatch_succeeded", False)),
+                "outcome_eligible": bool(_g("outcome_eligible", False)),
+                # A NEW service call was issued vs the boosted setpoint already
+                # being within write tolerance (no new write this cycle).
+                "new_write": _targets_total > 0,
+                "within_tolerance_no_write": bool(_boost_applied and _targets_total == 0),
+                # Never inferred from a successful service call.
+                "heating_effect_confirmed": None,
+            }
+
+        return {
+            "available": True,
+            "preheat": preheat,
+            "tpi": tpi,
+            "boost": boost,
+            "notes": {
+                "is_selection_only": "TPI coefficients/duty are the selection; "
+                                     "actuator dispatch is in boost.dispatch_* fields",
+                "within_tolerance_no_write": "boost offset active on the TRV but no new "
+                                             "service call issued this cycle (setpoint within tolerance)",
+                "heating_effect_confirmed": "always null — a successful dispatch does not "
+                                            "confirm the room physically warmed",
+            },
+        }
+    except Exception:
+        return {"available": False}
+
+
 # Fields taken as-is from the real compute_learning_progress() attrs dict
 # (learning/runtime/learning_progress.py) — numeric scores/labels only, no
 # IDs, no timestamps, no raw episode data. Nothing here is invented; anything

@@ -304,13 +304,29 @@ class CaptureCoordinator:
     def open_decision(self) -> Optional[CapturedDecision]:
         return self._open
 
+    # H1: NORMAL and BOOST are the same heating-decision CLASS. A Boost raises the
+    # setpoint of an ongoing heat-to-comfort decision — it is a modifier of that
+    # decision, not a new decision. Before the D4 fix, decision_type never flipped
+    # NORMAL<->BOOST mid-cycle (the boost signal was dead), so a flip never split a
+    # decision. D4 made the flip reachable; treating the two as the same class keeps
+    # one stable decision_id across the flip, so the boost update context and the
+    # outcome episode bind under the SAME id (no lost boost outcome, no orphaned
+    # context, and an episode that ever boosted can never be stored as a clean
+    # baseline). PREHEAT/IDLE remain distinct regimes and still open a new decision.
+    # Per-cycle decision_type/boost_active are unchanged (still BOOST on boost
+    # cycles) — only the decision_id/episode boundary is kept stable.
+    _HEATING_CLASS = frozenset({DecisionType.NORMAL, DecisionType.BOOST})
+
+    def _same_decision_class(self, a: "DecisionType", b: "DecisionType") -> bool:
+        return a is b or (a in self._HEATING_CLASS and b in self._HEATING_CLASS)
+
     def _decision_changed(self, inp: RuntimeCycleInput) -> bool:
         d = inp.controller_decision
         if self._open is None:
             return True
         if d.superseded:
             return True
-        if d.decision_type is not self._open.decision_type:
+        if not self._same_decision_class(d.decision_type, self._open.decision_type):
             return True
         if d.decision_token and self._open.decision_id and \
                 not self._open.decision_id.endswith(

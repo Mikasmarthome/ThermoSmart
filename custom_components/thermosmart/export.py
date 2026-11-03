@@ -405,11 +405,17 @@ def _learning_application_export(coord) -> dict:
                                             "preheat.selected_minutes is the value actually chosen this cycle",
                 "heating_effect_confirmed": "always null — neither a successful dispatch NOR a held "
                                             "setpoint confirms the room physically warmed",
-                "dispatch_accounting": "O1 per-cycle multi-device accounting (counts only, no device IDs): "
-                                       "considered = held + attempted (succeeded+failed); held = devices already "
-                                       "at the requested setpoint within tolerance (no new write); excluded = "
-                                       "devices skipped before the write decision (reasons: profile_inactive|"
-                                       "unsupported|no_state). dispatch_targets_total counts NEW write attempts only",
+                "dispatch_accounting": "O1 per-cycle multi-device accounting (counts only, no device IDs), "
+                                       "SCOPED to the setpoint dispatch path (where held/excluded are defined; "
+                                       "not merged with the direct-valve path, which shares climate_entities and "
+                                       "would double-count the same TRV): considered = held + setpoint write "
+                                       "attempts; held = devices already at the requested setpoint within tolerance "
+                                       "(no new write; the held OFFSET is derived from the device's ACTUAL observed "
+                                       "setpoint, not the request); excluded = devices skipped before the write "
+                                       "decision (reasons: profile_inactive|unsupported|no_state). "
+                                       "dispatch_targets_total/succeeded/failed are the aggregate across setpoint "
+                                       "AND valve writes, so may exceed considered-minus-held when direct-valve "
+                                       "control is also active",
             },
         }
     except Exception:

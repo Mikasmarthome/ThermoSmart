@@ -347,3 +347,102 @@ class TestIsolationAndPrivacy:
             climate_states={"climate.trv_test": {"temperature": 28.5}})
         assert b["dispatch_status"] == "already_satisfied"      # was "not_attempted"
         assert coord.data["zone"]["applied_boost_offset_c"] > 0  # was 0.0
+
+
+# ── M1: held-offset accuracy (actual observed setpoint, not the request) ──────
+
+class TestHeldOffsetAccuracy:
+    async def test_held_below_target_within_tolerance_uses_actual(self):
+        # Device holds 28.3 °C while the requested boosted setpoint is 28.5 °C
+        # (within the default 0.5 tolerance). The confirmed offset must reflect the
+        # ACTUAL held value (28.3 - 28.0 baseline = 0.3), NOT the requested 0.5.
+        coord, b = await _boost_cycle(climate_states={"climate.trv_test": {"temperature": 28.3}})
+        assert b["dispatch_status"] == "already_satisfied"
+        assert b["approved_offset_c"] == pytest.approx(0.5)          # what was requested
+        assert b["dispatch_confirmed_offset_c"] == pytest.approx(0.3, abs=0.051)  # what is held
+        assert b["dispatch_confirmed_offset_c"] < b["approved_offset_c"]
+
+    async def test_held_exactly_at_target_confirms_full_offset(self):
+        coord, b = await _boost_cycle(climate_states={"climate.trv_test": {"temperature": 28.5}})
+        assert b["dispatch_confirmed_offset_c"] == pytest.approx(0.5)
+
+    async def test_held_below_baseline_reports_no_confirmed_offset(self):
+        # Non-default tolerance 1.0: device holds 27.8 °C — within tolerance of the
+        # 28.5 request, but BELOW the 28.0 baseline. Observation does not support a
+        # confirmed positive boost, so the confirmed offset is 0.0 (uncertainty
+        # reported, not a fabricated 0.5).
+        coord, b = await _boost_cycle(cfg={"temp_tolerance": 1.0},
+                                      climate_states={"climate.trv_test": {"temperature": 27.8}})
+        assert b["dispatch_status"] == "already_satisfied"
+        assert b["approved_offset_c"] == pytest.approx(0.5)
+        assert b["dispatch_confirmed_offset_c"] == pytest.approx(0.0)
+
+
+# ── M4: mixed held/written conservative minimum includes held devices ─────────
+
+class TestMixedHeldWrittenAggregation:
+    async def test_mixed_zone_minimum_includes_held_device(self):
+        # TRV A already holds 28.2 (offset 0.2); TRV B is newly written to 28.5
+        # (offset 0.5). The conservative zone offset is the MINIMUM across both —
+        # 0.2 — not 0.5. Before M4 the held device was ignored and the offset was
+        # overstated as 0.5.
+        coord, b = await _boost_cycle(
+            climate_entities=["climate.a", "climate.b"],
+            climate_states={"climate.a": {"temperature": 28.2},
+                            "climate.b": {"temperature": 21.0}})
+        assert b["dispatch_status"] == "fully_succeeded"
+        assert b["dispatch_targets_held"] == 1
+        assert b["dispatch_targets_total"] == 1
+        assert b["dispatch_confirmed_offset_c"] == pytest.approx(0.2, abs=0.051)
+        assert b["dispatch_confirmed_offset_c"] < b["approved_offset_c"]
+
+
+# ── M2: legacy fallback cannot produce adaptive evidence ──────────────────────
+
+class TestLegacyFallbackSafety:
+    def test_boost_decision_without_dispatch_record_forms_no_context(self):
+        # D4 makes DecisionType.BOOST reachable. With NO authoritative dispatch
+        # record we cannot confirm the boost was applied/succeeded, so the former
+        # setpoint-heuristic fallback is disabled: NO boost context is formed.
+        ev = EvidenceMaterializer().materialize(
+            _snap(decision_type=DecisionType.BOOST, boost_dispatch=None,
+                  trv_setpoint_c=25.0, target_c=21.0))     # large setpoint>target
+        assert ev.boost_context is None
+        assert "boost_unconfirmed_no_dispatch_record" in ev.notes
+
+    def test_failed_boost_record_forms_no_context(self):
+        ev = EvidenceMaterializer().materialize(
+            _snap(decision_type=DecisionType.BOOST, boost_dispatch=_bd("failed", applied=0.0)))
+        assert ev.boost_context is None
+
+    def test_not_attempted_boost_record_forms_no_context(self):
+        ev = EvidenceMaterializer().materialize(
+            _snap(decision_type=DecisionType.BOOST, boost_dispatch=_bd("not_attempted", applied=0.0)))
+        assert ev.boost_context is None
+
+
+# ── M3: accounting scope / no double-count across setpoint+valve ──────────────
+
+class TestAccountingScope:
+    def test_considered_is_setpoint_scoped(self):
+        # The exported considered/held counts come from the SETPOINT stats only
+        # (the coordinator uses _sp_stats, never the merged stats, for these), so a
+        # valve write for the same TRV cannot inflate them.
+        sp = _DispatchStats()
+        sp.record_held(effective_c=22.0, entity_id="climate.x")   # held via setpoint
+        sp.record(None, effective_c=23.0, entity_id="climate.y")  # written via setpoint
+        assert sp.considered == 2
+        assert sp.targets_held == 1
+
+    def test_merge_sums_each_count_once(self):
+        sp = _DispatchStats()
+        sp.record_held(effective_c=22.0, entity_id="climate.x")
+        sp.record_excluded("unsupported")
+        vv = _DispatchStats()
+        vv.record(None)                                           # a valve write
+        m = sp.merge(vv)
+        # held/excluded come only from the path that recorded them (no doubling);
+        # total is the sum of both paths' write attempts.
+        assert m.targets_held == 1
+        assert m.targets_excluded == 1
+        assert m.targets_total == sp.targets_total + vv.targets_total

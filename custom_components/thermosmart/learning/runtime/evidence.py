@@ -80,21 +80,18 @@ class EvidenceMaterializer:
                     context_quality=DataQuality.OK,
                     controller_kind=None)
                 notes.append("boost_authoritative" + (":partial" if partial else ""))
-        elif snapshot.decision_type is DecisionType.BOOST and snapshot.target_c is not None \
-                and snapshot.trv_setpoint_c is not None:
-            # LEGACY/DIAGNOSTIC fallback only when no authoritative record exists. Clearly
-            # marked, reduced reliability — never treated as a full applied-boost outcome.
-            offset = max(0.0, snapshot.trv_setpoint_c - snapshot.target_c)
-            if offset > 0.0:
-                boost_ctx = BoostUpdateContext(
-                    source_episode_id=snapshot.decision_id,
-                    decision_id=snapshot.decision_id, learning_zone_id=snapshot.zone_id,
-                    authority="legacy_fallback",
-                    requested_offset_c=offset, boost_applied_c=None,
-                    start_deficit_c=None, target_temperature_c=snapshot.target_c,
-                    outcome_reliability="partial", context_quality=DataQuality.STALE,
-                    controller_kind=None)
-                notes.append("boost_legacy_fallback")
+        elif snapshot.decision_type is DecisionType.BOOST:
+            # M2: DecisionType.BOOST is the controller's DECISION to boost — it is NOT
+            # proof that a boost was dispatched, succeeded, or is physically in effect.
+            # The only authoritative evidence of an applied boost is the LiveDecisionRecord
+            # dispatch result (``boost_dispatch`` above). When that record is absent we
+            # have no dispatch status at all, so we CANNOT tell a successful boost from a
+            # failed / not-attempted / merely-requested one. The former setpoint-heuristic
+            # fallback (trv_setpoint > target) would form a boost sample here regardless —
+            # and D4 made this branch reachable — so a failed or not-attempted boost could
+            # produce learning evidence through it. Form NO boost context: with no
+            # authoritative dispatch record, no boost outcome is attributed.
+            notes.append("boost_unconfirmed_no_dispatch_record")
 
         return MaterializedEvidence(
             zone_id=snapshot.zone_id, decision_id=snapshot.decision_id, ts=snapshot.ts,

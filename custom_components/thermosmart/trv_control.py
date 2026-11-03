@@ -759,8 +759,9 @@ class TRVControlMixin:
                         self.hass, state.attributes.get("temperature"))
                     if current_setpoint_c is not None and abs(current_setpoint_c - frost_temp) < 0.3:
                         # Already holding the window-open/frost setpoint — satisfied,
-                        # no new write. Tracked as held for accurate accounting.
-                        stats.record_held(effective_c=frost_temp, entity_id=entity_id)
+                        # no new write. M1: record the ACTUAL observed setpoint, not
+                        # the requested frost value.
+                        stats.record_held(effective_c=current_setpoint_c, entity_id=entity_id)
                         continue
                     _frost_pending.append((entity_id, frost_temp, self.hass.services.async_call(
                         "climate", "set_temperature",
@@ -821,10 +822,13 @@ class TRVControlMixin:
             if current_setpoint is not None:
                 if abs(current_setpoint - effective_setpoint) < tolerance:
                     # D5a: the device already holds the requested setpoint within
-                    # tolerance — the requested control state is already satisfied.
-                    # Record it as held (NOT a new write, NOT "not attempted"); the
-                    # held value is retained for the counterfactual boost-offset.
-                    stats.record_held(effective_c=effective_setpoint, entity_id=entity_id)
+                    # tolerance — the requested control state is already satisfied,
+                    # so no new write is issued. M1: record the device's ACTUAL
+                    # observed setpoint (current_setpoint), NOT the requested value —
+                    # within tolerance the real setpoint can sit up to `tolerance`
+                    # below the request, so the held boost offset must be derived
+                    # from what the device actually holds, never from the request.
+                    stats.record_held(effective_c=current_setpoint, entity_id=entity_id)
                     continue
             _LOGGER.debug(
                 "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",

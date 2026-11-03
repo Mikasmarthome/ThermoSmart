@@ -1214,8 +1214,18 @@ class ThermoSmartCoordinator(
                         offsets.append(_eff_sp - _eff_bl)
                     return offsets
 
-                if _disp_status == "fully_succeeded" and _eff_by_eid:
-                    _dev_offsets = _counterfactual_offsets(_eff_by_eid)
+                _held_by_eid = _sp_stats.held_setpoints_by_entity
+                if _disp_status == "fully_succeeded" and (_eff_by_eid or _held_by_eid):
+                    # M4: the conservative zone offset is the per-device MINIMUM across
+                    # ALL devices that carry the boost this cycle — both newly WRITTEN
+                    # devices (effective_setpoints_by_entity) AND devices already HOLDING
+                    # it (held_setpoints_by_entity, keyed by their ACTUAL observed
+                    # setpoint per M1). Ignoring held devices in a mixed zone would
+                    # overstate the applied offset when a held device sits below the
+                    # requested target. Written values take precedence on the (not
+                    # expected) chance an entity appears in both.
+                    _merged_eff = {**_held_by_eid, **_eff_by_eid}
+                    _dev_offsets = _counterfactual_offsets(_merged_eff)
                     _real_applied = max(0.0, min(_dev_offsets))
                     recommendation["_boost_applied_c"] = round(_real_applied, 4)
                     recommendation["_boost_per_device_applied_c"] = [
@@ -1297,11 +1307,17 @@ class ThermoSmartCoordinator(
                         dispatch_targets_succeeded=_combined.targets_succeeded,
                         dispatch_targets_failed=_combined.targets_failed,
                         dispatch_failure_reasons=tuple(_combined.failure_reasons),
-                        # D5a/O1: multi-device accounting (counts only, no entity IDs).
-                        dispatch_targets_held=_combined.targets_held,
-                        dispatch_targets_considered=_combined.considered,
-                        dispatch_targets_excluded=_combined.targets_excluded,
-                        dispatch_excluded_reasons=tuple(_combined.excluded_reasons),
+                        # D5a/O1/M3: multi-device accounting (counts only, no entity IDs),
+                        # scoped to the SETPOINT dispatch path where "held" and "excluded"
+                        # are defined. It is NOT merged with the direct-valve path, which
+                        # iterates the same climate_entities and would double-count the
+                        # same physical TRV. The aggregate targets_total/succeeded/failed
+                        # above still include valve writes (unchanged); the valve path has
+                        # no held/considered/excluded breakdown here.
+                        dispatch_targets_held=_sp_stats.targets_held,
+                        dispatch_targets_considered=_sp_stats.considered,
+                        dispatch_targets_excluded=_sp_stats.targets_excluded,
+                        dispatch_excluded_reasons=tuple(_sp_stats.excluded_reasons),
                         dispatch_ts=_cycle_ts if _disp_attempted else None,
                         outcome_eligible=_outcome_elig,
                         outcome_reliability=_outcome_rel,
@@ -1731,6 +1747,20 @@ class ThermoSmartCoordinator(
                 reason = "same_setpoint_block"
                 summary = "TRV setpoint command blocked: already at target"
                 details = {"requested_setpoint": requested_rounded}
+            elif sp_stats.status == "already_satisfied":
+                # L1: D5a introduced "already_satisfied" — every considered device
+                # already holds the requested setpoint within tolerance. Semantically
+                # this IS "already at target", so it maps to the existing
+                # SAME_SETPOINT_BLOCK event even when no prior write by us matched (the
+                # previous code reached this state only via the _last_written_setpoints
+                # match above; a held-without-prior-write cycle used to fall through to
+                # the misleading "not_attempted" event — now reported accurately).
+                event_type = SupportEventType.SAME_SETPOINT_BLOCK
+                severity = SupportEventSeverity.INFO
+                reason = "same_setpoint_block"
+                summary = "TRV setpoint command blocked: already at target"
+                details = {"requested_setpoint": requested_rounded,
+                           "devices_held": sp_stats.targets_held}
             elif sp_stats.status == "not_attempted":
                 event_type = SupportEventType.TRV_COMMAND_BLOCKED
                 severity = SupportEventSeverity.INFO

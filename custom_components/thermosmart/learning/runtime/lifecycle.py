@@ -181,6 +181,12 @@ class _ZoneRuntime:
         self._last_snapshot: Any = None
         # B2b-4d: at most ONE active deferred boost finalization per zone (post-reach observer).
         self.pending_boost_outcome: Any = None
+        # H1 (baseline-contamination guard): decision_ids where a Boost was applied at
+        # ANY cycle (written OR already-held with a positive offset). Belt-and-braces:
+        # even if the decision's final dispatch record shows no boost (boost dropped
+        # before REACHED), the decision can never be stored as a clean non-boost
+        # baseline. Session-scoped and bounded; cleared when the decision closes.
+        self.boost_applied_decisions: "OrderedDict[str, bool]" = OrderedDict()
 
     def serialize(self) -> dict:
         # B2b-attribution: persist pending boost contexts and dispatch records so that a
@@ -485,6 +491,16 @@ class LearningRuntime:
             zr.pending_dispatch_records[ddid] = snapshot.boost_dispatch
             while len(zr.pending_dispatch_records) > zr._pending_boost_cap:
                 zr.pending_dispatch_records.popitem(last=False)
+            # H1 guard: mark this decision boost-contaminated if ANY positive boost
+            # offset was applied this cycle (written or already-held). This persists
+            # across the whole decision (stable id after the capture fix), so a boost
+            # that is later dropped before REACHED can never leave a clean baseline.
+            _applied = getattr(snapshot.boost_dispatch, "boost_applied_c", None)
+            if _applied is not None and _applied > 0.0:
+                zr.boost_applied_decisions.pop(ddid, None)
+                zr.boost_applied_decisions[ddid] = True
+                while len(zr.boost_applied_decisions) > zr._pending_boost_cap:
+                    zr.boost_applied_decisions.popitem(last=False)
         zr._last_snapshot = snapshot        # for baseline context at outcome close
 
         # B2b-4d: advance any deferred post-reach boost observer with THIS cycle's sample;
@@ -528,6 +544,8 @@ class LearningRuntime:
                 if ce.model_name == "outcome" and ce.decision_id is not None:
                     bctx = zr.pending_boost_contexts.pop(ce.decision_id, None)
                     drec = zr.pending_dispatch_records.pop(ce.decision_id, None)
+                    # H1 guard: did this decision ever apply a Boost (written or held)?
+                    _decision_boosted = zr.boost_applied_decisions.pop(ce.decision_id, False)
                     # B2b-4b: augment the episode with runtime confounders from authoritative
                     # evidence (multi-TRV, afterheat). The SAME
                     # augmented episode feeds both the boost outcome and the baseline path.
@@ -557,6 +575,19 @@ class LearningRuntime:
                                 authoritative_change = True
                                 zr.model_update_counts["boost"] = \
                                     zr.model_update_counts.get("boost", 0) + 1
+                    elif _decision_boosted:
+                        # H1: the decision applied a Boost at some cycle but formed no
+                        # bindable boost context (e.g. an already-held boost later
+                        # dropped before REACHED). It is NOT a clean non-boost episode,
+                        # so it must never become a baseline sample — record the
+                        # diagnostic rejection and store nothing.
+                        try:
+                            from ..models.baseline_comparison import BaselineSampleRejection
+                            # match the string-keyed diagnostics the normal reject path uses
+                            zr.baseline_store.record_rejection(
+                                BaselineSampleRejection.BOOST_APPLIED.value)
+                        except Exception as err:
+                            self._record_runtime_error("baseline_store", err)
                     else:
                         # B2b-3: an authoritative NON-boost outcome becomes a baseline sample.
                         self._maybe_store_baseline(zr, bound_episode, drec, snapshot)

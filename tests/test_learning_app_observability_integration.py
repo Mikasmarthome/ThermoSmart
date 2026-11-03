@@ -36,6 +36,7 @@ from tests.helpers_ha_runtime import (
     inject_learned_thermal_state,
     make_dispatching_coordinator,
 )
+from tests.helpers_runtime_scenarios import runtime as scenario_runtime
 
 _START = datetime(2026, 1, 12, 6, 0, tzinfo=timezone.utc)
 
@@ -63,8 +64,10 @@ class TestRealBoostDispatch:
         b = out["boost"]
         assert b["available"] is True
         assert b["lifecycle_approved"] is True
-        # approved (pre-dispatch) and coordinator-confirmed (post-dispatch) agree
-        # here, and both equal the zone's authoritative applied offset.
+        # R3: approved (pre-dispatch policy offset) is a real, non-zero boost, and
+        # it equals the coordinator-confirmed (post-dispatch) offset ONLY because
+        # dispatch fully succeeded. Both equal the zone's authoritative value.
+        assert b["approved_offset_c"] > 0
         assert b["approved_offset_c"] == b["dispatch_confirmed_offset_c"]
         assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"]
         assert b["dispatch_attempted"] is True
@@ -89,6 +92,15 @@ class TestRealBoostDispatch:
         assert b["dispatch_targets_succeeded"] == 0
         assert b["dispatch_failure_reasons"]                 # populated, privacy-safe labels
         assert all(":" not in r or not r.startswith("climate.") for r in b["dispatch_failure_reasons"])
+        # R3 (I1 regression guard): the boost WAS approved (offset > 0) but NOTHING
+        # was dispatched, so the coordinator-confirmed offset is 0.0 and must NOT
+        # equal the approved offset. A mutation that sources approved_offset_c from
+        # the post-dispatch confirmed value (the original I1 bug) collapses these
+        # to the same value and is caught here.
+        assert b["approved_offset_c"] > 0
+        assert b["dispatch_confirmed_offset_c"] == 0.0
+        assert b["approved_offset_c"] != b["dispatch_confirmed_offset_c"]
+        assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"]
         assert b["heating_effect_confirmed"] is None
 
     async def test_partial_dispatch_is_distinguished(self):
@@ -102,6 +114,35 @@ class TestRealBoostDispatch:
         assert b["dispatch_targets_total"] == 2
         assert b["dispatch_targets_succeeded"] == 1
         assert b["dispatch_targets_failed"] == 1
+        # R3 (I1 regression guard): approved > 0 but the coordinator confirms 0.0
+        # on a non-fully-successful dispatch — approved and confirmed must differ.
+        assert b["approved_offset_c"] > 0
+        assert b["dispatch_confirmed_offset_c"] == 0.0
+        assert b["approved_offset_c"] != b["dispatch_confirmed_offset_c"]
+        assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"]
+
+    async def test_already_held_setpoint_no_write(self):
+        # R3 / D5: the device already holds exactly the requested (boosted)
+        # setpoint, so the real _apply_temperature issues NO new service call.
+        # The boost was still approved this cycle; the diagnostic reports the
+        # within-tolerance inference without claiming a dispatch happened.
+        # (requested boosted setpoint for this scenario is 28.5 °C.)
+        coord, out = await _run_boost_cycle(
+            cfg={"boost_bootstrap_prior_c": 1.0},
+            climate_states={"climate.trv_test": {"temperature": 28.5}})
+        b = out["boost"]
+        assert b["requested_setpoint_c"] == 28.5              # guards the held-value premise
+        assert b["lifecycle_approved"] is True
+        assert b["approved_offset_c"] > 0
+        assert b["dispatch_attempted"] is True               # the dispatch path DID run
+        assert b["dispatch_targets_total"] == 0              # but no per-device command was queued
+        assert b["dispatch_write_issued"] is False
+        assert b["service_call_succeeded"] is None           # no call attempted -> tri-state null
+        assert b["within_tolerance_no_write_inferred"] is True
+        assert coord._service_calls == []                    # real path issued nothing
+        # confirmed offset reflects that nothing was dispatched this cycle
+        assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"] == 0.0
+        assert b["heating_effect_confirmed"] is None
 
     async def test_active_control_off_no_dispatch_attempted(self):
         coord, out = await _run_boost_cycle(
@@ -176,6 +217,21 @@ class TestRealPreheat:
         assert ph["baseline_minutes"] == zone["preheat_baseline_minutes"]
         # deterministic selection equals the baseline it fell back to
         assert ph["selected_minutes"] == ph["baseline_minutes"]
+
+    async def test_learned_preheat_exposes_no_heat_rate_source(self):
+        # R1: a learned preheat must never carry a heat-rate *source* field — the
+        # only candidate (LiveDecisionRecord.heat_rate_source) is the TPI
+        # coefficient source, not the heat-rate model's, and exposing it risks a
+        # self-contradictory block. Assert the field is gone and the remaining
+        # keys are exactly the authoritative set.
+        zone, ph = await _run_preheat(learned=True)
+        assert ph["source"] == "learned"                     # preheat IS learned
+        assert "heat_rate_source" not in ph                  # misleading field removed
+        assert ph["status"] in ("valid", "valid_hl_prior")
+        assert set(ph) == {
+            "available", "source", "status", "selected_minutes", "baseline_minutes",
+            "onset_delay_source", "calculated", "active_window",
+        }
 
 
 # ── I4: real TPI selection through a cycle ────────────────────────────────────
@@ -347,3 +403,83 @@ class TestRestoreHealthPath:
         assert hd["restore_errors"] >= 1
         assert any(r.startswith("store:load_failed:") for r in hd["restore_error_reasons"])
         assert scan_payload(hd) == []
+
+
+# ── R4: the three previously swallowed pending-entry restore error paths ──────
+
+class TestPendingEntryRestoreErrors:
+    """Each corrupt per-entry pending record is isolated (the entry is skipped)
+    but now surfaced as a distinct, privacy-safe ``<segment>:entry:<Type>``
+    reason — none is silently swallowed any more."""
+
+    def _restore_with(self, key):
+        rt = scenario_runtime()
+        # A non-mapping entry makes the per-entry decoder raise; the whole-segment
+        # envelope is otherwise valid so only the one entry is affected.
+        rt._restore_payload({"runtime_schema_version": RUNTIME_SCHEMA_VERSION,
+                             "zones": {"z": {key: {"d1": 12345}}}})
+        return rt.health()
+
+    def test_pending_boost_contexts_entry_error_surfaced(self):
+        h = self._restore_with("pending_boost_contexts")
+        assert h.restore_errors >= 1
+        assert any(r.startswith("pending_boost_contexts:entry:")
+                   for r in h.restore_error_reasons)
+        assert all(":entry:" not in r or r.count(":") == 2 for r in h.restore_error_reasons)
+
+    def test_pending_dispatch_records_entry_error_surfaced(self):
+        h = self._restore_with("pending_dispatch_records")
+        assert any(r.startswith("pending_dispatch_records:entry:")
+                   for r in h.restore_error_reasons)
+
+    def test_pending_baseline_ctx_entry_error_surfaced(self):
+        h = self._restore_with("pending_baseline_ctx")
+        assert any(r.startswith("pending_baseline_ctx:entry:")
+                   for r in h.restore_error_reasons)
+
+    def test_entry_errors_carry_no_payload_or_ids(self):
+        # Error reasons are type labels only — no decision id, no payload value.
+        for key in ("pending_boost_contexts", "pending_dispatch_records",
+                    "pending_baseline_ctx"):
+            h = self._restore_with(key)
+            for r in h.restore_error_reasons:
+                assert "d1" not in r and "12345" not in r
+            assert scan_payload(list(h.restore_error_reasons)) == []
+
+
+# ── R4: calculated preheat duration vs actual active preheat window ───────────
+
+class TestCalculatedVsActiveWindow:
+    async def test_calculated_duration_does_not_imply_active_window(self):
+        # A learned preheat duration is CALCULATED (> 0) this cycle, but whether
+        # the zone is actually inside a preheat window is reported independently
+        # from the coordinator's own ``preheat_active`` flag — the two are never
+        # conflated.
+        zone, ph = await _run_preheat(learned=True)
+        assert ph["calculated"] is True                      # a duration was computed
+        assert ph["selected_minutes"] > 0
+        # active_window reflects the coordinator's own flag, not "calculated".
+        assert ph["active_window"] == bool(zone.get("preheat_active", False))
+        assert ph["calculated"] is not None
+        # They are distinct keys with distinct meaning.
+        assert "calculated" in ph and "active_window" in ph
+
+
+# ── R4: a generic (non-boost) dispatch write must not be labelled a boost ─────
+
+class TestNonBoostWriteNotMislabelled:
+    async def test_schedule_setpoint_write_is_not_a_boost(self):
+        # Cold room, NO boost prior: the real cycle writes a schedule/TPI setpoint
+        # (a generic dispatch), but no Learning boost is applied. The boost block
+        # must report that write without claiming it was a boost.
+        coord, out = await _run_boost_cycle(cfg={}, indoor="18.0")
+        b = out["boost"]
+        assert coord._service_calls, "expected a generic (non-boost) setpoint write"
+        assert b["dispatch_write_issued"] is True            # a write DID happen
+        assert b["lifecycle_approved"] is False              # ...but it is not a boost
+        assert b["approved_offset_c"] in (None, 0.0)
+        assert b["dispatch_confirmed_offset_c"] == 0.0
+        assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"]
+        assert b["within_tolerance_no_write_inferred"] is False
+        assert b["heating_effect_confirmed"] is None
+        assert scan_payload(out) == []

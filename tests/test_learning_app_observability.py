@@ -102,6 +102,25 @@ class TestPreheatApplication:
         assert ph["calculated"] is True
         assert ph["active_window"] is False
 
+    def test_learned_preheat_with_tpi_cold_start_has_no_heat_rate_source(self):
+        # R1 regression: the LiveDecisionRecord.heat_rate_source is populated from
+        # tpi_coef_source (coordinator.py), so a learned preheat while TPI is still
+        # in cold-start would previously expose heat_rate_source="cold_start" —
+        # contradicting source="learned". The field is removed; no such
+        # contradiction can appear.
+        zone = {"preheat_active": False, "preheat_minutes": 40.0,
+                "preheat_status": "valid", "preheat_baseline_minutes": 90.0}
+        ldr = _ldr(heat_rate_source="cold_start", onset_delay_source="cold_start_prior")
+        ph = _learning_application_export(_coord(zone=zone, ldr=ldr))["preheat"]
+        assert ph["source"] == "learned"
+        assert "heat_rate_source" not in ph               # misleading field gone
+        assert ph["onset_delay_source"] == "cold_start_prior"   # authoritative one kept
+        # no exported value contradicts the learned preheat source
+        assert set(ph) == {
+            "available", "source", "status", "selected_minutes", "baseline_minutes",
+            "onset_delay_source", "calculated", "active_window",
+        }
+
 
 # ── Application export: TPI ───────────────────────────────────────────────────
 

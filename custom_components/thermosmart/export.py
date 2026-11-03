@@ -267,8 +267,16 @@ def _learning_application_export(coord) -> dict:
         # LiveDecisionRecord as a status fallback. ``baseline_minutes`` is the
         # coordinator's OWN same-cycle deterministic baseline (not recomputed
         # here). No fallback reason is invented beyond the runtime's own
-        # ``preheat_status``; the true learned candidate (preheat_minutes_learning)
-        # is exposed by the separate decision_trace diagnostic, not duplicated here.
+        # ``preheat_status``.
+        #
+        # R1: a heat-rate *source* is deliberately NOT exported here. The only
+        # candidate on the LiveDecisionRecord (``heat_rate_source``) is populated
+        # from ``recommendation["tpi_coef_source"]`` (coordinator.py), i.e. it is
+        # the TPI coefficient source, not the heat-rate model's own source — so a
+        # learned preheat with TPI still in cold-start would otherwise be labelled
+        # with a contradictory "cold_start" heat-rate source. ``onset_delay_source``
+        # IS authoritative (derived from the onset-delay prediction's
+        # fallback/confidence) and is kept.
         _ph_status = zone.get("preheat_status") or _g("preheat_status")
         _ph_selected = zone.get("preheat_minutes")
         if _ph_selected is None:
@@ -280,8 +288,7 @@ def _learning_application_export(coord) -> dict:
             "status": _ph_status,                              # authoritative safe-read status
             "selected_minutes": _ph_selected,
             "baseline_minutes": zone.get("preheat_baseline_minutes"),  # coordinator's observed baseline
-            "heat_rate_source": _g("heat_rate_source"),
-            "onset_delay_source": _g("onset_delay_source"),
+            "onset_delay_source": _g("onset_delay_source"),    # authoritative (onset-delay prediction)
             # A duration was COMPUTED this cycle (> 0) — not necessarily heating now.
             "calculated": bool(_ph_selected or 0),
             # The zone is ACTUALLY in a preheat window right now (coordinator state).
@@ -380,9 +387,15 @@ def _learning_application_export(coord) -> dict:
                 "within_tolerance_no_write_inferred": "INFERENCE only — boost offset approved but no "
                                                       "new service call issued this cycle; not a verified device read",
                 "preheat_baseline_minutes": "the coordinator's own same-cycle baseline, not recomputed here; "
-                                            "the independent learned preheat candidate is in the decision_trace block",
+                                            "preheat.selected_minutes is the value actually chosen this cycle",
                 "heating_effect_confirmed": "always null — a successful dispatch does not "
                                             "confirm the room physically warmed",
+                "dispatch_targets_total": "devices a command was ATTEMPTED on this cycle "
+                                          "(succeeded + failed). Devices skipped because their "
+                                          "setpoint was already held are not counted and cannot "
+                                          "be distinguished from devices not considered — "
+                                          "representing considered/skipped truthfully needs "
+                                          "dispatch-path instrumentation, deferred to Phase B",
             },
         }
     except Exception:

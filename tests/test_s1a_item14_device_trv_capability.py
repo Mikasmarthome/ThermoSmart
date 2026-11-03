@@ -330,19 +330,28 @@ class TestApplyTemperatureSetpointDispatch:
         assert args[0][2]["temperature"] == pytest.approx(23.5)
 
     async def test_dedup_exact_match_skips_service_call(self):
-        """Current setpoint == trv_setpoint → within 0.5°C tolerance → no dispatch."""
+        """Current setpoint == trv_setpoint → within 0.5°C tolerance → no dispatch.
+
+        D5a: the device already holds the requested setpoint, so the status is the
+        authoritative ``already_satisfied`` (NOT ``not_attempted``) and the device
+        is counted as held — while still issuing no service call (dedup preserved).
+        """
         coord = _coord_with_svc()
         set_hass_states(coord, {"climate.trv": _trv_state(setpoint=23.5)})
         stats = await coord._apply_temperature(_CFG_ONE, _REC_NORMAL)
-        assert stats.status == "not_attempted"
+        assert stats.status == "already_satisfied"
+        assert stats.targets_held == 1
+        assert stats.targets_total == 0            # no new write attempted
+        assert stats.considered == 1
         assert not coord.hass.services.async_call.called
 
     async def test_dedup_within_tolerance_skips_service_call(self):
-        """Difference 0.3°C < 0.5°C tolerance → no dispatch."""
+        """Difference 0.3°C < 0.5°C tolerance → no dispatch (held, not not_attempted)."""
         coord = _coord_with_svc()
         set_hass_states(coord, {"climate.trv": _trv_state(setpoint=23.3)})
         stats = await coord._apply_temperature(_CFG_ONE, _REC_NORMAL)
-        assert stats.status == "not_attempted"
+        assert stats.status == "already_satisfied"
+        assert stats.targets_held == 1
 
     async def test_dedup_just_outside_tolerance_dispatches(self):
         """Difference 0.6°C > 0.5°C tolerance → dispatches."""
@@ -484,13 +493,18 @@ class TestApplyTemperatureWindowOpen:
         )
 
     async def test_window_open_dedup_skips_if_already_at_frost(self):
-        """Current setpoint == WINDOW_OPEN_SETPOINT → within 0.3°C → no dispatch."""
+        """Current setpoint == WINDOW_OPEN_SETPOINT → within 0.3°C → no dispatch.
+
+        D5a: already holding the frost/window-open setpoint → held → the status is
+        ``already_satisfied``; still no service call (dedup preserved).
+        """
         coord = _coord_with_svc()
         set_hass_states(
             coord, {"climate.trv": _trv_state(setpoint=WINDOW_OPEN_SETPOINT)}
         )
         stats = await coord._apply_temperature(_CFG_ONE, _REC_WINDOW)
-        assert stats.status == "not_attempted"
+        assert stats.status == "already_satisfied"
+        assert stats.targets_held == 1
         assert not coord.hass.services.async_call.called
 
     async def test_window_open_service_failure_does_not_update_last_written(self):
@@ -622,14 +636,17 @@ class TestApplyTemperatureMultiTRV:
         assert not coord.hass.services.async_call.called
 
     async def test_dedup_prevents_redundant_writes_across_cycles(self):
-        """After successful write, next cycle with unchanged TRV state is deduplicated."""
+        """After a successful write, the next cycle with unchanged TRV state is
+        deduplicated — now surfaced as ``already_satisfied`` (held), not
+        ``not_attempted``; still no redundant service call."""
         coord = _coord_with_svc()
         set_hass_states(coord, {"climate.trv": _trv_state(setpoint=19.0)})
         await coord._apply_temperature(_CFG_ONE, _REC_NORMAL)
         coord.hass.services.async_call.reset_mock()
         set_hass_states(coord, {"climate.trv": _trv_state(setpoint=23.5)})
         stats = await coord._apply_temperature(_CFG_ONE, _REC_NORMAL)
-        assert stats.status == "not_attempted"
+        assert stats.status == "already_satisfied"
+        assert stats.targets_held == 1
         assert not coord.hass.services.async_call.called
 
 

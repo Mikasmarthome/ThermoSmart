@@ -51,6 +51,14 @@ class EvidenceMaterializer:
                 notes.append("boost_dispatch_failed")            # no normal outcome
             elif bd.dispatch_status == "not_attempted":
                 notes.append("boost_not_attempted")              # no dispatch-effect outcome
+            elif bd.dispatch_status == "already_satisfied":
+                # D5a: the device already held the requested (boosted) setpoint — the
+                # control state is satisfied, but NO new service call was issued, so
+                # this cycle produces NO fresh actuation evidence. Form no boost
+                # outcome (conservative): a held setpoint must never, on its own,
+                # create a new successful-dispatch learning sample. The boost offset
+                # IS reflected in applied_boost_offset_c for attribution/diagnostics.
+                notes.append("boost_held_no_new_dispatch")
             elif applied is None or applied <= 0.0:
                 notes.append("boost_zero_applied")               # candidate but nothing written
             elif bd.dispatch_status in ("fully_succeeded", "partially_succeeded"):

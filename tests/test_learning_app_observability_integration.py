@@ -122,10 +122,12 @@ class TestRealBoostDispatch:
         assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"]
 
     async def test_already_held_setpoint_no_write(self):
-        # R3 / D5: the device already holds exactly the requested (boosted)
-        # setpoint, so the real _apply_temperature issues NO new service call.
-        # The boost was still approved this cycle; the diagnostic reports the
-        # within-tolerance inference without claiming a dispatch happened.
+        # D5a (CORRECTED semantics): the device already holds exactly the requested
+        # (boosted) setpoint, so the real _apply_temperature issues NO new service
+        # call. Phase B fixes the accounting: the device is reported HELD (not
+        # "not attempted"), the status is "already_satisfied", and because the
+        # boost offset IS physically on the device the confirmed offset is > 0
+        # (NOT 0.0, as the pre-Phase-B D5a bug reported).
         # (requested boosted setpoint for this scenario is 28.5 °C.)
         coord, out = await _run_boost_cycle(
             cfg={"boost_bootstrap_prior_c": 1.0},
@@ -135,14 +137,20 @@ class TestRealBoostDispatch:
         assert b["lifecycle_approved"] is True
         assert b["approved_offset_c"] > 0
         assert b["dispatch_attempted"] is True               # the dispatch path DID run
-        assert b["dispatch_targets_total"] == 0              # but no per-device command was queued
+        assert b["dispatch_status"] == "already_satisfied"   # D5a: distinct from not_attempted
+        assert b["dispatch_targets_total"] == 0              # no NEW per-device command was queued
+        assert b["dispatch_targets_held"] == 1               # ...the device is accounted as held
+        assert b["dispatch_targets_considered"] == 1
         assert b["dispatch_write_issued"] is False
+        assert b["requested_state_already_satisfied"] is True
         assert b["service_call_succeeded"] is None           # no call attempted -> tri-state null
-        assert b["within_tolerance_no_write_inferred"] is True
+        assert b["outcome_eligible"] is False                # no new actuation evidence
         assert coord._service_calls == []                    # real path issued nothing
-        # confirmed offset reflects that nothing was dispatched this cycle
-        assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"] == 0.0
-        assert b["heating_effect_confirmed"] is None
+        # D5a fix: the held boost IS applied on the device, so confirmed offset > 0
+        # and equals the coordinator's post-dispatch zone value (not 0.0).
+        assert b["dispatch_confirmed_offset_c"] > 0
+        assert b["dispatch_confirmed_offset_c"] == coord.data["zone"]["applied_boost_offset_c"]
+        assert b["heating_effect_confirmed"] is None         # held != physical heating proof
 
     async def test_active_control_off_no_dispatch_attempted(self):
         coord, out = await _run_boost_cycle(

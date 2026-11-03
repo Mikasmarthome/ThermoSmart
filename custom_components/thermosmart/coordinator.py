@@ -1222,6 +1222,24 @@ class ThermoSmartCoordinator(
                         round(o, 4) for o in _dev_offsets]
                     recommendation["applied_boost_offset_c"] = round(_real_applied, 3)
                     # boost_offset_c (prediction) and boost_factor are not updated post-dispatch.
+                elif _disp_status == "already_satisfied" and _sp_stats.held_setpoints_by_entity:
+                    # D5a: every considered device already holds the requested
+                    # (boosted) setpoint within tolerance — so the boost offset IS
+                    # physically on the devices even though NO new service call was
+                    # issued this cycle. Report the real applied offset (same
+                    # conservative per-device counterfactual minimum as a successful
+                    # write), computed from the HELD effective setpoints. This fixes
+                    # the D5a defect where a held boost was reported as applied=0.0 /
+                    # "not attempted". The lifecycle is intentionally NOT invalidated
+                    # (the control state is correct), and this cycle does NOT become
+                    # outcome_eligible (no new actuation evidence; see LDR completion
+                    # and the EvidenceMaterializer's explicit already_satisfied branch).
+                    _dev_offsets = _counterfactual_offsets(_sp_stats.held_setpoints_by_entity)
+                    _real_applied = max(0.0, min(_dev_offsets))
+                    recommendation["_boost_applied_c"] = round(_real_applied, 4)
+                    recommendation["_boost_per_device_applied_c"] = [
+                        round(o, 4) for o in _dev_offsets]
+                    recommendation["applied_boost_offset_c"] = round(_real_applied, 3)
                 elif _disp_status == "not_attempted":
                     # Dispatch path skipped entirely (summer mode / active-control exclusion):
                     # approved-but-not-dispatched must not surface as applied truth.
@@ -1279,6 +1297,11 @@ class ThermoSmartCoordinator(
                         dispatch_targets_succeeded=_combined.targets_succeeded,
                         dispatch_targets_failed=_combined.targets_failed,
                         dispatch_failure_reasons=tuple(_combined.failure_reasons),
+                        # D5a/O1: multi-device accounting (counts only, no entity IDs).
+                        dispatch_targets_held=_combined.targets_held,
+                        dispatch_targets_considered=_combined.considered,
+                        dispatch_targets_excluded=_combined.targets_excluded,
+                        dispatch_excluded_reasons=tuple(_combined.excluded_reasons),
                         dispatch_ts=_cycle_ts if _disp_attempted else None,
                         outcome_eligible=_outcome_elig,
                         outcome_reliability=_outcome_rel,

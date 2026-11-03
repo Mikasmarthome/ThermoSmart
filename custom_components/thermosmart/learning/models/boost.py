@@ -198,7 +198,11 @@ def classify_boost_outcome(*, dispatch_status: Optional[str], authority: str,
     conf = evaluate_confounders(list(confounder_flags or ()), partial_dispatch=is_partial)
     if dispatch_status == "failed":
         return BoostOutcomeClass.BOOST_FAILED_DISPATCH
-    if dispatch_status == "not_attempted":
+    # D5a: a held setpoint ("already_satisfied") issued no new service call, so it
+    # yields no fresh dispatch-effect outcome — classify like not-attempted (no
+    # outcome). Defensive: the EvidenceMaterializer already forms no boost context
+    # for a held cycle, so this normally never arrives here.
+    if dispatch_status in ("not_attempted", "already_satisfied"):
         return BoostOutcomeClass.BOOST_NOT_ATTEMPTED
     if conf.is_interrupting:
         return BoostOutcomeClass.BOOST_INTERRUPTED

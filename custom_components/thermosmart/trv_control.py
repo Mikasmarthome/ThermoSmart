@@ -36,10 +36,22 @@ _LOGGER = logging.getLogger(__name__)
 # ── Dispatch statistics (privacy-safe, no entity IDs) ────────────────────────
 
 class _DispatchStats:
-    """Accumulates per-entity dispatch results without exposing entity IDs."""
+    """Accumulates per-entity dispatch results without exposing entity IDs.
+
+    ``targets_total`` counts devices where a NEW service call was attempted this
+    cycle (succeeded + failed). D5a/O1: a device already holding the requested
+    setpoint within tolerance is a distinct, authoritative category — recorded
+    via ``record_held()`` into ``targets_held`` (NOT ``targets_total``), so it is
+    never mistaken for a new successful write nor for "not attempted". Devices
+    excluded before the write decision (inactive profile, unsupported, no state)
+    are counted in ``targets_excluded`` with privacy-safe enum reasons only.
+    ``considered`` = devices that reached the write decision = held + attempted.
+    """
     __slots__ = ("targets_total", "targets_succeeded", "targets_failed",
                  "failure_reasons", "effective_setpoints",
-                 "effective_setpoints_by_entity", "failed_entity_ids")
+                 "effective_setpoints_by_entity", "failed_entity_ids",
+                 "targets_held", "targets_excluded", "excluded_reasons",
+                 "held_setpoints_by_entity")
 
     def __init__(self) -> None:
         self.targets_total: int = 0
@@ -54,6 +66,17 @@ class _DispatchStats:
         # counter (Device Compatibility P1). Not privacy-sensitive: consumed only
         # in-process by the coordinator, never itself exported or stored.
         self.failed_entity_ids: list = []
+        # D5a/O1: devices already holding the requested setpoint within tolerance
+        # (no new service call issued). Tracked separately from writes.
+        self.targets_held: int = 0
+        # entity_id → effective °C already held (keyed for counterfactual boost
+        # offset; the held value IS the requested boosted setpoint, so a held
+        # boost is genuinely applied on the device).
+        self.held_setpoints_by_entity: dict = {}
+        # O1: devices excluded before the write decision, with privacy-safe enum
+        # reasons only (no entity ids): "profile_inactive"|"unsupported"|"no_state".
+        self.targets_excluded: int = 0
+        self.excluded_reasons: list = []
 
     def record(self, exc=None, *, effective_c=None, entity_id: str | None = None) -> None:
         """Record one dispatch attempt; pass exc to mark it as failed.
@@ -74,6 +97,23 @@ class _DispatchStats:
                 self.effective_setpoints.append(float(effective_c))
                 if entity_id is not None:
                     self.effective_setpoints_by_entity[entity_id] = float(effective_c)
+
+    def record_held(self, *, effective_c, entity_id: str | None = None) -> None:
+        """Record a device already holding the requested setpoint within tolerance.
+
+        No new service call is issued. The held value is the requested (possibly
+        boosted) setpoint, so it is retained for the per-device counterfactual
+        boost-offset computation. This is NOT a write and NOT counted in
+        targets_total/targets_succeeded.
+        """
+        self.targets_held += 1
+        if effective_c is not None and entity_id is not None:
+            self.held_setpoints_by_entity[entity_id] = float(effective_c)
+
+    def record_excluded(self, reason: str) -> None:
+        """Record a device excluded before the write decision (privacy-safe reason)."""
+        self.targets_excluded += 1
+        self.excluded_reasons.append(reason)
 
     def record_gather(self, results) -> None:
         """Process the list of results from asyncio.gather(return_exceptions=True).
@@ -98,11 +138,26 @@ class _DispatchStats:
         merged.effective_setpoints_by_entity = {
             **self.effective_setpoints_by_entity, **other.effective_setpoints_by_entity}
         merged.failed_entity_ids = self.failed_entity_ids + other.failed_entity_ids
+        merged.targets_held = self.targets_held + other.targets_held
+        merged.held_setpoints_by_entity = {
+            **self.held_setpoints_by_entity, **other.held_setpoints_by_entity}
+        merged.targets_excluded = self.targets_excluded + other.targets_excluded
+        merged.excluded_reasons = self.excluded_reasons + other.excluded_reasons
         return merged
+
+    @property
+    def considered(self) -> int:
+        """Devices that reached the write decision (held + write-attempted)."""
+        return self.targets_total + self.targets_held
 
     @property
     def status(self) -> str:
         if self.targets_total == 0:
+            # No new service call attempted. Distinguish a device already holding
+            # the requested control state (already_satisfied) from a path that
+            # produced no actionable target at all (not_attempted).
+            if self.targets_held > 0:
+                return "already_satisfied"
             return "not_attempted"
         if self.targets_failed == 0:
             return "fully_succeeded"
@@ -662,8 +717,10 @@ class TRVControlMixin:
                 for entity_id in cfg.get("climate_entities", []):
                     state = self._get_trv_state(entity_id)
                     if state is None:
+                        stats.record_excluded("no_state")
                         continue
                     if not self._supports_single_setpoint(entity_id, state):
+                        stats.record_excluded("unsupported")
                         continue
                     frost_temp = cfg.get(CONF_WINDOW_OPEN_TEMP, WINDOW_OPEN_SETPOINT)
                     # min_temp is already normalized to the HA system unit by
@@ -682,6 +739,7 @@ class TRVControlMixin:
                             "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
                             self.zone_name, entity_id,
                         )
+                        stats.record_excluded("profile_inactive")
                         continue
                     if _wp is not None and _wp.minimum_setpoint is not None and _wp.minimum_setpoint > frost_temp:
                         _LOGGER.debug(
@@ -700,6 +758,9 @@ class TRVControlMixin:
                     current_setpoint_c = to_internal_temperature_c(
                         self.hass, state.attributes.get("temperature"))
                     if current_setpoint_c is not None and abs(current_setpoint_c - frost_temp) < 0.3:
+                        # Already holding the window-open/frost setpoint — satisfied,
+                        # no new write. Tracked as held for accurate accounting.
+                        stats.record_held(effective_c=frost_temp, entity_id=entity_id)
                         continue
                     _frost_pending.append((entity_id, frost_temp, self.hass.services.async_call(
                         "climate", "set_temperature",
@@ -741,6 +802,7 @@ class TRVControlMixin:
         for entity_id in cfg.get("climate_entities", []):
             state = self._get_trv_state(entity_id)
             if state is None:
+                stats.record_excluded("no_state")
                 continue
             _profile = self._device_profiles.get(entity_id)
             if _profile is not None and not _profile.is_active:
@@ -748,14 +810,21 @@ class TRVControlMixin:
                     "ThermoSmart '%s': skipping setpoint write for %s (profile is_active=False)",
                     self.zone_name, entity_id,
                 )
+                stats.record_excluded("profile_inactive")
                 continue
             if not self._supports_single_setpoint(entity_id, state):
+                stats.record_excluded("unsupported")
                 continue
             effective_setpoint = self.resolve_device_effective_setpoint(
                 entity_id, state, trv_setpoint, _profile)
             current_setpoint = to_internal_temperature_c(self.hass, state.attributes.get("temperature"))
             if current_setpoint is not None:
                 if abs(current_setpoint - effective_setpoint) < tolerance:
+                    # D5a: the device already holds the requested setpoint within
+                    # tolerance — the requested control state is already satisfied.
+                    # Record it as held (NOT a new write, NOT "not attempted"); the
+                    # held value is retained for the counterfactual boost-offset.
+                    stats.record_held(effective_c=effective_setpoint, entity_id=entity_id)
                     continue
             _LOGGER.debug(
                 "ThermoSmart '%s' → %s: %.1f°C (Ziel=%.1f°C, Boost+%.1f°C)",

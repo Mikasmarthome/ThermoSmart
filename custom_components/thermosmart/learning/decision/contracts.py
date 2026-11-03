@@ -236,11 +236,18 @@ class LiveDecisionRecord:
     dispatch_failure_reason: Optional[str] = None  # repr(exc) for outer exception; None = success
     dispatch_ts: Optional[str] = None
     # Per-entity dispatch truth (from asyncio.gather results / sequential calls)
-    dispatch_status: str = "not_attempted"      # "not_attempted"|"fully_succeeded"|"partially_succeeded"|"failed"
-    dispatch_targets_total: int = 0             # entities where a command was queued/attempted
+    dispatch_status: str = "not_attempted"      # "not_attempted"|"already_satisfied"|"fully_succeeded"|"partially_succeeded"|"failed"
+    dispatch_targets_total: int = 0             # entities where a NEW command was queued/attempted (succeeded+failed)
     dispatch_targets_succeeded: int = 0         # commands that completed without exception
     dispatch_targets_failed: int = 0            # commands that raised
     dispatch_failure_reasons: tuple = ()        # privacy-safe normalized error labels (no entity IDs)
+    # D5a/O1: multi-device dispatch accounting (counts only, no entity IDs).
+    # "already holding the requested setpoint within tolerance" is a distinct
+    # category — never a new write, never "not attempted".
+    dispatch_targets_held: int = 0              # devices already holding the requested setpoint (no new write)
+    dispatch_targets_considered: int = 0        # devices that reached the write decision (held + attempted)
+    dispatch_targets_excluded: int = 0          # devices excluded before the write decision
+    dispatch_excluded_reasons: tuple = ()       # privacy-safe enum reasons: profile_inactive|unsupported|no_state
     # ── outcome eligibility (learning attribution gate) ──────────────
     outcome_eligible: bool = False              # True iff dispatch_status == "fully_succeeded"
     outcome_reliability: str = "none"           # "full"|"partial"|"none"

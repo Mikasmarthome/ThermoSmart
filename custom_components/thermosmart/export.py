@@ -323,6 +323,8 @@ def _learning_application_export(coord) -> dict:
             _block = _g("boost_rejected_reason")
             _attempted = bool(_g("dispatch_attempted", False))
             _targets_total = int(_g("dispatch_targets_total", 0) or 0)
+            _targets_held = int(_g("dispatch_targets_held", 0) or 0)
+            _dispatch_status = _g("dispatch_status", "not_attempted")
             # Tri-state: True / False only when a service call was actually
             # attempted this cycle; None means no call was attempted, so there
             # is no success/failure to report (never collapse None into False).
@@ -353,20 +355,29 @@ def _learning_application_export(coord) -> dict:
                 # ── dispatch semantics (authoritative LDR dispatch_* state) ──
                 "dispatch_attempted": _attempted,
                 "dispatch_path": _g("dispatch_path"),
-                "dispatch_status": _g("dispatch_status", "not_attempted"),
+                "dispatch_status": _dispatch_status,
                 "dispatch_targets_total": _targets_total,
                 "dispatch_targets_succeeded": int(_g("dispatch_targets_succeeded", 0) or 0),
                 "dispatch_targets_failed": int(_g("dispatch_targets_failed", 0) or 0),
                 "dispatch_failure_reasons": list(_g("dispatch_failure_reasons", ()) or ()),
+                # ── D5a/O1 multi-device accounting (authoritative counts, no IDs) ──
+                "dispatch_targets_considered": int(_g("dispatch_targets_considered", 0) or 0),
+                "dispatch_targets_held": _targets_held,          # already holding requested setpoint (no new write)
+                "dispatch_targets_excluded": int(_g("dispatch_targets_excluded", 0) or 0),
+                "dispatch_excluded_reasons": list(_g("dispatch_excluded_reasons", ()) or ()),
                 # Tri-state True/False/None (None = no call attempted this cycle).
                 "service_call_succeeded": _svc,
                 "outcome_eligible": bool(_g("outcome_eligible", False)),
                 # A NEW service call was issued this cycle.
                 "dispatch_write_issued": _targets_total > 0,
-                # INFERENCE, not verified device state: offset approved but no new
-                # write issued — inferred to be already within write tolerance.
+                # D5a: AUTHORITATIVE (not inferred) — every considered device already
+                # held the requested setpoint within tolerance, so the requested
+                # control state is satisfied with no new write this cycle.
+                "requested_state_already_satisfied": _dispatch_status == "already_satisfied",
+                # Back-compat (Phase A) INFERENCE flag; now corroborated by the
+                # authoritative held count above.
                 "within_tolerance_no_write_inferred": bool(_boost_applied and _targets_total == 0),
-                # Never inferred from a successful service call.
+                # Never inferred from a successful service call OR a held setpoint.
                 "heating_effect_confirmed": None,
             }
 
@@ -384,18 +395,21 @@ def _learning_application_export(coord) -> dict:
                                      "dispatch_effective_setpoint_min_c/max_c",
                 "service_call_succeeded": "tri-state: null means no service call was "
                                           "attempted this cycle (not a failure)",
-                "within_tolerance_no_write_inferred": "INFERENCE only — boost offset approved but no "
-                                                      "new service call issued this cycle; not a verified device read",
+                "requested_state_already_satisfied": "AUTHORITATIVE — dispatch_status=='already_satisfied': "
+                                                     "every considered device already held the requested setpoint "
+                                                     "within tolerance, so no new service call was issued; the boost "
+                                                     "offset (if any) is still reflected in dispatch_confirmed_offset_c",
+                "within_tolerance_no_write_inferred": "Phase A inference kept for back-compat; the authoritative "
+                                                      "signal is requested_state_already_satisfied / dispatch_targets_held",
                 "preheat_baseline_minutes": "the coordinator's own same-cycle baseline, not recomputed here; "
                                             "preheat.selected_minutes is the value actually chosen this cycle",
-                "heating_effect_confirmed": "always null — a successful dispatch does not "
-                                            "confirm the room physically warmed",
-                "dispatch_targets_total": "devices a command was ATTEMPTED on this cycle "
-                                          "(succeeded + failed). Devices skipped because their "
-                                          "setpoint was already held are not counted and cannot "
-                                          "be distinguished from devices not considered — "
-                                          "representing considered/skipped truthfully needs "
-                                          "dispatch-path instrumentation, deferred to Phase B",
+                "heating_effect_confirmed": "always null — neither a successful dispatch NOR a held "
+                                            "setpoint confirms the room physically warmed",
+                "dispatch_accounting": "O1 per-cycle multi-device accounting (counts only, no device IDs): "
+                                       "considered = held + attempted (succeeded+failed); held = devices already "
+                                       "at the requested setpoint within tolerance (no new write); excluded = "
+                                       "devices skipped before the write decision (reasons: profile_inactive|"
+                                       "unsupported|no_state). dispatch_targets_total counts NEW write attempts only",
             },
         }
     except Exception:

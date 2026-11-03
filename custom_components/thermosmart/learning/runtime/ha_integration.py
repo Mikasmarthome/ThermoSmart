@@ -123,7 +123,16 @@ def _decision_type(recommendation: Mapping[str, Any]) -> DecisionType:
     try:
         if recommendation.get("preheat_minutes", 0) and recommendation.get("preheat_minutes", 0) > 0:
             return DecisionType.PREHEAT
-        if recommendation.get("boost_active"):
+        # D4: the authoritative "controller applied a Boost this cycle" signal is
+        # ``learning_boost_adjusted`` (set by the coordinator when the Boost policy
+        # AND lifecycle approved the offset — the same flag the coordinator uses to
+        # gate post-dispatch applied-offset computation and support-event tracking).
+        # The former ``recommendation["boost_active"]`` key never existed, so this
+        # branch was dead and every Boost cycle was misclassified as NORMAL.
+        # A rejected Boost leaves the flag False (→ NORMAL/PREHEAT); the actual
+        # dispatch success/failure is carried separately and authoritatively by the
+        # LiveDecisionRecord's boost_dispatch, which gates outcome formation.
+        if recommendation.get("learning_boost_adjusted"):
             return DecisionType.BOOST
         if recommendation.get("window_open") or recommendation.get("is_summer"):
             return DecisionType.IDLE
@@ -226,7 +235,10 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
         mode=rec.get("mode"), controller_demand=demand,
         controller_decision=ControllerDecisionInput(
             decision_type=decision_type, target_c=target, trv_setpoint_c=setpoint,
-            boost_offset_c=boost_offset, boost_active=bool(rec.get("boost_active")),
+            boost_offset_c=boost_offset,
+            # D4: authoritative applied-boost signal (see _decision_type); the old
+            # rec["boost_active"] key never existed, so this was always False.
+            boost_active=bool(rec.get("learning_boost_adjusted")),
             preheat_active=bool(rec.get("preheat_minutes", 0)),
             mode=rec.get("mode")),
         window_open=rec.get("window_open"), heating_failure=heating_failure,

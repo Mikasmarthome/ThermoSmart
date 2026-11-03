@@ -74,24 +74,26 @@ class TestD7CoefSource:
 
 class TestPreheatApplication:
     def test_learned_selection_and_active_window(self):
+        # baseline_minutes is the coordinator's OWN same-cycle baseline (not recomputed).
         zone = {"preheat_active": True, "current_temp": 19.0,
-                "preheat_minutes": 42.0, "preheat_status": "valid"}
+                "preheat_minutes": 42.0, "preheat_status": "valid",
+                "preheat_baseline_minutes": 60.0}
         ph = _learning_application_export(_coord(zone=zone, ldr=_ldr()))["preheat"]
         assert ph["source"] == "learned"
+        assert ph["status"] == "valid"            # authoritative safe-read status
         assert ph["selected_minutes"] == 42.0
-        assert ph["learned_candidate_minutes"] == 42.0
-        # deterministic baseline recomputed for comparison (deficit 2°C @ 1.5°C/h + onset)
-        assert ph["baseline_minutes"] is not None and ph["baseline_minutes"] > 0
+        assert ph["baseline_minutes"] == 60.0     # coordinator's observed baseline, verbatim
         assert ph["calculated"] is True
         assert ph["active_window"] is True        # calculated vs active distinguished
 
     def test_deterministic_fallback_not_active(self):
         zone = {"preheat_active": False, "current_temp": 19.0,
-                "preheat_minutes": 85.0, "preheat_status": "deterministic_baseline"}
+                "preheat_minutes": 85.0, "preheat_status": "deterministic_baseline",
+                "preheat_baseline_minutes": 85.0}
         ph = _learning_application_export(_coord(zone=zone, ldr=_ldr()))["preheat"]
         assert ph["source"] == "deterministic_baseline"
-        assert ph["fallback_reason"] == "deterministic_baseline"
-        assert ph["learned_candidate_minutes"] is None   # no learned value selected
+        assert ph["status"] == "deterministic_baseline"   # renamed from fallback_reason
+        assert ph["baseline_minutes"] == 85.0
         assert ph["active_window"] is False
 
     def test_calculated_but_not_active(self):
@@ -134,30 +136,42 @@ class TestBoostApplication:
     def test_applied_with_new_write(self):
         ldr = _ldr(boost_candidate_c=2.0, boost_applied_c=1.2, boost_applied=True,
                    final_setpoint_c=22.2, baseline_setpoint_c=21.0,
+                   dispatch_attempted=True, dispatch_path="setpoint",
+                   dispatch_effective_setpoint_min_c=22.0, dispatch_effective_setpoint_max_c=22.2,
                    dispatch_status="fully_succeeded", dispatch_targets_total=1,
-                   dispatch_targets_failed=0, dispatch_succeeded=True, outcome_eligible=True)
-        b = _learning_application_export(_coord(ldr=ldr))["boost"]
+                   dispatch_targets_succeeded=1, dispatch_targets_failed=0,
+                   dispatch_succeeded=True, outcome_eligible=True,
+                   boost_evaluation_status="evaluated_applied")
+        b = _learning_application_export(_coord(
+            zone={"applied_boost_offset_c": 1.2}, ldr=ldr))["boost"]
         assert b["proposed_offset_c"] == 2.0
-        assert b["applied_offset_c"] == 1.2
+        assert b["approved_offset_c"] == 1.2                       # renamed from applied_offset_c
         assert b["requested_setpoint_c"] == 22.2
+        assert b["dispatch_confirmed_offset_c"] == 1.2             # coordinator post-dispatch truth
+        assert b["dispatch_effective_setpoint_min_c"] == 22.0
+        assert b["dispatch_effective_setpoint_max_c"] == 22.2
         assert b["baseline_setpoint_c"] == 21.0
         assert b["policy_approved"] is True
         assert b["lifecycle_approved"] is True
-        assert b["new_write"] is True
-        assert b["within_tolerance_no_write"] is False
-        assert b["service_call_succeeded"] is True
+        assert b["dispatch_attempted"] is True
+        assert b["dispatch_path"] == "setpoint"
+        assert b["boost_evaluation_status"] == "evaluated_applied"
+        assert b["dispatch_write_issued"] is True                  # renamed from new_write
+        assert b["within_tolerance_no_write_inferred"] is False
+        assert b["service_call_succeeded"] is True                 # tri-state: attempted + succeeded
         assert b["outcome_eligible"] is True
         assert b["heating_effect_confirmed"] is None   # never inferred from dispatch
 
     def test_within_tolerance_no_write_is_observable(self):
         # D5a symptom made observable: boost applied, but no new service call.
-        ldr = _ldr(boost_applied=True, boost_applied_c=1.0, dispatch_status="not_attempted",
-                   dispatch_targets_total=0, dispatch_succeeded=False)
+        ldr = _ldr(boost_applied=True, boost_applied_c=1.0, dispatch_attempted=False,
+                   dispatch_status="not_attempted", dispatch_targets_total=0,
+                   dispatch_succeeded=False)
         b = _learning_application_export(_coord(ldr=ldr))["boost"]
         assert b["lifecycle_approved"] is True
-        assert b["new_write"] is False
-        assert b["within_tolerance_no_write"] is True
-        assert b["service_call_succeeded"] is False
+        assert b["dispatch_write_issued"] is False
+        assert b["within_tolerance_no_write_inferred"] is True     # inference, not a device read
+        assert b["service_call_succeeded"] is None                 # tri-state: no call attempted
         assert b["heating_effect_confirmed"] is None
 
     def test_guard_rejected(self):

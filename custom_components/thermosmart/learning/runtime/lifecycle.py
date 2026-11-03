@@ -283,8 +283,11 @@ class _ZoneRuntime:
                 for did, bctx_d in (data["pending_boost_contexts"] or {}).items():
                     try:
                         self.pending_boost_contexts[did] = BoostUpdateContext.from_dict(bctx_d)
-                    except Exception:
-                        pass  # corrupt entry isolated; decision loses attribution (logged above)
+                    except Exception as entry_err:
+                        # Entry isolated (decision loses attribution) — but surfaced,
+                        # no longer silently swallowed. Error type only, no payload/id.
+                        errors.append(
+                            f"pending_boost_contexts:entry:{type(entry_err).__name__}")
             except Exception as err:
                 errors.append(f"pending_boost_contexts:restore:{type(err).__name__}")
         if "pending_dispatch_records" in data:
@@ -293,8 +296,10 @@ class _ZoneRuntime:
                 for did, drec_d in (data["pending_dispatch_records"] or {}).items():
                     try:
                         self.pending_dispatch_records[did] = BoostDispatchRecord.from_dict(drec_d)
-                    except Exception:
-                        pass  # corrupt entry isolated
+                    except Exception as entry_err:
+                        # Entry isolated but surfaced. Error type only, no payload/id.
+                        errors.append(
+                            f"pending_dispatch_records:entry:{type(entry_err).__name__}")
             except Exception as err:
                 errors.append(f"pending_dispatch_records:restore:{type(err).__name__}")
         if "pending_baseline_ctx" in data:
@@ -302,8 +307,10 @@ class _ZoneRuntime:
                 for did, ctx in (data["pending_baseline_ctx"] or {}).items():
                     try:
                         self.pending_baseline_ctx[did] = dict(ctx)
-                    except Exception:
-                        pass
+                    except Exception as entry_err:
+                        # Entry isolated but surfaced. Error type only, no payload/id.
+                        errors.append(
+                            f"pending_baseline_ctx:entry:{type(entry_err).__name__}")
             except Exception as err:
                 errors.append(f"pending_baseline_ctx:restore:{type(err).__name__}")
         self.model_update_counts = dict(data.get("model_update_counts", {}))
@@ -882,7 +889,19 @@ class LearningRuntime:
         self._initialized = True
         if self._persistence is None:
             return True
+        # PersistenceOrchestrator.load() never raises — it catches a store read
+        # failure internally, records a "load_failed:<Type>" warning and returns
+        # None. That previously meant a failed load was indistinguishable, in the
+        # restore-error view, from a clean "nothing persisted yet" load. Surface
+        # it explicitly: any load_failed warning seen across the load is promoted
+        # to a privacy-safe restore error (the warning itself is preserved in the
+        # orchestrator's warnings/storage_warnings count). Setup stays non-fatal —
+        # a failed load simply means no restore this session.
+        _warn_before = len(self._persistence.warnings)
         data = await self._persistence.load()
+        for w in self._persistence.warnings[_warn_before:]:
+            if w.startswith("load_failed:"):
+                self._restore_errors.append(f"store:{w}")
         if data:
             self._restore_payload(data)
         return True

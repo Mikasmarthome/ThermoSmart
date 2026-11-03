@@ -232,16 +232,20 @@ def _learning_application_export(coord) -> dict:
     writes a setpoint, never creates runtime state. Each sub-block is
     independently ``available``.
 
-    Preheat — distinguishes learned vs deterministic selection, the candidate /
-    baseline / selected minutes, the exact fallback reason, and a *calculated*
-    duration (``calculated``) from an *active* preheat window (``active_window``).
+    Preheat — distinguishes learned vs deterministic selection, the selected
+    minutes and the coordinator's own same-cycle ``baseline_minutes`` (not
+    recomputed here), the runtime's authoritative ``status`` (the safe-read
+    status, not an invented fallback reason), and a *calculated* duration
+    (``calculated``) from an *active* preheat window (``active_window``).
     TPI — exposes the authoritative ``coef_source`` (never inferred from the
     coefficients differing from defaults), candidate vs selected (post blend /
     step-limit) coefficients, the fallback gate, and marks that these are the
-    coefficient SELECTION, not actuator dispatch. Boost — proposed /
-    policy-approved / lifecycle-approved, requested setpoint, dispatch status +
-    confirmed service-call result, a NEW write vs a setpoint already within
-    tolerance, and the exact block reason; physical heating effectiveness is
+    coefficient SELECTION, not actuator dispatch. Boost — distinguishes the
+    proposed / policy-approved (pre-dispatch) / coordinator-confirmed
+    (post-dispatch) offsets and the per-device effective setpoints actually
+    written, a tri-state ``service_call_succeeded`` (null when no call was
+    attempted), a NEW write vs a within-tolerance *inference*, partial-failure
+    detail, and the exact block reason; physical heating effectiveness is
     never inferred from a successful service call.
 
     Privacy: counts, enums, temperatures/offsets and booleans only — the
@@ -259,32 +263,25 @@ def _learning_application_export(coord) -> dict:
             return getattr(ldr, name, default) if ldr is not None else default
 
         # ── Preheat ──────────────────────────────────────────────────────────
-        # Sourced from the recommendation (zone data), with the LiveDecisionRecord
-        # as a fallback for status. The deterministic baseline is RECOMPUTED with
-        # the pure classmethod for comparison (no side effects, no state change).
+        # Sourced entirely from the recommendation (zone data), with the
+        # LiveDecisionRecord as a status fallback. ``baseline_minutes`` is the
+        # coordinator's OWN same-cycle deterministic baseline (not recomputed
+        # here). No fallback reason is invented beyond the runtime's own
+        # ``preheat_status``; the true learned candidate (preheat_minutes_learning)
+        # is exposed by the separate decision_trace diagnostic, not duplicated here.
         _ph_status = zone.get("preheat_status") or _g("preheat_status")
         _ph_selected = zone.get("preheat_minutes")
         if _ph_selected is None:
             _ph_selected = _g("preheat_minutes")
         _learned = _ph_status in ("valid", "valid_hl_prior")
-        _baseline_min = None
-        try:
-            from .learning.runtime.ha_integration import LearningShadowController as _LSC
-            _cur = zone.get("current_temp")
-            _comfort = (getattr(coord, "zone_cfg", {}) or {}).get("comfort_temp", 21.0)
-            if _cur is not None:
-                _baseline_min, _ = _LSC.compute_deterministic_preheat_baseline(_cur, _comfort)
-        except Exception:
-            _baseline_min = None
         preheat = {
             "available": True,
             "source": "learned" if _learned else (_ph_status or "unknown"),
+            "status": _ph_status,                              # authoritative safe-read status
             "selected_minutes": _ph_selected,
-            "baseline_minutes": _baseline_min,
-            # The learned candidate equals the selected value only when a learned
-            # value was actually chosen; otherwise a baseline/fallback was used.
-            "learned_candidate_minutes": _ph_selected if _learned else None,
-            "fallback_reason": _ph_status,
+            "baseline_minutes": zone.get("preheat_baseline_minutes"),  # coordinator's observed baseline
+            "heat_rate_source": _g("heat_rate_source"),
+            "onset_delay_source": _g("onset_delay_source"),
             # A duration was COMPUTED this cycle (> 0) — not necessarily heating now.
             "calculated": bool(_ph_selected or 0),
             # The zone is ACTUALLY in a preheat window right now (coordinator state).
@@ -317,28 +314,51 @@ def _learning_application_export(coord) -> dict:
         else:
             _boost_applied = bool(_g("boost_applied"))     # authoritative applied-this-cycle flag
             _block = _g("boost_rejected_reason")
+            _attempted = bool(_g("dispatch_attempted", False))
             _targets_total = int(_g("dispatch_targets_total", 0) or 0)
+            # Tri-state: True / False only when a service call was actually
+            # attempted this cycle; None means no call was attempted, so there
+            # is no success/failure to report (never collapse None into False).
+            if not _attempted or _targets_total == 0:
+                _svc = None
+            else:
+                _svc = bool(_g("dispatch_succeeded", False))
             boost = {
                 "available": True,
-                "proposed_offset_c": _g("boost_candidate_c"),   # raw pre-guard proposal
+                # ── offset provenance (distinct stages, not interchangeable) ──
+                "proposed_offset_c": _g("boost_candidate_c"),    # raw Learning proposal (pre-guard)
+                "approved_offset_c": _g("boost_applied_c"),      # policy-approved offset, PRE-dispatch (None = not applied)
+                "requested_setpoint_c": _g("final_setpoint_c"),  # setpoint requested pre-dispatch
+                # What the service actually wrote per device (post-dispatch):
+                "dispatch_effective_setpoint_min_c": _g("dispatch_effective_setpoint_min_c"),
+                "dispatch_effective_setpoint_max_c": _g("dispatch_effective_setpoint_max_c"),
+                # Coordinator's own post-dispatch confirmed offset (counterfactual
+                # per-device min) — the authoritative "what was dispatched" value.
+                "dispatch_confirmed_offset_c": zone.get("applied_boost_offset_c"),
+                "baseline_setpoint_c": _g("baseline_setpoint_c"),
                 # Derived from existing state: boost_applied means the policy AND
                 # lifecycle approved it; "lifecycle_blocked" means the policy
                 # approved but the lifecycle rejected it.
                 "policy_approved": bool(_boost_applied or _block == "lifecycle_blocked"),
                 "lifecycle_approved": _boost_applied,
-                "applied_offset_c": _g("boost_applied_c"),       # offset actually applied (None = not applied)
-                "requested_setpoint_c": _g("final_setpoint_c"),
-                "baseline_setpoint_c": _g("baseline_setpoint_c"),
                 "block_reason": _block,
+                "boost_evaluation_status": _g("boost_evaluation_status", "unknown"),
+                # ── dispatch semantics (authoritative LDR dispatch_* state) ──
+                "dispatch_attempted": _attempted,
+                "dispatch_path": _g("dispatch_path"),
                 "dispatch_status": _g("dispatch_status", "not_attempted"),
                 "dispatch_targets_total": _targets_total,
+                "dispatch_targets_succeeded": int(_g("dispatch_targets_succeeded", 0) or 0),
                 "dispatch_targets_failed": int(_g("dispatch_targets_failed", 0) or 0),
-                "service_call_succeeded": bool(_g("dispatch_succeeded", False)),
+                "dispatch_failure_reasons": list(_g("dispatch_failure_reasons", ()) or ()),
+                # Tri-state True/False/None (None = no call attempted this cycle).
+                "service_call_succeeded": _svc,
                 "outcome_eligible": bool(_g("outcome_eligible", False)),
-                # A NEW service call was issued vs the boosted setpoint already
-                # being within write tolerance (no new write this cycle).
-                "new_write": _targets_total > 0,
-                "within_tolerance_no_write": bool(_boost_applied and _targets_total == 0),
+                # A NEW service call was issued this cycle.
+                "dispatch_write_issued": _targets_total > 0,
+                # INFERENCE, not verified device state: offset approved but no new
+                # write issued — inferred to be already within write tolerance.
+                "within_tolerance_no_write_inferred": bool(_boost_applied and _targets_total == 0),
                 # Never inferred from a successful service call.
                 "heating_effect_confirmed": None,
             }
@@ -351,8 +371,16 @@ def _learning_application_export(coord) -> dict:
             "notes": {
                 "is_selection_only": "TPI coefficients/duty are the selection; "
                                      "actuator dispatch is in boost.dispatch_* fields",
-                "within_tolerance_no_write": "boost offset active on the TRV but no new "
-                                             "service call issued this cycle (setpoint within tolerance)",
+                "offset_provenance": "proposed_offset_c (raw) -> approved_offset_c "
+                                     "(policy-approved, pre-dispatch) -> dispatch_confirmed_offset_c "
+                                     "(coordinator post-dispatch); effective per-device setpoints in "
+                                     "dispatch_effective_setpoint_min_c/max_c",
+                "service_call_succeeded": "tri-state: null means no service call was "
+                                          "attempted this cycle (not a failure)",
+                "within_tolerance_no_write_inferred": "INFERENCE only — boost offset approved but no "
+                                                      "new service call issued this cycle; not a verified device read",
+                "preheat_baseline_minutes": "the coordinator's own same-cycle baseline, not recomputed here; "
+                                            "the independent learned preheat candidate is in the decision_trace block",
                 "heating_effect_confirmed": "always null — a successful dispatch does not "
                                             "confirm the room physically warmed",
             },

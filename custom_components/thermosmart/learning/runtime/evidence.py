@@ -46,7 +46,13 @@ class EvidenceMaterializer:
         boost_ctx = None
         bd = snapshot.boost_dispatch
         if bd is not None:
-            applied = bd.boost_applied_c
+            # F1: adaptive learning must use the POST-dispatch CONFIRMED effective
+            # offset (effective_offset_c), NOT the pre-dispatch APPROVED offset
+            # (boost_applied_c). effective_offset_c is None only on older records;
+            # fall back to the approved offset then (no fabricated confirmation).
+            approved = bd.boost_applied_c
+            effective = getattr(bd, "effective_offset_c", None)
+            learn_offset = effective if effective is not None else approved
             if bd.dispatch_status == "failed":
                 notes.append("boost_dispatch_failed")            # no normal outcome
             elif bd.dispatch_status == "not_attempted":
@@ -59,15 +65,17 @@ class EvidenceMaterializer:
                 # create a new successful-dispatch learning sample. The boost offset
                 # IS reflected in applied_boost_offset_c for attribution/diagnostics.
                 notes.append("boost_held_no_new_dispatch")
-            elif applied is None or applied <= 0.0:
-                notes.append("boost_zero_applied")               # candidate but nothing written
+            elif learn_offset is None or learn_offset <= 0.0:
+                # Nothing was EFFECTIVELY applied (e.g. approved but clamped to
+                # baseline, or zero) — no boost outcome from this cycle.
+                notes.append("boost_zero_applied")
             elif bd.dispatch_status in ("fully_succeeded", "partially_succeeded"):
                 partial = bd.dispatch_status == "partially_succeeded"
                 boost_ctx = BoostUpdateContext(
                     source_episode_id=snapshot.decision_id,  # bound at episode close
                     decision_id=snapshot.decision_id, learning_zone_id=snapshot.zone_id,
                     authority="live_record",
-                    requested_offset_c=float(applied), boost_applied_c=float(applied),
+                    requested_offset_c=float(learn_offset), boost_applied_c=float(learn_offset),
                     start_deficit_c=bd.start_deficit_c,
                     expected_non_boost_duration_s=bd.expected_non_boost_duration_s,
                     target_temperature_c=snapshot.target_c,

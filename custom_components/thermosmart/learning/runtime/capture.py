@@ -94,6 +94,14 @@ class BoostDispatchRecord:
     effective_setpoints: tuple = ()
     targets_total: int = 0
     targets_failed: int = 0
+    # F1: POST-dispatch confirmed effective boost offset (coordinator counterfactual
+    # min across written AND held devices) — the authoritative offset adaptive learning
+    # must use, distinct from ``boost_applied_c`` (the PRE-dispatch APPROVED offset kept
+    # for baseline None/0.0/approved semantics). None on old records -> callers fall
+    # back to boost_applied_c.
+    effective_offset_c: Optional[float] = None
+    # F1: held devices' actual observed setpoints (no entity ids) for multi-TRV ambiguity.
+    held_effective_setpoints: tuple = ()
 
     def to_dict(self) -> dict:
         return {
@@ -114,6 +122,8 @@ class BoostDispatchRecord:
             "effective_setpoints": list(self.effective_setpoints),
             "targets_total": self.targets_total,
             "targets_failed": self.targets_failed,
+            "effective_offset_c": self.effective_offset_c,
+            "held_effective_setpoints": list(self.held_effective_setpoints),
         }
 
     @classmethod
@@ -136,6 +146,8 @@ class BoostDispatchRecord:
             effective_setpoints=tuple(d.get("effective_setpoints", [])),
             targets_total=int(d.get("targets_total", 0)),
             targets_failed=int(d.get("targets_failed", 0)),
+            effective_offset_c=d.get("effective_offset_c"),      # None on older payloads
+            held_effective_setpoints=tuple(d.get("held_effective_setpoints", [])),
         )
 
 

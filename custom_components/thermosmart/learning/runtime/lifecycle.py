@@ -481,14 +481,25 @@ class LearningRuntime:
         # baseline-sample creation and boost baseline-query at the OutcomeEpisode close).
         if snapshot.boost_dispatch is not None:
             ddid = snapshot.decision_id     # authoritative capture id (matches ce.decision_id)
-            zr.pending_dispatch_records.pop(ddid, None)
-            zr.pending_dispatch_records[ddid] = snapshot.boost_dispatch
+            _new_rec = snapshot.boost_dispatch
+            _existing = zr.pending_dispatch_records.get(ddid)
+            # F1/F3 (last-cycle problem): a later UNBOOSTED cycle of the same decision
+            # must NOT erase the boost-device ambiguity captured on an earlier boosted
+            # cycle. Retain the existing record when it carries boost evidence (a
+            # positive effective/approved offset, or a non-clean dispatch status) and
+            # the incoming one does not. Otherwise take the newer record (clean episodes
+            # and genuine boost updates both advance normally).
+            if _existing is not None and self._dispatch_boost_relevance(_existing) \
+                    > self._dispatch_boost_relevance(_new_rec):
+                pass                        # keep the more boost-relevant earlier record
+            else:
+                zr.pending_dispatch_records.pop(ddid, None)
+                zr.pending_dispatch_records[ddid] = _new_rec
             while len(zr.pending_dispatch_records) > zr._pending_boost_cap:
                 zr.pending_dispatch_records.popitem(last=False)
-            # H1: Boost provenance is now latched EPISODE-scoped by the OutcomeEpisode
+            # H1: Boost provenance is also latched EPISODE-scoped by the OutcomeEpisode
             # builder (see pipeline boost_exposed -> OutcomeEpisode.boost_exposed),
-            # which survives decision_id changes and serialize/restore — superseding
-            # the former session-only per-decision marker.
+            # which survives decision_id changes and serialize/restore.
         zr._last_snapshot = snapshot        # for baseline context at outcome close
 
         # B2b-4d: advance any deferred post-reach boost observer with THIS cycle's sample;
@@ -507,6 +518,28 @@ class LearningRuntime:
         # before any model update; each update is eligibility-gated and isolated.
         pipe_result = zr.pipeline.process(snapshot)
         zr.last_regime = pipe_result.regime
+
+        # F4: prune orphaned pending boost contexts / dispatch records / baseline
+        # contexts. An entry keyed by decision_id D can only be consumed when an
+        # OutcomeEpisode closes under D. After this cycle the only decision_ids that
+        # can still consume an entry are the currently-open outcome episode's
+        # decision_id and the current snapshot's decision_id (a new episode may open
+        # under it this/next cycle). Entries under any other decision_id are orphaned
+        # (their episode aborted, or the decision changed via target jump / PREHEAT /
+        # completion) and are dropped so they cannot accumulate to the FIFO cap or
+        # persist across restarts. The open episode's own entries are always kept.
+        try:
+            _keep = {snapshot.decision_id, zr.pipeline.open_outcome_decision_id()}
+            # episodes completing THIS cycle are consumed by the close branch below —
+            # never prune their entries ahead of that.
+            _keep |= {getattr(ce, "decision_id", None) for ce in pipe_result.completed}
+            _keep.discard(None)
+            for _d in (zr.pending_boost_contexts, zr.pending_dispatch_records,
+                       zr.pending_baseline_ctx):
+                for _k in [k for k in _d if k not in _keep]:
+                    _d.pop(_k, None)
+        except Exception as err:
+            self._record_runtime_error("pending_prune", err)
         if startup_ok and not pipe_result.disturbed and not pipe_result.deduplicated:
             for ce in pipe_result.completed:
                 ok = zr.orchestrator.apply_update(ce.model_name, ce.episode)
@@ -545,11 +578,18 @@ class LearningRuntime:
                     # positive applied offset on the bound dispatch record, also count —
                     # so missing/absent provenance never silently yields a false clean
                     # baseline when other persisted evidence indicates Boost exposure.
+                    _drec_off = 0.0
+                    if drec is not None:
+                        _de = getattr(drec, "effective_offset_c", None)
+                        # effective when present (F1), else the approved offset (old record)
+                        _drec_off = (_de if _de is not None
+                                     else getattr(drec, "boost_applied_c", None)) or 0.0
                     _episode_boosted = (
                         bool(getattr(bound_episode, "boost_exposed", False))
                         or bctx is not None
+                        or _drec_off > 0.0
                         or (drec is not None
-                            and (getattr(drec, "boost_applied_c", None) or 0.0) > 0.0))
+                            and getattr(drec, "dispatch_status", None) == "partially_succeeded"))
                     # Episode-history hand-off for outcome: the augmented bound_episode
                     # (with runtime confounder flags), never the raw ce.episode. Emitted
                     # immediately here, independent of the boost REACHED/non-REACHED/
@@ -677,25 +717,18 @@ class LearningRuntime:
                                   ConfounderSeverity, BoostConfounder)
             from ..contracts import PredictionType
             # ── multi-TRV from authoritative per-device effective setpoints ──
-            # KNOWN LIMITATION (audit LOW, documented not fixed): this spread/clamp
-            # check sees only NEWLY WRITTEN devices (dispatch.effective_setpoints);
-            # devices that were already HOLDING the boost are not represented here, so
-            # a mixed zone whose written devices are homogeneous but whose held device
-            # diverges beyond quantisation tolerance would not raise MULTI_TRV_AMBIGUOUS.
-            # Not fixed here because (a) the held per-device setpoints are not on the
-            # persisted BoostDispatchRecord and the bound record at close is the final
-            # cycle's (not necessarily the boost cycle's), so a correct fix would change
-            # the persisted record format AND the record-binding semantics the M1–M4
-            # audit already cleared — out of this finding's scope; and (b) M4 already
-            # makes the learned boost offset the conservative per-device MINIMUM across
-            # written AND held devices, so the learned magnitude is never over-credited
-            # even if such an episode is wrongly treated as unconfounded.
+            # F1: the ambiguity check sees BOTH newly WRITTEN devices
+            # (dispatch.effective_setpoints) AND devices already HOLDING the boost
+            # (dispatch.held_effective_setpoints, actual observed setpoints) — a held
+            # device that diverges from the written ones now correctly raises
+            # MULTI_TRV_AMBIGUOUS instead of being silently omitted.
             if dispatch is not None:
                 effs = list(getattr(dispatch, "effective_setpoints", ()) or ())
+                held_effs = list(getattr(dispatch, "held_effective_setpoints", ()) or ())
                 base_sp = getattr(dispatch, "baseline_setpoint_c", None)
                 dctype = getattr(dispatch, "device_control_type", "setpoint")
                 applied = getattr(dispatch, "boost_applied_c", None)
-                if effs and base_sp is not None:
+                if (effs or held_effs) and base_sp is not None:
                     devices = [BoostDeviceDispatchEvidence(
                         slot=f"trv{i}", control_type=dctype,
                         requested_offset_c=applied,
@@ -703,6 +736,15 @@ class LearningRuntime:
                         clamp_applied_c=(abs((applied or 0.0) - (float(sp) - float(base_sp)))
                                          if applied is not None else 0.0))
                         for i, sp in enumerate(effs)]
+                    # Held devices ARE on the boost (their setpoint holds it) — successful,
+                    # available, with their actual observed effective offset.
+                    devices += [BoostDeviceDispatchEvidence(
+                        slot=f"trvH{i}", control_type=dctype,
+                        requested_offset_c=applied,
+                        effective_offset_c=round(float(sp) - float(base_sp), 4),
+                        clamp_applied_c=(abs((applied or 0.0) - (float(sp) - float(base_sp)))
+                                         if applied is not None else 0.0))
+                        for i, sp in enumerate(held_effs)]
                     total = int(getattr(dispatch, "targets_total", len(effs)) or len(effs))
                     failed = int(getattr(dispatch, "targets_failed", 0) or 0)
                     for j in range(max(0, total - len(effs)) + failed):
@@ -740,6 +782,25 @@ class LearningRuntime:
             return float(v) if v is not None else None
         except (AttributeError, TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _dispatch_boost_relevance(rec) -> float:
+        """F1/F3: rank a dispatch record by how much Boost-device evidence it carries,
+        so a later UNBOOSTED cycle of the same decision never erases an earlier boosted
+        cycle's ambiguity. Higher = more relevant. A clean (no-effect) record scores 0;
+        an effectively-applied boost or a partial (per-device-ambiguous) dispatch scores
+        higher and is retained."""
+        if rec is None:
+            return -1.0
+        status = getattr(rec, "dispatch_status", "not_attempted")
+        eff = getattr(rec, "effective_offset_c", None)
+        mag = eff if eff is not None else (getattr(rec, "boost_applied_c", None) or 0.0)
+        score = 0.0
+        if (mag or 0.0) > 0.0:
+            score += 2.0
+        if status == "partially_succeeded":
+            score += 1.0
+        return score
 
     def _device_states(self, snapshot) -> dict:
         return dict(getattr(snapshot, "device_states", {}) or {})

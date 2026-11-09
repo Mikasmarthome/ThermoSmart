@@ -1171,9 +1171,14 @@ class ThermoSmartCoordinator(
             # logic. See _maybe_record_trv_dispatch_event().
             self._maybe_record_trv_dispatch_event(recommendation, _sp_stats, effective_summer)
 
-            # Per-device applied boost offset — updated BEFORE LiveDecisionRecord so
-            # LDR.boost_applied_c reflects real dispatch truth, not the pre-dispatch
-            # approved value.
+            # Per-device applied boost offset — the counterfactual post-dispatch
+            # effective offset is computed here into recommendation["applied_boost_offset_c"]
+            # and carried on the LiveDecisionRecord as dispatch_effective_boost_offset_c
+            # (the value adaptive learning consumes). NOTE: LDR.boost_applied_c is NOT
+            # updated below — it deliberately remains the PRE-dispatch APPROVED offset
+            # (three-state None/0.0/approved) used for the baseline UNKNOWN/APPLIED
+            # semantics and the export's approved_offset_c. The two are distinct and
+            # must not be conflated.
             #
             # Counterfactual formula (per device):
             #   device_applied_i = effective_with_boost_i - effective_baseline_i
@@ -1318,6 +1323,17 @@ class ThermoSmartCoordinator(
                         dispatch_targets_considered=_sp_stats.considered,
                         dispatch_targets_excluded=_sp_stats.targets_excluded,
                         dispatch_excluded_reasons=tuple(_sp_stats.excluded_reasons),
+                        # F1: POST-dispatch confirmed effective boost offset (the M4
+                        # counterfactual minimum across written AND held devices) — the
+                        # authoritative offset adaptive learning must use, distinct from
+                        # the pre-dispatch approved boost_applied_c. 0.0 for non-boost /
+                        # failed / partial / not-attempted cycles (see line ~980 init and
+                        # the post-dispatch branches above).
+                        dispatch_effective_boost_offset_c=recommendation.get("applied_boost_offset_c"),
+                        # F1: held devices' ACTUAL observed setpoints (no entity ids), so
+                        # the multi-TRV ambiguity check can include them.
+                        dispatch_held_effective_setpoints=tuple(
+                            float(v) for v in _sp_stats.held_setpoints_by_entity.values()),
                         dispatch_ts=_cycle_ts if _disp_attempted else None,
                         outcome_eligible=_outcome_elig,
                         outcome_reliability=_outcome_rel,

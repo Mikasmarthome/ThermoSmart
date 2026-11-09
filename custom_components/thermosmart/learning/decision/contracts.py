@@ -256,3 +256,14 @@ class LiveDecisionRecord:
     boost_evaluation_status: str = "unknown"
     # B2b-4b: authoritative per-device effective setpoints actually written (no entity ids).
     dispatch_effective_setpoints: tuple = ()
+    # F1: POST-dispatch confirmed effective boost offset (coordinator counterfactual
+    # minimum across written AND held devices). This is the offset ACTUALLY realised
+    # on the devices and is the authoritative value adaptive learning must consume —
+    # distinct from ``boost_applied_c`` which is the PRE-dispatch APPROVED offset
+    # (kept for the three-state baseline semantics: None/0.0/approved). None until a
+    # boost cycle sets it; 0.0 for failed/partial/not-attempted (nothing realised).
+    dispatch_effective_boost_offset_c: Optional[float] = None
+    # F1: per-device effective setpoints of devices already HOLDING the boost (actual
+    # observed values, no entity ids) — lets the multi-TRV ambiguity check see held
+    # devices alongside written ones instead of silently omitting them.
+    dispatch_held_effective_setpoints: tuple = ()

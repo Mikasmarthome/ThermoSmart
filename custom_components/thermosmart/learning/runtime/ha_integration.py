@@ -174,7 +174,12 @@ def _boost_dispatch_from_live_record(live_record: Any) -> Optional[Any]:
             effective_setpoints=tuple(
                 getattr(live_record, "dispatch_effective_setpoints", ()) or ()),
             targets_total=int(getattr(live_record, "dispatch_targets_total", 0) or 0),
-            targets_failed=int(getattr(live_record, "dispatch_targets_failed", 0) or 0))
+            targets_failed=int(getattr(live_record, "dispatch_targets_failed", 0) or 0),
+            # F1: the authoritative POST-dispatch effective offset for adaptive learning,
+            # and the held devices' observed setpoints for multi-TRV ambiguity.
+            effective_offset_c=getattr(live_record, "dispatch_effective_boost_offset_c", None),
+            held_effective_setpoints=tuple(
+                getattr(live_record, "dispatch_held_effective_setpoints", ()) or ()))
     except Exception:
         return None
 

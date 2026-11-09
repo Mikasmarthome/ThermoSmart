@@ -191,12 +191,23 @@ class RuntimePipeline:
         _drive_end_sp = (self._last_heating_setpoint
                          if seconds_since is not None and seconds_since <= 1800 else None)
 
-        # H1: positive, dispatch-supported Boost exposure this cycle (written OR
-        # already-held). boost_applied_c > 0 is the authoritative applied offset from
-        # the LiveDecisionRecord dispatch result; a failed/not-attempted boost has 0.
+        # H1/F2: DISPATCH-SUPPORTED Boost exposure this cycle — derived from the
+        # authoritative dispatch STATUS plus the POST-dispatch effective offset, never
+        # from the pre-dispatch approved offset. A failed or not-attempted boost is NOT
+        # exposure (it must not suppress a clean baseline); a partially-succeeded boost
+        # IS exposure (some device received it); fully-succeeded / already-held count
+        # only when a positive offset was actually realised. effective_offset_c is None
+        # only on older records -> fall back to the approved offset then.
         _bd = getattr(snapshot, "boost_dispatch", None)
-        _boost_exposed = bool(_bd is not None
-                              and (getattr(_bd, "boost_applied_c", None) or 0.0) > 0.0)
+        _boost_exposed = False
+        if _bd is not None:
+            _status = getattr(_bd, "dispatch_status", "not_attempted")
+            _eff = getattr(_bd, "effective_offset_c", None)
+            _mag = _eff if _eff is not None else getattr(_bd, "boost_applied_c", None)
+            if _status == "partially_succeeded":
+                _boost_exposed = True
+            elif _status in ("fully_succeeded", "already_satisfied"):
+                _boost_exposed = (_mag or 0.0) > 0.0
 
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,
@@ -251,6 +262,19 @@ class RuntimePipeline:
             regime=regime.regime.value, previous_regime=prev, completed=tuple(completed),
             feature_valid_points=valid, deduplicated=False,
             disturbed=regime.regime is _R.DISTURBED)
+
+    def open_outcome_decision_id(self) -> Optional[str]:
+        """F4: the decision_id the currently-open OutcomeEpisode will close under, or
+        None when no outcome episode is open. Used to prune pending boost contexts /
+        dispatch records whose episode can no longer consume them, without deleting the
+        open episode's own pending entries."""
+        b = self._builders.get("outcome")
+        try:
+            if b is not None and getattr(b, "_active", False):
+                return b._extra.get("decision_id")
+        except Exception:
+            return None
+        return None
 
     def builder_lifecycle_summary(self) -> dict:
         """Read-only copy of the per-builder lifecycle tallies (diagnostics).

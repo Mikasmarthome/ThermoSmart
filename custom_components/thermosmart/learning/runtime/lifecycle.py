@@ -181,12 +181,6 @@ class _ZoneRuntime:
         self._last_snapshot: Any = None
         # B2b-4d: at most ONE active deferred boost finalization per zone (post-reach observer).
         self.pending_boost_outcome: Any = None
-        # H1 (baseline-contamination guard): decision_ids where a Boost was applied at
-        # ANY cycle (written OR already-held with a positive offset). Belt-and-braces:
-        # even if the decision's final dispatch record shows no boost (boost dropped
-        # before REACHED), the decision can never be stored as a clean non-boost
-        # baseline. Session-scoped and bounded; cleared when the decision closes.
-        self.boost_applied_decisions: "OrderedDict[str, bool]" = OrderedDict()
 
     def serialize(self) -> dict:
         # B2b-attribution: persist pending boost contexts and dispatch records so that a
@@ -491,16 +485,10 @@ class LearningRuntime:
             zr.pending_dispatch_records[ddid] = snapshot.boost_dispatch
             while len(zr.pending_dispatch_records) > zr._pending_boost_cap:
                 zr.pending_dispatch_records.popitem(last=False)
-            # H1 guard: mark this decision boost-contaminated if ANY positive boost
-            # offset was applied this cycle (written or already-held). This persists
-            # across the whole decision (stable id after the capture fix), so a boost
-            # that is later dropped before REACHED can never leave a clean baseline.
-            _applied = getattr(snapshot.boost_dispatch, "boost_applied_c", None)
-            if _applied is not None and _applied > 0.0:
-                zr.boost_applied_decisions.pop(ddid, None)
-                zr.boost_applied_decisions[ddid] = True
-                while len(zr.boost_applied_decisions) > zr._pending_boost_cap:
-                    zr.boost_applied_decisions.popitem(last=False)
+            # H1: Boost provenance is now latched EPISODE-scoped by the OutcomeEpisode
+            # builder (see pipeline boost_exposed -> OutcomeEpisode.boost_exposed),
+            # which survives decision_id changes and serialize/restore — superseding
+            # the former session-only per-decision marker.
         zr._last_snapshot = snapshot        # for baseline context at outcome close
 
         # B2b-4d: advance any deferred post-reach boost observer with THIS cycle's sample;
@@ -544,13 +532,24 @@ class LearningRuntime:
                 if ce.model_name == "outcome" and ce.decision_id is not None:
                     bctx = zr.pending_boost_contexts.pop(ce.decision_id, None)
                     drec = zr.pending_dispatch_records.pop(ce.decision_id, None)
-                    # H1 guard: did this decision ever apply a Boost (written or held)?
-                    _decision_boosted = zr.boost_applied_decisions.pop(ce.decision_id, False)
                     # B2b-4b: augment the episode with runtime confounders from authoritative
                     # evidence (multi-TRV, afterheat). The SAME
                     # augmented episode feeds both the boost outcome and the baseline path.
                     extra_cf = self._runtime_confounders(zr, ce.episode, drec, snapshot)
                     bound_episode = self._augment_confounders(ce.episode, extra_cf)
+                    # H1: episode-scoped Boost provenance — True iff THIS OutcomeEpisode
+                    # saw a positive, dispatch-supported Boost at any cycle, latched by
+                    # the builder across decision_id changes and restarts (independent of
+                    # the current cycle's decision_id). Fallbacks for an older restored
+                    # episode that predates the field: a persisted boost context, or a
+                    # positive applied offset on the bound dispatch record, also count —
+                    # so missing/absent provenance never silently yields a false clean
+                    # baseline when other persisted evidence indicates Boost exposure.
+                    _episode_boosted = (
+                        bool(getattr(bound_episode, "boost_exposed", False))
+                        or bctx is not None
+                        or (drec is not None
+                            and (getattr(drec, "boost_applied_c", None) or 0.0) > 0.0))
                     # Episode-history hand-off for outcome: the augmented bound_episode
                     # (with runtime confounder flags), never the raw ce.episode. Emitted
                     # immediately here, independent of the boost REACHED/non-REACHED/
@@ -575,12 +574,15 @@ class LearningRuntime:
                                 authoritative_change = True
                                 zr.model_update_counts["boost"] = \
                                     zr.model_update_counts.get("boost", 0) + 1
-                    elif _decision_boosted:
-                        # H1: the decision applied a Boost at some cycle but formed no
-                        # bindable boost context (e.g. an already-held boost later
-                        # dropped before REACHED). It is NOT a clean non-boost episode,
-                        # so it must never become a baseline sample — record the
-                        # diagnostic rejection and store nothing.
+                    elif _episode_boosted:
+                        # H1: the EPISODE experienced a Boost at some cycle but no boost
+                        # context binds to the decision_id it closed under (an already-held
+                        # boost later dropped before REACHED, or a decision_id change —
+                        # target jump / PREHEAT->BOOST — while the episode stayed open).
+                        # It is NOT a clean non-boost episode, so it is conservatively
+                        # rejected from BOTH adaptive Boost learning AND the baseline store
+                        # (no forced attribution, no contamination) — the diagnostic
+                        # rejection is recorded and nothing is stored.
                         try:
                             from ..models.baseline_comparison import BaselineSampleRejection
                             # match the string-keyed diagnostics the normal reject path uses
@@ -675,6 +677,19 @@ class LearningRuntime:
                                   ConfounderSeverity, BoostConfounder)
             from ..contracts import PredictionType
             # ── multi-TRV from authoritative per-device effective setpoints ──
+            # KNOWN LIMITATION (audit LOW, documented not fixed): this spread/clamp
+            # check sees only NEWLY WRITTEN devices (dispatch.effective_setpoints);
+            # devices that were already HOLDING the boost are not represented here, so
+            # a mixed zone whose written devices are homogeneous but whose held device
+            # diverges beyond quantisation tolerance would not raise MULTI_TRV_AMBIGUOUS.
+            # Not fixed here because (a) the held per-device setpoints are not on the
+            # persisted BoostDispatchRecord and the bound record at close is the final
+            # cycle's (not necessarily the boost cycle's), so a correct fix would change
+            # the persisted record format AND the record-binding semantics the M1–M4
+            # audit already cleared — out of this finding's scope; and (b) M4 already
+            # makes the learned boost offset the conservative per-device MINIMUM across
+            # written AND held devices, so the learned magnitude is never over-credited
+            # even if such an episode is wrongly treated as unconfounded.
             if dispatch is not None:
                 effs = list(getattr(dispatch, "effective_setpoints", ()) or ())
                 base_sp = getattr(dispatch, "baseline_setpoint_c", None)

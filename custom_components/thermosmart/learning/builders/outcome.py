@@ -51,11 +51,20 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
                 })
                 if d.start_temp is not None and self._start_temp is None:
                     self._start_temp = d.start_temp
+                # H1: an episode may open ON a boost cycle — latch provenance now.
+                if inp.boost_exposed:
+                    self._extra["boost_seen"] = True
                 return BuilderResult(BuilderAction.OPENED, open_episode_id=self._episode_id,
                                      reason_codes=(ReasonCode.OPENED.value,))
             return BuilderResult(BuilderAction.NO_CHANGE)
 
         # active outcome
+        # H1: latch episode-scoped Boost provenance. Set BEFORE any abort/close so a
+        # boost on the same cycle that aborts the episode is still recorded; the flag
+        # is reset only by _reset_episode (close/abort/discard), never leaking forward.
+        if inp.boost_exposed:
+            self._extra["boost_seen"] = True
+
         if inp.heating_failure or (inp.regime is not None
                                    and inp.regime.regime is Regime.DISTURBED):
             self._confounders.add(ConfounderCode.HEATING_FAILURE if inp.heating_failure
@@ -119,6 +128,10 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
             reason=_EPISODE_REASON[reason],
             controller=ControllerKind(self._extra["controller"]),
             trajectory=self._traj.build(self.trajectory_cap),
+            # H1: carry the latched episode-scoped Boost provenance onto the closed
+            # episode so the runtime's baseline decision sees it regardless of which
+            # decision_id the episode opened/closed under.
+            boost_exposed=bool(self._extra.get("boost_seen", False)),
         )
         eid = self._episode_id
         reliability = self._episode_reliability()

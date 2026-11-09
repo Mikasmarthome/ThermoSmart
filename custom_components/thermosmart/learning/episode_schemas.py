@@ -291,6 +291,12 @@ class OutcomeEpisode:
     time_quality: DataQuality = DataQuality.OK
     confounder_flags: tuple[str, ...] = ()
     legacy_peak_temp: Optional[float] = None
+    # H1: episode-scoped Boost provenance — True iff this heating episode saw a
+    # positive, dispatch-supported Boost offset at ANY cycle (written or held),
+    # latched by the builder across decision_id changes and restarts. The runtime
+    # uses it to guarantee a boosted episode is never accepted as a clean baseline.
+    # Default False keeps older serialized/reconstructed episodes backward compatible.
+    boost_exposed: bool = False
 
     def __post_init__(self) -> None:
         s, e = _validate_common(

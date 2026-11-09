@@ -142,6 +142,11 @@ class BuilderInput:
     decision_start: Optional[DecisionContext] = None
     decision_superseded: bool = False
     mode_change: bool = False
+    # H1: this cycle carried a positive, dispatch-supported Boost offset (written OR
+    # already-held). The OutcomeEpisodeBuilder latches it onto the open episode
+    # (episode-scoped provenance) so an episode that EVER saw a Boost can never be
+    # stored as a clean non-boost baseline, independent of decision_id changes.
+    boost_exposed: bool = False
     # drive-end evidence for afterheat builder: setpoint from the last heating step
     # (before coordinator reduced it to comfort).  Lets the builder capture
     # setpoint_before > setpoint_after so _drive_end_reliability() can infer drive end.

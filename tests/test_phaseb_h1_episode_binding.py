@@ -148,11 +148,11 @@ class TestContextCleanup:
     def test_5_context_popped_at_close(self):
         zr, ids = _run({3: (DecisionType.BOOST, 1.0, "fully_succeeded")})
         # After the OutcomeEpisode closed, the boost context was consumed (bound
-        # into the pending boost outcome) and the per-decision contamination marker
-        # was cleared — neither is orphaned. (pending_dispatch_records is maintained
-        # every cycle, so later NORMAL cycles legitimately re-populate it.)
+        # into the pending boost outcome) — not orphaned. Boost provenance is now
+        # latched on the episode itself (OutcomeEpisode.boost_exposed), so there is
+        # no leftover zone-level marker to leak. (pending_dispatch_records is
+        # maintained every cycle, so later NORMAL cycles legitimately re-populate it.)
         assert len(zr.pending_boost_contexts) == 0      # boost context not orphaned
-        assert len(zr.boost_applied_decisions) == 0     # H1 contamination marker cleared
 
 
 # ── scenario 6: no contaminated baseline samples (explicit contrast) ──────────
@@ -204,3 +204,145 @@ class TestRestartContinuity:
                    heating=(_TEMPS[i] < _TARGET))
         assert zr2.pending_boost_outcome is not None    # boost outcome bound post-restart
         assert zr2.baseline_store.size == 0             # not contaminated
+
+
+# ── flexible driver for decision-ID-change scenarios (target jump / PREHEAT) ───
+
+def _fcycle(rt, i, temp, *, zone=_ZONE, target=_TARGET, dt=DecisionType.NORMAL,
+            applied=0.0, status="fully_succeeded", heating=True, window=None):
+    ts = (T0 + timedelta(minutes=i * 5)).isoformat()
+    setp = target + (3.0 if heating else -4.0)
+    bd = BoostDispatchRecord(
+        decision_id="x", boost_applied_c=applied, dispatch_status=status,
+        baseline_setpoint_c=target, final_setpoint_c=setp, targets_total=1,
+        effective_setpoint_min_c=setp, effective_setpoint_max_c=setp)
+    inp = RuntimeCycleInput(
+        zone_id=zone, ts=ts, target_c=target, trv_setpoint_c=setp, controller_demand=heating,
+        indoor_temp=Measurement(temp, DataQuality.OK), window_open=window,
+        schedule=ScheduleTarget(comfort_time_utc=COMFORT, comfort_temperature_c=target),
+        controller_decision=ControllerDecisionInput(
+            decision_type=dt, target_c=target, trv_setpoint_c=setp,
+            boost_active=(dt is DecisionType.BOOST)),
+        boost_dispatch=bd)
+    return rt.run_cycle(inp)
+
+
+class TestDecisionIdChangeWhileEpisodeOpen:
+    def test_6_target_step_then_boost_under_new_target(self):
+        # Outcome episode opens at target 21; the target steps to 23 mid-episode (a
+        # NEW capture decision_id) and a Boost is applied under the new target. The
+        # episode-scoped provenance is latched regardless of the decision_id change,
+        # so the episode is never a clean baseline.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL); zr = rt._zone(_ZONE)
+        _fcycle(rt, 0, 18.0, target=21.0); _fcycle(rt, 1, 19.0, target=21.0)
+        _fcycle(rt, 2, 20.0, target=23.0, dt=DecisionType.BOOST, applied=1.0)
+        for i, t in enumerate([21.0, 22.0, 23.0, 23.0, 23.0], start=3):
+            _fcycle(rt, i, t, target=23.0, heating=(t < 23.0))
+        assert zr.baseline_store.size == 0
+        assert zr.baseline_store.rejection_counts().get("boost_applied", 0) >= 1
+
+    def test_7_preheat_then_boost(self):
+        rt = runtime(mode=LearningRuntimeMode.CONTROL); zr = rt._zone(_ZONE)
+        _fcycle(rt, 0, 18.0, dt=DecisionType.PREHEAT)
+        _fcycle(rt, 1, 19.0, dt=DecisionType.PREHEAT)
+        _fcycle(rt, 2, 20.0, dt=DecisionType.BOOST, applied=1.0)
+        for i, t in enumerate([20.6, 21.0, 21.0, 21.0], start=3):
+            _fcycle(rt, i, t, heating=(t < 21.0))
+        assert zr.baseline_store.size == 0
+
+    def test_8_repeated_target_steps_and_boost(self):
+        rt = runtime(mode=LearningRuntimeMode.CONTROL); zr = rt._zone(_ZONE)
+        _fcycle(rt, 0, 18.0, target=20.0)
+        _fcycle(rt, 1, 19.0, target=21.0)
+        _fcycle(rt, 2, 19.8, target=22.0, dt=DecisionType.BOOST, applied=1.0)
+        for i, t in enumerate([20.6, 21.4, 22.0, 22.0, 22.0], start=3):
+            _fcycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 0
+
+
+class TestRestartScenarios:
+    def _drive_then_restart(self, *, boost_applied, boost_status):
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _fcycle(rt, 0, 18.0); _fcycle(rt, 1, 19.0)
+        _fcycle(rt, 2, 19.5, dt=DecisionType.BOOST, applied=boost_applied, status=boost_status)
+        payload = rt._build_payload()
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _fcycle(rt2, i, t, heating=(t < 21.0))
+        return rt2._zone(_ZONE)
+
+    def test_5_written_boost_restart_then_removed(self):
+        zr = self._drive_then_restart(boost_applied=1.0, boost_status="fully_succeeded")
+        assert zr.baseline_store.size == 0
+        assert zr.pending_boost_outcome is not None
+
+    def test_4_held_only_boost_restart_then_removed(self):
+        # The case the former session-only marker FAILED: a held-only boost, a
+        # restart, then boost removal. Episode-scoped provenance persists in the
+        # builder state, so the episode is still excluded from baselines.
+        zr = self._drive_then_restart(boost_applied=0.8, boost_status="already_satisfied")
+        assert zr.baseline_store.size == 0
+        assert zr.baseline_store.rejection_counts().get("boost_applied", 0) >= 1
+
+
+class TestAbortAndCleanEpisode:
+    def test_10_11_abort_then_clean_episode_stores_baseline(self):
+        # A boosted episode aborted by a window-open interruption; a subsequent CLEAN
+        # episode under a new target must store a baseline (flag/context did not leak).
+        rt = runtime(mode=LearningRuntimeMode.CONTROL); zr = rt._zone(_ZONE)
+        _fcycle(rt, 0, 18.0, dt=DecisionType.BOOST, applied=1.0)
+        _fcycle(rt, 1, 19.0, window=True)
+        for i, t in enumerate([18.0, 18.8, 19.6, 20.4, 22.0, 22.0, 22.0, 22.0], start=2):
+            _fcycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 1
+        assert zr.baseline_store.rejection_counts().get("boost_applied", 0) == 0
+
+
+class TestBackwardCompatibleProvenance:
+    def test_12_older_payload_without_provenance_field(self):
+        # Emulate a pre-field payload: strip boost_seen from every serialized builder's
+        # extra. A WRITTEN boost still has its persisted boost context, so the restored
+        # episode is still excluded from baselines via the context cross-check (req 7).
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _fcycle(rt, 0, 18.0); _fcycle(rt, 1, 19.0)
+        _fcycle(rt, 2, 19.5, dt=DecisionType.BOOST, applied=1.0)
+        payload = rt._build_payload()
+        for zdata in payload["zones"].values():
+            for bstate in (zdata.get("pipeline", {}).get("builders", {}) or {}).values():
+                if isinstance(bstate, dict) and isinstance(bstate.get("extra"), dict):
+                    bstate["extra"].pop("boost_seen", None)
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _fcycle(rt2, i, t, heating=(t < 21.0))
+        assert rt2._zone(_ZONE).baseline_store.size == 0
+
+    def test_13_malformed_provenance_does_not_create_false_baseline(self):
+        # A corrupt builder state must not resurrect an episode as a clean baseline.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _fcycle(rt, 0, 18.0); _fcycle(rt, 1, 19.0)
+        _fcycle(rt, 2, 19.5, dt=DecisionType.BOOST, applied=1.0)
+        payload = rt._build_payload()
+        for zdata in payload["zones"].values():
+            builders = zdata.get("pipeline", {}).get("builders", {})
+            if "outcome" in builders:
+                builders["outcome"] = {"active": "not-a-bool", "extra": "not-a-dict"}
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _fcycle(rt2, i, t, heating=(t < 21.0))
+        assert rt2._zone(_ZONE).baseline_store.size == 0
+
+
+class TestMultiZoneProvenanceIsolation:
+    def test_14_zones_isolated(self):
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        temps = [18.0, 18.8, 19.6, 20.4, 21.0, 21.0, 21.0, 21.0]
+        for i, t in enumerate(temps):
+            _fcycle(rt, i, t, zone="A",
+                    dt=(DecisionType.BOOST if i == 2 else DecisionType.NORMAL),
+                    applied=(1.0 if i == 2 else 0.0), heating=(t < 21.0))
+            _fcycle(rt, i, t, zone="B", heating=(t < 21.0))
+        assert rt._zone("A").baseline_store.size == 0
+        assert rt._zone("B").baseline_store.size == 1

@@ -191,13 +191,20 @@ class RuntimePipeline:
         _drive_end_sp = (self._last_heating_setpoint
                          if seconds_since is not None and seconds_since <= 1800 else None)
 
+        # H1: positive, dispatch-supported Boost exposure this cycle (written OR
+        # already-held). boost_applied_c > 0 is the authoritative applied offset from
+        # the LiveDecisionRecord dispatch result; a failed/not-attempted boost has 0.
+        _bd = getattr(snapshot, "boost_dispatch", None)
+        _boost_exposed = bool(_bd is not None
+                              and (getattr(_bd, "boost_applied_c", None) or 0.0) > 0.0)
+
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,
             target=snapshot.target_c, trv_setpoint=snapshot.trv_setpoint_c,
             window_open=snapshot.window_open, heating_failure=snapshot.heating_failure,
             outdoor_temp=snapshot.outdoor_temp,
             indoor_temp_quality=snapshot.indoor_temp_quality, decision_start=decision_start,
-            drive_end_setpoint_c=_drive_end_sp)
+            drive_end_setpoint_c=_drive_end_sp, boost_exposed=_boost_exposed)
 
         # Call each builder exactly once per step, then fan out the result to every
         # model that shares the builder key.  Without this, two models that share a

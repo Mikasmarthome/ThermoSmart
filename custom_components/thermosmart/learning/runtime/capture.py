@@ -38,6 +38,33 @@ def _coerce_finite_tuple(values) -> tuple:
             out.append(c)
     return tuple(out)
 
+
+def _coerce_finite_tuple_checked(values) -> tuple:
+    """L1: normalize a persisted setpoint sequence AND report whether it was malformed.
+
+    Returns ``(finite_entries, unreliable)``. ``unreliable`` is True when the container
+    is not a list/tuple, or when ANY member is non-numeric / None / NaN / inf — i.e.
+    whenever a per-device setpoint was present in the payload but could not be trusted.
+    Unlike ``_coerce_finite_tuple`` (which SILENTLY drops bad members), this never lets
+    a corrupt per-device value vanish quietly: a dropped confounding held/written
+    setpoint could otherwise turn a confounded multi-TRV Boost episode into what looks
+    like clean, successful adaptive learning. The caller marks the whole record
+    unreliable so it can be failed closed instead."""
+    if values is None:
+        return (), False
+    if not isinstance(values, (list, tuple)):
+        # A malformed container (string, dict, scalar, …): no trustworthy evidence.
+        return (), True
+    out = []
+    unreliable = False
+    for v in values:
+        c = _coerce_finite_offset(v)
+        if c is None:
+            unreliable = True      # present-but-invalid member: do NOT silently drop
+        else:
+            out.append(c)
+    return tuple(out), unreliable
+
 from ..contracts import DataQuality, DecisionId, Measurement
 
 
@@ -131,6 +158,14 @@ class BoostDispatchRecord:
     # of effective_offset_c (the conservative min). None on older records -> callers
     # derive it conservatively from the per-device setpoints (see any_device_boosted()).
     any_device_boosted: Optional[bool] = None
+    # L1: restore-time reliability marker. True when a persisted per-device setpoint
+    # tuple was malformed (bad container, or any non-finite/non-numeric member), so the
+    # per-device evidence cannot be trusted. A record flagged unreliable must be FAILED
+    # CLOSED for adaptive Boost learning (no boost context, no clean baseline) — the
+    # corrupt evidence must never be silently dropped and then read as a clean episode.
+    # Transient on live records (always False from the live path); round-trips so a
+    # re-serialized restored record stays flagged.
+    persistence_unreliable: bool = False
 
     def to_dict(self) -> dict:
         return {
@@ -154,10 +189,15 @@ class BoostDispatchRecord:
             "effective_offset_c": self.effective_offset_c,
             "held_effective_setpoints": list(self.held_effective_setpoints),
             "any_device_boosted": self.any_device_boosted,
+            "persistence_unreliable": self.persistence_unreliable,
         }
 
     @classmethod
     def from_dict(cls, d: Mapping[str, object]) -> "BoostDispatchRecord":
+        # L1: coerce the per-device setpoint tuples with malformed-member detection.
+        _eff_sp, _eff_unreliable = _coerce_finite_tuple_checked(d.get("effective_setpoints", []))
+        _held_sp, _held_unreliable = _coerce_finite_tuple_checked(
+            d.get("held_effective_setpoints", []))
         return cls(
             decision_id=str(d["decision_id"]),
             boost_candidate_c=_coerce_finite_offset(d.get("boost_candidate_c")),
@@ -174,15 +214,20 @@ class BoostDispatchRecord:
                 d.get("expected_non_boost_duration_s")),
             boost_evaluation_status=str(d.get("boost_evaluation_status", "unknown")),
             device_control_type=str(d.get("device_control_type", "setpoint")),
-            effective_setpoints=_coerce_finite_tuple(d.get("effective_setpoints", [])),
+            # L1: checked coercion — a malformed container or an invalid member marks the
+            # record unreliable instead of silently dropping (possibly confounding)
+            # per-device evidence.
+            effective_setpoints=_eff_sp,
             targets_total=int(d.get("targets_total", 0)),
             targets_failed=int(d.get("targets_failed", 0)),
             # N2: a malformed persisted offset (e.g. "x", NaN, inf) normalizes to None
             # instead of crashing later relevance/learning evaluation.
             effective_offset_c=_coerce_finite_offset(d.get("effective_offset_c")),
-            held_effective_setpoints=_coerce_finite_tuple(d.get("held_effective_setpoints", [])),
+            held_effective_setpoints=_held_sp,
             any_device_boosted=(None if d.get("any_device_boosted") is None
                                 else bool(d.get("any_device_boosted"))),
+            persistence_unreliable=(bool(d.get("persistence_unreliable", False))
+                                    or _eff_unreliable or _held_unreliable),
         )
 
 
@@ -200,25 +245,53 @@ def record_any_device_boosted(bd) -> bool:
     magnitude, which is 0.0 when any device sits at baseline). Failed/not-attempted
     writes never appear in ``effective_setpoints``, so they are not counted.
 
-    Prefers the explicit coordinator-computed ``any_device_boosted`` flag; for older
-    records that predate it (None) it derives conservatively from the persisted
-    per-device written + held setpoints vs the zone baseline — never inventing physical
-    confirmation, only reading dispatch-supported setpoints that were actually recorded.
+    Current-format records (M1): the explicit coordinator-computed
+    ``any_device_boosted`` flag is authoritative and used alone.
+
+    Legacy records (M2) that predate the flag (``any_device_boosted is None``):
+      1. First derive exposure from TRUSTWORTHY per-device setpoint evidence — the
+         persisted written + held setpoints vs the zone baseline — when that evidence is
+         present (a finite baseline and at least one finite setpoint). This is
+         conclusive: it never invents physical confirmation, only reads dispatch-
+         supported setpoints that were actually recorded.
+      2. When that per-device evidence is ABSENT or inconclusive (no baseline, or no
+         recorded setpoints — e.g. an old in-flight Boost payload that stored neither
+         held setpoints nor the flag), fall back to a CONSERVATIVE legacy
+         baseline-exclusion rule: treat the cycle as exposed iff the dispatch was
+         applied/held (status fully_succeeded / partially_succeeded / already_satisfied)
+         AND a finite positive approved OR effective Boost offset exceeds the exposure
+         threshold. This protects a previously-boosted episode from being misclassified
+         as a clean baseline, WITHOUT fabricating a successful write and WITHOUT ever
+         being used as adaptive-learning magnitude (that still comes solely from
+         ``effective_offset_c`` in the EvidenceMaterializer). Failed / not-attempted
+         legacy records with no positive device evidence stay non-exposed.
     """
     if bd is None:
         return False
     v = getattr(bd, "any_device_boosted", None)
     if v is not None:
         return bool(v)
+    # ── legacy record: (1) trustworthy per-device setpoint evidence, if present ──
     base = getattr(bd, "baseline_setpoint_c", None)
-    if base is None:
-        return False
     sps = list(getattr(bd, "effective_setpoints", ()) or ()) \
         + list(getattr(bd, "held_effective_setpoints", ()) or ())
-    try:
-        return any((float(sp) - float(base)) > _EXPOSURE_EPS_C for sp in sps)
-    except (TypeError, ValueError):
-        return False
+    if base is not None and sps:
+        try:
+            return any((float(sp) - float(base)) > _EXPOSURE_EPS_C for sp in sps)
+        except (TypeError, ValueError):
+            return False
+    # ── (2) per-device evidence absent/inconclusive: conservative legacy fallback ──
+    status = getattr(bd, "dispatch_status", "not_attempted")
+    if status in ("fully_succeeded", "partially_succeeded", "already_satisfied"):
+        for off in (getattr(bd, "effective_offset_c", None),
+                    getattr(bd, "boost_applied_c", None)):
+            try:
+                if off is not None and math.isfinite(float(off)) \
+                        and float(off) > _EXPOSURE_EPS_C:
+                    return True
+            except (TypeError, ValueError):
+                continue
+    return False
 
 
 @dataclass(frozen=True)

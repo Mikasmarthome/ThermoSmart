@@ -267,12 +267,20 @@ class LiveDecisionRecord:
     # observed values, no entity ids) — lets the multi-TRV ambiguity check see held
     # devices alongside written ones instead of silently omitting them.
     dispatch_held_effective_setpoints: tuple = ()
-    # N1: authoritative, dispatch-supported "any device boosted" exposure signal —
+    # N1/M1: authoritative, dispatch-supported "any device boosted" exposure signal —
     # True iff at least one SUCCESSFULLY-WRITTEN or currently-HELD device had a positive
     # per-device effective offset above the zone baseline. This is INDEPENDENT of
     # dispatch_effective_boost_offset_c (the conservative MINIMUM used for adaptive
     # learning magnitude, which is 0.0 when any device sits at baseline). It is the
     # single source of truth for "was this episode boost-exposed" — used for episode
-    # provenance, dispatch-record retention and close-time baseline exclusion. False for
-    # non-boost / failed / not-attempted cycles.
+    # provenance, dispatch-record retention and close-time baseline exclusion.
+    #
+    # M1: this is INDEPENDENT of the aggregate dispatch_status. A zone-level ``failed``
+    # (or ``partially_succeeded``) status does NOT imply no exposure: one TRV's write can
+    # raise while another TRV remains HELD above its unboosted baseline, which is a real
+    # boost exposure. The signal counts only commanded-and-successful writes and observed
+    # held setpoints, so a failed/not-attempted write never, on its own, sets it True —
+    # but a held boosted device still does, whatever the aggregate status. False only
+    # when no written-successful or held device is above baseline (incl. pure non-boost
+    # cycles).
     dispatch_any_device_boosted: bool = False

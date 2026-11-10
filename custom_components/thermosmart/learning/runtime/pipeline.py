@@ -191,18 +191,23 @@ class RuntimePipeline:
         _drive_end_sp = (self._last_heating_setpoint
                          if seconds_since is not None and seconds_since <= 1800 else None)
 
-        # H1/F2/N1: DISPATCH-SUPPORTED Boost exposure this cycle. Uses the SINGLE
+        # H1/F2/N1/M1: DISPATCH-SUPPORTED Boost exposure this cycle. Uses the SINGLE
         # authoritative "any device boosted" predicate (record_any_device_boosted) —
         # NOT the conservative effective-offset MINIMUM, which is 0.0 in a mixed zone
         # where one device sits at baseline while another was boosted (the N1 bug).
-        # A failed / not-attempted dispatch is never exposure (its successful-write set
-        # is empty), so it cannot suppress a clean baseline.
+        #
+        # M1: there is NO aggregate-dispatch-status gate here. A record can report
+        # ``failed`` at the ZONE level (e.g. one TRV write raised) while another TRV
+        # remains HELD above its unboosted baseline — a genuinely boost-exposed cycle.
+        # Gating exposure on ``fully/partially_succeeded/already_satisfied`` (the old
+        # code) dropped that exposure, so when the decision_id changed on the same cycle
+        # the episode could close without the relevant record and be stored as a CLEAN
+        # baseline. record_any_device_boosted() already reads only SUCCESSFULLY-WRITTEN
+        # and OBSERVED-HELD devices above baseline, so a failed write (absent from
+        # effective_setpoints and never a held device) can never, on its own, mark
+        # exposure — the authoritative flag is the correct and sufficient gate.
         _bd = getattr(snapshot, "boost_dispatch", None)
-        _boost_exposed = False
-        if _bd is not None:
-            _status = getattr(_bd, "dispatch_status", "not_attempted")
-            if _status in ("fully_succeeded", "partially_succeeded", "already_satisfied"):
-                _boost_exposed = record_any_device_boosted(_bd)
+        _boost_exposed = record_any_device_boosted(_bd)
 
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,

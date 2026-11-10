@@ -588,6 +588,12 @@ class LearningRuntime:
                         bool(getattr(bound_episode, "boost_exposed", False))
                         or bctx is not None
                         or record_any_device_boosted(drec))
+                    # L1: a restored dispatch record whose per-device setpoint evidence was
+                    # malformed cannot safely attribute adaptive learning NOR certify a
+                    # clean baseline — drop the dropped-member confounder would otherwise
+                    # make a confounded episode look clean. Fail closed: no boost update,
+                    # no baseline sample, recorded as a conservative rejection below.
+                    _drec_unreliable = bool(getattr(drec, "persistence_unreliable", False))
                     # Episode-history hand-off for outcome: the augmented bound_episode
                     # (with runtime confounder flags), never the raw ce.episode. Emitted
                     # immediately here, independent of the boost REACHED/non-REACHED/
@@ -595,7 +601,16 @@ class LearningRuntime:
                     # unrelated to whether/when the (possibly deferred) boost model
                     # update resolves.
                     self._emit_completed_episode(bound_episode)
-                    if bctx is not None:
+                    if _drec_unreliable:
+                        # L1: unreliable per-device evidence — reject conservatively from
+                        # BOTH adaptive Boost learning and the baseline store.
+                        try:
+                            from ..models.baseline_comparison import BaselineSampleRejection
+                            zr.baseline_store.record_rejection(
+                                BaselineSampleRejection.BOOST_APPLIED.value)
+                        except Exception as err:
+                            self._record_runtime_error("baseline_store", err)
+                    elif bctx is not None:
                         # B2b-3: derive a trustworthy expected_non_boost_duration_s from
                         # comparable historical NON-boost episodes completed before now
                         # (baseline FROZEN at decision; cutoff unchanged).

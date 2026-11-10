@@ -57,7 +57,15 @@ class EvidenceMaterializer:
             _eff = getattr(bd, "effective_offset_c", None)
             learn_offset = _eff if (isinstance(_eff, (int, float))
                                     and _math.isfinite(_eff)) else None
-            if bd.dispatch_status == "failed":
+            if getattr(bd, "persistence_unreliable", False):
+                # L1: the restored per-device dispatch evidence was malformed (a bad
+                # container, or a non-finite/non-numeric member). Confounding per-device
+                # evidence must never be silently dropped and then read as a clean,
+                # successful Boost — so fail CLOSED here: form NO adaptive Boost context.
+                # (The runtime also rejects an unreliable record at episode close, so it
+                # becomes neither adaptive learning nor a clean baseline sample.)
+                notes.append("boost_evidence_unreliable")
+            elif bd.dispatch_status == "failed":
                 notes.append("boost_dispatch_failed")            # no normal outcome
             elif bd.dispatch_status == "not_attempted":
                 notes.append("boost_not_attempted")              # no dispatch-effect outcome

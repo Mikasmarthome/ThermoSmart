@@ -279,8 +279,14 @@ def _snap(decision_type=DecisionType.BOOST, boost_dispatch=None, **kw):
 
 
 def _bd(status, applied=1.0, **kw):
+    # Model the live coordinator: the POST-dispatch effective offset (F1) equals the
+    # applied offset for these single-device records, and the authoritative "any device
+    # boosted" exposure flag (N1) follows from a positive offset on an exposed status.
+    _exposed = status in ("fully_succeeded", "already_satisfied", "partially_succeeded")
     base = dict(decision_id="z:BOOST:1", boost_candidate_c=1.5, boost_applied_c=applied,
-                baseline_setpoint_c=21.0, final_setpoint_c=22.5, dispatch_status=status)
+                baseline_setpoint_c=21.0, final_setpoint_c=22.5, dispatch_status=status,
+                effective_offset_c=applied,
+                any_device_boosted=bool((applied or 0.0) > 0.0 and _exposed))
     base.update(kw)
     return BoostDispatchRecord(**base)
 

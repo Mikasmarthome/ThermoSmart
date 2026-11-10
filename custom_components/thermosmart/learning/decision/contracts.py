@@ -267,3 +267,12 @@ class LiveDecisionRecord:
     # observed values, no entity ids) — lets the multi-TRV ambiguity check see held
     # devices alongside written ones instead of silently omitting them.
     dispatch_held_effective_setpoints: tuple = ()
+    # N1: authoritative, dispatch-supported "any device boosted" exposure signal —
+    # True iff at least one SUCCESSFULLY-WRITTEN or currently-HELD device had a positive
+    # per-device effective offset above the zone baseline. This is INDEPENDENT of
+    # dispatch_effective_boost_offset_c (the conservative MINIMUM used for adaptive
+    # learning magnitude, which is 0.0 when any device sits at baseline). It is the
+    # single source of truth for "was this episode boost-exposed" — used for episode
+    # provenance, dispatch-record retention and close-time baseline exclusion. False for
+    # non-boost / failed / not-attempted cycles.
+    dispatch_any_device_boosted: bool = False

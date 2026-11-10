@@ -9,10 +9,34 @@ injected as typed values; timestamps are passed in.
 from __future__ import annotations
 
 import hashlib
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Mapping, Optional, Sequence
+
+
+def _coerce_finite_offset(value) -> Optional[float]:
+    """N2: normalize a persisted offset to a finite float, or None. A malformed value
+    (non-numeric string, NaN, inf, etc.) becomes None instead of crashing a later
+    numeric comparison. A valid 0.0 or positive/negative finite number is preserved."""
+    if value is None:
+        return None
+    try:
+        f = float(value)
+    except (TypeError, ValueError):
+        return None
+    return f if math.isfinite(f) else None
+
+
+def _coerce_finite_tuple(values) -> tuple:
+    """N2: keep only finite numeric entries from a persisted setpoint sequence."""
+    out = []
+    for v in values or ():
+        c = _coerce_finite_offset(v)
+        if c is not None:
+            out.append(c)
+    return tuple(out)
 
 from ..contracts import DataQuality, DecisionId, Measurement
 
@@ -102,6 +126,11 @@ class BoostDispatchRecord:
     effective_offset_c: Optional[float] = None
     # F1: held devices' actual observed setpoints (no entity ids) for multi-TRV ambiguity.
     held_effective_setpoints: tuple = ()
+    # N1: authoritative dispatch-supported "any device boosted" exposure flag (True iff
+    # at least one successfully-written or held device was above baseline). Independent
+    # of effective_offset_c (the conservative min). None on older records -> callers
+    # derive it conservatively from the per-device setpoints (see any_device_boosted()).
+    any_device_boosted: Optional[bool] = None
 
     def to_dict(self) -> dict:
         return {
@@ -124,31 +153,72 @@ class BoostDispatchRecord:
             "targets_failed": self.targets_failed,
             "effective_offset_c": self.effective_offset_c,
             "held_effective_setpoints": list(self.held_effective_setpoints),
+            "any_device_boosted": self.any_device_boosted,
         }
 
     @classmethod
     def from_dict(cls, d: Mapping[str, object]) -> "BoostDispatchRecord":
         return cls(
             decision_id=str(d["decision_id"]),
-            boost_candidate_c=d.get("boost_candidate_c"),
-            boost_applied_c=d.get("boost_applied_c"),
-            baseline_setpoint_c=d.get("baseline_setpoint_c"),
-            final_setpoint_c=d.get("final_setpoint_c"),
-            effective_setpoint_min_c=d.get("effective_setpoint_min_c"),
-            effective_setpoint_max_c=d.get("effective_setpoint_max_c"),
+            boost_candidate_c=_coerce_finite_offset(d.get("boost_candidate_c")),
+            boost_applied_c=_coerce_finite_offset(d.get("boost_applied_c")),
+            baseline_setpoint_c=_coerce_finite_offset(d.get("baseline_setpoint_c")),
+            final_setpoint_c=_coerce_finite_offset(d.get("final_setpoint_c")),
+            effective_setpoint_min_c=_coerce_finite_offset(d.get("effective_setpoint_min_c")),
+            effective_setpoint_max_c=_coerce_finite_offset(d.get("effective_setpoint_max_c")),
             dispatch_status=str(d.get("dispatch_status", "not_attempted")),
             outcome_eligible=bool(d.get("outcome_eligible", False)),
             outcome_reliability=str(d.get("outcome_reliability", "none")),
-            start_deficit_c=d.get("start_deficit_c"),
-            expected_non_boost_duration_s=d.get("expected_non_boost_duration_s"),
+            start_deficit_c=_coerce_finite_offset(d.get("start_deficit_c")),
+            expected_non_boost_duration_s=_coerce_finite_offset(
+                d.get("expected_non_boost_duration_s")),
             boost_evaluation_status=str(d.get("boost_evaluation_status", "unknown")),
             device_control_type=str(d.get("device_control_type", "setpoint")),
-            effective_setpoints=tuple(d.get("effective_setpoints", [])),
+            effective_setpoints=_coerce_finite_tuple(d.get("effective_setpoints", [])),
             targets_total=int(d.get("targets_total", 0)),
             targets_failed=int(d.get("targets_failed", 0)),
-            effective_offset_c=d.get("effective_offset_c"),      # None on older payloads
-            held_effective_setpoints=tuple(d.get("held_effective_setpoints", [])),
+            # N2: a malformed persisted offset (e.g. "x", NaN, inf) normalizes to None
+            # instead of crashing later relevance/learning evaluation.
+            effective_offset_c=_coerce_finite_offset(d.get("effective_offset_c")),
+            held_effective_setpoints=_coerce_finite_tuple(d.get("held_effective_setpoints", [])),
+            any_device_boosted=(None if d.get("any_device_boosted") is None
+                                else bool(d.get("any_device_boosted"))),
         )
+
+
+_EXPOSURE_EPS_C = 0.05
+
+
+def record_any_device_boosted(bd) -> bool:
+    """N1: the SINGLE authoritative "was this cycle boost-exposed" predicate, used by
+    every consumer (pipeline provenance, dispatch-record retention, close-time baseline
+    exclusion) so there is exactly one definition.
+
+    True iff at least one SUCCESSFULLY-WRITTEN or currently-HELD device had a positive
+    per-device effective offset above the zone baseline. This is INDEPENDENT of
+    ``effective_offset_c`` (the conservative MINIMUM used for adaptive learning
+    magnitude, which is 0.0 when any device sits at baseline). Failed/not-attempted
+    writes never appear in ``effective_setpoints``, so they are not counted.
+
+    Prefers the explicit coordinator-computed ``any_device_boosted`` flag; for older
+    records that predate it (None) it derives conservatively from the persisted
+    per-device written + held setpoints vs the zone baseline — never inventing physical
+    confirmation, only reading dispatch-supported setpoints that were actually recorded.
+    """
+    if bd is None:
+        return False
+    v = getattr(bd, "any_device_boosted", None)
+    if v is not None:
+        return bool(v)
+    base = getattr(bd, "baseline_setpoint_c", None)
+    if base is None:
+        return False
+    sps = list(getattr(bd, "effective_setpoints", ()) or ()) \
+        + list(getattr(bd, "held_effective_setpoints", ()) or ())
+    try:
+        return any((float(sp) - float(base)) > _EXPOSURE_EPS_C for sp in sps)
+    except (TypeError, ValueError):
+        return False
 
 
 @dataclass(frozen=True)

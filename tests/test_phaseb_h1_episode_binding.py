@@ -40,16 +40,27 @@ _TARGET = 21.0
 _TEMPS = [18.0, 18.6, 19.2, 19.8, 20.4, 21.0, 21.0, 21.0, 21.0]
 
 
+def _mk_bd(applied, status, base, setp):
+    """Build a single-device authoritative dispatch record as the live coordinator
+    would: the POST-dispatch effective offset (F1) and the authoritative "any device
+    boosted" exposure flag (N1) are set from the applied offset + status."""
+    exposed_status = status in ("fully_succeeded", "already_satisfied", "partially_succeeded")
+    effective = (applied if status in ("fully_succeeded", "already_satisfied") else 0.0)
+    any_boosted = bool((applied or 0.0) > 0.0 and exposed_status)
+    return BoostDispatchRecord(
+        decision_id="x", boost_applied_c=applied, dispatch_status=status,
+        baseline_setpoint_c=base, final_setpoint_c=setp, targets_total=1,
+        effective_setpoint_min_c=setp, effective_setpoint_max_c=setp,
+        effective_offset_c=effective, any_device_boosted=any_boosted)
+
+
 def _cycle(rt, i, temp, *, dt=DecisionType.NORMAL, applied=0.0,
            status="fully_succeeded", heating=True):
     """One real runtime cycle with an authoritative dispatch record (as the live
     coordinator always supplies). applied>0 marks a genuinely applied boost."""
     ts = (T0 + timedelta(minutes=i * 5)).isoformat()
     setp = _TARGET + (3.0 if heating else -4.0)
-    bd = BoostDispatchRecord(
-        decision_id="x", boost_applied_c=applied, dispatch_status=status,
-        baseline_setpoint_c=_TARGET, final_setpoint_c=setp, targets_total=1,
-        effective_setpoint_min_c=setp, effective_setpoint_max_c=setp)
+    bd = _mk_bd(applied, status, _TARGET, setp)
     inp = RuntimeCycleInput(
         zone_id=_ZONE, ts=ts, target_c=_TARGET, trv_setpoint_c=setp, controller_demand=heating,
         indoor_temp=Measurement(temp, DataQuality.OK),
@@ -212,10 +223,7 @@ def _fcycle(rt, i, temp, *, zone=_ZONE, target=_TARGET, dt=DecisionType.NORMAL,
             applied=0.0, status="fully_succeeded", heating=True, window=None):
     ts = (T0 + timedelta(minutes=i * 5)).isoformat()
     setp = target + (3.0 if heating else -4.0)
-    bd = BoostDispatchRecord(
-        decision_id="x", boost_applied_c=applied, dispatch_status=status,
-        baseline_setpoint_c=target, final_setpoint_c=setp, targets_total=1,
-        effective_setpoint_min_c=setp, effective_setpoint_max_c=setp)
+    bd = _mk_bd(applied, status, target, setp)
     inp = RuntimeCycleInput(
         zone_id=zone, ts=ts, target_c=target, trv_setpoint_c=setp, controller_demand=heating,
         indoor_temp=Measurement(temp, DataQuality.OK), window_open=window,

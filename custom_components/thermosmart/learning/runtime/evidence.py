@@ -46,13 +46,17 @@ class EvidenceMaterializer:
         boost_ctx = None
         bd = snapshot.boost_dispatch
         if bd is not None:
-            # F1: adaptive learning must use the POST-dispatch CONFIRMED effective
-            # offset (effective_offset_c), NOT the pre-dispatch APPROVED offset
-            # (boost_applied_c). effective_offset_c is None only on older records;
-            # fall back to the approved offset then (no fabricated confirmation).
-            approved = bd.boost_applied_c
-            effective = getattr(bd, "effective_offset_c", None)
-            learn_offset = effective if effective is not None else approved
+            # F1/N3: adaptive learning uses ONLY the POST-dispatch CONFIRMED effective
+            # offset (effective_offset_c) and FAILS CLOSED when it is absent or invalid
+            # — the pre-dispatch APPROVED offset (boost_applied_c) is NEVER treated as a
+            # confirmed post-dispatch application. On an older record lacking the
+            # effective offset, no adaptive Boost outcome forms (conservative); baseline
+            # protection is still provided separately by the authoritative exposure
+            # signal (record_any_device_boosted), so no clean baseline is fabricated.
+            import math as _math
+            _eff = getattr(bd, "effective_offset_c", None)
+            learn_offset = _eff if (isinstance(_eff, (int, float))
+                                    and _math.isfinite(_eff)) else None
             if bd.dispatch_status == "failed":
                 notes.append("boost_dispatch_failed")            # no normal outcome
             elif bd.dispatch_status == "not_attempted":

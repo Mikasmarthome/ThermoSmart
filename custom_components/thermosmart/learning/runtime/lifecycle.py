@@ -578,18 +578,16 @@ class LearningRuntime:
                     # positive applied offset on the bound dispatch record, also count —
                     # so missing/absent provenance never silently yields a false clean
                     # baseline when other persisted evidence indicates Boost exposure.
-                    _drec_off = 0.0
-                    if drec is not None:
-                        _de = getattr(drec, "effective_offset_c", None)
-                        # effective when present (F1), else the approved offset (old record)
-                        _drec_off = (_de if _de is not None
-                                     else getattr(drec, "boost_applied_c", None)) or 0.0
+                    # N1: use the SINGLE authoritative exposure predicate on the bound
+                    # dispatch record (any device boosted), NOT the conservative min —
+                    # a mixed zone with one boosted and one baseline device must still be
+                    # excluded from clean baselines. Combined with the episode-scoped
+                    # provenance and any surviving boost context.
+                    from .capture import record_any_device_boosted
                     _episode_boosted = (
                         bool(getattr(bound_episode, "boost_exposed", False))
                         or bctx is not None
-                        or _drec_off > 0.0
-                        or (drec is not None
-                            and getattr(drec, "dispatch_status", None) == "partially_succeeded"))
+                        or record_any_device_boosted(drec))
                     # Episode-history hand-off for outcome: the augmented bound_episode
                     # (with runtime confounder flags), never the raw ce.episode. Emitted
                     # immediately here, independent of the boost REACHED/non-REACHED/
@@ -785,20 +783,19 @@ class LearningRuntime:
 
     @staticmethod
     def _dispatch_boost_relevance(rec) -> float:
-        """F1/F3: rank a dispatch record by how much Boost-device evidence it carries,
+        """F1/F3/N1: rank a dispatch record by how much Boost-device evidence it carries,
         so a later UNBOOSTED cycle of the same decision never erases an earlier boosted
-        cycle's ambiguity. Higher = more relevant. A clean (no-effect) record scores 0;
-        an effectively-applied boost or a partial (per-device-ambiguous) dispatch scores
-        higher and is retained."""
+        cycle's exposure/ambiguity. Higher = more relevant. A clean (no-device-boosted)
+        record scores 0; a record where ANY device was boosted (authoritative exposure,
+        independent of the conservative min) or a partial dispatch scores higher and is
+        retained. N2-safe: reads only the normalized record, never raw values."""
         if rec is None:
             return -1.0
-        status = getattr(rec, "dispatch_status", "not_attempted")
-        eff = getattr(rec, "effective_offset_c", None)
-        mag = eff if eff is not None else (getattr(rec, "boost_applied_c", None) or 0.0)
+        from .capture import record_any_device_boosted
         score = 0.0
-        if (mag or 0.0) > 0.0:
+        if record_any_device_boosted(rec):
             score += 2.0
-        if status == "partially_succeeded":
+        if getattr(rec, "dispatch_status", "not_attempted") == "partially_succeeded":
             score += 1.0
         return score
 

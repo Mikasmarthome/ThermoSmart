@@ -67,13 +67,17 @@ def _cycle(rt, i, temp, *, zone=_ZONE, target=_TARGET, dt=DecisionType.NORMAL,
            heating=True, window=None):
     ts = (T0 + timedelta(minutes=i * 5)).isoformat()
     setp = target + (3.0 if heating else -4.0)
+    # N1: authoritative exposure — a boost that was approved on an exposed dispatch
+    # status reached at least one device (independent of the conservative min).
+    _exposed = status in ("fully_succeeded", "partially_succeeded", "already_satisfied")
+    _any_boosted = bool((approved or 0.0) > 0.0 and _exposed)
     bd = BoostDispatchRecord(
         decision_id="x", boost_applied_c=approved, baseline_setpoint_c=target,
         final_setpoint_c=setp, dispatch_status=status, effective_offset_c=effective,
         held_effective_setpoints=tuple(held),
         effective_setpoints=tuple(written if written is not None
                                   else ((setp,) if effective and effective > 0 else ())),
-        targets_total=1)
+        targets_total=1, any_device_boosted=_any_boosted)
     inp = RuntimeCycleInput(
         zone_id=zone, ts=ts, target_c=target, trv_setpoint_c=setp, controller_demand=heating,
         indoor_temp=Measurement(temp, DataQuality.OK), window_open=window,
@@ -95,11 +99,12 @@ class TestLearningConsumesEffectiveOffset:
         assert ev.boost_context.boost_applied_c == pytest.approx(0.2)
         assert ev.boost_context.requested_offset_c == pytest.approx(0.2)
 
-    def test_effective_none_falls_back_to_approved(self):
-        # Older record: effective_offset_c is None -> fall back to approved 0.5.
+    def test_effective_none_fails_closed(self):
+        # N3: effective_offset_c absent -> adaptive learning FAILS CLOSED (no context);
+        # the approved offset is NEVER treated as a confirmed post-dispatch application.
         ev = EvidenceMaterializer().materialize(_snap(_bd(approved=0.5, effective=None)))
-        assert ev.boost_context is not None
-        assert ev.boost_context.boost_applied_c == pytest.approx(0.5)
+        assert ev.boost_context is None
+        assert "boost_zero_applied" in ev.notes
 
     def test_effective_zero_forms_no_context(self):
         # Boost approved (0.5) but clamped away to 0 effective -> no learning outcome.
@@ -261,9 +266,141 @@ class TestOrphanCleanup:
 # ── F3: older / malformed persisted provenance ────────────────────────────────
 
 class TestOlderMalformedProvenance:
-    def test_old_record_without_effective_offset_still_learns_via_fallback(self):
-        # effective_offset_c missing (None) on an older record -> fallback to approved.
-        bd = _bd(approved=0.6, effective=None)
+    def test_old_record_without_effective_offset_fails_closed_but_protects_baseline(self):
+        # N3: an older record lacking effective_offset_c forms NO adaptive Boost
+        # context (fail closed), but baseline protection is preserved via the
+        # authoritative exposure signal derived from the persisted per-device
+        # setpoints — here a written device above baseline -> exposed.
+        from custom_components.thermosmart.learning.runtime.capture import (
+            record_any_device_boosted)
+        bd = _bd(approved=0.6, effective=None, written=[21.6], base=21.0)
         ev = EvidenceMaterializer().materialize(_snap(bd))
-        assert ev.boost_context is not None
-        assert ev.boost_context.boost_applied_c == pytest.approx(0.6)
+        assert ev.boost_context is None                       # fail closed for learning
+        assert record_any_device_boosted(bd) is True          # but still exposed -> no clean baseline
+
+
+# ── N1: mixed-TRV exposure vs conservative minimum ───────────────────────────
+
+def _vcycle(rt, i, temp, *, zone=_ZONE, target=_TARGET, dt=DecisionType.NORMAL,
+            effective=0.0, written=(), held=(), status="fully_succeeded", heating=True,
+            window=None):
+    """VERSION-AGNOSTIC driver (no any_device_boosted field, so it also runs against
+    5448096): builds the record from effective_offset_c + per-device written/held
+    setpoints only. Exposure must be derived from the per-device setpoints, not the
+    conservative minimum."""
+    ts = (T0 + timedelta(minutes=i * 5)).isoformat()
+    setp = target + (3.0 if heating else -4.0)
+    bd = BoostDispatchRecord(
+        decision_id="x", boost_applied_c=(0.5 if dt is DecisionType.BOOST else 0.0),
+        baseline_setpoint_c=target, final_setpoint_c=setp, dispatch_status=status,
+        effective_offset_c=effective, effective_setpoints=tuple(written),
+        held_effective_setpoints=tuple(held), targets_total=1)
+    inp = RuntimeCycleInput(
+        zone_id=zone, ts=ts, target_c=target, trv_setpoint_c=setp, controller_demand=heating,
+        indoor_temp=Measurement(temp, DataQuality.OK), window_open=window,
+        schedule=ScheduleTarget(comfort_time_utc=COMFORT, comfort_temperature_c=target),
+        controller_decision=ControllerDecisionInput(
+            decision_type=dt, target_c=target, trv_setpoint_c=setp,
+            boost_active=(dt is DecisionType.BOOST)),
+        boost_dispatch=bd)
+    return rt.run_cycle(inp)
+
+
+class TestN1MixedTrvExposure:
+    def test_regression_written_above_held_at_baseline_min_zero_not_baseline(self):
+        # N1 REGRESSION PROOF (version-agnostic): device A written above baseline
+        # (22.0, offset 1.0), device B held at baseline (21.0, offset 0.0) -> the
+        # conservative effective MINIMUM is 0.0, but a device WAS boosted. The episode
+        # must be exposed and NOT stored as a clean baseline. Against 5448096 (exposure
+        # computed from the minimum) this stored a clean baseline (size 1).
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        for i, t in enumerate(_TEMPS):
+            if i == 2:
+                _vcycle(rt, i, t, dt=DecisionType.BOOST, effective=0.0,
+                        written=(22.0,), held=(21.0,), heating=(t < _TARGET))
+            else:
+                _vcycle(rt, i, t, heating=(t < _TARGET))
+        assert zr.baseline_store.size == 0
+        assert zr.baseline_store.rejection_counts().get("boost_applied", 0) >= 1
+
+    def test_mixed_then_unboosted_cycles_not_baseline(self):
+        # Same mixed boost, then purely unboosted cycles before REACHED. The boosted
+        # record is retained (relevance uses the authoritative exposure) so the
+        # episode is still excluded.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _vcycle(rt, 0, 18.0); _vcycle(rt, 1, 19.0)
+        _vcycle(rt, 2, 19.5, dt=DecisionType.BOOST, effective=0.0, written=(22.0,), held=(21.0,))
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _vcycle(rt, i, t, heating=(t < _TARGET))
+        assert zr.baseline_store.size == 0
+
+    def test_mixed_exposure_across_restart_not_baseline(self):
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _vcycle(rt, 0, 18.0); _vcycle(rt, 1, 19.0)
+        _vcycle(rt, 2, 19.5, dt=DecisionType.BOOST, effective=0.0, written=(22.0,), held=(21.0,))
+        payload = rt._build_payload()
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _vcycle(rt2, i, t, heating=(t < _TARGET))
+        assert rt2._zone(_ZONE).baseline_store.size == 0
+
+    def test_clean_control_effective_zero_no_device_boosted_stores_baseline(self):
+        # Control: effective 0.0 AND no device above baseline (all at baseline) -> a
+        # genuinely clean non-boost episode -> baseline IS stored.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        for i, t in enumerate(_TEMPS):
+            _vcycle(rt, i, t, heating=(t < _TARGET))     # NORMAL, no written/held above base
+        assert zr.baseline_store.size == 1
+
+    def test_no_adaptive_update_when_effective_min_zero(self):
+        # N1 req 6: a zero conservative effective offset must NOT generate adaptive
+        # Boost evidence, even though the episode is exposed (baseline-excluded).
+        bd = BoostDispatchRecord(
+            decision_id="d1", boost_applied_c=0.5, baseline_setpoint_c=21.0,
+            final_setpoint_c=22.0, dispatch_status="fully_succeeded",
+            effective_offset_c=0.0, effective_setpoints=(22.0,),
+            held_effective_setpoints=(21.0,), any_device_boosted=True, targets_total=1)
+        ev = EvidenceMaterializer().materialize(_snap(bd))
+        assert ev.boost_context is None                 # no adaptive magnitude (min 0)
+        from custom_components.thermosmart.learning.runtime.capture import (
+            record_any_device_boosted)
+        assert record_any_device_boosted(bd) is True     # but exposed -> no clean baseline
+
+
+# ── N2: malformed persisted effective offset ─────────────────────────────────
+
+class TestN2MalformedOffset:
+    def test_malformed_effective_offset_normalized_on_restore(self):
+        from custom_components.thermosmart.learning.runtime.capture import BoostDispatchRecord as BR
+        d = _bd("fully_succeeded", approved=0.5).to_dict()
+        d["effective_offset_c"] = "x"               # malformed
+        d["boost_applied_c"] = "nan"
+        d["held_effective_setpoints"] = [21.0, "bad", float("inf")]
+        rec = BR.from_dict(d)
+        assert rec.effective_offset_c is None           # coerced, no crash
+        assert rec.boost_applied_c is None
+        assert rec.held_effective_setpoints == (21.0,)  # bad/inf dropped
+
+    def test_malformed_offset_does_not_crash_relevance_or_cycle(self):
+        # A malformed record must not raise in relevance evaluation or a full cycle.
+        from custom_components.thermosmart.learning.runtime.capture import BoostDispatchRecord as BR
+        d = _bd("fully_succeeded", approved=0.5).to_dict()
+        d["effective_offset_c"] = "x"
+        rec = BR.from_dict(d)
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        # relevance must not raise
+        assert rt._dispatch_boost_relevance(rec) >= 0.0
+        # and a full learning cycle carrying it must not raise
+        inp = RuntimeCycleInput(
+            zone_id=_ZONE, ts=T0.isoformat(), target_c=_TARGET, trv_setpoint_c=21.5,
+            controller_demand=True, indoor_temp=Measurement(19.0, DataQuality.OK),
+            schedule=ScheduleTarget(comfort_time_utc=COMFORT, comfort_temperature_c=_TARGET),
+            controller_decision=ControllerDecisionInput(
+                decision_type=DecisionType.BOOST, target_c=_TARGET, trv_setpoint_c=21.5,
+                boost_active=True),
+            boost_dispatch=rec)
+        rt.run_cycle(inp)      # must not raise

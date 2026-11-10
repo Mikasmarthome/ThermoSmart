@@ -1164,6 +1164,7 @@ class ThermoSmartCoordinator(
             _combined = _sp_stats.merge(_vv_stats) if _disp_attempted else _DispatchStats()
             _disp_status = _combined.status if _disp_attempted else "not_attempted"
             _eff_sps = _sp_stats.effective_setpoints
+            _any_device_boosted = False   # N1: set in the boost block below when applicable
 
             # Learning Support Critical Events: observe the TRV dispatch outcome
             # already decided above — pure observation, no influence on the
@@ -1220,6 +1221,19 @@ class ThermoSmartCoordinator(
                     return offsets
 
                 _held_by_eid = _sp_stats.held_setpoints_by_entity
+                # N1: authoritative "any device boosted" exposure signal — TRUE iff at
+                # least one SUCCESSFULLY-WRITTEN or currently-HELD device has a positive
+                # per-device effective offset above the zone baseline. Computed from the
+                # per-device counterfactual (same transform as applied_boost_offset_c)
+                # across the MERGED written+held devices and taking the MAX, so it is
+                # independent of the conservative MINIMUM used for the learning magnitude
+                # (which is 0.0 when any device sits at baseline). Failed/not-attempted
+                # writes are absent from effective_setpoints_by_entity, so they cannot
+                # count as confirmed exposure (commanded-and-successful or observed-held
+                # only).
+                _merged_for_exposure = {**_held_by_eid, **_eff_by_eid}
+                _any_device_boosted = any(
+                    o > 0.05 for o in _counterfactual_offsets(_merged_for_exposure))
                 if _disp_status == "fully_succeeded" and (_eff_by_eid or _held_by_eid):
                     # M4: the conservative zone offset is the per-device MINIMUM across
                     # ALL devices that carry the boost this cycle — both newly WRITTEN
@@ -1334,6 +1348,8 @@ class ThermoSmartCoordinator(
                         # the multi-TRV ambiguity check can include them.
                         dispatch_held_effective_setpoints=tuple(
                             float(v) for v in _sp_stats.held_setpoints_by_entity.values()),
+                        # N1: authoritative dispatch-supported exposure (see above).
+                        dispatch_any_device_boosted=_any_device_boosted,
                         dispatch_ts=_cycle_ts if _disp_attempted else None,
                         outcome_eligible=_outcome_elig,
                         outcome_reliability=_outcome_rel,

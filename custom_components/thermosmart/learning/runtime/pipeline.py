@@ -29,7 +29,7 @@ from ..episode_schemas import ControllerKind
 from ..features import FeatureExtractor
 from ..episode_schemas import Trajectory, TrajectoryPoint
 from ..regime import RegimeInput, RegimeResult, ThermalRegimeClassifier
-from .capture import CapturedSnapshot, DecisionType
+from .capture import CapturedSnapshot, DecisionType, record_any_device_boosted
 
 
 @dataclass(frozen=True)
@@ -191,23 +191,18 @@ class RuntimePipeline:
         _drive_end_sp = (self._last_heating_setpoint
                          if seconds_since is not None and seconds_since <= 1800 else None)
 
-        # H1/F2: DISPATCH-SUPPORTED Boost exposure this cycle — derived from the
-        # authoritative dispatch STATUS plus the POST-dispatch effective offset, never
-        # from the pre-dispatch approved offset. A failed or not-attempted boost is NOT
-        # exposure (it must not suppress a clean baseline); a partially-succeeded boost
-        # IS exposure (some device received it); fully-succeeded / already-held count
-        # only when a positive offset was actually realised. effective_offset_c is None
-        # only on older records -> fall back to the approved offset then.
+        # H1/F2/N1: DISPATCH-SUPPORTED Boost exposure this cycle. Uses the SINGLE
+        # authoritative "any device boosted" predicate (record_any_device_boosted) —
+        # NOT the conservative effective-offset MINIMUM, which is 0.0 in a mixed zone
+        # where one device sits at baseline while another was boosted (the N1 bug).
+        # A failed / not-attempted dispatch is never exposure (its successful-write set
+        # is empty), so it cannot suppress a clean baseline.
         _bd = getattr(snapshot, "boost_dispatch", None)
         _boost_exposed = False
         if _bd is not None:
             _status = getattr(_bd, "dispatch_status", "not_attempted")
-            _eff = getattr(_bd, "effective_offset_c", None)
-            _mag = _eff if _eff is not None else getattr(_bd, "boost_applied_c", None)
-            if _status == "partially_succeeded":
-                _boost_exposed = True
-            elif _status in ("fully_succeeded", "already_satisfied"):
-                _boost_exposed = (_mag or 0.0) > 0.0
+            if _status in ("fully_succeeded", "partially_succeeded", "already_satisfied"):
+                _boost_exposed = record_any_device_boosted(_bd)
 
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,

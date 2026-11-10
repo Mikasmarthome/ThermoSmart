@@ -179,7 +179,10 @@ def _boost_dispatch_from_live_record(live_record: Any) -> Optional[Any]:
             # and the held devices' observed setpoints for multi-TRV ambiguity.
             effective_offset_c=getattr(live_record, "dispatch_effective_boost_offset_c", None),
             held_effective_setpoints=tuple(
-                getattr(live_record, "dispatch_held_effective_setpoints", ()) or ()))
+                getattr(live_record, "dispatch_held_effective_setpoints", ()) or ()),
+            # N1: authoritative dispatch-supported exposure, independent of the min.
+            any_device_boosted=bool(
+                getattr(live_record, "dispatch_any_device_boosted", False)))
     except Exception:
         return None
 

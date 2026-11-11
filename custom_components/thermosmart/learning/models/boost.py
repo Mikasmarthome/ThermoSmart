@@ -524,6 +524,15 @@ class BoostUpdateContext:
     # baseline is used (expected_non_boost_duration_s set), this scales the attribution so a
     # weak-but-admissible baseline yields a smaller adaptive update than a robust one.
     baseline_reliability: Optional[float] = None
+    # R1: min/max of the REALIZED (post-dispatch effective) boost offset observed across the
+    # cycles of this one learning episode. Each materialized cycle seeds both to its own
+    # realized offset; the runtime merges them as later cycles of the same decision arrive
+    # (a simple min/max tracker, persisted with the pending context). When max-min exceeds
+    # the quantisation tolerance the episode had materially different realized offsets and
+    # must not be attributed to a single offset (see BOOST_OFFSET_CHANGED). None on legacy
+    # contexts -> no detection (backward compatible, same as uniform).
+    realized_offset_min_c: Optional[float] = None
+    realized_offset_max_c: Optional[float] = None
 
     def __post_init__(self) -> None:
         if not self.source_episode_id:
@@ -536,7 +545,8 @@ class BoostUpdateContext:
                      "expected_afterheat_rise_c", "expected_heat_loss_c_per_h",
                      "outcome_performance", "outcome_comfort", "boost_applied_c",
                      "baseline_setpoint_c", "final_setpoint_c",
-                     "effective_setpoint_min_c", "effective_setpoint_max_c"):
+                     "effective_setpoint_min_c", "effective_setpoint_max_c",
+                     "realized_offset_min_c", "realized_offset_max_c"):
             v = getattr(self, name)
             if v is not None and not is_finite(v):
                 raise ValueError(f"{name} must be finite (or None)")
@@ -570,6 +580,8 @@ class BoostUpdateContext:
             "dispatch_status": self.dispatch_status,
             "outcome_reliability": self.outcome_reliability,
             "baseline_reliability": self.baseline_reliability,
+            "realized_offset_min_c": self.realized_offset_min_c,
+            "realized_offset_max_c": self.realized_offset_max_c,
         }
 
     @classmethod
@@ -602,7 +614,9 @@ class BoostUpdateContext:
             effective_setpoint_max_c=d.get("effective_setpoint_max_c"),
             dispatch_status=d.get("dispatch_status"),
             outcome_reliability=d.get("outcome_reliability"),
-            baseline_reliability=d.get("baseline_reliability"))
+            baseline_reliability=d.get("baseline_reliability"),
+            realized_offset_min_c=d.get("realized_offset_min_c"),
+            realized_offset_max_c=d.get("realized_offset_max_c"))
 
 
 @dataclass(frozen=True)

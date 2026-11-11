@@ -70,6 +70,12 @@ class BoostConfounder(Enum):
     SENSOR_SOURCE_CHANGE = "sensor_source_change"
     DEVICE_CONFIGURATION_CHANGE = "device_configuration_change"
     TPI_AUTHORITY_CHANGE = "tpi_authority_change"
+    # R1: the REALIZED boost offset changed materially WITHIN one learning episode (e.g.
+    # 1.0 -> 1.0 -> 0.5 °C across cycles). The episode's thermal outcome cannot be
+    # attributed to any single offset, so it must not move the learned factor — BLOCKING,
+    # which classifies the sample BOOST_CONFOUNDED (stored, reduced reliability, no factor
+    # movement) rather than last-write-wins attribution to the final offset.
+    BOOST_OFFSET_CHANGED = "boost_offset_changed"
     PREHEAT_INTERACTION = "preheat_interaction"
     AFTERHEAT_INTERACTION = "afterheat_interaction"
     FORECAST_OR_OUTDOOR_SHIFT = "forecast_or_outdoor_shift"
@@ -97,6 +103,7 @@ _SEVERITY: Mapping[BoostConfounder, ConfounderSeverity] = {
     BoostConfounder.ADDITIONAL_RADIATOR: ConfounderSeverity.BLOCKING,
     BoostConfounder.OCCUPANCY_HEAT_GAIN: ConfounderSeverity.DEGRADING,
     BoostConfounder.MULTI_TRV_AMBIGUOUS: ConfounderSeverity.BLOCKING,
+    BoostConfounder.BOOST_OFFSET_CHANGED: ConfounderSeverity.BLOCKING,
     BoostConfounder.PARTIAL_DEVICE_EFFECT: ConfounderSeverity.DEGRADING,
     BoostConfounder.SENSOR_SOURCE_CHANGE: ConfounderSeverity.DEGRADING,
     BoostConfounder.DEVICE_CONFIGURATION_CHANGE: ConfounderSeverity.BLOCKING,
@@ -128,6 +135,7 @@ _ALIAS: Mapping[str, BoostConfounder] = {
     "unexplained_reheating": BoostConfounder.UNEXPLAINED_REHEATING,
     "occupancy_heat_gain": BoostConfounder.OCCUPANCY_HEAT_GAIN,
     "multi_trv_ambiguous": BoostConfounder.MULTI_TRV_AMBIGUOUS,
+    "boost_offset_changed": BoostConfounder.BOOST_OFFSET_CHANGED,
     "partial_device_effect": BoostConfounder.PARTIAL_DEVICE_EFFECT,
     "sensor_source_change": BoostConfounder.SENSOR_SOURCE_CHANGE,
     "device_configuration_change": BoostConfounder.DEVICE_CONFIGURATION_CHANGE,

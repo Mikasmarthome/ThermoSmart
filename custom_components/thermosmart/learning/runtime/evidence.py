@@ -98,7 +98,11 @@ class EvidenceMaterializer:
                     dispatch_status=bd.dispatch_status,
                     outcome_reliability=("partial" if partial else "full"),
                     context_quality=DataQuality.OK,
-                    controller_kind=None)
+                    controller_kind=None,
+                    # R1: seed the realized-offset range to THIS cycle's effective offset;
+                    # the runtime merges min/max as later cycles of the same episode arrive.
+                    realized_offset_min_c=float(learn_offset),
+                    realized_offset_max_c=float(learn_offset))
                 notes.append("boost_authoritative" + (":partial" if partial else ""))
         elif snapshot.decision_type is DecisionType.BOOST:
             # M2: DecisionType.BOOST is the controller's DECISION to boost — it is NOT

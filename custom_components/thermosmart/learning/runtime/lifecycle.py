@@ -462,8 +462,26 @@ class LearningRuntime:
         # OutcomeEpisode closes cross-cycle. Bounded FIFO; keyed by decision_id.
         if evidence.boost_context is not None:
             did = evidence.boost_context.decision_id
+            _new_ctx = evidence.boost_context
+            # R1: carry the realized-offset min/max forward from an earlier cycle of the
+            # SAME episode. The pending context is otherwise overwritten last-write-wins, so
+            # a 1.0 -> 1.0 -> 0.5 episode would be attributed entirely to the final 0.5.
+            # Merging min/max (a simple tracker on the persisted context) preserves that the
+            # realized offset changed, so a mixed-offset episode is flagged at close and not
+            # treated as an unambiguous single-offset sample. Legacy contexts (min/max None)
+            # contribute nothing and behave exactly as before.
+            _prev_ctx = zr.pending_boost_contexts.get(did)
+            if _prev_ctx is not None:
+                _los = [v for v in (getattr(_prev_ctx, "realized_offset_min_c", None),
+                                    _new_ctx.realized_offset_min_c) if v is not None]
+                _his = [v for v in (getattr(_prev_ctx, "realized_offset_max_c", None),
+                                    _new_ctx.realized_offset_max_c) if v is not None]
+                _new_ctx = replace(
+                    _new_ctx,
+                    realized_offset_min_c=(min(_los) if _los else None),
+                    realized_offset_max_c=(max(_his) if _his else None))
             zr.pending_boost_contexts.pop(did, None)
-            zr.pending_boost_contexts[did] = evidence.boost_context
+            zr.pending_boost_contexts[did] = _new_ctx
             while len(zr.pending_boost_contexts) > zr._pending_boost_cap:
                 zr.pending_boost_contexts.popitem(last=False)
             # B2b-3a: freeze the matching features at the DECISION (first boost cycle); do
@@ -569,6 +587,13 @@ class LearningRuntime:
                     # evidence (multi-TRV, afterheat). The SAME
                     # augmented episode feeds both the boost outcome and the baseline path.
                     extra_cf = self._runtime_confounders(zr, ce.episode, drec, snapshot)
+                    # R1: a materially-changing realized offset within this episode makes it
+                    # un-attributable to a single offset. Tag it with the BLOCKING
+                    # BOOST_OFFSET_CHANGED confounder so the boost model classifies it
+                    # BOOST_CONFOUNDED (stored, reduced reliability, NO factor movement) —
+                    # never last-write-wins attribution to the final offset.
+                    if bctx is not None and self._boost_offset_mixed(bctx):
+                        extra_cf = tuple(extra_cf) + ("boost_offset_changed",)
                     bound_episode = self._augment_confounders(ce.episode, extra_cf)
                     # H1: episode-scoped Boost provenance — True iff THIS OutcomeEpisode
                     # saw a positive, dispatch-supported Boost at any cycle, latched by
@@ -803,6 +828,26 @@ class LearningRuntime:
             return float(v) if v is not None else None
         except (AttributeError, TypeError, ValueError):
             return None
+
+    @staticmethod
+    def _boost_offset_mixed(bctx) -> bool:
+        """R1: True iff the realized boost offset changed MATERIALLY within this episode —
+        i.e. the tracked max-min exceeds the quantisation/ambiguity tolerance. Uses the
+        existing MultiTrvParams.offset_spread_ambiguous_c absolute floor (the same tolerance
+        the multi-TRV spread check uses), so a genuine step change (e.g. 1.0 -> 0.5) is
+        flagged while sub-threshold jitter (e.g. a per-device min_temp clamp shifting the
+        effective minimum by < the floor) is not. Legacy/uniform contexts (min or max None,
+        or equal) return False. Never raises."""
+        lo = getattr(bctx, "realized_offset_min_c", None)
+        hi = getattr(bctx, "realized_offset_max_c", None)
+        if lo is None or hi is None:
+            return False
+        try:
+            from ..models.boost_reliability import MultiTrvParams
+            tol = MultiTrvParams().offset_spread_ambiguous_c
+            return (float(hi) - float(lo)) > tol
+        except (TypeError, ValueError):
+            return False
 
     @staticmethod
     def _dispatch_boost_relevance(rec) -> float:

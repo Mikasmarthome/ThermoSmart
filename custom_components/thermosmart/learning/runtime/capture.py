@@ -65,6 +65,49 @@ def _coerce_finite_tuple_checked(values) -> tuple:
             out.append(c)
     return tuple(out), unreliable
 
+
+def _coerce_offset_checked(d, key) -> tuple:
+    """F-C: coerce a persisted offset field, distinguishing ABSENT (valid historical
+    absence) from PRESENT-BUT-MALFORMED (corruption).
+
+    Returns ``(finite_float_or_None, malformed)``:
+      * key missing, or present and explicitly ``None`` -> (None, False): a legitimate
+        legacy absence, NOT corruption.
+      * present, finite number (incl. a valid 0.0) -> (float, False).
+      * present, non-numeric / NaN / infinity -> (None, True): corruption, so the caller
+        marks the whole record persistence-unreliable (fail closed), rather than silently
+        treating the corrupt field as absent.
+    """
+    if key not in d:
+        return None, False
+    raw = d[key]
+    if raw is None:
+        return None, False
+    c = _coerce_finite_offset(raw)
+    if c is None:
+        return None, True
+    return c, False
+
+
+def _coerce_flag_checked(d, key) -> tuple:
+    """F-C: validate the explicit exposure flag STRICTLY as ``bool`` or ``None`` — never by
+    generic truthiness. Returns ``(bool_or_None, malformed)``:
+      * key missing, or present and ``None`` -> (None, False): legacy absence.
+      * present and a real ``bool`` -> (that bool, False): authoritative True/False
+        (a valid explicit ``False``, e.g. a real per-device min_temp clamp, is preserved).
+      * present and anything else (numeric ``0``/``1``, empty string, "true", …)
+        -> (None, True): corruption. The flag is NOT trusted (treated as absent) and the
+        record is marked persistence-unreliable.
+    Note: ``isinstance(x, bool)`` rejects ``0``/``1`` ints (they are not ``bool``)."""
+    if key not in d:
+        return None, False
+    raw = d[key]
+    if raw is None:
+        return None, False
+    if isinstance(raw, bool):
+        return raw, False
+    return None, True
+
 from ..contracts import DataQuality, DecisionId, Measurement
 
 
@@ -194,24 +237,36 @@ class BoostDispatchRecord:
 
     @classmethod
     def from_dict(cls, d: Mapping[str, object]) -> "BoostDispatchRecord":
-        # L1: coerce the per-device setpoint tuples with malformed-member detection.
+        # L1/F-C: coerce per-device setpoint tuples AND every scalar offset/flag field
+        # with malformed-member detection. A PRESENT-BUT-MALFORMED field (not a legacy
+        # absence) marks the whole record persistence-unreliable so it fails closed for
+        # both adaptive learning and baseline storage, rather than silently normalizing
+        # corruption into a value that could read as a clean episode.
         _eff_sp, _eff_unreliable = _coerce_finite_tuple_checked(d.get("effective_setpoints", []))
         _held_sp, _held_unreliable = _coerce_finite_tuple_checked(
             d.get("held_effective_setpoints", []))
+        _malformed = [_eff_unreliable, _held_unreliable]
+
+        def _off(key):
+            val, bad = _coerce_offset_checked(d, key)
+            _malformed.append(bad)
+            return val
+
+        _flag, _flag_bad = _coerce_flag_checked(d, "any_device_boosted")
+        _malformed.append(_flag_bad)
         return cls(
             decision_id=str(d["decision_id"]),
-            boost_candidate_c=_coerce_finite_offset(d.get("boost_candidate_c")),
-            boost_applied_c=_coerce_finite_offset(d.get("boost_applied_c")),
-            baseline_setpoint_c=_coerce_finite_offset(d.get("baseline_setpoint_c")),
-            final_setpoint_c=_coerce_finite_offset(d.get("final_setpoint_c")),
-            effective_setpoint_min_c=_coerce_finite_offset(d.get("effective_setpoint_min_c")),
-            effective_setpoint_max_c=_coerce_finite_offset(d.get("effective_setpoint_max_c")),
+            boost_candidate_c=_off("boost_candidate_c"),
+            boost_applied_c=_off("boost_applied_c"),
+            baseline_setpoint_c=_off("baseline_setpoint_c"),
+            final_setpoint_c=_off("final_setpoint_c"),
+            effective_setpoint_min_c=_off("effective_setpoint_min_c"),
+            effective_setpoint_max_c=_off("effective_setpoint_max_c"),
             dispatch_status=str(d.get("dispatch_status", "not_attempted")),
             outcome_eligible=bool(d.get("outcome_eligible", False)),
             outcome_reliability=str(d.get("outcome_reliability", "none")),
-            start_deficit_c=_coerce_finite_offset(d.get("start_deficit_c")),
-            expected_non_boost_duration_s=_coerce_finite_offset(
-                d.get("expected_non_boost_duration_s")),
+            start_deficit_c=_off("start_deficit_c"),
+            expected_non_boost_duration_s=_off("expected_non_boost_duration_s"),
             boost_evaluation_status=str(d.get("boost_evaluation_status", "unknown")),
             device_control_type=str(d.get("device_control_type", "setpoint")),
             # L1: checked coercion — a malformed container or an invalid member marks the
@@ -220,14 +275,15 @@ class BoostDispatchRecord:
             effective_setpoints=_eff_sp,
             targets_total=int(d.get("targets_total", 0)),
             targets_failed=int(d.get("targets_failed", 0)),
-            # N2: a malformed persisted offset (e.g. "x", NaN, inf) normalizes to None
-            # instead of crashing later relevance/learning evaluation.
-            effective_offset_c=_coerce_finite_offset(d.get("effective_offset_c")),
+            # N2/F-C: a malformed persisted offset (e.g. "x", NaN, inf) normalizes to None
+            # AND flags the record; a valid 0.0 and an explicit null (legacy absence) do not.
+            effective_offset_c=_off("effective_offset_c"),
             held_effective_setpoints=_held_sp,
-            any_device_boosted=(None if d.get("any_device_boosted") is None
-                                else bool(d.get("any_device_boosted"))),
+            # F-C: strict bool/None validation — a non-bool (0, 1, "", "true") is corruption,
+            # not an authoritative flag, so it is dropped to None and flagged.
+            any_device_boosted=_flag,
             persistence_unreliable=(bool(d.get("persistence_unreliable", False))
-                                    or _eff_unreliable or _held_unreliable),
+                                    or any(_malformed)),
         )
 
 
@@ -270,17 +326,30 @@ def record_any_device_boosted(bd) -> bool:
         return False
     v = getattr(bd, "any_device_boosted", None)
     if v is not None:
+        # Current-format record: the explicit flag is authoritative and used ALONE. A
+        # valid explicit False (e.g. a real per-device min_temp clamp) is never overridden
+        # by a zone-baseline comparison.
         return bool(v)
-    # ── legacy record: (1) trustworthy per-device setpoint evidence, if present ──
+    # ── legacy record (flag absent): COMBINE per-device evidence OR the conservative
+    # fallback. F-A: these are not mutually exclusive. An older payload may persist a
+    # WRITTEN device at the zone baseline (per-device offset 0.0) while the actually
+    # boosted HELD device was never persisted — so the per-device check alone reads
+    # "not exposed" and, if it short-circuited, would skip the fallback and store a
+    # contaminated baseline. Either signal indicating exposure is sufficient.
     base = getattr(bd, "baseline_setpoint_c", None)
     sps = list(getattr(bd, "effective_setpoints", ()) or ()) \
         + list(getattr(bd, "held_effective_setpoints", ()) or ())
     if base is not None and sps:
         try:
-            return any((float(sp) - float(base)) > _EXPOSURE_EPS_C for sp in sps)
+            if any((float(sp) - float(base)) > _EXPOSURE_EPS_C for sp in sps):
+                return True             # (1) trustworthy per-device evidence of a boost
         except (TypeError, ValueError):
-            return False
-    # ── (2) per-device evidence absent/inconclusive: conservative legacy fallback ──
+            pass
+    # (2) conservative legacy fallback: an applied/held dispatch with a finite positive
+    # approved OR effective offset above the threshold. Never fabricates a successful
+    # write; the approved offset is NEVER used as adaptive-learning magnitude (that stays
+    # effective_offset_c in the EvidenceMaterializer). Failed / not-attempted legacy
+    # records with no positive device evidence stay non-exposed.
     status = getattr(bd, "dispatch_status", "not_attempted")
     if status in ("fully_succeeded", "partially_succeeded", "already_satisfied"):
         for off in (getattr(bd, "effective_offset_c", None),

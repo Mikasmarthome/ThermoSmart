@@ -798,17 +798,25 @@ class LearningRuntime:
 
     @staticmethod
     def _dispatch_boost_relevance(rec) -> float:
-        """F1/F3/N1: rank a dispatch record by how much Boost-device evidence it carries,
-        so a later UNBOOSTED cycle of the same decision never erases an earlier boosted
-        cycle's exposure/ambiguity. Higher = more relevant. A clean (no-device-boosted)
-        record scores 0; a record where ANY device was boosted (authoritative exposure,
-        independent of the conservative min) or a partial dispatch scores higher and is
-        retained. N2-safe: reads only the normalized record, never raw values."""
+        """F1/F3/N1/F-B: rank a dispatch record by how much Boost-device / provenance
+        evidence it carries, so a later UNBOOSTED cycle of the same decision never erases
+        an earlier boosted-or-unreliable record. Higher = more relevant. A clean
+        (no-device-boosted, reliable) record scores 0; a record where ANY device was
+        boosted (authoritative exposure, independent of the conservative min), OR that is
+        marked persistence-unreliable, OR a partial dispatch, scores higher and is
+        retained until the owning episode closes/rejects. N2-safe: reads only the
+        normalized record, never raw values."""
         if rec is None:
             return -1.0
         from .capture import record_any_device_boosted
         score = 0.0
         if record_any_device_boosted(rec):
+            score += 2.0
+        if getattr(rec, "persistence_unreliable", False):
+            # F-B: unreliable provenance must survive a later clean dispatch of the same
+            # decision — a clean record (score 0) can never overwrite it, so the episode
+            # is still failed closed (no clean baseline) at close. F4 pruning still drops
+            # it once its decision_id can no longer close an episode (bounded state).
             score += 2.0
         if getattr(rec, "dispatch_status", "not_attempted") == "partially_succeeded":
             score += 1.0

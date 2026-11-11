@@ -297,6 +297,13 @@ class OutcomeEpisode:
     # uses it to guarantee a boosted episode is never accepted as a clean baseline.
     # Default False keeps older serialized/reconstructed episodes backward compatible.
     boost_exposed: bool = False
+    # F-D (live-record ownership): True iff this episode saw UNRELIABLE dispatch evidence
+    # (a corrupt persisted record or a non-finite live setpoint/offset) at ANY cycle while
+    # it was open — latched by the builder exactly like boost_exposed, so it is attributed
+    # to the episode that spanned the unreliable cycle regardless of which decision_id the
+    # live record was keyed under. The runtime fails such an episode closed (no clean
+    # baseline, no adaptive Boost sample). Default False keeps older episodes compatible.
+    evidence_unreliable: bool = False
 
     def __post_init__(self) -> None:
         s, e = _validate_common(

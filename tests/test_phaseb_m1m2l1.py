@@ -938,3 +938,183 @@ class TestFDHardening:
         ev = EvidenceMaterializer().materialize(_snap(bd))
         assert ev.boost_context is None
         assert "boost_evidence_unreliable" in ev.notes
+
+
+# ── F-D (live-record episode ownership): unreliable live evidence at a decision
+#    transition must fail the CLOSING episode closed, not store a clean baseline ──
+
+def _unreliable_rec(base=_TARGET):
+    """A live-shaped unreliable dispatch record with explicit-False exposure and NO
+    boost evidence — exactly what a non-finite live glitch produces at a transition.
+    record_any_device_boosted() returns False (authoritative False), so the ONLY signal
+    that the cycle is untrustworthy is persistence_unreliable."""
+    return BoostDispatchRecord(
+        decision_id="x", boost_applied_c=0.0, baseline_setpoint_c=base,
+        final_setpoint_c=base, dispatch_status="failed", effective_offset_c=0.0,
+        effective_setpoints=(), held_effective_setpoints=(),
+        any_device_boosted=False, targets_total=1, persistence_unreliable=True)
+
+
+class TestFDLiveRecordEpisodeOwnership:
+    def test_regression_unreliable_at_target_jump_not_baseline(self):
+        # REGRESSION (fails on 55c288e): outcome episode opens at target 21; the target
+        # steps to 22 at cycle 2 (a NEW capture decision_id) carrying an UNRELIABLE live
+        # record. The active episode stays under the OLD id and closes under it, so the
+        # close-time per-record check sees a clean OLD-id record and (on 55c288e) stores a
+        # clean baseline. After F-D the episode latches evidence_unreliable at that cycle
+        # and is failed closed.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, target=21.0)
+        _cycle(rt, 1, 19.0, target=21.0)
+        _cycle(rt, 2, 20.0, target=22.0, dt=DecisionType.NORMAL, rec=_unreliable_rec())
+        for i, t in enumerate([21.0, 22.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 0
+
+    def test_regression_unreliable_at_preheat_to_normal_not_baseline(self):
+        # REGRESSION (fails on 55c288e): PREHEAT -> NORMAL class change at cycle 2 carrying
+        # an unreliable live record. Same ownership gap; must fail closed.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, dt=DecisionType.PREHEAT)
+        _cycle(rt, 1, 19.0, dt=DecisionType.PREHEAT)
+        _cycle(rt, 2, 20.0, dt=DecisionType.NORMAL, rec=_unreliable_rec())
+        for i, t in enumerate([20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt, i, t, heating=(t < 21.0))
+        assert zr.baseline_store.size == 0
+
+    def test_unreliable_before_transition_not_baseline(self):
+        # Unreliable record on a cycle BEFORE the target jump (same decision). Caught via
+        # the episode latch (and the same-decision record). No clean baseline.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, target=21.0)
+        _cycle(rt, 1, 19.0, target=21.0, dt=DecisionType.NORMAL, rec=_unreliable_rec())
+        _cycle(rt, 2, 20.0, target=22.0)   # jump after the unreliable cycle
+        for i, t in enumerate([21.0, 22.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 0
+
+    def test_unreliable_after_transition_not_baseline(self):
+        # Unreliable record AFTER the jump, while the old episode is still open -> latched
+        # on the still-open episode -> failed closed.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, target=21.0)
+        _cycle(rt, 1, 19.0, target=22.0)   # jump (new decision), episode stays open
+        _cycle(rt, 2, 19.5, target=22.0, dt=DecisionType.NORMAL, rec=_unreliable_rec())
+        for i, t in enumerate([20.0, 21.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 0
+
+    def test_clean_transition_without_unreliable_stores_baseline(self):
+        # CONTROL: a target jump with only clean evidence -> the closing episode is a
+        # legitimate clean baseline. The fix must NOT over-exclude.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, target=21.0)
+        _cycle(rt, 1, 19.0, target=21.0)
+        _cycle(rt, 2, 20.0, target=22.0)   # clean jump
+        for i, t in enumerate([21.0, 22.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 1
+
+    def test_repeated_clean_cycles_store_baseline(self):
+        # CONTROL: an all-clean reaching episode stores exactly one baseline.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        for i, t in enumerate(_TEMPS):
+            _cycle(rt, i, t, heating=(t < _TARGET))
+        assert zr.baseline_store.size == 1
+
+    def test_same_decision_unreliable_not_baseline(self):
+        # Unreliable record on a same-decision cycle (no transition) -> failed closed.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        for i, t in enumerate(_TEMPS):
+            if i == 2:
+                _cycle(rt, i, t, dt=DecisionType.NORMAL, rec=_unreliable_rec(),
+                       heating=(t < _TARGET))
+            else:
+                _cycle(rt, i, t, heating=(t < _TARGET))
+        assert zr.baseline_store.size == 0
+
+    def test_explicit_false_exposure_still_authoritative(self):
+        # A reliable cycle with explicit-False exposure (e.g. a real min_temp clamp) and
+        # NO unreliability must remain baseline-eligible — evidence_unreliable only fires
+        # on actual unreliability, never on a valid False.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        for i, t in enumerate(_TEMPS):
+            if i == 2:
+                _cycle(rt, i, t, dt=DecisionType.NORMAL,
+                       rec=_rec(status="fully_succeeded", base=_TARGET, written=(21.0,),
+                                held=(21.0,), approved=0.0, effective=0.0,
+                                any_boosted=False),
+                       heating=(t < _TARGET))
+            else:
+                _cycle(rt, i, t, heating=(t < _TARGET))
+        assert zr.baseline_store.size == 1
+
+    def test_aborted_unreliable_episode_then_clean_stores_baseline(self):
+        # An unreliable episode aborted by a window-open; a later CLEAN episode under a new
+        # target must store a baseline (the latch resets on abort — no indefinite leak).
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, target=21.0, rec=_unreliable_rec())
+        _cycle(rt, 1, 19.0, target=21.0, window=True)   # abort
+        for i, t in enumerate([18.0, 18.8, 19.6, 20.4, 22.0, 22.0, 22.0, 22.0], start=2):
+            _cycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.baseline_store.size == 1
+
+    def test_restart_around_transition_preserves_marker(self):
+        # The unreliable transition cycle is latched into the builder _extra; serialize
+        # mid-episode, restore, then reach. The restored episode must still fail closed.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _cycle(rt, 0, 18.0, target=21.0)
+        _cycle(rt, 1, 19.0, target=21.0)
+        _cycle(rt, 2, 20.0, target=22.0, dt=DecisionType.NORMAL, rec=_unreliable_rec())
+        payload = rt._build_payload()
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        for i, t in enumerate([21.0, 22.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt2, i, t, target=22.0, heating=(t < 22.0))
+        assert rt2._zone(_ZONE).baseline_store.size == 0
+
+    def test_multi_zone_one_unreliable_one_clean(self):
+        # Zone A: unreliable record at a target jump -> excluded. Zone B: clean -> baseline.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _cycle(rt, 0, 18.0, zone="A", target=21.0)
+        _cycle(rt, 1, 19.0, zone="A", target=21.0)
+        _cycle(rt, 2, 20.0, zone="A", target=22.0, dt=DecisionType.NORMAL,
+               rec=_unreliable_rec())
+        for i, t in enumerate(_TEMPS):
+            _cycle(rt, i, t, zone="B", heating=(t < _TARGET))
+        for i, t in enumerate([21.0, 22.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt, i, t, zone="A", target=22.0, heating=(t < 22.0))
+        assert rt._zone("A").baseline_store.size == 0
+        assert rt._zone("B").baseline_store.size == 1
+
+    def test_pending_records_bounded_with_unreliable_transitions(self):
+        # Many unreliable-at-transition episodes must not grow pending state unbounded
+        # (F4 pruning still applies; the episode latch does not leak into pending dicts).
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        for k in range(30):
+            tgt = 20.0 + (k % 5) * 0.5
+            _cycle(rt, k * 2, 18.0, target=tgt, rec=_unreliable_rec(base=tgt))
+            _cycle(rt, k * 2 + 1, 18.5, target=tgt, window=True)   # abort
+        assert len(zr.pending_dispatch_records) <= 2
+        assert len(zr.pending_boost_contexts) <= 2
+
+    def test_no_adaptive_update_from_unreliable_transition(self):
+        # The unreliable transition cycle must never produce an adaptive Boost update.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 0, 18.0, target=21.0)
+        _cycle(rt, 1, 19.0, target=21.0)
+        _cycle(rt, 2, 20.0, target=22.0, dt=DecisionType.NORMAL, rec=_unreliable_rec())
+        for i, t in enumerate([21.0, 22.0, 22.0, 22.0, 22.0], start=3):
+            _cycle(rt, i, t, target=22.0, heating=(t < 22.0))
+        assert zr.model_update_counts.get("boost", 0) == 0

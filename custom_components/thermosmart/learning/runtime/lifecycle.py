@@ -593,7 +593,15 @@ class LearningRuntime:
                     # clean baseline — drop the dropped-member confounder would otherwise
                     # make a confounded episode look clean. Fail closed: no boost update,
                     # no baseline sample, recorded as a conservative rejection below.
-                    _drec_unreliable = bool(getattr(drec, "persistence_unreliable", False))
+                    # F-D: ALSO fail closed when the EPISODE itself latched unreliable
+                    # evidence at any cycle (episode-scoped, like boost_exposed). This
+                    # covers the decision-transition case where the unreliable live record
+                    # is keyed under the NEW decision_id (so ``drec`` for the OLD closing
+                    # episode is clean) while the unreliable cycle was still part of the
+                    # OLD episode's trajectory.
+                    _drec_unreliable = (bool(getattr(drec, "persistence_unreliable", False))
+                                        or bool(getattr(bound_episode, "evidence_unreliable",
+                                                        False)))
                     # Episode-history hand-off for outcome: the augmented bound_episode
                     # (with runtime confounder flags), never the raw ce.episode. Emitted
                     # immediately here, independent of the boost REACHED/non-REACHED/

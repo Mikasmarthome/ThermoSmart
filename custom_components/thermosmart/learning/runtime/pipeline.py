@@ -208,6 +208,15 @@ class RuntimePipeline:
         # exposure — the authoritative flag is the correct and sufficient gate.
         _bd = getattr(snapshot, "boost_dispatch", None)
         _boost_exposed = record_any_device_boosted(_bd)
+        # F-D (live-record episode ownership): if THIS cycle's dispatch record is
+        # unreliable (corrupt persisted record or a non-finite live setpoint/offset),
+        # latch that onto the currently-open outcome episode. At a decision transition
+        # (target jump / PREHEAT->NORMAL) the unreliable record is keyed under the NEW
+        # decision_id while the previous episode is still open and closes under the OLD
+        # id — so the close-time per-record check would miss it. Latching per-cycle on the
+        # active episode (exactly like boost_exposed) attributes the unreliable evidence to
+        # the episode whose trajectory actually spanned that cycle, so it fails closed.
+        _evidence_unreliable = bool(getattr(_bd, "persistence_unreliable", False))
 
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,
@@ -215,7 +224,8 @@ class RuntimePipeline:
             window_open=snapshot.window_open, heating_failure=snapshot.heating_failure,
             outdoor_temp=snapshot.outdoor_temp,
             indoor_temp_quality=snapshot.indoor_temp_quality, decision_start=decision_start,
-            drive_end_setpoint_c=_drive_end_sp, boost_exposed=_boost_exposed)
+            drive_end_setpoint_c=_drive_end_sp, boost_exposed=_boost_exposed,
+            evidence_unreliable=_evidence_unreliable)
 
         # Call each builder exactly once per step, then fan out the result to every
         # model that shares the builder key.  Without this, two models that share a

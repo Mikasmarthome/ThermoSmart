@@ -147,6 +147,12 @@ class BuilderInput:
     # (episode-scoped provenance) so an episode that EVER saw a Boost can never be
     # stored as a clean non-boost baseline, independent of decision_id changes.
     boost_exposed: bool = False
+    # F-D: this cycle's dispatch evidence is UNRELIABLE (corrupt persisted record or a
+    # non-finite live setpoint/offset). The OutcomeEpisodeBuilder latches it onto the open
+    # episode (episode-scoped, like boost_exposed) so an episode that EVER saw unreliable
+    # evidence is failed closed — never stored as a clean baseline — regardless of
+    # decision_id changes at the transition where the unreliable record appears.
+    evidence_unreliable: bool = False
     # drive-end evidence for afterheat builder: setpoint from the last heating step
     # (before coordinator reduced it to comfort).  Lets the builder capture
     # setpoint_before > setpoint_after so _drive_end_reliability() can infer drive end.

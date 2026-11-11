@@ -54,6 +54,10 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
                 # H1: an episode may open ON a boost cycle — latch provenance now.
                 if inp.boost_exposed:
                     self._extra["boost_seen"] = True
+                # F-D: an episode may open ON the transition cycle that carries the
+                # unreliable live record — latch unreliability now too.
+                if inp.evidence_unreliable:
+                    self._extra["evidence_unreliable"] = True
                 return BuilderResult(BuilderAction.OPENED, open_episode_id=self._episode_id,
                                      reason_codes=(ReasonCode.OPENED.value,))
             return BuilderResult(BuilderAction.NO_CHANGE)
@@ -64,6 +68,13 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
         # is reset only by _reset_episode (close/abort/discard), never leaking forward.
         if inp.boost_exposed:
             self._extra["boost_seen"] = True
+        # F-D: latch episode-scoped UNRELIABLE-evidence provenance (same lifetime as
+        # boost_seen). A cycle with an unreliable dispatch record belongs to this open
+        # episode's trajectory even when the capture decision_id changed on that cycle
+        # (target jump / PREHEAT->NORMAL) and the record is keyed under the NEW decision —
+        # so the closing episode cannot be certified as a clean baseline.
+        if inp.evidence_unreliable:
+            self._extra["evidence_unreliable"] = True
 
         if inp.heating_failure or (inp.regime is not None
                                    and inp.regime.regime is Regime.DISTURBED):
@@ -132,6 +143,9 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
             # episode so the runtime's baseline decision sees it regardless of which
             # decision_id the episode opened/closed under.
             boost_exposed=bool(self._extra.get("boost_seen", False)),
+            # F-D: carry the latched episode-scoped unreliable-evidence provenance so the
+            # runtime fails the closing episode closed regardless of decision_id changes.
+            evidence_unreliable=bool(self._extra.get("evidence_unreliable", False)),
         )
         eid = self._episode_id
         reliability = self._episode_reliability()

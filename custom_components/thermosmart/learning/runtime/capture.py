@@ -19,8 +19,14 @@ from typing import Mapping, Optional, Sequence
 def _coerce_finite_offset(value) -> Optional[float]:
     """N2: normalize a persisted offset to a finite float, or None. A malformed value
     (non-numeric string, NaN, inf, etc.) becomes None instead of crashing a later
-    numeric comparison. A valid 0.0 or positive/negative finite number is preserved."""
+    numeric comparison. A valid 0.0 or positive/negative finite number is preserved.
+
+    F-D: a bool is NOT a numeric offset — ``float(True)`` would silently become 1.0 and
+    read as a real boost magnitude — so a bool is rejected (None), which the checked
+    callers treat as a present-but-malformed field."""
     if value is None:
+        return None
+    if isinstance(value, bool):
         return None
     try:
         f = float(value)
@@ -107,6 +113,63 @@ def _coerce_flag_checked(d, key) -> tuple:
     if isinstance(raw, bool):
         return raw, False
     return None, True
+
+
+def _coerce_count_checked(d, key) -> tuple:
+    """F-D: parse a persisted non-negative integer count safely, distinguishing absence
+    from corruption. Returns ``(int_value, malformed)``:
+      * key missing, or present and ``None`` -> (0, False): legitimate legacy absence.
+      * present, a real non-negative ``int`` (not ``bool``) -> (that, False): a valid 0 is
+        preserved.
+      * anything else (string "x", NaN/inf float, any float, bool, negative int)
+        -> (0, True): corruption. Never raises — an unchecked ``int(...)`` on "x"/NaN/None
+        would raise during restore and drop the whole record, which for an older payload
+        lacking the episode boost_seen latch could let a boosted episode close as a clean
+        baseline. The record is marked unreliable instead (fail closed)."""
+    if key not in d:
+        return 0, False
+    raw = d[key]
+    if raw is None:
+        return 0, False
+    if isinstance(raw, bool):
+        return 0, True
+    if isinstance(raw, int):
+        return (raw, False) if raw >= 0 else (0, True)
+    return 0, True
+
+
+def _coerce_bool_checked(d, key, default=False) -> tuple:
+    """F-D: strict bool field (e.g. outcome_eligible). Returns ``(bool, malformed)``.
+    Missing or ``None`` -> (default, False). A real ``bool`` -> (that, False). Any other
+    present value -> (default, True): corruption. Never truthiness-coerced — a persisted
+    ``"false"`` string must NOT read as True."""
+    if key not in d or d[key] is None:
+        return default, False
+    raw = d[key]
+    if isinstance(raw, bool):
+        return raw, False
+    return default, True
+
+
+_KNOWN_DISPATCH_STATUSES = frozenset({
+    "not_attempted", "already_satisfied", "fully_succeeded",
+    "partially_succeeded", "failed"})
+
+
+def _coerce_status_checked(d, key) -> tuple:
+    """F-D: validate persisted dispatch_status. Returns ``(status_str, malformed)``:
+      * key missing -> ("not_attempted", False): legitimate legacy absence/default.
+      * a known status string -> (it, False): valid, semantics preserved.
+      * anything else (unknown string "bogus", ``None``, numeric 5, bool) -> (stringified
+        value, True): corruption. An unknown status would otherwise bypass the
+        conservative legacy exposure fallback (which only triggers on known applied/held
+        statuses), so the record is marked unreliable and fails closed instead."""
+    if key not in d:
+        return "not_attempted", False
+    raw = d[key]
+    if isinstance(raw, str) and raw in _KNOWN_DISPATCH_STATUSES:
+        return raw, False
+    return str(raw), True
 
 from ..contracts import DataQuality, DecisionId, Measurement
 
@@ -201,12 +264,14 @@ class BoostDispatchRecord:
     # of effective_offset_c (the conservative min). None on older records -> callers
     # derive it conservatively from the per-device setpoints (see any_device_boosted()).
     any_device_boosted: Optional[bool] = None
-    # L1: restore-time reliability marker. True when a persisted per-device setpoint
-    # tuple was malformed (bad container, or any non-finite/non-numeric member), so the
-    # per-device evidence cannot be trusted. A record flagged unreliable must be FAILED
-    # CLOSED for adaptive Boost learning (no boost context, no clean baseline) — the
-    # corrupt evidence must never be silently dropped and then read as a clean episode.
-    # Transient on live records (always False from the live path); round-trips so a
+    # L1/F-C/F-D: evidence-reliability marker. True when the record's evidence cannot be
+    # trusted: a malformed persisted field (bad setpoint container or member, a non-finite
+    # /non-numeric offset, an unknown dispatch_status, a corrupt count or exposure flag —
+    # see from_dict), OR a non-finite live setpoint/offset glitch (see
+    # ha_integration._boost_dispatch_from_live_record). A record flagged unreliable must be
+    # FAILED CLOSED for adaptive Boost learning (no boost context) AND for baseline storage
+    # (no clean baseline) — corrupt/glitched evidence must never be silently normalized and
+    # then read as a clean episode. False on a normal live record; round-trips so a
     # re-serialized restored record stays flagged.
     persistence_unreliable: bool = False
 
@@ -254,6 +319,14 @@ class BoostDispatchRecord:
 
         _flag, _flag_bad = _coerce_flag_checked(d, "any_device_boosted")
         _malformed.append(_flag_bad)
+        # F-D: safe count parsing, strict bool for outcome_eligible, and dispatch_status
+        # validated against the known set. Each distinguishes legacy absence from a
+        # present-but-malformed value and never raises during restore.
+        _tt, _tt_bad = _coerce_count_checked(d, "targets_total")
+        _tf, _tf_bad = _coerce_count_checked(d, "targets_failed")
+        _oe, _oe_bad = _coerce_bool_checked(d, "outcome_eligible", default=False)
+        _status, _status_bad = _coerce_status_checked(d, "dispatch_status")
+        _malformed.extend((_tt_bad, _tf_bad, _oe_bad, _status_bad))
         return cls(
             decision_id=str(d["decision_id"]),
             boost_candidate_c=_off("boost_candidate_c"),
@@ -262,8 +335,11 @@ class BoostDispatchRecord:
             final_setpoint_c=_off("final_setpoint_c"),
             effective_setpoint_min_c=_off("effective_setpoint_min_c"),
             effective_setpoint_max_c=_off("effective_setpoint_max_c"),
-            dispatch_status=str(d.get("dispatch_status", "not_attempted")),
-            outcome_eligible=bool(d.get("outcome_eligible", False)),
+            # F-D: an unknown/malformed dispatch_status is kept (stringified) but flags the
+            # record unreliable so it cannot bypass the conservative exposure fallback.
+            dispatch_status=_status,
+            # F-D: "false"/other non-bool must not be truthiness-coerced to True.
+            outcome_eligible=_oe,
             outcome_reliability=str(d.get("outcome_reliability", "none")),
             start_deficit_c=_off("start_deficit_c"),
             expected_non_boost_duration_s=_off("expected_non_boost_duration_s"),
@@ -273,8 +349,10 @@ class BoostDispatchRecord:
             # record unreliable instead of silently dropping (possibly confounding)
             # per-device evidence.
             effective_setpoints=_eff_sp,
-            targets_total=int(d.get("targets_total", 0)),
-            targets_failed=int(d.get("targets_failed", 0)),
+            # F-D: safe non-negative count parsing (no unchecked int() that could raise and
+            # drop the record on restore).
+            targets_total=_tt,
+            targets_failed=_tf,
             # N2/F-C: a malformed persisted offset (e.g. "x", NaN, inf) normalizes to None
             # AND flags the record; a valid 0.0 and an explicit null (legacy absence) do not.
             effective_offset_c=_off("effective_offset_c"),

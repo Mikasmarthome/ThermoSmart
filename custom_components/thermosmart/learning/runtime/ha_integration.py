@@ -157,6 +157,24 @@ def _boost_dispatch_from_live_record(live_record: Any) -> Optional[Any]:
         # B2b-3c: device control type from the post-dispatch path ("setpoint"/"direct_valve").
         dpath = getattr(live_record, "dispatch_path", None)
         device_type = dpath if dpath in ("setpoint", "direct_valve") else "setpoint"
+        # F-D: fail closed on a non-finite live setpoint/offset (sensor or compute glitch,
+        # e.g. NaN/inf). Such a value must never drive adaptive Boost learning or certify a
+        # clean baseline, so the record is marked unreliable (same fail-closed path as a
+        # corrupt persisted record). The values are left intact for diagnostics; the marker
+        # alone forces rejection at episode close and in the EvidenceMaterializer.
+        _eff_sps = tuple(getattr(live_record, "dispatch_effective_setpoints", ()) or ())
+        _held_sps = tuple(getattr(live_record, "dispatch_held_effective_setpoints", ()) or ())
+        _eff_off = getattr(live_record, "dispatch_effective_boost_offset_c", None)
+
+        def _nonfinite(x) -> bool:
+            try:
+                return isinstance(x, bool) or not math.isfinite(float(x))
+            except (TypeError, ValueError):
+                return True
+
+        _live_unreliable = (any(_nonfinite(s) for s in _eff_sps)
+                            or any(_nonfinite(s) for s in _held_sps)
+                            or (_eff_off is not None and _nonfinite(_eff_off)))
         return BoostDispatchRecord(
             decision_id=did,
             boost_candidate_c=getattr(live_record, "boost_candidate_c", None),
@@ -171,18 +189,18 @@ def _boost_dispatch_from_live_record(live_record: Any) -> Optional[Any]:
             outcome_reliability=getattr(live_record, "outcome_reliability", "none"),
             boost_evaluation_status=getattr(live_record, "boost_evaluation_status", "unknown"),
             device_control_type=device_type,
-            effective_setpoints=tuple(
-                getattr(live_record, "dispatch_effective_setpoints", ()) or ()),
+            effective_setpoints=_eff_sps,
             targets_total=int(getattr(live_record, "dispatch_targets_total", 0) or 0),
             targets_failed=int(getattr(live_record, "dispatch_targets_failed", 0) or 0),
             # F1: the authoritative POST-dispatch effective offset for adaptive learning,
             # and the held devices' observed setpoints for multi-TRV ambiguity.
-            effective_offset_c=getattr(live_record, "dispatch_effective_boost_offset_c", None),
-            held_effective_setpoints=tuple(
-                getattr(live_record, "dispatch_held_effective_setpoints", ()) or ()),
+            effective_offset_c=_eff_off,
+            held_effective_setpoints=_held_sps,
             # N1: authoritative dispatch-supported exposure, independent of the min.
             any_device_boosted=bool(
-                getattr(live_record, "dispatch_any_device_boosted", False)))
+                getattr(live_record, "dispatch_any_device_boosted", False)),
+            # F-D: non-finite live setpoint/offset -> fail closed.
+            persistence_unreliable=_live_unreliable)
     except Exception:
         return None
 

@@ -21,7 +21,9 @@ spurious adaptive Boost update); after the fix they pass.
 """
 from __future__ import annotations
 
+import math
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
 
@@ -695,5 +697,244 @@ class TestFCMalformedFields:
         # A record with a malformed present offset forms no adaptive Boost context.
         rec = BoostDispatchRecord.from_dict(_base_dict(boost_applied_c="x"))
         ev = EvidenceMaterializer().materialize(_snap(rec))
+        assert ev.boost_context is None
+        assert "boost_evidence_unreliable" in ev.notes
+
+
+# ── F-D: corrupted persisted counts and dispatch status ───────────────────────
+
+def _corrupt_records(payload, overrides, *, strip_boost_seen=True, only_zone=None):
+    """Apply `overrides` to every persisted dispatch record and drop surviving
+    boost/baseline contexts (and optionally the episode boost_seen latch) so the
+    dispatch record is the SOLE provenance — the F-D 'older payload' scenario."""
+    for zid, zdata in payload["zones"].items():
+        if only_zone is not None and zid != only_zone:
+            continue
+        for drec_d in (zdata.get("pending_dispatch_records") or {}).values():
+            drec_d.update(overrides)
+        zdata["pending_boost_contexts"] = {}
+        zdata["pending_baseline_ctx"] = {}
+        if strip_boost_seen:
+            for bstate in (zdata.get("pipeline", {}).get("builders", {}) or {}).values():
+                if isinstance(bstate, dict) and isinstance(bstate.get("extra"), dict):
+                    bstate["extra"].pop("boost_seen", None)
+    return payload
+
+
+class TestFDCorruptedCounts:
+    @pytest.mark.parametrize("field", ["targets_total", "targets_failed"])
+    @pytest.mark.parametrize("bad", ["x", "nan", float("nan"), float("inf"), 2.5, True, -1])
+    def test_corrupted_count_marks_unreliable_no_raise(self, field, bad):
+        rec = BoostDispatchRecord.from_dict(_base_dict(**{field: bad}))
+        assert rec.persistence_unreliable is True
+        assert getattr(rec, field) == 0           # safe default, no raise
+
+    def test_valid_zero_counts_preserved(self):
+        rec = BoostDispatchRecord.from_dict(_base_dict(targets_total=0, targets_failed=0))
+        assert rec.persistence_unreliable is False
+        assert rec.targets_total == 0 and rec.targets_failed == 0
+
+    def test_valid_positive_counts_preserved(self):
+        rec = BoostDispatchRecord.from_dict(_base_dict(targets_total=3, targets_failed=1))
+        assert rec.persistence_unreliable is False
+        assert rec.targets_total == 3 and rec.targets_failed == 1
+
+    @pytest.mark.parametrize("field", ["targets_total", "targets_failed"])
+    def test_missing_and_null_counts_are_legacy_absence(self, field):
+        d = _base_dict()
+        d.pop(field, None)
+        assert BoostDispatchRecord.from_dict(d).persistence_unreliable is False
+        assert BoostDispatchRecord.from_dict(
+            _base_dict(**{field: None})).persistence_unreliable is False
+        assert getattr(BoostDispatchRecord.from_dict(_base_dict(**{field: None})),
+                       field) == 0
+
+
+class TestFDDispatchStatus:
+    @pytest.mark.parametrize("status", ["not_attempted", "already_satisfied",
+                                        "fully_succeeded", "partially_succeeded", "failed"])
+    def test_known_status_preserved_not_unreliable(self, status):
+        rec = BoostDispatchRecord.from_dict(_base_dict(dispatch_status=status))
+        assert rec.persistence_unreliable is False
+        assert rec.dispatch_status == status
+
+    @pytest.mark.parametrize("bad", ["bogus", "", None, 5, 1.0, True])
+    def test_unknown_status_marks_unreliable(self, bad):
+        rec = BoostDispatchRecord.from_dict(_base_dict(dispatch_status=bad))
+        assert rec.persistence_unreliable is True
+
+    def test_missing_status_defaults_not_attempted(self):
+        d = _base_dict()
+        d.pop("dispatch_status", None)
+        rec = BoostDispatchRecord.from_dict(d)
+        assert rec.persistence_unreliable is False
+        assert rec.dispatch_status == "not_attempted"
+
+    def test_unknown_status_fails_closed_for_learning(self):
+        rec = BoostDispatchRecord.from_dict(_base_dict(dispatch_status="bogus"))
+        ev = EvidenceMaterializer().materialize(_snap(rec))
+        assert ev.boost_context is None
+        assert "boost_evidence_unreliable" in ev.notes
+
+
+class TestFDRuntimeRegressions:
+    def _drive_boosted_then_corrupt(self, overrides, *, only_zone=_ZONE, zone=_ZONE):
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _cycle(rt, 0, 18.0, zone=zone)
+        _cycle(rt, 1, 19.0, zone=zone)
+        _cycle(rt, 2, 19.5, zone=zone, dt=DecisionType.BOOST,
+               rec=_rec(status="fully_succeeded", base=_TARGET, written=(23.0,),
+                        held=(21.0,), approved=2.0, effective=2.0, any_boosted=True))
+        payload = _corrupt_records(rt._build_payload(), overrides, only_zone=only_zone)
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        return rt2
+
+    def test_fd1_regression_corrupted_targets_total_not_baseline(self):
+        # REGRESSION (fails on 3461cb7): targets_total corrupted. On 3461cb7 the unchecked
+        # int("x") raises in from_dict and the record is DROPPED on restore; with no
+        # boost_seen latch the boosted episode closes as a clean baseline. After F-D the
+        # record is parsed safely, marked unreliable, retained, and failed closed.
+        rt2 = self._drive_boosted_then_corrupt({"targets_total": "x"})
+        zr2 = rt2._zone(_ZONE)
+        recs = list(zr2.pending_dispatch_records.values())
+        assert recs and recs[0].persistence_unreliable is True   # kept, not dropped
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt2, i, t, heating=(t < _TARGET))
+        assert zr2.baseline_store.size == 0
+        assert zr2.model_update_counts.get("boost", 0) == 0
+        assert zr2.baseline_store.rejection_counts().get("boost_applied", 0) >= 1
+
+    def test_fd1_regression_corrupted_targets_failed_not_baseline(self):
+        rt2 = self._drive_boosted_then_corrupt({"targets_failed": "x"})
+        zr2 = rt2._zone(_ZONE)
+        assert list(zr2.pending_dispatch_records.values())[0].persistence_unreliable is True
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt2, i, t, heating=(t < _TARGET))
+        assert zr2.baseline_store.size == 0
+
+    def test_fd2_regression_unknown_status_not_baseline(self):
+        # REGRESSION (fails on 3461cb7): unknown dispatch_status with no per-device
+        # evidence bypassed the legacy fallback -> read not-exposed -> clean baseline.
+        # After F-D the unknown status marks the record unreliable -> failed closed.
+        rt2 = self._drive_boosted_then_corrupt(
+            {"dispatch_status": "bogus", "any_device_boosted": None,
+             "effective_setpoints": [], "held_effective_setpoints": [],
+             "effective_offset_c": None, "boost_applied_c": 0.8})
+        zr2 = rt2._zone(_ZONE)
+        assert list(zr2.pending_dispatch_records.values())[0].persistence_unreliable is True
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt2, i, t, heating=(t < _TARGET))
+        assert zr2.baseline_store.size == 0
+
+    def test_fd_mixed_valid_and_malformed_fields(self):
+        # Mixed: a valid status + valid counts but a malformed offset -> still unreliable.
+        rec = BoostDispatchRecord.from_dict(
+            _base_dict(dispatch_status="fully_succeeded", targets_total=2,
+                       targets_failed=0, boost_applied_c="x"))
+        assert rec.persistence_unreliable is True
+        assert rec.dispatch_status == "fully_succeeded"
+        assert rec.targets_total == 2
+
+    def test_fd_multiple_restore_cycles_preserve_marker(self):
+        rt2 = self._drive_boosted_then_corrupt({"targets_total": "x"})
+        p2 = rt2._build_payload()
+        rt3 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt3._restore_payload(p2)
+        zr3 = rt3._zone(_ZONE)
+        assert list(zr3.pending_dispatch_records.values())[0].persistence_unreliable is True
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt3, i, t, heating=(t < _TARGET))
+        assert zr3.baseline_store.size == 0
+
+    def test_fd_multi_zone_isolation(self):
+        # Zone A: corrupted-count boosted record -> excluded. Zone B: clean -> baseline.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        for i, t in enumerate([18.0, 19.0, 19.5]):
+            _cycle(rt, i, t, zone="A",
+                   dt=(DecisionType.BOOST if i == 2 else DecisionType.NORMAL),
+                   rec=(_rec(status="fully_succeeded", base=_TARGET, written=(23.0,),
+                             held=(21.0,), approved=2.0, effective=2.0, any_boosted=True)
+                        if i == 2 else None),
+                   heating=(t < _TARGET))
+            _cycle(rt, i, t, zone="B", heating=(t < _TARGET))
+        payload = _corrupt_records(rt._build_payload(), {"targets_total": "x"},
+                                   only_zone="A")
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt2, i, t, zone="A", heating=(t < _TARGET))
+            _cycle(rt2, i, t, zone="B", heating=(t < _TARGET))
+        assert rt2._zone("A").baseline_store.size == 0
+        assert rt2._zone("B").baseline_store.size == 1
+
+    def test_fd_abort_then_clean_episode_stores_baseline(self):
+        # A corrupted-count boosted episode aborted by a window-open; a subsequent clean
+        # episode under a new target must still store a baseline (no provenance leak).
+        rt2 = self._drive_boosted_then_corrupt({"targets_total": "x"})
+        zr2 = rt2._zone(_ZONE)
+        _cycle(rt2, 3, 19.0, window=True)   # abort the restored episode
+        for i, t in enumerate([18.0, 18.8, 19.6, 20.4, 22.0, 22.0, 22.0, 22.0], start=4):
+            _cycle(rt2, i, t, target=22.0, heating=(t < 22.0))
+        assert zr2.baseline_store.size == 1
+        assert zr2.baseline_store.rejection_counts().get("boost_applied", 0) == 0
+
+
+# ── F-D additional hardening: bool offsets, outcome_eligible, non-finite live ──
+
+class TestFDHardening:
+    @pytest.mark.parametrize("field", ["boost_applied_c", "effective_offset_c",
+                                       "baseline_setpoint_c"])
+    @pytest.mark.parametrize("val", [True, False])
+    def test_bool_not_accepted_as_offset(self, field, val):
+        rec = BoostDispatchRecord.from_dict(_base_dict(**{field: val}))
+        assert rec.persistence_unreliable is True
+        assert getattr(rec, field) is None          # bool never coerced to 1.0/0.0
+
+    def test_outcome_eligible_false_string_not_true(self):
+        rec = BoostDispatchRecord.from_dict(_base_dict(outcome_eligible="false"))
+        assert rec.outcome_eligible is False         # NOT truthiness-coerced to True
+        assert rec.persistence_unreliable is True
+
+    @pytest.mark.parametrize("val", [True, False])
+    def test_outcome_eligible_real_bool_preserved(self, val):
+        rec = BoostDispatchRecord.from_dict(_base_dict(outcome_eligible=val))
+        assert rec.outcome_eligible is val
+        assert rec.persistence_unreliable is False
+
+    def test_outcome_eligible_missing_defaults_false(self):
+        d = _base_dict()
+        d.pop("outcome_eligible", None)
+        rec = BoostDispatchRecord.from_dict(d)
+        assert rec.outcome_eligible is False
+        assert rec.persistence_unreliable is False
+
+    def _live(self, **over):
+        base = dict(
+            decision_id="x", dispatch_path="setpoint", boost_candidate_c=1.0,
+            boost_applied_c=2.0, baseline_setpoint_c=21.0, final_setpoint_c=23.0,
+            dispatch_effective_setpoint_min_c=23.0, dispatch_effective_setpoint_max_c=23.0,
+            dispatch_status="fully_succeeded", outcome_eligible=True,
+            outcome_reliability="full", boost_evaluation_status="applied",
+            dispatch_effective_setpoints=(23.0,), dispatch_targets_total=1,
+            dispatch_targets_failed=0, dispatch_effective_boost_offset_c=2.0,
+            dispatch_held_effective_setpoints=(), dispatch_any_device_boosted=True)
+        base.update(over)
+        return SimpleNamespace(**base)
+
+    def test_finite_live_record_is_reliable(self):
+        bd = _boost_dispatch_from_live_record(self._live())
+        assert bd.persistence_unreliable is False
+
+    @pytest.mark.parametrize("over", [
+        {"dispatch_effective_setpoints": (float("nan"),)},
+        {"dispatch_effective_setpoints": (float("inf"), 23.0)},
+        {"dispatch_held_effective_setpoints": (float("inf"),)},
+        {"dispatch_effective_boost_offset_c": float("nan")},
+        {"dispatch_effective_boost_offset_c": float("inf")}])
+    def test_nonfinite_live_setpoint_fails_closed(self, over):
+        bd = _boost_dispatch_from_live_record(self._live(**over))
+        assert bd.persistence_unreliable is True
+        ev = EvidenceMaterializer().materialize(_snap(bd))
         assert ev.boost_context is None
         assert "boost_evidence_unreliable" in ev.notes

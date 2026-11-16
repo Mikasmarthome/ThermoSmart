@@ -153,6 +153,11 @@ class BuilderInput:
     # evidence is failed closed — never stored as a clean baseline — regardless of
     # decision_id changes at the transition where the unreliable record appears.
     evidence_unreliable: bool = False
+    # R1/F1: the realized Boost offset applied on THIS cycle (None when no boost was
+    # intended this cycle). The OutcomeEpisodeBuilder latches its min/max across the open
+    # episode (episode-scoped, like boost_exposed) so a materially-changing realized offset
+    # is detected even when the episode spans multiple decision ids.
+    boost_realized_offset_c: Optional[float] = None
     # drive-end evidence for afterheat builder: setpoint from the last heating step
     # (before coordinator reduced it to comfort).  Lets the builder capture
     # setpoint_before > setpoint_after so _drive_end_reliability() can infer drive end.

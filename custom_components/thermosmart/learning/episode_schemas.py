@@ -304,6 +304,13 @@ class OutcomeEpisode:
     # live record was keyed under. The runtime fails such an episode closed (no clean
     # baseline, no adaptive Boost sample). Default False keeps older episodes compatible.
     evidence_unreliable: bool = False
+    # R1/F1: episode-scoped realized-Boost-offset range (min/max of the post-dispatch
+    # effective offset over the cycles of THIS episode where a boost was intended), latched
+    # by the OutcomeEpisodeBuilder across decision_id changes and restarts. The runtime
+    # flags a materially-changing range (BOOST_OFFSET_CHANGED) so a mixed-offset episode is
+    # not attributed to a single offset. Both None on older/uniform/non-boost episodes.
+    boost_realized_offset_min_c: Optional[float] = None
+    boost_realized_offset_max_c: Optional[float] = None
 
     def __post_init__(self) -> None:
         s, e = _validate_common(

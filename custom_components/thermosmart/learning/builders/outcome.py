@@ -38,6 +38,18 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
         super().__init__(learning_zone_id, params)
         self.trajectory_cap = self._params.outcome_trajectory_cap
 
+    def _latch_realized_offset(self, inp: BuilderInput) -> None:
+        """R1/F1: fold this cycle's realized Boost offset into the episode-scoped min/max.
+        Only cycles where a boost was intended carry a value (see pipeline); non-boost
+        cycles contribute nothing, so a legitimate release never widens the range."""
+        v = inp.boost_realized_offset_c
+        if v is None:
+            return
+        lo = self._extra.get("boost_off_min")
+        hi = self._extra.get("boost_off_max")
+        self._extra["boost_off_min"] = v if lo is None else min(lo, v)
+        self._extra["boost_off_max"] = v if hi is None else max(hi, v)
+
     def _step(self, inp: BuilderInput) -> BuilderResult:
         if not self._active:
             if inp.decision_start is not None:
@@ -58,6 +70,8 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
                 # unreliable live record — latch unreliability now too.
                 if inp.evidence_unreliable:
                     self._extra["evidence_unreliable"] = True
+                # R1/F1: latch the realized-offset range from the opening cycle.
+                self._latch_realized_offset(inp)
                 return BuilderResult(BuilderAction.OPENED, open_episode_id=self._episode_id,
                                      reason_codes=(ReasonCode.OPENED.value,))
             return BuilderResult(BuilderAction.NO_CHANGE)
@@ -75,6 +89,10 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
         # so the closing episode cannot be certified as a clean baseline.
         if inp.evidence_unreliable:
             self._extra["evidence_unreliable"] = True
+        # R1/F1: latch the episode-scoped realized-offset range. Set BEFORE any abort/close
+        # so a changing offset on the cycle that also closes/aborts is still recorded; reset
+        # only by _reset_episode (close/abort/discard), never leaking to the next episode.
+        self._latch_realized_offset(inp)
 
         if inp.heating_failure or (inp.regime is not None
                                    and inp.regime.regime is Regime.DISTURBED):
@@ -146,6 +164,10 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
             # F-D: carry the latched episode-scoped unreliable-evidence provenance so the
             # runtime fails the closing episode closed regardless of decision_id changes.
             evidence_unreliable=bool(self._extra.get("evidence_unreliable", False)),
+            # R1/F1: carry the EPISODE-scoped realized-offset range so the runtime detects a
+            # mixed offset across the whole episode, including across decision transitions.
+            boost_realized_offset_min_c=self._extra.get("boost_off_min"),
+            boost_realized_offset_max_c=self._extra.get("boost_off_max"),
         )
         eid = self._episode_id
         reliability = self._episode_reliability()

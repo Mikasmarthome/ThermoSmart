@@ -12,6 +12,7 @@ The full path is:
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
@@ -30,6 +31,36 @@ from ..features import FeatureExtractor
 from ..episode_schemas import Trajectory, TrajectoryPoint
 from ..regime import RegimeInput, RegimeResult, ThermalRegimeClassifier
 from .capture import CapturedSnapshot, DecisionType, record_any_device_boosted
+
+
+def _tracked_realized_offset(bd) -> Optional[float]:
+    """R1/F1/F2: the realized boost offset to track for EPISODE-scoped mixed-offset
+    detection. Present only on cycles where a boost was INTENDED this cycle (a finite
+    positive pre-dispatch APPROVED offset, boost_applied_c > 0), and then equal to the
+    POST-dispatch effective offset ACTUALLY realized — which is 0.0 for a failed boost
+    dispatch and the held offset for an already-satisfied (held) cycle.
+
+    Returns None (not tracked) on cycles with no boost intent (a normal/released cycle,
+    boost_applied_c 0/None) so a legitimate boost release is never mistaken for a changed
+    offset, and on unreliable records (handled separately by evidence_unreliable). This is
+    what lets the episode tracker distinguish:
+      * write(1.0) -> failed(approved>0, effective 0.0)   -> range [0.0, 1.0] -> MIXED (F2)
+      * write(1.0) -> held(approved>0, effective 1.0)     -> range [1.0, 1.0] -> clean
+      * write(1.0) -> released(approved 0/None)           -> not tracked      -> clean
+      * PREHEAT boost 1.0 then NORMAL boost 0.5           -> range [0.5, 1.0] -> MIXED (F1)
+    """
+    if bd is None:
+        return None
+    if getattr(bd, "persistence_unreliable", False):
+        return None
+    approved = getattr(bd, "boost_applied_c", None)
+    if not (isinstance(approved, (int, float)) and not isinstance(approved, bool)
+            and math.isfinite(approved) and approved > 0.0):
+        return None
+    eff = getattr(bd, "effective_offset_c", None)
+    if isinstance(eff, (int, float)) and not isinstance(eff, bool) and math.isfinite(eff):
+        return float(eff)
+    return None
 
 
 @dataclass(frozen=True)
@@ -217,6 +248,11 @@ class RuntimePipeline:
         # active episode (exactly like boost_exposed) attributes the unreliable evidence to
         # the episode whose trajectory actually spanned that cycle, so it fails closed.
         _evidence_unreliable = bool(getattr(_bd, "persistence_unreliable", False))
+        # R1/F1: the realized boost offset for this cycle (None when no boost intended),
+        # latched EPISODE-scoped by the OutcomeEpisodeBuilder so a mixed realized offset is
+        # detected across the whole open episode — even when it spans multiple decision ids
+        # (PREHEAT->NORMAL) and the decision-keyed context tracker alone would miss it.
+        _boost_realized = _tracked_realized_offset(_bd)
 
         binp = BuilderInput(
             ts=datetime.fromisoformat(snapshot.ts), regime=regime, indoor_temp=temp,
@@ -225,7 +261,8 @@ class RuntimePipeline:
             outdoor_temp=snapshot.outdoor_temp,
             indoor_temp_quality=snapshot.indoor_temp_quality, decision_start=decision_start,
             drive_end_setpoint_c=_drive_end_sp, boost_exposed=_boost_exposed,
-            evidence_unreliable=_evidence_unreliable)
+            evidence_unreliable=_evidence_unreliable,
+            boost_realized_offset_c=_boost_realized)
 
         # Call each builder exactly once per step, then fan out the result to every
         # model that shares the builder key.  Without this, two models that share a

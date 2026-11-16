@@ -9,6 +9,7 @@ an injected store + clock; there are no HA imports here.
 """
 from __future__ import annotations
 
+import math
 from collections import OrderedDict
 from dataclasses import dataclass, field, replace
 from datetime import datetime
@@ -587,12 +588,18 @@ class LearningRuntime:
                     # evidence (multi-TRV, afterheat). The SAME
                     # augmented episode feeds both the boost outcome and the baseline path.
                     extra_cf = self._runtime_confounders(zr, ce.episode, drec, snapshot)
-                    # R1: a materially-changing realized offset within this episode makes it
-                    # un-attributable to a single offset. Tag it with the BLOCKING
-                    # BOOST_OFFSET_CHANGED confounder so the boost model classifies it
+                    # R1/F1/F2: a materially-changing realized offset within this episode
+                    # makes it un-attributable to a single offset. Detected from BOTH the
+                    # same-decision context range (bctx) AND the EPISODE-scoped range the
+                    # OutcomeEpisodeBuilder latched across the whole episode — the latter is
+                    # authoritative when one episode spans multiple decision ids
+                    # (PREHEAT->NORMAL, F1) and also catches a later failed boost dispatch
+                    # realizing 0.0 after an earlier successful boost (F2). Tag with the
+                    # BLOCKING BOOST_OFFSET_CHANGED confounder so the model classifies it
                     # BOOST_CONFOUNDED (stored, reduced reliability, NO factor movement) —
                     # never last-write-wins attribution to the final offset.
-                    if bctx is not None and self._boost_offset_mixed(bctx):
+                    if (bctx is not None and self._boost_offset_mixed(bctx)) \
+                            or self._episode_offset_mixed(ce.episode):
                         extra_cf = tuple(extra_cf) + ("boost_offset_changed",)
                     bound_episode = self._augment_confounders(ce.episode, extra_cf)
                     # H1: episode-scoped Boost provenance — True iff THIS OutcomeEpisode
@@ -830,24 +837,54 @@ class LearningRuntime:
             return None
 
     @staticmethod
-    def _boost_offset_mixed(bctx) -> bool:
-        """R1: True iff the realized boost offset changed MATERIALLY within this episode —
-        i.e. the tracked max-min exceeds the quantisation/ambiguity tolerance. Uses the
-        existing MultiTrvParams.offset_spread_ambiguous_c absolute floor (the same tolerance
-        the multi-TRV spread check uses), so a genuine step change (e.g. 1.0 -> 0.5) is
-        flagged while sub-threshold jitter (e.g. a per-device min_temp clamp shifting the
-        effective minimum by < the floor) is not. Legacy/uniform contexts (min or max None,
-        or equal) return False. Never raises."""
-        lo = getattr(bctx, "realized_offset_min_c", None)
-        hi = getattr(bctx, "realized_offset_max_c", None)
+    def _offset_range_mixed(lo, hi) -> bool:
+        """R1/F3: True iff a realized-offset range is MATERIALLY mixed OR MALFORMED.
+
+        * both None            -> False (legacy / no boost — clean, backward compatible)
+        * one-sided (one None) -> True  (F3: an incomplete range cannot certify "uniform")
+        * a bool               -> True  (F3: a bool is not a numeric offset)
+        * non-finite           -> True  (F3: NaN/inf)
+        * inverted (min > max)  -> True  (F3: corrupt restore)
+        * otherwise            -> (max - min) > MultiTrvParams.offset_spread_ambiguous_c,
+          the same absolute quantisation/ambiguity floor the multi-TRV spread check uses,
+          so a genuine step change (e.g. 1.0 -> 0.5) is flagged while sub-threshold jitter
+          is not.
+
+        Fail-closed: any malformed persisted/latched range becomes "mixed", so it is tagged
+        BOOST_OFFSET_CHANGED (BLOCKING) and can never silently become a clean, full-
+        reliability learning sample. Never raises."""
+        if lo is None and hi is None:
+            return False
         if lo is None or hi is None:
-            return False
+            return True
+        if isinstance(lo, bool) or isinstance(hi, bool):
+            return True
         try:
-            from ..models.boost_reliability import MultiTrvParams
-            tol = MultiTrvParams().offset_spread_ambiguous_c
-            return (float(hi) - float(lo)) > tol
+            lo = float(lo)
+            hi = float(hi)
         except (TypeError, ValueError):
-            return False
+            return True
+        if not (math.isfinite(lo) and math.isfinite(hi)):
+            return True
+        if lo > hi:
+            return True
+        from ..models.boost_reliability import MultiTrvParams
+        return (hi - lo) > MultiTrvParams().offset_spread_ambiguous_c
+
+    @classmethod
+    def _boost_offset_mixed(cls, bctx) -> bool:
+        """R1: same-decision mixed-offset check on the pending BoostUpdateContext's tracked
+        realized-offset range (preserved from the original R1 fix)."""
+        return cls._offset_range_mixed(getattr(bctx, "realized_offset_min_c", None),
+                                       getattr(bctx, "realized_offset_max_c", None))
+
+    @classmethod
+    def _episode_offset_mixed(cls, episode) -> bool:
+        """R1/F1: episode-scoped mixed-offset check on the range the OutcomeEpisodeBuilder
+        latched across the WHOLE open episode — authoritative across decision transitions
+        (PREHEAT->NORMAL) where the context tracker alone (keyed by decision_id) misses it."""
+        return cls._offset_range_mixed(getattr(episode, "boost_realized_offset_min_c", None),
+                                       getattr(episode, "boost_realized_offset_max_c", None))
 
     @staticmethod
     def _dispatch_boost_relevance(rec) -> float:

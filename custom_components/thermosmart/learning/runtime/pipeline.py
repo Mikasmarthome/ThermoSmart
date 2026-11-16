@@ -323,6 +323,32 @@ class RuntimePipeline:
             return None
         return None
 
+    def outcome_offset_range(self) -> tuple:
+        """F3: the episode-scoped realized-offset (min, max) the open OutcomeEpisode has
+        latched, for restore-time corruption validation. (None, None) when no episode is
+        open. Reads the raw (possibly corrupt) persisted values — the caller validates."""
+        b = self._builders.get("outcome")
+        try:
+            if b is not None and getattr(b, "_active", False):
+                return b._extra.get("boost_off_min"), b._extra.get("boost_off_max")
+        except Exception:
+            pass
+        return None, None
+
+    def mark_outcome_unreliable(self) -> bool:
+        """F3: latch the episode-scoped evidence_unreliable poison on the OPEN OutcomeEpisode
+        (the existing F-D fail-closed mechanism). Returns True iff an open episode was
+        poisoned. The flag persists in builder _extra and is cleared only at the next
+        episode boundary (_reset_episode), so a later valid cycle cannot un-poison it."""
+        b = self._builders.get("outcome")
+        try:
+            if b is not None and getattr(b, "_active", False):
+                b._extra["evidence_unreliable"] = True
+                return True
+        except Exception:
+            pass
+        return False
+
     def builder_lifecycle_summary(self) -> dict:
         """Read-only copy of the per-builder lifecycle tallies (diagnostics).
 

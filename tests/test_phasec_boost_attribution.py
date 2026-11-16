@@ -523,3 +523,175 @@ class TestNoControlEffect:
                 r = _cycle(rt, i, t, heating=(t < _TARGET))
             assert r.control_commands == ()
             assert r.has_control_effect is False
+
+
+# ── F3: corrupt persisted state end-to-end (restore -> cycle -> close -> update) ─
+
+def _open_boosted_payload(*, legacy=False):
+    """Drive an OPEN (not-yet-reached) boosted episode and return its serialized payload,
+    so a pending boost context and an active outcome builder range exist to corrupt."""
+    rt = runtime(mode=LearningRuntimeMode.CONTROL)
+    _cycle(rt, 0, 18.0, effective=1.0, dt=DecisionType.BOOST)
+    _cycle(rt, 1, 19.0, effective=1.0, dt=DecisionType.BOOST)
+    payload = rt._build_payload()
+    if legacy:
+        for cd in (payload["zones"][_ZONE].get("pending_boost_contexts") or {}).values():
+            cd.pop("realized_offset_min_c", None)
+            cd.pop("realized_offset_max_c", None)
+        ex = payload["zones"][_ZONE]["pipeline"]["builders"]["outcome"]["extra"]
+        ex.pop("boost_off_min", None)
+        ex.pop("boost_off_max", None)
+    return payload
+
+
+def _corrupt_payload(payload, *, ctx_range=None, extra_range=None):
+    z = payload["zones"][_ZONE]
+    if ctx_range is not None:
+        for cd in (z.get("pending_boost_contexts") or {}).values():
+            cd["realized_offset_min_c"], cd["realized_offset_max_c"] = ctx_range
+    if extra_range is not None:
+        ex = z["pipeline"]["builders"]["outcome"]["extra"]
+        ex["boost_off_min"], ex["boost_off_max"] = extra_range
+    return payload
+
+
+def _restore_and_reach(payload, *, zone=_ZONE, extra_cycles=None):
+    """Restore the payload into a fresh runtime, drive a VALID boost cycle, then reach."""
+    cap: list = []
+    rt = runtime(mode=LearningRuntimeMode.CONTROL, episode_sink=lambda e: cap.append(e))
+    rt._restore_payload(payload)
+    zr = rt._zone(zone)
+    _cycle(rt, 2, 19.5, effective=1.0, dt=DecisionType.BOOST, zone=zone)
+    for i, t in enumerate(extra_cycles or [20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+        _cycle(rt, i, t, heating=(t < _TARGET), zone=zone)
+    return rt, zr, cap
+
+
+def _assert_blocked(zr):
+    # The actual Boost model update outcome: NO adaptive update (not even deferred), and the
+    # episode is recorded as a conservative rejection.
+    assert zr.pending_boost_outcome is None
+    assert zr.model_update_counts.get("boost", 0) == 0
+    assert zr.baseline_store.rejection_counts().get("boost_applied", 0) >= 1
+
+
+def _assert_allowed(zr):
+    # A valid episode reaches the adaptive path (the deferred post-reach boost observer is
+    # opened) — factor update eligible.
+    assert zr.pending_boost_outcome is not None
+
+
+class TestF3CorruptRestoreEndToEnd:
+    def test_1_valid_restore_allows_factor_update(self):
+        rt, zr, cap = _restore_and_reach(_open_boosted_payload())
+        _assert_allowed(zr)
+
+    def test_2_legacy_both_absent_allows_factor_update(self):
+        rt, zr, cap = _restore_and_reach(_open_boosted_payload(legacy=True))
+        _assert_allowed(zr)
+
+    def test_3_inverted_pending_range_blocks(self):
+        rt, zr, cap = _restore_and_reach(
+            _corrupt_payload(_open_boosted_payload(), ctx_range=(1.0, 0.5)))
+        _assert_blocked(zr)
+
+    def test_4_one_sided_pending_range_blocks(self):
+        for rng in [(1.0, None), (None, 1.0)]:
+            rt, zr, cap = _restore_and_reach(
+                _corrupt_payload(_open_boosted_payload(), ctx_range=rng))
+            _assert_blocked(zr)
+
+    @pytest.mark.parametrize("bad", [float("nan"), float("inf"), "x", [1.0], True])
+    def test_5_nonfinite_wrongtype_bool_pending_blocks(self, bad):
+        rt, zr, cap = _restore_and_reach(
+            _corrupt_payload(_open_boosted_payload(), ctx_range=(bad, 1.0)))
+        _assert_blocked(zr)
+
+    def test_6_inverted_builder_extra_blocks(self):
+        rt, zr, cap = _restore_and_reach(
+            _corrupt_payload(_open_boosted_payload(), extra_range=(1.0, 0.5)))
+        _assert_blocked(zr)
+
+    def test_7_one_sided_builder_extra_blocks(self):
+        for rng in [(1.0, None), (None, 1.0)]:
+            rt, zr, cap = _restore_and_reach(
+                _corrupt_payload(_open_boosted_payload(), extra_range=rng))
+            _assert_blocked(zr)
+
+    def test_8_corrupt_both_locations_blocks(self):
+        rt, zr, cap = _restore_and_reach(
+            _corrupt_payload(_open_boosted_payload(), ctx_range=(1.0, 0.5),
+                             extra_range=(True, True)))
+        _assert_blocked(zr)
+
+    def test_9_corrupt_restore_then_decision_change_blocks(self):
+        # After the poisoned restore, a decision (target) change must not un-poison it.
+        payload = _corrupt_payload(_open_boosted_payload(), ctx_range=(1.0, 0.5))
+        cap: list = []
+        rt = runtime(mode=LearningRuntimeMode.CONTROL, episode_sink=lambda e: cap.append(e))
+        rt._restore_payload(payload)
+        zr = rt._zone(_ZONE)
+        _cycle(rt, 2, 19.5, effective=1.0, dt=DecisionType.BOOST, target=23.0)  # target jump
+        for i, t in enumerate([20.0, 21.0, 22.0, 23.0, 23.0, 23.0], start=3):
+            _cycle(rt, i, t, target=23.0, heating=(t < 23.0))
+        _assert_blocked(zr)
+
+    def test_10_corrupt_restore_then_second_restart_blocks(self):
+        # Poison must survive a SECOND restart (the latch re-serializes).
+        payload = _corrupt_payload(_open_boosted_payload(), ctx_range=(1.0, 0.5))
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt2._restore_payload(payload)
+        _cycle(rt2, 2, 19.5, effective=1.0, dt=DecisionType.BOOST)   # one valid cycle
+        payload2 = rt2._build_payload()
+        cap: list = []
+        rt3 = runtime(mode=LearningRuntimeMode.CONTROL, episode_sink=lambda e: cap.append(e))
+        rt3._restore_payload(payload2)
+        zr3 = rt3._zone(_ZONE)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt3, i, t, heating=(t < _TARGET))
+        _assert_blocked(zr3)
+
+    def test_11_corrupt_closes_then_clean_episode_learns(self):
+        # The poisoned episode closes (rejected); a SUBSEQUENT clean boosted episode under a
+        # new target must be eligible again (poison resets at the episode boundary).
+        rt, zr, cap = _restore_and_reach(
+            _corrupt_payload(_open_boosted_payload(), ctx_range=(1.0, 0.5)))
+        _assert_blocked(zr)                                   # first (poisoned) episode
+        base = 30
+        _cycle(rt, base, 18.0, effective=1.0, dt=DecisionType.BOOST, target=23.0)
+        for i, t in enumerate([19.0, 20.0, 21.0, 22.0, 23.0, 23.0, 23.0], start=base + 1):
+            _cycle(rt, i, t, target=23.0, heating=(t < 23.0))
+        assert zr.pending_boost_outcome is not None           # clean episode is eligible
+
+    def test_12_clean_cross_decision_remains_eligible(self):
+        # Valid cross-decision (PREHEAT->NORMAL) uniform boost restored -> still eligible.
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        _cycle(rt, 0, 18.0, effective=1.0, dt=DecisionType.PREHEAT)
+        _cycle(rt, 1, 19.0, effective=1.0, dt=DecisionType.NORMAL)
+        payload = rt._build_payload()
+        cap: list = []
+        rt2 = runtime(mode=LearningRuntimeMode.CONTROL, episode_sink=lambda e: cap.append(e))
+        rt2._restore_payload(payload)
+        zr2 = rt2._zone(_ZONE)
+        _cycle(rt2, 2, 19.5, effective=1.0, dt=DecisionType.NORMAL)
+        for i, t in enumerate([20.0, 20.6, 21.0, 21.0, 21.0], start=3):
+            _cycle(rt2, i, t, heating=(t < _TARGET))
+        _assert_allowed(zr2)
+
+    def test_13_f1_mixed_offset_protection_intact(self):
+        _, _, cap = _run({0: dict(effective=1.0), 1: dict(effective=1.0),
+                          2: dict(effective=0.5)})
+        assert _has_offset_changed(cap) is True
+
+    def test_14_f2_failed_dispatch_protection_intact(self):
+        _, _, cap = _run({0: dict(effective=1.0),
+                          1: dict(effective=0.0, approved=1.0, status="failed")})
+        assert _has_offset_changed(cap) is True
+
+    def test_15_corrupt_restore_issues_no_control(self):
+        payload = _corrupt_payload(_open_boosted_payload(), ctx_range=(1.0, 0.5))
+        rt = runtime(mode=LearningRuntimeMode.CONTROL)
+        rt._restore_payload(payload)
+        r = _cycle(rt, 2, 19.5, effective=1.0, dt=DecisionType.BOOST)
+        assert r.control_commands == ()
+        assert r.has_control_effect is False

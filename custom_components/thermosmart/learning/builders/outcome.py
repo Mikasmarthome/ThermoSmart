@@ -7,6 +7,7 @@ decision.
 """
 from __future__ import annotations
 
+import math
 from typing import Optional
 
 from ..contracts import Regime
@@ -41,12 +42,23 @@ class OutcomeEpisodeBuilder(EpisodeBuilder):
     def _latch_realized_offset(self, inp: BuilderInput) -> None:
         """R1/F1: fold this cycle's realized Boost offset into the episode-scoped min/max.
         Only cycles where a boost was intended carry a value (see pipeline); non-boost
-        cycles contribute nothing, so a legitimate release never widens the range."""
+        cycles contribute nothing, so a legitimate release never widens the range.
+
+        F3: fold only a VALID finite numeric existing value; a corrupt restored _extra value
+        (bool / NaN / inf / string / list) is not min()/max()-normalised here (which could
+        silently "clean" it or raise) — it is dropped and re-seeded. Corruption is caught
+        and the episode poisoned (evidence_unreliable) at restore, so dropping the corrupt
+        range value here never un-poisons the episode; it only avoids a crash."""
         v = inp.boost_realized_offset_c
         if v is None:
             return
-        lo = self._extra.get("boost_off_min")
-        hi = self._extra.get("boost_off_max")
+
+        def _num(x):
+            return x if (isinstance(x, (int, float)) and not isinstance(x, bool)
+                         and math.isfinite(x)) else None
+
+        lo = _num(self._extra.get("boost_off_min"))
+        hi = _num(self._extra.get("boost_off_max"))
         self._extra["boost_off_min"] = v if lo is None else min(lo, v)
         self._extra["boost_off_max"] = v if hi is None else max(hi, v)
 

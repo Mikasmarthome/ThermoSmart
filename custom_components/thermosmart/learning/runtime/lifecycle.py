@@ -42,6 +42,33 @@ from .shadow import (
 RUNTIME_SCHEMA_VERSION = 1
 
 
+def _offset_range_malformed(lo, hi) -> bool:
+    """F3: True iff a persisted/latched realized-offset (min, max) pair is CORRUPT —
+    present-but-invalid — as opposed to a legitimate range or a legacy absence.
+
+    * both None            -> False (legacy both-absent — NOT corruption)
+    * exactly one None     -> True  (one-sided: an incomplete range is corrupt)
+    * either a bool        -> True  (a bool is not a numeric offset)
+    * either wrong type    -> True  (string / list / etc.)
+    * either non-finite    -> True  (NaN / inf)
+    * min > max            -> True  (inverted)
+    * otherwise            -> False (a valid range; may still be "mixed" by tolerance)
+
+    Used to drive the episode-scoped unreliable (poison) latch: corrupt boost-attribution
+    evidence must fail closed and must not be silently normalised into a clean sample."""
+    if lo is None and hi is None:
+        return False
+    if lo is None or hi is None:
+        return True
+    if isinstance(lo, bool) or isinstance(hi, bool):
+        return True
+    if not (isinstance(lo, (int, float)) and isinstance(hi, (int, float))):
+        return True
+    if not (math.isfinite(lo) and math.isfinite(hi)):
+        return True
+    return lo > hi
+
+
 class LearningRuntimeMode(Enum):
     INACTIVE = "inactive"
     CAPTURE_ONLY = "capture_only"
@@ -278,17 +305,35 @@ class _ZoneRuntime:
                 errors.append(f"pending_boost:restore:{type(err).__name__}")
         # B2b-attribution: restore pending pre-episode-close contexts so a restart between
         # dispatch and episode-close does not silently lose the learning attribution.
+        # F3: a pending context whose realized-offset range is CORRUPT (unreconstructable,
+        # one-sided, bool, non-finite, wrong-type or inverted) is DROPPED (never stored,
+        # so it cannot be popped later as clean) and POISONS the open OutcomeEpisode via the
+        # episode-scoped evidence_unreliable latch — even when the context itself cannot be
+        # reconstructed. A later valid cycle, a fresh context, a min()/max() merge, a
+        # decision change or a further restart cannot un-poison it (the latch lives in the
+        # builder _extra and clears only at the next episode boundary). Valid and legacy
+        # (both-absent) contexts are stored and remain eligible.
+        _poison_episode = False
         if "pending_boost_contexts" in data:
             try:
                 from ..models import BoostUpdateContext
                 for did, bctx_d in (data["pending_boost_contexts"] or {}).items():
                     try:
-                        self.pending_boost_contexts[did] = BoostUpdateContext.from_dict(bctx_d)
+                        _ctx = BoostUpdateContext.from_dict(bctx_d)
                     except Exception as entry_err:
-                        # Entry isolated (decision loses attribution) — but surfaced,
-                        # no longer silently swallowed. Error type only, no payload/id.
+                        # Could not reconstruct (NaN/inf/string/list in a validated field):
+                        # drop AND poison the open episode. Error type only, no payload/id.
+                        _poison_episode = True
                         errors.append(
                             f"pending_boost_contexts:entry:{type(entry_err).__name__}")
+                        continue
+                    if _offset_range_malformed(getattr(_ctx, "realized_offset_min_c", None),
+                                               getattr(_ctx, "realized_offset_max_c", None)):
+                        # Reconstructable but corrupt range: drop AND poison.
+                        _poison_episode = True
+                        errors.append("pending_boost_contexts:entry:MalformedRange")
+                    else:
+                        self.pending_boost_contexts[did] = _ctx
             except Exception as err:
                 errors.append(f"pending_boost_contexts:restore:{type(err).__name__}")
         if "pending_dispatch_records" in data:
@@ -314,6 +359,24 @@ class _ZoneRuntime:
                             f"pending_baseline_ctx:entry:{type(entry_err).__name__}")
             except Exception as err:
                 errors.append(f"pending_baseline_ctx:restore:{type(err).__name__}")
+        # F3: the EPISODE-scoped builder range (restored inside the pipeline above) can also
+        # be corrupt (inverted / one-sided / bool / wrong-type). Validate it and poison the
+        # open episode too, so a fresh min()/max() latch cannot normalise it clean.
+        try:
+            _blo, _bhi = self.pipeline.outcome_offset_range()
+            if _offset_range_malformed(_blo, _bhi):
+                _poison_episode = True
+        except Exception:
+            pass
+        if _poison_episode:
+            # Fail closed: the open OutcomeEpisode is marked unreliable. If ownership cannot
+            # be established (no open episode), the corrupt contexts were already dropped, so
+            # nothing clean can inherit them.
+            try:
+                if self.pipeline.mark_outcome_unreliable():
+                    errors.append("pending_boost_contexts:poison:episode_unreliable")
+            except Exception as err:
+                errors.append(f"pending_boost_contexts:poison:{type(err).__name__}")
         self.model_update_counts = dict(data.get("model_update_counts", {}))
         self.cycles = data.get("cycles", 0)
         self.last_cycle_ts = data.get("last_cycle_ts")
@@ -855,21 +918,10 @@ class LearningRuntime:
         reliability learning sample. Never raises."""
         if lo is None and hi is None:
             return False
-        if lo is None or hi is None:
-            return True
-        if isinstance(lo, bool) or isinstance(hi, bool):
-            return True
-        try:
-            lo = float(lo)
-            hi = float(hi)
-        except (TypeError, ValueError):
-            return True
-        if not (math.isfinite(lo) and math.isfinite(hi)):
-            return True
-        if lo > hi:
+        if _offset_range_malformed(lo, hi):
             return True
         from ..models.boost_reliability import MultiTrvParams
-        return (hi - lo) > MultiTrvParams().offset_spread_ambiguous_c
+        return (float(hi) - float(lo)) > MultiTrvParams().offset_spread_ambiguous_c
 
     @classmethod
     def _boost_offset_mixed(cls, bctx) -> bool:

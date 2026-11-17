@@ -82,9 +82,29 @@ _PLAUSIBLE_MAX_C = 50.0
 _CADENCE_MS = 300_000
 _MAX_HOLD_MS = 2 * _CADENCE_MS            # 600 s: one skipped poll tolerated
 # Minimum temporal coverage for the evidence to be a candidate for conditioned
-# learning. Observational hint only (D2-A.1 consumes nothing).
+# learning. Observational hint only (D2-A.1/D2-A.2 consume nothing).
 _MIN_TEMPORAL_COVERAGE = 0.5
 _MIN_USABLE_FOR_CONDITIONING = 2
+
+# Floating-point tolerances for restore/finalize consistency checks. JSON
+# round-trips float64 exactly, so these only absorb accumulation rounding: a
+# small absolute floor plus a relative term that scales with the magnitude of
+# the (millisecond-scale) weight sums being compared — never a broad allowance.
+_ABS_TOL = 1e-6
+_REL_TOL = 1e-9
+
+
+def _tol(*magnitudes: float) -> float:
+    return _ABS_TOL + _REL_TOL * max((abs(m) for m in magnitudes), default=0.0)
+
+
+def _in_range(value: float, lo: float, hi: float) -> bool:
+    t = _tol(lo, hi, value)
+    return (lo - t) <= value <= (hi + t)
+
+
+def _close(a: float, b: float) -> bool:
+    return abs(a - b) <= _tol(a, b)
 
 
 def _is_number(value) -> bool:
@@ -232,7 +252,7 @@ class OutdoorEvidenceAccumulator:
 
         wsum, vwsum, covered = self._wsum, self._vwsum, self._covered_ms
         if self._last_usable_offset is not None and end_offset_ms is not None \
-                and _is_number(end_offset_ms):
+                and _is_number(end_offset_ms) and math.isfinite(end_offset_ms):
             tail = min(float(end_offset_ms) - float(self._last_usable_offset),
                        float(_MAX_HOLD_MS))
             if tail > 0.0:
@@ -240,12 +260,25 @@ class OutdoorEvidenceAccumulator:
                 vwsum += (self._last_usable_value or 0.0) * tail
                 covered += tail
 
-        if self._usable_count == 0:
+        # Overflow-safe mean. On any arithmetic error, or a non-finite / out-of-
+        # [min,max] result, the mean fails closed to None (unusable), never to a
+        # fabricated value.
+        try:
+            if self._usable_count == 0:
+                mean = None
+            elif wsum > 0.0:
+                mean = vwsum / wsum
+            else:
+                mean = self._simple_sum / self._usable_count
+            if mean is not None and not math.isfinite(mean):
+                mean = None
+        except (OverflowError, ZeroDivisionError, ValueError):
             mean = None
-        elif wsum > 0.0:
-            mean = round(vwsum / wsum, 4)
-        else:
-            mean = round(self._simple_sum / self._usable_count, 4)
+        if mean is not None and self._min is not None and self._max is not None \
+                and not _in_range(mean, self._min, self._max):
+            mean = None                                  # finalized mean-range validation
+        if mean is not None:
+            mean = round(mean, 4)
 
         # a resolved source hint from the final cycle participates only when it is
         # a usable source we already recorded; it never fabricates a new identity.
@@ -260,13 +293,24 @@ class OutdoorEvidenceAccumulator:
         else:
             quality = DataQuality.OK
 
-        duration_s = max(0.0, float(duration_s))
+        duration_s = float(duration_s)
+        duration_s = max(0.0, duration_s) if math.isfinite(duration_s) else 0.0
         duration_ms = duration_s * 1000.0
         sample_cov = round(self._usable_count / self._sample_count, 4) if self._sample_count else 0.0
-        temporal_cov = round(min(1.0, covered / duration_ms), 4) if duration_ms > 0.0 else 0.0
+        try:
+            temporal_cov = round(min(1.0, covered / duration_ms), 4) if duration_ms > 0.0 else 0.0
+        except (OverflowError, ZeroDivisionError, ValueError):
+            temporal_cov = 0.0
+        # Weights that exceed the episode duration (e.g. a legacy v1 uncapped
+        # snapshot restored and finalized) mean the temporal basis is not
+        # verifiable against this episode — do not treat it as trustworthy
+        # conditioned evidence even though temporal_cov is clamped to 1.0.
+        coverage_trustworthy = duration_ms > 0.0 and covered <= duration_ms + _tol(covered, duration_ms)
         conditioning_ready = (
             self._usable_count >= _MIN_USABLE_FOR_CONDITIONING
+            and mean is not None
             and temporal_cov >= _MIN_TEMPORAL_COVERAGE
+            and coverage_trustworthy
             and not source_changed
         )
         return OutdoorEvidence(
@@ -315,12 +359,22 @@ class OutdoorEvidenceAccumulator:
         empty accumulator (unusable evidence) rather than a fabricated measurement
         and never raises — a lost outdoor summary must not break episode restore.
 
-        Rejected (→ empty): non-dict; unsupported/absent schema version; a missing
-        or malformed required numeric field; NaN / Infinity; a bool where a number
-        is expected; a negative count/weight/coverage/offset; usable > total;
-        sources that are not non-empty strings or that are present with zero usable
-        samples; and a reconstructed mean that falls outside the persisted
-        [min, max]. OverflowError during any conversion is caught.
+        Rejected (→ empty): non-dict; unsupported/absent/inconsistent schema
+        version (v2 missing its ``cov``/``lo`` state); a missing or malformed
+        required numeric field; NaN / Infinity; a bool where a number is expected;
+        a negative count/weight/coverage/offset; usable > total; a usable episode
+        missing min/max/first/last; any persisted temperature outside the
+        plausibility contract; min > max or a first/last/last-value/reconstructed
+        mean outside [min, max]; ``wsum == 0`` with a non-zero ``vwsum``; a v2
+        ``cov`` that disagrees with ``wsum`` (the serializer increments them in
+        lockstep); and inconsistent source metadata. OverflowError (and
+        ValueError/TypeError/ZeroDivisionError) during conversion is caught.
+
+        Duration is NOT known at restore, so offsets/weights are validated only
+        for finiteness, sign and internal ordering here; their consistency with
+        the actual episode duration is enforced in :meth:`finalize`
+        (``coverage_trustworthy``), and unverifiable state is never surfaced as
+        conditioning-ready.
         """
         acc = cls()
         if not isinstance(data, dict):
@@ -328,6 +382,10 @@ class OutdoorEvidenceAccumulator:
         try:
             version = data.get("v")
             if version not in _SUPPORTED_SCHEMA_VERSIONS:
+                return cls()
+            # v2 must carry its explicit temporal-coverage state; its absence is an
+            # inconsistent/forged v2 record.
+            if version == 2 and ("cov" not in data or "lo" not in data):
                 return cls()
 
             n = _req_int(data, "n")
@@ -339,7 +397,7 @@ class OutdoorEvidenceAccumulator:
             # recorded weight sum as a best-effort covered time, and to the last
             # usable offset for the ordering guard.
             covered = _opt_float(data, "cov") if "cov" in data else wsum
-            if covered is _INVALID:
+            if covered is _INVALID or (version == 2 and covered is None):
                 return cls()
 
             vmin = _opt_float(data, "min")
@@ -373,32 +431,45 @@ class OutdoorEvidenceAccumulator:
                 return cls()
             if wsum < 0.0 or (covered is not None and covered < 0.0):
                 return cls()
+            # wsum == 0 means no interval was ever closed out, so the weighted sum
+            # must be exactly 0 too; a non-zero vwsum is corruption.
+            if wsum == 0.0 and abs(vwsum) > _ABS_TOL:
+                return cls()
+            # v2: the serializer writes cov and wsum from the same lockstep
+            # increments, so they must be equal (within fp rounding).
+            if version == 2 and covered is not None and not _close(covered, wsum):
+                return cls()
             if luo is not None and luo < 0:
                 return cls()
             if lo is not None and lo < 0:
                 return cls()
             if luo is not None and lo is not None and luo > lo:
                 return cls()
+            # every persisted temperature must satisfy the plausibility contract
+            for t in (vmin, vmax, vfirst, vlast, luv):
+                if t is not None and not (_PLAUSIBLE_MIN_C <= t <= _PLAUSIBLE_MAX_C):
+                    return cls()
             # a usable value implies at least one usable sample and vice-versa
             if u == 0 and (sources or vmin is not None or vmax is not None
                            or vfirst is not None or vlast is not None):
                 return cls()
-            if u > 0 and (vmin is None or vmax is None):
+            # a usable episode must carry a complete, ordered temperature envelope
+            if u > 0 and (vmin is None or vmax is None or vfirst is None or vlast is None):
                 return cls()
             if vmin is not None and vmax is not None and vmin > vmax:
                 return cls()
+            for edge in (vfirst, vlast, luv):
+                if edge is not None and vmin is not None and vmax is not None \
+                        and not _in_range(edge, vmin, vmax):
+                    return cls()
             if luo is not None and luv is None:
                 return cls()
-            if luv is not None and vmin is not None and vmax is not None \
-                    and not (vmin - 1e-6 <= luv <= vmax + 1e-6):
-                return cls()
-            # reconstructed mean must lie within [min, max]
+            # reconstructed mean (restored) must lie within [min, max]
             if u > 0:
                 mean = (vwsum / wsum) if wsum > 0.0 else (ssum / u)
                 if not math.isfinite(mean):
                     return cls()
-                if vmin is not None and vmax is not None \
-                        and not (vmin - 1e-6 <= mean <= vmax + 1e-6):
+                if vmin is not None and vmax is not None and not _in_range(mean, vmin, vmax):
                     return cls()
         except (TypeError, ValueError, OverflowError, ZeroDivisionError):
             return cls()

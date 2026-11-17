@@ -2567,29 +2567,30 @@ class LearningShadowController:
             if confidence < self._PREHEAT_MIN_CONFIDENCE:
                 return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
-            # HEAT_LOSS_RATE gate: absent / fallback / stale / low-confidence prediction
-            # must NOT be treated as 0.0 (which would imply perfect insulation).
-            # Use the versioned safe prior instead so preheat is never under-estimated.
+            # HEAT_LOSS_RATE gate: whether the HL prediction is a learned, confident value
+            # (vs the safe prior). D3: this now ONLY drives the diagnostic status
+            # ("valid" vs "valid_hl_prior") — it does NOT enter the duration calculation,
+            # because HeatRate is already the OBSERVED NET temperature rise (deg C/h over the
+            # active heating phase, see HeatRateModel), i.e. the rise that remained AFTER the
+            # room's simultaneous passive heat loss. Subtracting HEAT_LOSS_RATE again (the
+            # previous ``heat_rate − heat_loss``) double-counted the loss and inflated the
+            # preheat duration. The predicted room heating duration must use the net rate as-is.
             _hl_valid = (
                 hl_pred is not None
                 and not getattr(hl_pred, "fallback_used", True)
                 and float(getattr(hl_pred, "confidence", 0.0) or 0.0) >= self._PREHEAT_MIN_CONFIDENCE
             )
-            heat_loss_c_per_h = (
-                float(hl_pred.values.get("heat_loss_rate", 0.0) or 0.0)
-                if _hl_valid
-                else self._HEAT_LOSS_PRIOR_C_PER_H
-            )
             afterheat_c = float(
                 af_pred.values.get("expected_overshoot", 0.0) if af_pred else 0.0) or 0.0
 
             # Effective Room Heating Duration (C):
-            #   net_rate = heat_rate − heat_loss  (min 0.2 C/h floor)
+            #   effective_rate = max(net learned heat rate, existing 0.2 C/h min-rate floor)
             #   effective_deficit = deficit − afterheat (the predicted afterheat covers part of the rise)
-            #   C = effective_deficit / net_rate × 60
-            net_rate = max(heat_rate_c_per_h - heat_loss_c_per_h, 0.2)
+            #   C = effective_deficit / effective_rate × 60
+            # D3: no second HEAT_LOSS subtraction (see above) and no new outdoor adjustment.
+            effective_rate = max(heat_rate_c_per_h, 0.2)
             effective_deficit = max(0.0, deficit - max(0.0, afterheat_c))
-            room_heating_min = (effective_deficit / net_rate) * 60.0
+            room_heating_min = (effective_deficit / effective_rate) * 60.0
 
             # Confidence-proportional cap (0.35–0.6 band): interpolate between
             # deterministic_baseline and PREHEAT_MAX_MIN as confidence rises.
@@ -2609,9 +2610,12 @@ class LearningShadowController:
             total_min = room_heating_min + onset_delay
             total_min = min(total_min, self._PREHEAT_MAX_MIN)
 
-            # "valid" requires both HR and HL from learned Learning predictions.
-            # "valid_hl_prior" signals that HR is learned but HL uses the safe prior.
-            # A fallback must never be labelled as "valid".
+            # Diagnostic status (public, backward-compatible — field VALUES unchanged):
+            # "valid" when HR AND HL are both learned, "valid_hl_prior" when HR is learned
+            # but HL uses the safe prior. D3 NOTE: HL no longer affects the computed preheat
+            # duration, so this distinction now reflects HL-prediction PROVENANCE only, not a
+            # duration effect; it is retained unchanged to preserve compatibility for existing
+            # consumers. A fallback must never be labelled "valid".
             _status = "valid" if _hl_valid else "valid_hl_prior"
             return round(total_min, 1), _status
         except Exception as err:

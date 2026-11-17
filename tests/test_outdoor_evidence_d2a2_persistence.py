@@ -116,8 +116,11 @@ class TestFinalizeGuards:
         d["v"] = 1
         d.pop("cov")
         d.pop("lo")
+        # last offset sits AT the episode end (so this isolates the uncapped-weight
+        # path, not the D2-A.3 future-offset path), but the weight sum vastly
+        # exceeds the duration.
         d.update(n=2, u=2, min=0.0, max=10.0, first=5.0, last=5.0, luv=5.0,
-                 wsum=50_000_000.0, vwsum=250_000_000.0, ssum=10.0, luo=50_000_000)
+                 wsum=50_000_000.0, vwsum=250_000_000.0, ssum=10.0, luo=600_000)
         acc = OutdoorEvidenceAccumulator.restore(d)
         ev = acc.finalize(duration_s=600.0, end_offset_ms=600_000)   # 600 s episode
         assert ev is not None

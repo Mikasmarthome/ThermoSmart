@@ -250,15 +250,38 @@ class OutdoorEvidenceAccumulator:
         if self._sample_count == 0:
             return None
 
+        # F1/F3: normalise the episode-end offset and detect corrupt persisted
+        # offsets BEFORE any float arithmetic. An offset that is not representable
+        # as a finite float (e.g. 10**400) is impossible, and a guard offset
+        # beyond the actual episode end means subsequent readings were silently
+        # suppressed (frozen evidence). Either case invalidates the evidence and
+        # must never raise, so the heating/cooling episode can still close.
+        end_off: Optional[int] = None
+        corrupt_offset = False
+        try:
+            if end_offset_ms is not None and _is_number(end_offset_ms) \
+                    and math.isfinite(float(end_offset_ms)):
+                end_off = int(end_offset_ms)
+            for o in (self._last_offset, self._last_usable_offset):
+                if o is not None and not math.isfinite(float(o)):
+                    corrupt_offset = True            # F1: not float-representable
+            if end_off is not None and self._last_offset is not None \
+                    and self._last_offset > end_off:
+                corrupt_offset = True                # F3: guard offset beyond episode end
+        except (OverflowError, ValueError):
+            corrupt_offset = True
+
         wsum, vwsum, covered = self._wsum, self._vwsum, self._covered_ms
-        if self._last_usable_offset is not None and end_offset_ms is not None \
-                and _is_number(end_offset_ms) and math.isfinite(end_offset_ms):
-            tail = min(float(end_offset_ms) - float(self._last_usable_offset),
-                       float(_MAX_HOLD_MS))
-            if tail > 0.0:
-                wsum += tail
-                vwsum += (self._last_usable_value or 0.0) * tail
-                covered += tail
+        if not corrupt_offset and self._last_usable_offset is not None and end_off is not None:
+            try:
+                tail = min(float(end_off) - float(self._last_usable_offset),
+                           float(_MAX_HOLD_MS))
+                if tail > 0.0:
+                    wsum += tail
+                    vwsum += (self._last_usable_value or 0.0) * tail
+                    covered += tail
+            except (OverflowError, ValueError):
+                corrupt_offset = True
 
         # Overflow-safe mean. On any arithmetic error, or a non-finite / out-of-
         # [min,max] result, the mean fails closed to None (unusable), never to a
@@ -277,6 +300,8 @@ class OutdoorEvidenceAccumulator:
         if mean is not None and self._min is not None and self._max is not None \
                 and not _in_range(mean, self._min, self._max):
             mean = None                                  # finalized mean-range validation
+        if corrupt_offset:
+            mean = None                                  # F1/F3: offset corruption -> unusable
         if mean is not None:
             mean = round(mean, 4)
 
@@ -301,6 +326,8 @@ class OutdoorEvidenceAccumulator:
             temporal_cov = round(min(1.0, covered / duration_ms), 4) if duration_ms > 0.0 else 0.0
         except (OverflowError, ZeroDivisionError, ValueError):
             temporal_cov = 0.0
+        if corrupt_offset:
+            temporal_cov = 0.0                           # corrupt offsets -> no verifiable coverage
         # Weights that exceed the episode duration (e.g. a legacy v1 uncapped
         # snapshot restored and finalized) mean the temporal basis is not
         # verifiable against this episode — do not treat it as trustworthy
@@ -309,6 +336,7 @@ class OutdoorEvidenceAccumulator:
         conditioning_ready = (
             self._usable_count >= _MIN_USABLE_FOR_CONDITIONING
             and mean is not None
+            and not corrupt_offset
             and temporal_cov >= _MIN_TEMPORAL_COVERAGE
             and coverage_trustworthy
             and not source_changed
@@ -538,10 +566,17 @@ def _opt_float(d: dict, key: str):
 
 def _opt_offset(d: dict, key: str):
     """Optional non-negative integer offset (ms). None stays None; bool / float /
-    non-finite / non-int -> :data:`_INVALID`."""
+    non-int -> :data:`_INVALID`. F1: an int so large it cannot be represented as a
+    finite float (e.g. ``10**400``, which would overflow the later tail
+    arithmetic) is impossible and also rejected -> :data:`_INVALID`."""
     raw = d.get(key)
     if raw is None:
         return None
     if isinstance(raw, bool) or not isinstance(raw, int):
+        return _INVALID
+    try:
+        if not math.isfinite(float(raw)):
+            return _INVALID
+    except OverflowError:
         return _INVALID
     return int(raw)

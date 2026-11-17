@@ -21,6 +21,7 @@ from ..contracts import PredictionType
 from .capture import CaptureCoordinator, RuntimeCycleInput
 from .evidence import EvidenceMaterializer
 from .orchestration import ModelOrchestrator
+from .outdoor_conditioning import build_context as _build_outdoor_context
 from .persistence import PersistenceOrchestrator, SavePolicy, SaveTrigger
 from .pipeline import RuntimePipeline
 from .prediction_ledger import PredictionSnapshot, PredictionSnapshotLedger
@@ -624,7 +625,21 @@ class LearningRuntime:
             self._record_runtime_error("pending_prune", err)
         if startup_ok and not pipe_result.disturbed and not pipe_result.deduplicated:
             for ce in pipe_result.completed:
-                ok = zr.orchestrator.apply_update(ce.model_name, ce.episode)
+                # D2-B (learning-only): attach an outdoor-conditioning context for
+                # HeatRate/HeatLoss when this episode's D2-A outdoor evidence passes
+                # the acceptance gate. The general bucket updates regardless; a
+                # context only ever ADDS a conditioned bucket. Any builder failure
+                # degrades to an unconditioned update (ctx stays None). Published
+                # predictions/control are unaffected (collect_predictions uses an
+                # empty context, so conditioned buckets are never selected).
+                ctx = None
+                try:
+                    ctx = _build_outdoor_context(
+                        ce.model_name, ce.episode, getattr(ce, "outdoor_evidence", None))
+                except Exception as err:
+                    self._record_runtime_error("outdoor_conditioning", err)
+                    ctx = None
+                ok = zr.orchestrator.apply_update(ce.model_name, ce.episode, ctx)
                 if ok:
                     authoritative_change = True
                     zr.model_update_counts[ce.model_name] = \

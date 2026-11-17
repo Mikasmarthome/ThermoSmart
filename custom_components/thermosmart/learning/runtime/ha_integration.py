@@ -2428,13 +2428,10 @@ class LearningShadowController:
     # warm ON TIME even for sluggish systems.  More aggressive than 0 (LE v1 cold
     # start), but NEVER invented — it's a principled physical prior.
     _DETERMINISTIC_HEAT_RATE_C_PER_H: float = 1.5
-    # Safe heat-loss prior used when HEAT_LOSS_RATE prediction is absent, stale,
-    # fallback-only, or low-confidence.  Choosing 0.0 would silently assume perfect
-    # insulation (net_rate = heat_rate), systematically underestimating preheat
-    # duration.  0.3 °C/h is a lower-bound physical prior: even well-insulated rooms
-    # lose heat; using it makes the preheat estimate safer while remaining sub-linear
-    # relative to the deterministic baseline net-rate (1.5 °C/h).
-    _HEAT_LOSS_PRIOR_C_PER_H: float = 0.3
+    # (The former _HEAT_LOSS_PRIOR_C_PER_H was removed in the D3 follow-up: since
+    # HeatRate is the observed NET rise, preheat duration no longer subtracts a
+    # heat-loss term, so a heat-loss prior is no longer needed. HEAT_LOSS_RATE is
+    # still surfaced as a diagnostic value; it just never enters the duration math.)
     # Absolute maximum preheat allowed from Learning (prevents runaway early starts).
     _PREHEAT_MAX_MIN: float = 180.0
     # Minimum temperature deficit that justifies a preheat command (°C).

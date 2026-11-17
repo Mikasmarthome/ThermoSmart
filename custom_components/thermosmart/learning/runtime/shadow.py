@@ -163,15 +163,22 @@ def compute_preheat_plan(*, comfort_time_utc: str, comfort_temperature_c: float,
             fallback_used=True, reason_codes=tuple(reasons))
 
     deficit = max(0.0, comfort_temperature_c - current_temperature_c)
-    net_rate = max(heat_rate_c_per_h - heat_loss_c_per_h, p.min_net_rate_c_per_h)
+    # D3 follow-up: HeatRate is already the OBSERVED NET rise (deg C/h over the active
+    # heating phase, see HeatRateModel) — the rise that remained AFTER the room's
+    # simultaneous passive heat loss. Subtracting HEAT_LOSS_RATE again (the previous
+    # ``heat_rate − heat_loss``) double-counted the loss and inflated the shadow duration.
+    # This mirrors the active-planner correction in ha_integration.read_preheat_minutes_safe.
+    # HEAT_LOSS_RATE stays a diagnostic value (expected_heat_loss_c_per_h) but is not
+    # applied to the duration a second time. The min-rate floor is preserved.
+    effective_rate = max(heat_rate_c_per_h, p.min_net_rate_c_per_h)
     # afterheat covers part of the rise after the drive ends
     effective_deficit = max(0.0, deficit - max(0.0, afterheat_rise_c))
-    active_duration_min = (effective_deficit / net_rate) * 60.0
+    active_duration_min = (effective_deficit / effective_rate) * 60.0
     recommended_start = None
     if comfort_dt is not None:
         start_dt = comfort_dt - timedelta(minutes=active_duration_min + p.start_margin_min)
         recommended_start = start_dt.isoformat()
-    expected_achievement = current_temperature_c + net_rate * (active_duration_min / 60.0) \
+    expected_achievement = current_temperature_c + effective_rate * (active_duration_min / 60.0) \
         + max(0.0, afterheat_rise_c)
     if fallback_used:
         reasons.append(ShadowReason.FALLBACK_USED.value)

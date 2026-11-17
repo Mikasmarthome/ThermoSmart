@@ -79,7 +79,9 @@ class PassiveCoolingEpisodeBuilder(EpisodeBuilder):
         reasons = (reason,)
         if self._extra.get("relative_only"):
             reasons = reasons + (ReasonCode.RELATIVE_COOLING_ONLY,)
-        return self._finalize(episode, reasons)
+        # D2-A: finalise outdoor evidence BEFORE _finalize resets episode state.
+        outdoor = self._build_outdoor_evidence(inp.ts)
+        return self._finalize(episode, reasons, outdoor_evidence=outdoor)
 
 
 def _no_outdoor(inp: BuilderInput) -> bool:

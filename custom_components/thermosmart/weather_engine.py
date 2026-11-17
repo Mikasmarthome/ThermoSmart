@@ -120,6 +120,11 @@ class WeatherEngine:
         """Alle Außenbedingungen als normalisiertes Dict zurückgeben."""
         data: dict = {
             "temperature": None,
+            # D2-A: which path provided ``temperature`` — "weather_entity", "sensor",
+            # or None when no plausible outdoor temperature was read. Additive and
+            # observational: no existing consumer reads it; it only feeds the Learning
+            # outdoor-evidence source-change detection.
+            "temperature_source": None,
             "humidity": None,
             "wind_speed": None,
             "solar_radiation": None,
@@ -157,6 +162,8 @@ class WeatherEngine:
             # unit-converted "successfully".
             data["temperature"] = (
                 _weather_temp_c if is_plausible_temperature_c(_weather_temp_c) else None)
+            if data["temperature"] is not None:
+                data["temperature_source"] = "weather_entity"
 
             # Letzter Fallback: Legacy-Forecast aus Entity-Attributen
             # (für Integrationen die den neuen Service nicht unterstützen)
@@ -240,6 +247,9 @@ class WeatherEngine:
             if value is not None:
                 data[key] = value
                 if key == "temperature":
+                    # D2-A: a dedicated outdoor sensor overrides the weather entity, so
+                    # the source becomes "sensor" (observational; no behaviour change).
+                    data["temperature_source"] = "sensor"
                     _LOGGER.debug(
                         "WeatherEngine: Außentemp %.1f°C von %s", value, sensor_id
                     )

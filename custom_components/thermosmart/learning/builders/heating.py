@@ -87,7 +87,9 @@ class HeatingEpisodeBuilder(EpisodeBuilder):
             trajectory=self._traj.build(self.trajectory_cap),
             controller=None, trv_binding_id=inp.trv_binding_id,
         )
-        return self._finalize(episode, (reason,))
+        # D2-A: finalise outdoor evidence BEFORE _finalize resets episode state.
+        outdoor = self._build_outdoor_evidence(inp.ts)
+        return self._finalize(episode, (reason,), outdoor_evidence=outdoor)
 
     def _builder_version(self) -> int:
         from .base import BUILDER_VERSION

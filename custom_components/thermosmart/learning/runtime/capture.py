@@ -459,6 +459,9 @@ class RuntimeCycleInput:
     # B2b-4e: live per-device availability (binding -> "available"|"unavailable"|"unknown")
     device_states: Mapping[str, str] = field(default_factory=dict)
     outdoor_temp: Optional[Measurement] = None
+    # D2-A: opaque outdoor-temperature source identity ("sensor"/"weather_entity"/None),
+    # observational only (outdoor-evidence source-change detection). Never fabricated.
+    outdoor_source: Optional[str] = None
     valve_opening: Optional[Measurement] = None
     hvac_action: Optional[str] = None
     window_open: Optional[bool] = None
@@ -516,6 +519,7 @@ class CapturedSnapshot:
     forecast_high: Optional[float]
     boost_dispatch: Optional[BoostDispatchRecord] = None   # B2b-1 authoritative binding
     device_states: Mapping[str, str] = field(default_factory=dict)   # B2b-4e live availability
+    outdoor_source: Optional[str] = None   # D2-A: outdoor-temp source identity (observational)
 
 
 # -- command ledger -----------------------------------------------------------
@@ -675,7 +679,8 @@ class CaptureCoordinator:
             outdoor_temp=inp.outdoor_temp, valve_opening=inp.valve_opening,
             hvac_action=inp.hvac_action, forecast_high=inp.forecast_high,
             boost_dispatch=inp.boost_dispatch,
-            device_states=dict(inp.device_states or {}))
+            device_states=dict(inp.device_states or {}),
+            outdoor_source=inp.outdoor_source)
 
     def serialize(self) -> dict:
         return {

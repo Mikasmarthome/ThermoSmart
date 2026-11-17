@@ -243,10 +243,16 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
         boost_offset = min(setpoint - target, TPI_MAX_BOOST_CELSIUS)
 
     outdoor = None
+    outdoor_source = None
     if weather:
         ot = weather.get("outdoor_temp") or weather.get("temperature")
         if ot is not None:
             outdoor = Measurement(ot, DataQuality.OK)
+            # D2-A: carry an opaque outdoor-temp source identity for outdoor-evidence
+            # source-change detection. Observational only; never changes the Measurement
+            # (quality stays OK) or any control/regime path. Absent -> None (unknown).
+            _src = weather.get("temperature_source")
+            outdoor_source = _src if isinstance(_src, str) and _src else None
 
     decision_type = _decision_type(rec)
     # Read hvac_action from recommendation (set by coordinator from TRV entity attributes).
@@ -268,7 +274,8 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
             preheat_active=bool(rec.get("preheat_minutes", 0)),
             mode=rec.get("mode")),
         window_open=rec.get("window_open"), heating_failure=heating_failure,
-        outdoor_temp=outdoor, forecast_high=rec.get("forecast_high"),
+        outdoor_temp=outdoor, outdoor_source=outdoor_source,
+        forecast_high=rec.get("forecast_high"),
         device_states=dict(rec.get("device_states") or {}),   # B2b-4e live availability
         hvac_action=hvac_action,
         boost_dispatch=_boost_dispatch_from_live_record(live_record))

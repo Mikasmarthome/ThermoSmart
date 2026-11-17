@@ -68,6 +68,10 @@ class CompletedEpisode:
     model_name: str
     episode: Any
     decision_id: Optional[str] = None
+    # D2-A: optional outdoor-temperature evidence sidecar (OutdoorEvidence) for
+    # heating / passive-cooling episodes. Observational only — the orchestrator
+    # applies model updates from ``episode`` and never reads this. None otherwise.
+    outdoor_evidence: Optional[Any] = None
 
 
 @dataclass(frozen=True)
@@ -259,6 +263,7 @@ class RuntimePipeline:
             target=snapshot.target_c, trv_setpoint=snapshot.trv_setpoint_c,
             window_open=snapshot.window_open, heating_failure=snapshot.heating_failure,
             outdoor_temp=snapshot.outdoor_temp,
+            outdoor_source=getattr(snapshot, "outdoor_source", None),
             indoor_temp_quality=snapshot.indoor_temp_quality, decision_start=decision_start,
             drive_end_setpoint_c=_drive_end_sp, boost_exposed=_boost_exposed,
             evidence_unreliable=_evidence_unreliable,
@@ -299,8 +304,9 @@ class RuntimePipeline:
                 continue
             if res.action is BuilderAction.CLOSED and res.episode is not None:
                 did = getattr(res.episode, "decision_id", None)
-                completed.append(CompletedEpisode(model_name=model_name, episode=res.episode,
-                                                  decision_id=did))
+                completed.append(CompletedEpisode(
+                    model_name=model_name, episode=res.episode, decision_id=did,
+                    outdoor_evidence=getattr(res, "outdoor_evidence", None)))
 
         prev = self._previous_regime
         self._previous_regime = regime.regime.value

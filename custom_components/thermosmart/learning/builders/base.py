@@ -15,6 +15,7 @@ from ..episode_schemas import (
     Trajectory,
     TrajectoryPoint,
 )
+from ..outdoor_evidence import OutdoorEvidence, OutdoorEvidenceAccumulator
 from ..raw_schemas import HeatingDriveEndEvent
 from ..regime import RegimeResult
 
@@ -162,6 +163,11 @@ class BuilderInput:
     # (before coordinator reduced it to comfort).  Lets the builder capture
     # setpoint_before > setpoint_after so _drive_end_reliability() can infer drive end.
     drive_end_setpoint_c: Optional[float] = None
+    # D2-A: opaque outdoor-temperature source identity for THIS cycle (e.g. "sensor"
+    # vs "weather_entity"), used only to detect a source change within an episode for
+    # the optional outdoor-evidence sidecar. None = unknown source (never fabricated).
+    # Purely observational: no model/control path reads it.
+    outdoor_source: Optional[str] = None
     # dedup
     event_id: Optional[str] = None
 
@@ -180,6 +186,10 @@ class BuilderResult:
     reason_codes: tuple[str, ...] = ()
     confounder_flags: tuple[str, ...] = ()
     source_refs: tuple[str, ...] = ()
+    # D2-A: optional outdoor-temperature evidence summary for a CLOSED episode
+    # (heating / passive-cooling only). Transient; rides to CompletedEpisode. None
+    # for non-closing results and for builders that do not emit it.
+    outdoor_evidence: Optional[OutdoorEvidence] = None
 
 
 class BuilderStateError(Exception):
@@ -315,6 +325,8 @@ class EpisodeBuilder:
         self._last_regime: Optional[Regime] = None
         self._unknown_since: Optional[datetime] = None
         self._extra: dict[str, Any] = {}
+        # D2-A: per-episode outdoor-temperature evidence (observational only).
+        self._outdoor = OutdoorEvidenceAccumulator()
 
     def _step(self, inp: BuilderInput) -> BuilderResult:  # pragma: no cover
         raise NotImplementedError
@@ -383,6 +395,9 @@ class EpisodeBuilder:
             "last_regime": self._last_regime.value if self._last_regime else None,
             "unknown_since": self._unknown_since.isoformat() if self._unknown_since else None,
             "extra": dict(self._extra),
+            # D2-A: tiny, bounded outdoor-evidence accumulator (optional key; absent in
+            # pre-D2-A snapshots — restore defaults to an empty accumulator).
+            "outdoor": self._outdoor.serialize(),
         }
 
     def restore_state(self, state: dict) -> None:
@@ -411,6 +426,9 @@ class EpisodeBuilder:
             self._last_regime = Regime(state["last_regime"]) if state["last_regime"] else None
             self._unknown_since = _parse(state["unknown_since"])
             self._extra = dict(state["extra"])
+            # D2-A: optional key; absent in pre-D2-A snapshots. restore() is fully
+            # defensive and never raises (corruption -> empty accumulator).
+            self._outdoor = OutdoorEvidenceAccumulator.restore(state.get("outdoor"))
             if state["trajectory"] is not None:
                 self._traj = TrajectoryAccumulator.restore(
                     self.trajectory_cap, self._params.downsample_policy,
@@ -442,6 +460,7 @@ class EpisodeBuilder:
         self._reliabilities = []
         self._confounders = set()
         self._unknown_since = None
+        self._outdoor = OutdoorEvidenceAccumulator()
         self._accumulate(inp)
 
     def _accumulate(self, inp: BuilderInput) -> None:
@@ -450,6 +469,9 @@ class EpisodeBuilder:
         gap = inp.indoor_temp is None
         self._traj.add(self._offset_ms(inp.ts), inp.indoor_temp,
                        inp.indoor_temp_quality, gap)
+        # D2-A: capture this cycle's outdoor reading (plausibility/quality gated inside).
+        self._outdoor.observe(self._offset_ms(inp.ts), inp.outdoor_temp,
+                              getattr(inp, "outdoor_source", None))
         if inp.regime is not None:
             self._reliabilities.append(inp.regime.reliability)
             if len(self._reliabilities) > self._RELIABILITIES_HARD_CAP:
@@ -511,7 +533,19 @@ class EpisodeBuilder:
         return BuilderResult(BuilderAction.ABORTED, reason_codes=(reason.value,),
                              confounder_flags=confounders)
 
-    def _finalize(self, episode: Any, reasons: tuple[ReasonCode, ...]) -> BuilderResult:
+    def _build_outdoor_evidence(self, end_ts: datetime) -> Optional[OutdoorEvidence]:
+        """D2-A: finalise the per-episode outdoor evidence (observational sidecar).
+
+        Must be called BEFORE ``_finalize`` (which resets episode state). Returns
+        ``None`` when no outdoor sample was seen or the episode never opened."""
+        acc = getattr(self, "_outdoor", None)
+        if acc is None or self._start_ts is None:
+            return None
+        duration_s = max(0.0, (end_ts - self._start_ts).total_seconds())
+        return acc.finalize(duration_s=duration_s, end_offset_ms=self._offset_ms(end_ts))
+
+    def _finalize(self, episode: Any, reasons: tuple[ReasonCode, ...], *,
+                  outdoor_evidence: Optional[OutdoorEvidence] = None) -> BuilderResult:
         reliability = self._episode_reliability()
         confounders = tuple(sorted(c.value for c in self._confounders))
         eid = self._episode_id
@@ -522,7 +556,7 @@ class EpisodeBuilder:
             codes = codes + (ReasonCode.TRAJECTORY_CAPPED.value,)
         return BuilderResult(BuilderAction.CLOSED, episode=episode, open_episode_id=eid,
                              reliability=reliability, reason_codes=codes,
-                             confounder_flags=confounders)
+                             confounder_flags=confounders, outdoor_evidence=outdoor_evidence)
 
     def _discard(self, reason: ReasonCode) -> BuilderResult:
         confounders = tuple(sorted(c.value for c in self._confounders))

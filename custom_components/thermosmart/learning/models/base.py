@@ -100,8 +100,22 @@ def _is_nonneg_int(x) -> bool:
     return isinstance(x, int) and not isinstance(x, bool) and x >= 0
 
 
+def _finite_num(x) -> bool:
+    """Overflow-safe finiteness for a persisted numeric field. Unlike ``is_finite``,
+    a huge integer (e.g. ``10**400``) — which ``math.isfinite`` cannot convert to
+    float and raises ``OverflowError`` on — is treated as NOT a usable finite number
+    (and quarantined) rather than being allowed to escape the per-bucket boundary.
+    bool is excluded. Never raises."""
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return False
+    try:
+        return math.isfinite(x)
+    except (OverflowError, ValueError):
+        return False
+
+
 def _is_finite_nonneg(x, *, tol: float = 0.0) -> bool:
-    return (not isinstance(x, bool)) and is_finite(x) and x >= -tol
+    return _finite_num(x) and x >= -tol
 
 
 def validate_bucket_key(key, *, max_band: int) -> bool:
@@ -151,7 +165,7 @@ def validate_bucket_dict(key, d, *, max_band: int, max_rate: float,
     if d.get("key") != key:
         return "key_mismatch"
     rate = d.get("rate_c_per_h")
-    if isinstance(rate, bool) or not is_finite(rate):
+    if not _finite_num(rate):          # overflow-safe: a huge int -> non_finite_rate
         return "non_finite_rate"
     if rate < -rate_tol or rate > max_rate + rate_tol:
         return "rate_out_of_range"
@@ -176,7 +190,10 @@ def quarantine_buckets(raw_buckets, bucket_from, *, max_band: int, max_rate: flo
     loaded: dict = {}
     quarantine: dict = {}
     for k, b in dict(raw_buckets or {}).items():
-        reason = validate_bucket_dict(k, b, max_band=max_band, max_rate=max_rate)
+        try:
+            reason = validate_bucket_dict(k, b, max_band=max_band, max_rate=max_rate)
+        except Exception:               # belt-and-braces at the per-bucket boundary:
+            reason = "validation_error"  # a validation raise is itself a quarantine event
         if reason is not None:
             quarantine[str(k)] = reason
             continue

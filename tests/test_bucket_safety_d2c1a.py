@@ -148,6 +148,71 @@ class TestSharedValidator:
                                        max_band=6, max_rate=12.0) is None
 
 
+# ── N1: overflow-safe quarantine (huge integers) ────────────────────────────────
+
+_HUGE = 10 ** 400   # not representable as a finite float; math.isfinite raises on it
+
+
+class TestHugeIntegerQuarantine:
+    @pytest.mark.parametrize("kw,reason", [
+        ("rate", "non_finite_rate"),
+        ("n", "bad_effective_n"),
+        ("disp", "bad_dispersion"),
+    ])
+    def test_validator_does_not_raise_on_huge_int(self, kw, reason):
+        b = _bucket(**{kw: _HUGE})
+        # must return a reason, never raise OverflowError
+        assert mb.validate_bucket_dict("outdoor:3", b, max_band=6, max_rate=12.0) == reason
+
+    def test_quarantine_buckets_never_raises(self):
+        raw = {"outdoor:3": _bucket(rate=_HUGE), "outdoor:1": _bucket(key="outdoor:1")}
+        loaded, q = mb.quarantine_buckets(
+            raw, lambda d: d, max_band=6, max_rate=12.0)
+        assert set(loaded) == {"outdoor:1"} and q == {"outdoor:3": "non_finite_rate"}
+
+    @pytest.mark.parametrize("kw,reason", [
+        ("rate", "non_finite_rate"),
+        ("n", "bad_effective_n"),
+        ("disp", "bad_dispersion"),
+    ])
+    def test_heat_rate_huge_int_quarantined_general_preserved(self, kw, reason):
+        state = _hr_state(buckets={"outdoor:3": _bucket(**{kw: _HUGE})})
+        m = HeatRateModel("lz")
+        m.deserialize_state(copy.deepcopy(state))          # must NOT raise OverflowError
+        assert m.diagnostics().general_rate_c_per_h == 4.0
+        assert not m._state.buckets
+        assert m.restore_quarantine_summary() == {reason: 1}
+
+    @pytest.mark.parametrize("kw,reason", [
+        ("rate", "non_finite_rate"),
+        ("n", "bad_effective_n"),
+        ("disp", "bad_dispersion"),
+    ])
+    def test_heat_loss_huge_int_quarantined_general_and_normalized_preserved(self, kw, reason):
+        state = _hl_state(buckets={"outdoor:2": _bucket(key="outdoor:2", **{kw: _HUGE})})
+        m = HeatLossModel("lz")
+        m.deserialize_state(copy.deepcopy(state))          # must NOT raise OverflowError
+        d = m.diagnostics()
+        assert d.general_loss_c_per_h == 0.5
+        assert d.normalized_coefficient_per_h is not None  # normalized preserved
+        assert not m._state.buckets
+        assert m.restore_quarantine_summary() == {reason: 1}
+
+    def test_huge_int_bucket_cannot_escape_via_orchestrator(self):
+        orch = ModelOrchestrator("lz")
+        errs = orch.restore_models({
+            "heat_rate": _hr_state(buckets={"outdoor:3": _bucket(rate=_HUGE)}),
+            "heat_loss": _hl_state(buckets={"outdoor:2": _bucket(key="outdoor:2",
+                                                                 n=_HUGE)}),
+        })
+        # quarantine entries, NOT whole-model restore failures
+        assert any(e.startswith("heat_rate:quarantine:non_finite_rate") for e in errs)
+        assert any(e.startswith("heat_loss:quarantine:bad_effective_n") for e in errs)
+        assert not any(":restore:" in e for e in errs)
+        assert orch.models["heat_rate"].diagnostics().general_rate_c_per_h == 4.0
+        assert orch.models["heat_loss"].diagnostics().general_loss_c_per_h == 0.5
+
+
 # ── HeatRate quarantine ─────────────────────────────────────────────────────────
 
 class TestHeatRateQuarantine:
@@ -419,6 +484,30 @@ class TestWeatherEngineFreshnessCapture:
         assert data["temperature"] is not None
         assert data["temperature_source"] == "weather_entity"
         assert data["temperature_last_updated"] == "2026-01-01T06:00:00+00:00"
+
+    @pytest.mark.asyncio
+    async def test_dedicated_sensor_timestamp_wins_over_weather_entity(self):
+        # N2: valid weather entity AND a valid dedicated sensor with DIFFERENT timestamps.
+        # The dedicated sensor takes precedence for both the value and the timestamp.
+        from custom_components.thermosmart.weather_engine import WeatherEngine
+        weather_ts = "2026-01-01T06:00:00+00:00"
+        sensor_ts = "2026-01-01T06:04:30+00:00"
+        hass = _FakeHass({
+            "weather.home": _FakeState(
+                "sunny", {"temperature": 3.0, "temperature_unit": "°C"},
+                last_updated=weather_ts),
+            "sensor.outdoor": _FakeState(
+                "1.5", {"unit_of_measurement": "°C"}, last_updated=sensor_ts),
+        })
+        eng = WeatherEngine(hass=hass, weather_entity="weather.home",
+                            outdoor_temp_sensor="sensor.outdoor")
+        data = await eng.async_get_data()
+        # existing precedence: the dedicated sensor wins the VALUE (unchanged behaviour)
+        assert data["temperature"] == pytest.approx(1.5)
+        assert data["temperature_source"] == "sensor"
+        # the timestamp belongs to the SELECTED (sensor) source, not the weather entity
+        assert data["temperature_last_updated"] == sensor_ts
+        assert data["temperature_last_updated"] != weather_ts
 
     @pytest.mark.asyncio
     async def test_unavailable_sensor_yields_none(self):

@@ -34,7 +34,14 @@ from ..contracts import (
 )
 from ..episode_schemas import HeatingEpisode
 from ..features import FeatureExtractor, FeatureName, FeatureStatus
-from .base import clamp, freshness_from_age, is_finite, outlier_z, robust_ema_update
+from .base import (
+    clamp,
+    freshness_from_age,
+    is_finite,
+    outlier_z,
+    quarantine_buckets,
+    robust_ema_update,
+)
 
 MODEL_VERSION = 1
 PARAMETER_VERSION = 1
@@ -186,6 +193,10 @@ class HeatRateDiagnostics:
     missing_optional_evidence: tuple[str, ...]
     model_version: int
     parameter_version: int
+    # D2-C1a: conditioned buckets dropped at the last restore (fail-closed quarantine).
+    # Privacy-safe: a count and a reason-slug tally only (no keys, no stored values).
+    quarantined_bucket_count: int = 0
+    quarantined_bucket_reasons: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -292,6 +303,9 @@ class HeatRateModel:
         self._device_prior = device_prior
         self._extractor = extractor or FeatureExtractor()
         self._state = self._empty_state()
+        # D2-C1a: key -> reason slug for conditioned buckets quarantined at the last
+        # deserialize_state. Session-scoped restore metadata, not persisted state.
+        self._last_restore_quarantine: dict[str, str] = {}
 
     # -- declared cold-start prior --------------------------------------
 
@@ -512,9 +526,14 @@ class HeatRateModel:
     def _rate_prediction(self, rate, sample_count, *, learned, fallback, bucket,
                          reasons, missing, cap=None) -> Prediction:
         rate = float(rate)
-        if not is_finite(rate):
+        # D2-C1a: defensive plausibility guard. No malformed, non-finite or out-of-range
+        # rate may reach an active prediction (a concern once conditioned buckets become
+        # selectable). A valid learned/general/prior rate is always finite and within
+        # [0, max_rate], so this never changes an existing valid prediction value.
+        if not is_finite(rate) or rate < 0.0 or rate > self._params.max_rate_c_per_h:
             rate = self._params.generic_prior_rate_c_per_h
             fallback = True
+            learned = 0.0           # a guarded value is prior-based, not learned
         conf = self._confidence_value(sample_count, fallback)
         if cap is not None:
             conf = min(conf, cap)
@@ -611,8 +630,19 @@ class HeatRateModel:
 
     # -- diagnostics / export -------------------------------------------
 
+    def restore_quarantine_summary(self) -> Mapping[str, int]:
+        """D2-C1a: privacy-safe tally (reason slug -> count) of conditioned buckets
+        dropped at the last ``deserialize_state``. Empty when nothing was quarantined.
+        Distinct from an ENTIRE-model restore failure, which raises in deserialize and
+        is surfaced by the orchestrator as a ``heat_rate:restore:<ExcType>`` entry."""
+        tally: dict[str, int] = {}
+        for reason in self._last_restore_quarantine.values():
+            tally[reason] = tally.get(reason, 0) + 1
+        return tally
+
     def diagnostics(self) -> HeatRateDiagnostics:
         s = self._state
+        _q = self.restore_quarantine_summary()
         return HeatRateDiagnostics(
             general_rate_c_per_h=s.general.rate_c_per_h,
             bucket_rates={k: b.rate_c_per_h for k, b in s.buckets.items()},
@@ -627,7 +657,9 @@ class HeatRateModel:
             outlier_counts=dict(s.outlier_counts), dedup_count=s.dedup_count,
             trv_only_fallback=not s.general.has_evidence,
             missing_optional_evidence=("outdoor_temp",) if not s.buckets else (),
-            model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION)
+            model_version=MODEL_VERSION, parameter_version=PARAMETER_VERSION,
+            quarantined_bucket_count=sum(_q.values()),
+            quarantined_bucket_reasons=_q)
 
     def export(self, scope: ExportScope) -> Mapping[str, Any]:
         s = self._state
@@ -711,6 +743,9 @@ class HeatRateModel:
         }
 
     def validate_state(self, state: Mapping[str, Any]) -> list[str]:
+        """Model-level invariants only (version, zone, the GENERAL bucket). Conditioned
+        buckets are NOT validated here: a single corrupt conditioned bucket must not
+        fail the whole model — it is quarantined per-bucket in ``deserialize_state``."""
         errors: list[str] = []
         if not isinstance(state, dict):
             return ["state is not a mapping"]
@@ -718,10 +753,12 @@ class HeatRateModel:
             errors.append("model_version mismatch")
         if state.get("learning_zone_id") != self._zone:
             errors.append("learning_zone_id mismatch")
-        for name in ("general", *list(state.get("buckets", {}).values())):
-            bucket = state["general"] if name == "general" else name
+        gen = state.get("general")
+        if not isinstance(gen, dict):
+            errors.append("missing general bucket")
+        else:
             for k in ("rate_c_per_h", "effective_n", "dispersion"):
-                v = bucket.get(k)
+                v = gen.get(k)
                 if v is not None and not is_finite(v):
                     errors.append(f"non-finite {k}")
         return errors
@@ -730,7 +767,14 @@ class HeatRateModel:
         errors = self.validate_state(state)
         if errors:
             raise ValueError(f"invalid heat-rate state: {errors}")
-        buckets = {k: _bucket_from(b) for k, b in state.get("buckets", {}).items()}
+        # D2-C1a: load conditioned buckets one at a time, quarantining any that fail
+        # validation. The general bucket (validated above) and every VALID conditioned
+        # bucket are preserved even when a sibling bucket is corrupt.
+        buckets, quarantine = quarantine_buckets(
+            state.get("buckets", {}), _bucket_from,
+            max_band=len(self._params.outdoor_buckets),
+            max_rate=self._params.max_rate_c_per_h)
+        self._last_restore_quarantine = quarantine
         recent = tuple(_sample_from(x) for x in state.get("recent_samples", []))
         self._state = HeatRateState(
             learning_zone_id=state["learning_zone_id"],

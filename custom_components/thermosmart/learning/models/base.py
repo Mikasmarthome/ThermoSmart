@@ -80,6 +80,113 @@ def outlier_z(sample: float, value: float, dispersion: float) -> float:
     return abs(sample - value) / dispersion
 
 
+# -- persisted conditioned-bucket validation (D2-C1a) -------------------------
+#
+# HeatRateModel and HeatLossModel share the EXACT conditioned-bucket dict schema
+# (key/rate_c_per_h/effective_n/dispersion/sample_count[/last_update_ts]) and the
+# same "outdoor:<band>[|profile:<id>]" key grammar, so the structural validation
+# genuinely belongs here. Only the plausibility rate band differs, so it is passed
+# in per model. These helpers are pure, never raise, and return a short privacy-safe
+# reason slug (no stored payload) for the FIRST violation — suitable for restore
+# diagnostics. They quarantine a single corrupt conditioned bucket WITHOUT
+# discarding the model's valid general/normalized learning.
+
+_BUCKET_REQUIRED_FIELDS = ("key", "rate_c_per_h", "effective_n", "dispersion",
+                           "sample_count")
+
+
+def _is_nonneg_int(x) -> bool:
+    # bool is an int subclass; a persisted sample_count must be a real int.
+    return isinstance(x, int) and not isinstance(x, bool) and x >= 0
+
+
+def _is_finite_nonneg(x, *, tol: float = 0.0) -> bool:
+    return (not isinstance(x, bool)) and is_finite(x) and x >= -tol
+
+
+def validate_bucket_key(key, *, max_band: int) -> bool:
+    """A conditioned-bucket key must be ``outdoor:<band>`` with ``band`` an integer
+    in ``[0, max_band]`` (``max_band == len(outdoor_buckets)``, i.e. the number of
+    bands the model can produce), optionally followed by ``|profile:<non-empty>``.
+    Mirrors ``Model._bucket_key()`` exactly. Pure; never raises."""
+    if not isinstance(key, str) or not key:
+        return False
+    parts = key.split("|")
+    if len(parts) > 2:
+        return False
+    head = parts[0]
+    prefix = "outdoor:"
+    if not head.startswith(prefix):
+        return False
+    band_str = head[len(prefix):]
+    if not band_str.isdigit():        # rejects "", "+1", "-1", "1.0", whitespace
+        return False
+    band = int(band_str)
+    if band < 0 or band > max_band:
+        return False
+    if len(parts) == 2:
+        prof = parts[1]
+        if not prof.startswith("profile:") or len(prof) <= len("profile:"):
+            return False
+    return True
+
+
+def validate_bucket_dict(key, d, *, max_band: int, max_rate: float,
+                         rate_tol: float = 1e-6) -> Optional[str]:
+    """Validate one persisted conditioned-bucket mapping. Return ``None`` when it is
+    safe to load, else a short privacy-safe reason slug for the first violation.
+
+    Checks: structural (mapping + all required fields present), key grammar/range,
+    inner ``key`` field consistency, finite non-negative in-range ``rate_c_per_h``
+    (``[0, max_rate]`` with fp tolerance — rejects NaN/inf/negative/implausible),
+    finite non-negative ``effective_n`` and ``dispersion``, non-negative integer
+    ``sample_count``, and an optional string ``last_update_ts``. Pure; never raises."""
+    if not isinstance(d, dict):
+        return "not_a_mapping"
+    for f in _BUCKET_REQUIRED_FIELDS:
+        if f not in d:
+            return "missing_field"
+    if not validate_bucket_key(key, max_band=max_band):
+        return "bad_key"
+    if d.get("key") != key:
+        return "key_mismatch"
+    rate = d.get("rate_c_per_h")
+    if isinstance(rate, bool) or not is_finite(rate):
+        return "non_finite_rate"
+    if rate < -rate_tol or rate > max_rate + rate_tol:
+        return "rate_out_of_range"
+    if not _is_finite_nonneg(d.get("effective_n")):
+        return "bad_effective_n"
+    if not _is_finite_nonneg(d.get("dispersion")):
+        return "bad_dispersion"
+    if not _is_nonneg_int(d.get("sample_count")):
+        return "bad_sample_count"
+    lut = d.get("last_update_ts")
+    if lut is not None and not isinstance(lut, str):
+        return "bad_last_update_ts"
+    return None
+
+
+def quarantine_buckets(raw_buckets, bucket_from, *, max_band: int, max_rate: float):
+    """Load conditioned buckets one at a time, dropping (quarantining) any that fail
+    validation while keeping the valid ones. ``bucket_from`` is the model's own
+    ``_bucket_from`` loader. Returns ``(loaded_dict, quarantine_dict)`` where
+    quarantine maps the offending key (stringified) to its reason slug. A corrupt
+    bucket therefore never aborts the restore or discards sibling buckets."""
+    loaded: dict = {}
+    quarantine: dict = {}
+    for k, b in dict(raw_buckets or {}).items():
+        reason = validate_bucket_dict(k, b, max_band=max_band, max_rate=max_rate)
+        if reason is not None:
+            quarantine[str(k)] = reason
+            continue
+        try:
+            loaded[k] = bucket_from(b)
+        except Exception:               # belt-and-braces: never let a loader raise
+            quarantine[str(k)] = "load_error"
+    return loaded, quarantine
+
+
 def freshness_from_age(
     now: Optional[str], last_update_ts: Optional[str],
 ) -> tuple[float, Optional[str]]:

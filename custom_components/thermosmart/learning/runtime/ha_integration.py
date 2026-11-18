@@ -244,6 +244,7 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
 
     outdoor = None
     outdoor_source = None
+    outdoor_last_updated = None
     if weather:
         ot = weather.get("outdoor_temp") or weather.get("temperature")
         if ot is not None:
@@ -253,6 +254,11 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
             # (quality stays OK) or any control/regime path. Absent -> None (unknown).
             _src = weather.get("temperature_source")
             outdoor_source = _src if isinstance(_src, str) and _src else None
+            # D2-C1a: carry the HA state timestamp of that source for freshness
+            # OBSERVABILITY only. Never a verified measurement time; quality stays OK
+            # and no control/regime path reads it. Absent -> None (unknown freshness).
+            _lu = weather.get("temperature_last_updated")
+            outdoor_last_updated = _lu if isinstance(_lu, str) and _lu else None
 
     decision_type = _decision_type(rec)
     # Read hvac_action from recommendation (set by coordinator from TRV entity attributes).
@@ -275,6 +281,7 @@ def build_runtime_cycle_input(zone_id: str, recommendation: Mapping[str, Any], *
             mode=rec.get("mode")),
         window_open=rec.get("window_open"), heating_failure=heating_failure,
         outdoor_temp=outdoor, outdoor_source=outdoor_source,
+        outdoor_last_updated=outdoor_last_updated,
         forecast_high=rec.get("forecast_high"),
         device_states=dict(rec.get("device_states") or {}),   # B2b-4e live availability
         hvac_action=hvac_action,
@@ -2625,6 +2632,34 @@ class LearningShadowController:
         except Exception as err:
             self._record_error("preheat_read", err)
         return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
+
+    def read_outdoor_freshness_safe(self):
+        """D2-C1a: observability-only outdoor-source freshness for the last cycle.
+
+        Returns an ``OutdoorFreshnessReport`` (source, freshness verdict, HA state
+        timestamp, verified-measurement timestamp). Purely diagnostic: it reads the
+        last captured snapshot and classifies what is KNOWN, never inventing freshness
+        from ``DataQuality.OK`` or an unchanged value, and never affects Preheat, TPI,
+        regime or any control decision. Missing/unavailable source -> UNKNOWN. Never
+        raises; falls back to an UNKNOWN report."""
+        from .outdoor_freshness import (
+            OutdoorFreshness,
+            OutdoorFreshnessReport,
+            classify_outdoor_freshness,
+        )
+        try:
+            if not self._enabled:
+                return OutdoorFreshnessReport(source=None, freshness=OutdoorFreshness.UNKNOWN)
+            zr = self._runtime._zone(self._zone)
+            snap = getattr(zr, "_last_snapshot", None)
+            if snap is None:
+                return OutdoorFreshnessReport(source=None, freshness=OutdoorFreshness.UNKNOWN)
+            return classify_outdoor_freshness(
+                source=getattr(snap, "outdoor_source", None),
+                ha_state_last_updated=getattr(snap, "outdoor_last_updated", None))
+        except Exception as err:
+            self._record_error("outdoor_freshness_read", err)
+            return OutdoorFreshnessReport(source=None, freshness=OutdoorFreshness.UNKNOWN)
 
     def read_heat_rate_safe(self) -> tuple:
         """Read Learning HEAT_RATE (°C/h) for display and diagnostics.

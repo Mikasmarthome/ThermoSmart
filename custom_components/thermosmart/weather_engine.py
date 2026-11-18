@@ -86,6 +86,22 @@ class WeatherEngine:
         self._solar_sensor = outdoor_solar_sensor
         self._rain_sensor = outdoor_rain_sensor
 
+    @staticmethod
+    def _state_last_updated_iso(state) -> str | None:
+        """D2-C1a: the HA state's ``last_updated`` as an ISO string, or None. This is an
+        HA state-machine timestamp (when the state object was written) — NOT a verified
+        physical measurement time; it is captured for freshness OBSERVABILITY only and
+        never gates control. Never raises."""
+        if state is None:
+            return None
+        ts = getattr(state, "last_updated", None)
+        if ts is None:
+            return None
+        try:
+            return ts.isoformat()
+        except Exception:
+            return None
+
     def _read_sensor(
         self, entity_id: str | None, *, is_temperature: bool = False, is_wind: bool = False,
     ) -> float | None:
@@ -125,6 +141,12 @@ class WeatherEngine:
             # observational: no existing consumer reads it; it only feeds the Learning
             # outdoor-evidence source-change detection.
             "temperature_source": None,
+            # D2-C1a: HA state timestamp (state.last_updated ISO) for whichever source
+            # provided ``temperature`` — observational provenance ONLY. It records when
+            # the HA state object was written, NOT a verified physical measurement time,
+            # so it never establishes freshness. None when unknown. No consumer reads it
+            # for control; temperature selection is unchanged.
+            "temperature_last_updated": None,
             "humidity": None,
             "wind_speed": None,
             "solar_radiation": None,
@@ -164,6 +186,7 @@ class WeatherEngine:
                 _weather_temp_c if is_plausible_temperature_c(_weather_temp_c) else None)
             if data["temperature"] is not None:
                 data["temperature_source"] = "weather_entity"
+                data["temperature_last_updated"] = self._state_last_updated_iso(weather_state)
 
             # Letzter Fallback: Legacy-Forecast aus Entity-Attributen
             # (für Integrationen die den neuen Service nicht unterstützen)
@@ -250,6 +273,10 @@ class WeatherEngine:
                     # D2-A: a dedicated outdoor sensor overrides the weather entity, so
                     # the source becomes "sensor" (observational; no behaviour change).
                     data["temperature_source"] = "sensor"
+                    # D2-C1a: capture the overriding sensor's HA state timestamp too, so
+                    # the recorded timestamp always matches the reported source.
+                    data["temperature_last_updated"] = self._state_last_updated_iso(
+                        self._hass.states.get(sensor_id))
                     _LOGGER.debug(
                         "WeatherEngine: Außentemp %.1f°C von %s", value, sensor_id
                     )

@@ -210,6 +210,17 @@ class ModelOrchestrator:
                 continue
             try:
                 model.deserialize_state(state)
-            except Exception as err:  # isolate a corrupted segment
+            except Exception as err:  # isolate a corrupted segment (ENTIRE-model failure)
                 errors.append(f"{name}:restore:{type(err).__name__}")
+                continue
+            # D2-C1a: a successful restore may still have QUARANTINED individual
+            # conditioned buckets (fail-closed drop, general learning preserved). Surface
+            # that distinctly from a whole-model failure, privacy-safe (reason + count only).
+            summary = getattr(model, "restore_quarantine_summary", None)
+            if callable(summary):
+                try:
+                    for reason, count in summary().items():
+                        errors.append(f"{name}:quarantine:{reason}:{count}")
+                except Exception as err:
+                    errors.append(f"{name}:quarantine_summary:{type(err).__name__}")
         return tuple(errors)

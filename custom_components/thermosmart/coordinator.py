@@ -2084,6 +2084,12 @@ class ThermoSmartCoordinator(
             preheat_minutes, preheat_status = self._learning_shadow.read_preheat_minutes_safe(
                 current_temp, comfort_temp,
                 outdoor_temp=weather_data.get("temperature") if weather_data else None,
+                # D2-C1b: current outdoor source + HA state timestamp from THIS cycle's
+                # weather_data (never the previous snapshot) — provenance for the
+                # conditioned-Preheat liveness gate; selection/control are unchanged.
+                outdoor_source=weather_data.get("temperature_source") if weather_data else None,
+                outdoor_last_updated=(
+                    weather_data.get("temperature_last_updated") if weather_data else None),
             )
             _onset_delay_min, _onset_delay_status = self._learning_shadow.read_onset_delay_safe()
         else:

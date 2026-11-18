@@ -311,6 +311,15 @@ class LearningShadowController:
         self._errors = 0
         self._error_signatures: dict[str, int] = {}
         self._last_result = None
+        # D2-C1b: session-scoped, per-zone conditioned-Preheat activation state.
+        # ``_cp_band``/``_cp_band_first_ts`` are the band-stability hysteresis tracker
+        # (gate 7); ``_last_conditioned_preheat`` holds additive activation diagnostics.
+        # NEVER persisted — a restart starts empty, so conditioned Preheat falls back to
+        # the general rate until band stability is re-established (see
+        # read_conditioned_preheat_diag / _conditioned_preheat_minutes).
+        self._cp_band: Optional[int] = None
+        self._cp_band_first_ts: Optional[str] = None
+        self._last_conditioned_preheat: dict = {"status": "inactive"}
         # Clock injection: explicit clock required — no hidden wall-clock fallback.
         if clock is None:
             raise ValueError(
@@ -2453,6 +2462,25 @@ class LearningShadowController:
     # Legacy alias kept for any external references; remove in v1.2
     _PREHEAT_FALLBACK_MIN: float = 60.0
 
+    # ── D2-C1b: outdoor-conditioned Preheat activation (audited policy B) ────────
+    # Preheat-ONLY. These gate when a learned, outdoor-conditioned HeatRate bucket may
+    # nudge the Preheat DURATION. The conditioned prediction is computed locally and
+    # NEVER written into zr.last_predictions, so published predictions / TPI / Boost /
+    # TRV / shadow planning are unaffected (they all read the general-only published
+    # HEAT_RATE). D3 is preserved: the conditioned rate is a NET rate and enters the
+    # SAME duration arithmetic (no second HeatLoss subtraction).
+    _CP_MIN_EVIDENCE: int = 10            # min conditioned bucket sample_count (gate 2)
+    _CP_MIN_CONFIDENCE: float = 0.35      # min conditioned confidence, absolute (gate 2)
+    _CP_FRESH_FUTURE_TOL_S: float = 120.0  # reject a source ts > 120 s in the future (gate 5)
+    _CP_FRESH_MAX_AGE_S: float = 10800.0  # reject a source ts older than 3 h (gate 5)
+    _CP_EDGE_GUARD_C: float = 0.5         # min distance from any bucket boundary (gate 6)
+    _CP_STABILITY_MIN_S: float = 300.0    # min elapsed same-band time before activating (gate 7)
+    _CP_BLEND_WEIGHT: float = 0.5         # fixed conditioned blend weight
+    _CP_BOUND_LOWER_MIN: float = 10.0     # final blended duration >= A_general - 10 min
+    _CP_BOUND_UPPER_MIN: float = 15.0     # final blended duration <= A_general + 15 min
+    # Bucket band boundaries — MUST match HeatRateParameters.outdoor_buckets exactly.
+    _CP_BUCKET_EDGES: tuple = (-10.0, -5.0, 0.0, 5.0, 10.0, 15.0)
+
     @classmethod
     def compute_deterministic_preheat_baseline(
         cls, current_temp: Optional[float], comfort_temp: float
@@ -2525,6 +2553,8 @@ class LearningShadowController:
         comfort_temp: float,
         *,
         outdoor_temp: Optional[float] = None,
+        outdoor_source: Optional[str] = None,
+        outdoor_last_updated: Optional[str] = None,
     ) -> tuple:
         """Read Learning preheat duration (command lead time in minutes).
 
@@ -2532,6 +2562,16 @@ class LearningShadowController:
         - ``minutes``: command lead time ≥ 0 (always the right value for the status).
         - ``status``: one of "valid", "low_confidence", "deterministic_baseline",
           "target_reached", "unavailable", "not_available".
+
+        D2-C1b: ``outdoor_temp``/``outdoor_source``/``outdoor_last_updated`` come from the
+        CURRENT ``weather_data`` via the coordinator (NOT the previous cycle's snapshot).
+        When every audited activation gate passes, an outdoor-conditioned HeatRate
+        prediction (computed LOCALLY — never written to ``zr.last_predictions``) nudges the
+        DURATION only, bounded tightly around the general duration. The returned ``status``
+        string is unchanged ("valid"/"valid_hl_prior"); activation detail is exposed
+        additively via ``read_conditioned_preheat_diag()``. Published predictions, TPI,
+        Boost, TRV and shadow planning are unaffected; D3 (no second HeatLoss subtraction)
+        is preserved.
 
         Three semantically distinct durations are kept separate (A = B + C):
         - **A Command Lead Time**: returned ``minutes``
@@ -2594,32 +2634,39 @@ class LearningShadowController:
             afterheat_c = float(
                 af_pred.values.get("expected_overshoot", 0.0) if af_pred else 0.0) or 0.0
 
-            # Effective Room Heating Duration (C):
+            # baseline_min is deterministic (independent of the learned rate); compute it
+            # once so the confidence-proportional cap below is identical for the general and
+            # the conditioned duration. Computing it unconditionally does not change the
+            # general result (it is only consumed inside the cap branch).
+            baseline_min, _ = self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
+
+            # Effective Room Heating Duration (C), for a given net rate + confidence:
             #   effective_rate = max(net learned heat rate, existing 0.2 C/h min-rate floor)
-            #   effective_deficit = deficit − afterheat (the predicted afterheat covers part of the rise)
-            #   C = effective_deficit / effective_rate × 60
-            # D3: no second HEAT_LOSS subtraction (see above) and no new outdoor adjustment.
-            effective_rate = max(heat_rate_c_per_h, 0.2)
-            effective_deficit = max(0.0, deficit - max(0.0, afterheat_c))
-            room_heating_min = (effective_deficit / effective_rate) * 60.0
-
-            # Confidence-proportional cap (0.35–0.6 band): interpolate between
-            # deterministic_baseline and PREHEAT_MAX_MIN as confidence rises.
-            if confidence < 0.6:
-                conf_range = max(0.001, 0.6 - self._PREHEAT_MIN_CONFIDENCE)
-                t = max(0.0, min(1.0, (confidence - self._PREHEAT_MIN_CONFIDENCE) / conf_range))
-                baseline_min, _ = self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
-                cap = baseline_min + t * (self._PREHEAT_MAX_MIN - baseline_min)
-                room_heating_min = min(room_heating_min, cap)
-
-            room_heating_min = max(0.0, min(room_heating_min, self._PREHEAT_MAX_MIN))
+            #   effective_deficit = deficit − afterheat (afterheat covers part of the rise)
+            #   C = effective_deficit / effective_rate × 60, then the existing
+            #       confidence-proportional cap (0.35–0.6 band) and the 180-min clamp.
+            # D3: no second HEAT_LOSS subtraction and no new outdoor adjustment.
+            def _room_heating(rate: float, conf: float) -> float:
+                effective_rate = max(rate, 0.2)
+                effective_deficit = max(0.0, deficit - max(0.0, afterheat_c))
+                rh = (effective_deficit / effective_rate) * 60.0
+                if conf < 0.6:
+                    conf_range = max(0.001, 0.6 - self._PREHEAT_MIN_CONFIDENCE)
+                    t = max(0.0, min(1.0, (conf - self._PREHEAT_MIN_CONFIDENCE) / conf_range))
+                    cap = baseline_min + t * (self._PREHEAT_MAX_MIN - baseline_min)
+                    rh = min(rh, cap)
+                return max(0.0, min(rh, self._PREHEAT_MAX_MIN))
 
             # Command Lead Time (A) = Room Heating Duration (C) + Onset Delay (B).
             # Onset delay comes from read_onset_delay_safe() — adaptive when learned,
             # otherwise returns the cold-start prior.  Never folded into heat rate.
             onset_delay, _ = self.read_onset_delay_safe()
-            total_min = room_heating_min + onset_delay
-            total_min = min(total_min, self._PREHEAT_MAX_MIN)
+
+            def _total(rate: float, conf: float) -> float:
+                return min(_room_heating(rate, conf) + onset_delay, self._PREHEAT_MAX_MIN)
+
+            # A_general — EXACT existing arithmetic (byte-identical general result).
+            a_general = _total(heat_rate_c_per_h, confidence)
 
             # Diagnostic status (public, backward-compatible — field VALUES unchanged):
             # "valid" when HR AND HL are both learned, "valid_hl_prior" when HR is learned
@@ -2628,10 +2675,205 @@ class LearningShadowController:
             # duration effect; it is retained unchanged to preserve compatibility for existing
             # consumers. A fallback must never be labelled "valid".
             _status = "valid" if _hl_valid else "valid_hl_prior"
+
+            # D2-C1b: gate an outdoor-conditioned nudge to the DURATION only. Returns
+            # ``a_general`` unchanged on any gate miss / error (never raises), so the general
+            # path is the deterministic fallback. Status string is NOT changed by activation.
+            total_min = self._conditioned_preheat_minutes(
+                a_general=a_general, total_fn=_total, general_status=_status,
+                outdoor_temp=outdoor_temp, outdoor_source=outdoor_source,
+                outdoor_last_updated=outdoor_last_updated)
             return round(total_min, 1), _status
         except Exception as err:
             self._record_error("preheat_read", err)
         return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
+
+    # ── D2-C1b: outdoor-conditioned Preheat activation (audited policy B) ────────
+
+    def read_conditioned_preheat_diag(self) -> dict:
+        """D2-C1b: additive, read-only diagnostics for the LAST conditioned-Preheat
+        evaluation — ``status`` (activated / general[:reason] / general:stabilizing),
+        ``band``, ``raw_duration_diff_min`` (A_conditioned − A_general), ``applied_bound``
+        (none/lower/upper). Session-scoped, never persisted, no control effect. Never
+        raises."""
+        try:
+            return dict(self._last_conditioned_preheat)
+        except Exception:
+            return {"status": "inactive"}
+
+    def _cp_band_index(self, value: float) -> int:
+        """Band index for an outdoor value over ``_CP_BUCKET_EDGES`` — mirrors
+        ``HeatRateModel._bucket_index`` exactly (``idx += 1`` while ``value >= edge``)."""
+        idx = 0
+        for edge in self._CP_BUCKET_EDGES:
+            if value >= edge:
+                idx += 1
+            else:
+                break
+        return idx
+
+    def _cp_source_age_s(self, last_updated_iso: Optional[str]) -> Optional[float]:
+        """Seconds between the ACTUAL Preheat read time (the controller's injected clock,
+        ``_utcnow_iso``) and the outdoor source's HA ``last_updated`` timestamp. Positive =
+        the timestamp is in the past. Returns None when the timestamp is missing/malformed
+        or the two instants are not comparable (naive/aware mismatch). This is used ONLY to
+        reject a dead/stuck source (gate 5); it never claims HA ``last_updated`` proves a
+        physical measurement time. Never raises."""
+        if not isinstance(last_updated_iso, str) or not last_updated_iso:
+            return None
+        from datetime import datetime
+        try:
+            lu = datetime.fromisoformat(last_updated_iso)
+            now = datetime.fromisoformat(self._utcnow_iso())
+            return (now - lu).total_seconds()
+        except (TypeError, ValueError):
+            return None
+
+    def _cp_elapsed_s(self, first_iso: Optional[str], now_iso: Optional[str]) -> Optional[float]:
+        """Elapsed seconds between two ISO instants (band-stability timer, gate 7).
+        Uses elapsed TIME, not call count. Returns None if either is missing/malformed or
+        incomparable. Never raises."""
+        if not first_iso or not now_iso:
+            return None
+        from datetime import datetime
+        try:
+            a = datetime.fromisoformat(first_iso)
+            b = datetime.fromisoformat(now_iso)
+            return (b - a).total_seconds()
+        except (TypeError, ValueError):
+            return None
+
+    def _conditioned_heat_rate_prediction(self, outdoor: float):
+        """Compute a LOCAL outdoor-conditioned HeatRate prediction by driving the model with
+        an outdoor context. NEVER written to ``zr.last_predictions`` and NEVER goes through
+        the shared ``collect_predictions`` (which uses an empty context), so no published
+        prediction / TPI / Boost / TRV / shadow value is affected. Returns the Prediction or
+        None. Never raises."""
+        try:
+            zr = self._runtime._zone(self._zone)
+            model = zr.orchestrator.models.get("heat_rate")
+        except Exception:
+            return None
+        if model is None:
+            return None
+        predict = getattr(model, "predict_heat_rate", None) or getattr(model, "predict", None)
+        if not callable(predict):
+            return None
+        from ..models.heat_rate import HeatRatePredictionContext
+        ctx = HeatRatePredictionContext(
+            outdoor_temp=Measurement(float(outdoor), DataQuality.OK))
+        return predict(ctx)
+
+    def _conditioned_preheat_minutes(self, *, a_general: float, total_fn, general_status: str,
+                                     outdoor_temp, outdoor_source, outdoor_last_updated) -> float:
+        """Apply the audited policy-B activation gates and, only if ALL pass, blend the
+        conditioned duration toward the general one within tight asymmetric bounds. Returns
+        ``a_general`` unchanged on any gate miss or error. Manages the session-scoped,
+        per-zone band-stability hysteresis and records additive diagnostics. Never raises."""
+        diag: dict = {"status": "general", "band": None,
+                      "raw_duration_diff_min": None, "applied_bound": None}
+
+        def _reset_and(status: str) -> float:
+            # gate 7: reset the stability tracker on a FAILED gate or band change.
+            self._cp_band = None
+            self._cp_band_first_ts = None
+            diag["status"] = status
+            self._last_conditioned_preheat = diag
+            return a_general
+
+        try:
+            # Gate 1: the general Preheat status must be valid / valid_hl_prior.
+            if general_status not in ("valid", "valid_hl_prior"):
+                return _reset_and("general:status")
+            # Gate 3: outdoor temperature finite and plausible.
+            from ...temperature_units import is_plausible_temperature_c
+            if outdoor_temp is None or isinstance(outdoor_temp, bool) \
+                    or not isinstance(outdoor_temp, (int, float)) \
+                    or not math.isfinite(float(outdoor_temp)) \
+                    or not is_plausible_temperature_c(float(outdoor_temp)):
+                return _reset_and("general:outdoor_implausible")
+            outdoor = float(outdoor_temp)
+            # Gate 4: source must be a non-empty identifier.
+            if not isinstance(outdoor_source, str) or not outdoor_source:
+                return _reset_and("general:no_source")
+            # Gate 5: live source timestamp (vs the actual Preheat read time). A missing /
+            # malformed ts, a ts > 120 s in the future, or a ts older than 3 h -> general.
+            # last_updated is provenance ONLY — it never certifies physical freshness.
+            age_s = self._cp_source_age_s(outdoor_last_updated)
+            if age_s is None:
+                return _reset_and("general:ts_missing")
+            if age_s < -self._CP_FRESH_FUTURE_TOL_S:
+                return _reset_and("general:ts_future")
+            if age_s > self._CP_FRESH_MAX_AGE_S:
+                return _reset_and("general:ts_stale")
+            # Gate 6: edge guard — >= 0.5 C from EVERY bucket boundary.
+            if any(abs(outdoor - edge) < self._CP_EDGE_GUARD_C
+                   for edge in self._CP_BUCKET_EDGES):
+                return _reset_and("general:edge_guard")
+            band = self._cp_band_index(outdoor)
+            diag["band"] = band
+            # Gate 2: a usable, learned, confident conditioned-bucket prediction.
+            cond = self._conditioned_heat_rate_prediction(outdoor)
+            if cond is None:
+                return _reset_and("general:no_model")
+            cond_fallback = bool(getattr(cond, "fallback_used", True))
+            cond_reasons = getattr(cond, "reason_codes", ()) or ()
+            cond_n = int(getattr(cond, "evidence_count", 0) or 0)
+            cond_conf = float(getattr(cond, "confidence", 0.0) or 0.0)
+            try:
+                cond_rate = float((cond.values or {}).get("heat_rate", 0.0) or 0.0)
+            except Exception:
+                cond_rate = 0.0
+            if cond_fallback or "conditioned_bucket" not in cond_reasons \
+                    or cond_n < self._CP_MIN_EVIDENCE or cond_conf < self._CP_MIN_CONFIDENCE \
+                    or not math.isfinite(cond_rate) or cond_rate <= 0.0:
+                return _reset_and("general:cond_gate")
+            # Gate 7: the same qualifying band must be stable for >= 300 s (elapsed time,
+            # not call count). A band change (re)starts the timer; a restart begins empty
+            # (both _cp_* are None) so this re-stabilizes from scratch -> general meanwhile.
+            now_iso = self._utcnow_iso()
+            if self._cp_band != band:
+                self._cp_band = band
+                self._cp_band_first_ts = now_iso
+                diag["status"] = "general:stabilizing"
+                self._last_conditioned_preheat = diag
+                return a_general
+            elapsed = self._cp_elapsed_s(self._cp_band_first_ts, now_iso)
+            if elapsed is None or elapsed < self._CP_STABILITY_MIN_S:
+                diag["status"] = "general:stabilizing"
+                self._last_conditioned_preheat = diag
+                return a_general
+            # ── all gates pass: compute the conditioned duration with the SAME arithmetic
+            # (via total_fn) and blend toward it with a fixed 0.5 weight, then clamp into
+            # the asymmetric [-10, +15] band around a_general, then the [0, 180] clamp.
+            a_cond = total_fn(cond_rate, cond_conf)
+            diff = a_cond - a_general
+            a_blended = a_general + self._CP_BLEND_WEIGHT * diff
+            lower = a_general - self._CP_BOUND_LOWER_MIN
+            upper = a_general + self._CP_BOUND_UPPER_MIN
+            if a_blended < lower:
+                a_bounded, bound = lower, "lower"
+            elif a_blended > upper:
+                a_bounded, bound = upper, "upper"
+            else:
+                a_bounded, bound = a_blended, "none"
+            a_final = max(0.0, min(a_bounded, self._PREHEAT_MAX_MIN))
+            diag.update({
+                "status": "activated", "raw_duration_diff_min": round(diff, 3),
+                "applied_bound": bound, "conditioned_evidence": cond_n,
+                "conditioned_confidence": round(cond_conf, 4),
+            })
+            self._last_conditioned_preheat = diag
+            return a_final
+        except Exception as err:
+            self._record_error("conditioned_preheat", err)
+            # Fail closed: general duration AND re-stabilize from scratch.
+            self._cp_band = None
+            self._cp_band_first_ts = None
+            self._last_conditioned_preheat = {
+                "status": "general:error", "band": diag.get("band"),
+                "raw_duration_diff_min": None, "applied_bound": None}
+            return a_general
 
     def read_outdoor_freshness_safe(self):
         """D2-C1a: observability-only outdoor-source freshness for the last cycle.

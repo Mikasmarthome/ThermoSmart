@@ -319,6 +319,11 @@ class LearningShadowController:
         # read_conditioned_preheat_diag / _conditioned_preheat_minutes).
         self._cp_band: Optional[int] = None
         self._cp_band_first_ts: Optional[str] = None
+        # N3: timestamp of the LAST qualifying observation in the current streak. A new
+        # qualifying observation that follows the previous one by more than
+        # _CP_MAX_OBS_GAP_S (a no-read gap) breaks continuity and restarts the timer, so a
+        # single stale observation can't satisfy the 300 s rule after hours of no reads.
+        self._cp_band_last_ts: Optional[str] = None
         self._last_conditioned_preheat: dict = {"status": "inactive"}
         # Clock injection: explicit clock required — no hidden wall-clock fallback.
         if clock is None:
@@ -2491,6 +2496,13 @@ class LearningShadowController:
     _CP_FRESH_MAX_AGE_S: float = 10800.0  # reject a source ts older than 3 h (gate 5)
     _CP_EDGE_GUARD_C: float = 0.5         # min distance from any bucket boundary (gate 6)
     _CP_STABILITY_MIN_S: float = 300.0    # min elapsed same-band time before activating (gate 7)
+    # N3: max gap between two CONSECUTIVE qualifying observations for the stability streak
+    # to remain continuous. This is a CONTINUITY threshold (it detects a no-read gap or a
+    # suspended cycle), NOT a physical outdoor-measurement freshness guarantee — physical
+    # freshness is never establishable from HA metadata (see classify_outdoor_freshness).
+    # 600 s = 2x the nominal coordinator update cadence; a single missed cycle is tolerated,
+    # a multi-cycle/multi-hour gap restarts the 300 s stability timer.
+    _CP_MAX_OBS_GAP_S: float = 600.0
     _CP_BLEND_WEIGHT: float = 0.5         # fixed conditioned blend weight
     _CP_BOUND_LOWER_MIN: float = 10.0     # final blended duration >= A_general - 10 min
     _CP_BOUND_UPPER_MIN: float = 15.0     # final blended duration <= A_general + 15 min
@@ -2728,6 +2740,7 @@ class LearningShadowController:
         Never raises."""
         self._cp_band = None
         self._cp_band_first_ts = None
+        self._cp_band_last_ts = None
         self._last_conditioned_preheat = {
             "status": status, "band": None,
             "raw_duration_diff_min": None, "applied_bound": None}
@@ -2819,6 +2832,7 @@ class LearningShadowController:
             # gate 7: reset the stability tracker on a FAILED gate or band change.
             self._cp_band = None
             self._cp_band_first_ts = None
+            self._cp_band_last_ts = None
             diag["status"] = status
             self._last_conditioned_preheat = diag
             return a_general
@@ -2874,16 +2888,31 @@ class LearningShadowController:
                 # a NaN confidence makes ``cond_conf < MIN`` False and would otherwise slip
                 # through the confidence floor.
                 return _reset_and("general:cond_gate")
-            # Gate 7: the same qualifying band must be stable for >= 300 s (elapsed time,
-            # not call count). A band change (re)starts the timer; a restart begins empty
-            # (both _cp_* are None) so this re-stabilizes from scratch -> general meanwhile.
+            # Gate 7: the same qualifying band must be stable for >= 300 s of elapsed time
+            # (not call count). The streak is CONTINUOUS only while consecutive qualifying
+            # observations are <= _CP_MAX_OBS_GAP_S apart (N3): a band change, a no-read gap
+            # beyond that threshold, or any backward clock movement breaks continuity and
+            # restarts the 300 s timer from the current observation. A process restart begins
+            # with all _cp_* None, so it also re-stabilizes from scratch -> general meanwhile.
             now_iso = self._utcnow_iso()
-            if self._cp_band != band:
+            gap = (self._cp_elapsed_s(self._cp_band_last_ts, now_iso)
+                   if self._cp_band_last_ts is not None else None)
+            _continuous = (
+                self._cp_band == band
+                and self._cp_band_first_ts is not None
+                and gap is not None
+                and 0.0 <= gap <= self._CP_MAX_OBS_GAP_S)   # 0<= rejects backward clock
+            if not _continuous:
+                # (re)start the streak at THIS observation (band change / stale no-read gap /
+                # backward clock / first observation).
                 self._cp_band = band
                 self._cp_band_first_ts = now_iso
+                self._cp_band_last_ts = now_iso
                 diag["status"] = "general:stabilizing"
                 self._last_conditioned_preheat = diag
                 return a_general
+            # continuous streak: advance the last-observation marker, then check the minimum.
+            self._cp_band_last_ts = now_iso
             elapsed = self._cp_elapsed_s(self._cp_band_first_ts, now_iso)
             if elapsed is None or elapsed < self._CP_STABILITY_MIN_S:
                 diag["status"] = "general:stabilizing"

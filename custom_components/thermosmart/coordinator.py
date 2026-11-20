@@ -2290,6 +2290,13 @@ class ThermoSmartCoordinator(
             "preheat_minutes": preheat_minutes,
             "preheat_active": preheat_active,
             "preheat_status": preheat_status,
+            # D2-C1b: additive, Preheat-ONLY conditioned-activation diagnostics for the
+            # DecisionTrace (status/band/raw duration diff/applied bound). Distinct from the
+            # published general HeatRate prediction/confidence; never replaces them. Empty
+            # dict when Learning is off (deterministic baseline path).
+            "preheat_conditioned": (
+                self._learning_shadow.read_conditioned_preheat_diag()
+                if (_learning_mode_on and self._learning_shadow is not None) else {}),
             # Onset delay and baseline for DecisionTrace (computed once above)
             "onset_delay_min": _onset_delay_min,
             "onset_delay_status": _onset_delay_status,

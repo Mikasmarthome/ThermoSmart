@@ -2323,6 +2323,22 @@ class LearningShadowController:
                     })
             except Exception:
                 pass
+            # D2-C1b: outdoor-conditioned Preheat-ONLY decision trace (additive, diagnostic).
+            # These describe the Preheat DURATION decision only and are clearly distinct from
+            # the published general HeatRate prediction/confidence above — they never replace
+            # a published value. Sourced from the recommendation (same cycle). Privacy-safe:
+            # only the status slug, the integer band, the duration-difference and the applied
+            # bound — no entity/zone names, no raw readings.
+            try:
+                _cp = recommendation.get("preheat_conditioned") or {}
+                trace_dict.update({
+                    "preheat_conditioned_status": _cp.get("status"),
+                    "preheat_conditioned_band": _cp.get("band"),
+                    "preheat_conditioned_raw_duration_diff_min": _cp.get("raw_duration_diff_min"),
+                    "preheat_conditioned_applied_bound": _cp.get("applied_bound"),
+                })
+            except Exception:
+                pass
             self._last_trace = trace_dict
         except Exception as err:
             self._record_error("decision_trace", err)
@@ -2588,6 +2604,8 @@ class LearningShadowController:
         6. Shadow disabled → deterministic baseline (status "deterministic_baseline")
         """
         if not self._enabled:
+            # N1/N2: shadow disabled bypasses conditioned activation entirely.
+            self._cp_abort("general:disabled")
             return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
         try:
             from ..contracts import PredictionType
@@ -2599,6 +2617,7 @@ class LearningShadowController:
             af_pred = preds.get(PredictionType.EXPECTED_OVERSHOOT)
 
             if hr_pred is None:
+                self._cp_abort("general:no_prediction")
                 return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
             fallback_used = getattr(hr_pred, "fallback_used", True)
@@ -2606,16 +2625,21 @@ class LearningShadowController:
             heat_rate_c_per_h = float(hr_pred.values.get("heat_rate", 0.0) or 0.0)
 
             if fallback_used or heat_rate_c_per_h <= 0:
+                self._cp_abort("general:hr_fallback")
                 return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
             if current_temp is None:
+                self._cp_abort("unavailable")
                 return 0.0, "unavailable"
 
             deficit = comfort_temp - current_temp
             if deficit <= self._PREHEAT_MIN_DELTA_C:
+                # N1: a long run of target_reached reads must NOT accumulate stability.
+                self._cp_abort("target_reached")
                 return 0.0, "target_reached"
 
             if confidence < self._PREHEAT_MIN_CONFIDENCE:
+                self._cp_abort("general:low_confidence")
                 return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
             # HEAT_LOSS_RATE gate: whether the HL prediction is a learned, confident value
@@ -2686,9 +2710,27 @@ class LearningShadowController:
             return round(total_min, 1), _status
         except Exception as err:
             self._record_error("preheat_read", err)
+        # N1/N2: an error before/while computing the conditioned nudge must also invalidate
+        # the stability streak and clear the diagnostics (fail closed to the general path).
+        self._cp_abort("general:error")
         return self.compute_deterministic_preheat_baseline(current_temp, comfort_temp)
 
     # ── D2-C1b: outdoor-conditioned Preheat activation (audited policy B) ────────
+
+    def _cp_abort(self, status: str) -> None:
+        """D2-C1b N1/N2: a Preheat path that bypasses conditioned activation (an early
+        return such as target_reached / deterministic_baseline / general fallback /
+        unavailable / low confidence / error) MUST invalidate the pending band-stability
+        streak AND clear the activation diagnostics. Without this, a qualifying band seen
+        before a long run of ineligible reads (e.g. hours of target_reached) could satisfy
+        the 300 s elapsed-time rule on the first new eligible read, and a stale ``activated``
+        diagnostic could outlive its decision. Session-scoped, per-zone, never persisted.
+        Never raises."""
+        self._cp_band = None
+        self._cp_band_first_ts = None
+        self._last_conditioned_preheat = {
+            "status": status, "band": None,
+            "raw_duration_diff_min": None, "applied_bound": None}
 
     def read_conditioned_preheat_diag(self) -> dict:
         """D2-C1b: additive, read-only diagnostics for the LAST conditioned-Preheat
@@ -2825,8 +2867,12 @@ class LearningShadowController:
             except Exception:
                 cond_rate = 0.0
             if cond_fallback or "conditioned_bucket" not in cond_reasons \
-                    or cond_n < self._CP_MIN_EVIDENCE or cond_conf < self._CP_MIN_CONFIDENCE \
+                    or cond_n < self._CP_MIN_EVIDENCE \
+                    or not math.isfinite(cond_conf) or cond_conf < self._CP_MIN_CONFIDENCE \
                     or not math.isfinite(cond_rate) or cond_rate <= 0.0:
+                # ``not math.isfinite(cond_conf)`` is checked BEFORE the ``<`` comparison:
+                # a NaN confidence makes ``cond_conf < MIN`` False and would otherwise slip
+                # through the confidence floor.
                 return _reset_and("general:cond_gate")
             # Gate 7: the same qualifying band must be stable for >= 300 s (elapsed time,
             # not call count). A band change (re)starts the timer; a restart begins empty
